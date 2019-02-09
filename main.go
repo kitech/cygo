@@ -255,12 +255,12 @@ func (t *translator) emitBlock(irFunc *ir.Func, goBB *ssa.BasicBlock) {
 }
 
 func (t *translator) emitGlobal(g *ssa.Global) {
-	name := g.Name()
+	name := g.String()
 	goElemType := g.Type().Underlying().(*gotypes.Pointer).Elem()
 	irElemType := t.goToIRType(goElemType)
-	irG := t.m.NewGlobal(name, irElemType)
+	irG := t.m.NewGlobalDef(name, irconstant.NewZeroInitializer(irElemType))
 	// TODO(pwaller): Different types of linkage?
-	irG.Linkage = irenum.LinkageExternal
+	irG.Linkage = irenum.LinkagePrivate
 	t.goToIRValue[g] = irG
 }
 
