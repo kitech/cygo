@@ -347,8 +347,8 @@ func (t *translator) emitBinOpCmp(
 		t.goToIRValue[b] = irBlock.NewICmp(irPred, irX, irY)
 
 	case isString(goParamType):
-		log.Printf("unimplemented: string comparison: %v", b)
-		t.goToIRValue[b] = irconstant.NewInt(irtypes.I1, 1)
+		t.emitBinOpCmpStr(irBlock, b)
+		return
 
 	case isFloat(goParamType):
 		irPred, ok := goOpToFPred[b.Op]
@@ -382,6 +382,44 @@ func (t *translator) emitBinOpCmp(
 		msg := "unimplemented: emitBinOpCmp: %T: %v"
 		panic(fmt.Errorf(msg, goParamType, goParamType))
 	}
+}
+
+func (t *translator) emitBinOpCmpStr(
+	irBlock *ir.Block,
+	b *ssa.BinOp,
+) {
+	if t.builtinStrNCmp == nil {
+		t.builtinStrNCmp = t.m.NewFunc(
+			"strncmp",
+			irtypes.I32,
+			ir.NewParam("x", irtypes.I8Ptr),
+			ir.NewParam("y", irtypes.I8Ptr),
+			ir.NewParam("n", irtypes.I64),
+		)
+	}
+
+	irX := t.translateValue(irBlock, b.X)
+	irY := t.translateValue(irBlock, b.Y)
+
+	irXPtr := irBlock.NewExtractValue(irX, 0)
+	irYPtr := irBlock.NewExtractValue(irY, 0)
+	irXLen := irBlock.NewExtractValue(irX, 1)
+	irYLen := irBlock.NewExtractValue(irY, 1)
+
+	// Get the minimum length of the two strings
+	irCond := irBlock.NewICmp(irenum.IPredULE, irXLen, irYLen)
+	irMinLen := irBlock.NewSelect(irCond, irXLen, irYLen)
+
+	irStrNCmp := irBlock.NewCall(t.builtinStrNCmp, irXPtr, irYPtr, irMinLen)
+
+	irConstZero := irconstant.NewInt(t.builtinStrNCmp.Sig.RetType.(*irtypes.IntType), 0)
+
+	irPred, ok := goSignedToOpToIPred[signed][b.Op]
+	if !ok {
+		panic(fmt.Errorf("unimplemented: str comparison with %q", b.Op))
+	}
+
+	t.goToIRValue[b] = irBlock.NewICmp(irPred, irStrNCmp, irConstZero)
 }
 
 func (t *translator) emitCall(irBlock *ir.Block, c *ssa.Call) {

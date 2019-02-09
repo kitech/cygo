@@ -24,9 +24,10 @@ type translator struct {
 
 	goToIRValue map[ssa.Value]irvalue.Value
 
-	builtinPrintln, builtinMalloc irvalue.Value
-	constantStrings               map[string]irconstant.Constant
-	goToIRTypeCache               map[gotypes.Type]irtypes.Type
+	builtinPrintln, builtinMalloc, builtinStrNCmp *ir.Func
+
+	constantStrings map[string]irconstant.Constant
+	goToIRTypeCache map[gotypes.Type]irtypes.Type
 }
 
 func main() {
