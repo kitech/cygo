@@ -136,10 +136,9 @@ func (t *translator) emitAllocHeap(irBlock *ir.Block, a *ssa.Alloc) {
 }
 
 func (t *translator) emitBinOp(irBlock *ir.Block, b *ssa.BinOp) {
-	if !gotypes.Identical(b.X.Type(), b.Y.Type()) &&
-		!((b.Op == token.SHL || b.Op == token.SHR) &&
-			!isSigned(b.X.Type().Underlying())) {
-
+	if !gotypes.Identical(b.X.Type(), b.Y.Type()) && // Types must be identical
+		!((b.Op == token.SHL || b.Op == token.SHR) && // Or it's a shift and the right operand is unsigned.
+			!isSigned(b.Y.Type().Underlying())) {
 		panic(fmt.Errorf("unmatched types in BinOp: %v != %v in %v",
 			b.X.Type(), b.Y.Type(), b))
 	}
