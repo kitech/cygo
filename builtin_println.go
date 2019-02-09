@@ -60,9 +60,16 @@ func (t *translator) makePrintArg(
 
 	case isBool(goType):
 		fmtStr = t.constantString(irBlock, "%s")
+
 		strTrue := t.constantString(irBlock, "true")
 		strFalse := t.constantString(irBlock, "false")
-		val = irBlock.NewSelect(t.translateValue(irBlock, goArg), strTrue, strFalse)
+
+		val = irBlock.NewSelect(
+			t.translateValue(irBlock, goArg),
+			strTrue,
+			strFalse,
+		)
+
 		return fmtStr, val
 
 	default:
