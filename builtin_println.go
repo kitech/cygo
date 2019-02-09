@@ -45,7 +45,15 @@ func (t *translator) makePrintArg(
 	goType := goArg.Type()
 	switch {
 	case isInteger(goType):
-		fmtStr = t.constantString(irBlock, "%d")
+		fmt := "d"
+		if !isSigned(goType) {
+			fmt = "u"
+		}
+		if sizeof(goType) == 8 {
+			fmt = "ll" + fmt
+		}
+
+		fmtStr = t.constantString(irBlock, "%"+fmt)
 
 	case isString(goType):
 		fmtStr = t.constantString(irBlock, "%s")
