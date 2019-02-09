@@ -846,7 +846,9 @@ func (t *translator) emitSlice(irBlock *ir.Block, s *ssa.Slice) {
 		return
 	}
 
-	t.goToIRValue[s] = t.translateValue(irBlock, s.X)
+	// Hack: not yet implemented.
+	t.goToIRValue[s] = irconstant.NewUndef(t.goToIRType(s.Type()))
+
 	log.Printf("unimplemented: emitSlice: %v", s)
 }
 
