@@ -12,7 +12,7 @@ import (
 
 	ir "github.com/llir/llvm/ir"
 	irconstant "github.com/llir/llvm/ir/constant"
-	"github.com/llir/llvm/ir/enum"
+	irenum "github.com/llir/llvm/ir/enum"
 	irtypes "github.com/llir/llvm/ir/types"
 	irvalue "github.com/llir/llvm/ir/value"
 )
@@ -296,31 +296,31 @@ const (
 )
 
 var (
-	goSignedToOpToIPred = map[signedness]map[token.Token]enum.IPred{
+	goSignedToOpToIPred = map[signedness]map[token.Token]irenum.IPred{
 		signed: {
-			token.EQL: enum.IPredEQ,
-			token.NEQ: enum.IPredNE,
-			token.GTR: enum.IPredSGT,
-			token.LSS: enum.IPredSLT,
-			token.GEQ: enum.IPredSGE,
-			token.LEQ: enum.IPredSLE,
+			token.EQL: irenum.IPredEQ,
+			token.NEQ: irenum.IPredNE,
+			token.GTR: irenum.IPredSGT,
+			token.LSS: irenum.IPredSLT,
+			token.GEQ: irenum.IPredSGE,
+			token.LEQ: irenum.IPredSLE,
 		},
 		unsigned: {
-			token.EQL: enum.IPredEQ,
-			token.NEQ: enum.IPredNE,
-			token.GTR: enum.IPredSGT,
-			token.LSS: enum.IPredSLT,
-			token.GEQ: enum.IPredSGE,
-			token.LEQ: enum.IPredSLE,
+			token.EQL: irenum.IPredEQ,
+			token.NEQ: irenum.IPredNE,
+			token.GTR: irenum.IPredUGT,
+			token.LSS: irenum.IPredULT,
+			token.GEQ: irenum.IPredUGE,
+			token.LEQ: irenum.IPredULE,
 		},
 	}
-	goOpToFPred = map[token.Token]enum.FPred{
-		token.EQL: enum.FPredOEQ,
-		token.NEQ: enum.FPredONE,
-		token.GTR: enum.FPredOGT,
-		token.LSS: enum.FPredOLT,
-		token.GEQ: enum.FPredOGE,
-		token.LEQ: enum.FPredOLE,
+	goOpToFPred = map[token.Token]irenum.FPred{
+		token.EQL: irenum.FPredOEQ,
+		token.NEQ: irenum.FPredONE,
+		token.GTR: irenum.FPredOGT,
+		token.LSS: irenum.FPredOLT,
+		token.GEQ: irenum.FPredOGE,
+		token.LEQ: irenum.FPredOLE,
 	}
 )
 
@@ -358,9 +358,9 @@ func (t *translator) emitBinOpCmp(
 			panic(fmt.Errorf("unimplemented: emitBinOpCmp: %v", goParamType))
 		}
 
-		iPred := enum.IPredEQ
+		iPred := irenum.IPredEQ
 		if b.Op == token.NEQ {
-			iPred = enum.IPredNE
+			iPred = irenum.IPredNE
 		}
 
 		irXInt := irBlock.NewPtrToInt(irX, irtypes.I64)
