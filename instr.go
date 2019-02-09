@@ -368,8 +368,10 @@ func (t *translator) emitBinOpCmp(
 			iPred = irenum.IPredNE
 		}
 
-		irXInt := irBlock.NewPtrToInt(irX, irtypes.I64)
-		irYInt := irBlock.NewPtrToInt(irY, irtypes.I64)
+		irXIfaceData := irBlock.NewExtractValue(irX, 1)
+		irYIfaceData := irBlock.NewExtractValue(irY, 1)
+		irXInt := irBlock.NewPtrToInt(irXIfaceData, irtypes.I64)
+		irYInt := irBlock.NewPtrToInt(irYIfaceData, irtypes.I64)
 
 		t.goToIRValue[b] = irBlock.NewICmp(iPred, irXInt, irYInt)
 
