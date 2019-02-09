@@ -37,14 +37,8 @@ func (t *translator) goConstToIR(
 	case isString(goConstType):
 		s := goconstant.StringVal(goConst.Value)
 		irConstantS := t.constantString(irBlock, s)
-
-		strT := irtypes.NewStruct(irtypes.I8Ptr, irtypes.I64)
 		irLen := irconstant.NewInt(irtypes.I64, int64(len(s)))
-
-		var v irvalue.Value = irconstant.NewZeroInitializer(strT)
-		v = irBlock.NewInsertValue(v, irConstantS, 0)
-		v = irBlock.NewInsertValue(v, irLen, 1)
-		return v
+		return irconstant.NewStruct(irConstantS, irLen)
 
 	case isInteger(goConstType):
 		irTyp := t.goToIRType(goConstType).(*irtypes.IntType)
