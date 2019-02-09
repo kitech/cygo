@@ -771,10 +771,21 @@ func (t *translator) emitPanic(irBlock *ir.Block, p *ssa.Panic) {
 }
 
 func (t *translator) emitPhi(irBlock *ir.Block, p *ssa.Phi) {
+	irPhi, ok := t.goToIRValue[p]
+	if ok {
+		if irPhi == nil {
+			panic("nil phi?")
+		}
+		// TODO(pwaller): HACK - revisit.
+		irBlock.Insts = append(irBlock.Insts, irPhi.(ir.Instruction))
+		return
+	}
+
 	// log.Printf("unimplemented: emitPhi")
-	irPhi := &ir.InstPhi{} // populated when function is complete.
-	irBlock.Insts = append(irBlock.Insts, irPhi)
-	t.goToIRValue[p] = irPhi
+	irPhi1 := &ir.InstPhi{} // populated when function is complete.
+	irPhi1.Typ = t.goToIRType(p.Type())
+	irBlock.Insts = append(irBlock.Insts, irPhi1)
+	t.goToIRValue[p] = irPhi1
 }
 
 func (t *translator) emitRange(irBlock *ir.Block, r *ssa.Range) {

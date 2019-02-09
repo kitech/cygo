@@ -177,6 +177,7 @@ func (t *translator) emitFunctionBody(irFunc *ir.Func, f *ssa.Function) {
 	// Fixup Phi incoming edges.
 	for i, goBB := range f.Blocks {
 		irBlock := irFunc.Blocks[i]
+
 		for _, goInstr := range goBB.Instrs {
 			goPhi, ok := goInstr.(*ssa.Phi)
 			if !ok {
@@ -185,13 +186,20 @@ func (t *translator) emitFunctionBody(irFunc *ir.Func, f *ssa.Function) {
 			irPhi := t.goToIRValue[goPhi].(*ir.InstPhi)
 
 			for j, goEdgeValue := range goPhi.Edges {
+				irEdgeValue := t.translateValue(irBlock, goEdgeValue)
 				irPhi.Incs = append(irPhi.Incs, &ir.Incoming{
-					X:    t.translateValue(irBlock, goEdgeValue),
+					X:    irEdgeValue,
 					Pred: irFunc.Blocks[goBB.Preds[j].Index],
 				})
 			}
+
 			_ = irPhi.Type() // Compute phi type.
 		}
+	}
+
+	if len(f.Blocks) == 0 {
+		// No blocks to convert, but they may have been synthesized.
+		return
 	}
 
 	// Fixup branching terminators.
@@ -203,7 +211,6 @@ func (t *translator) emitFunctionBody(irFunc *ir.Func, f *ssa.Function) {
 			irTerm.Target = irFunc.Blocks[goBB.Succs[0].Index]
 
 		case *ir.TermCondBr:
-			// TODO(pwaller): check correct ordering?
 			irTerm.TargetTrue = irFunc.Blocks[goBB.Succs[0].Index]
 			irTerm.TargetFalse = irFunc.Blocks[goBB.Succs[1].Index]
 		}
@@ -250,6 +257,13 @@ func (t *translator) translateValue(
 
 	case *ssa.Builtin:
 		panic(fmt.Sprintf("use of builtin %v not in call", goValue.Name()))
+
+	case *ssa.Phi:
+		// It's a forward reference.
+		irPhi := &ir.InstPhi{} // populated after all instructions emitted.
+		irPhi.Typ = t.goToIRType(goValue.Type())
+		t.goToIRValue[goValue] = irPhi
+		return irPhi
 
 	default:
 		panic(fmt.Sprintf("unknown goValue: %T: %v", goValue, goValue))
