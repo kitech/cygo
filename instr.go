@@ -802,7 +802,7 @@ func (t *translator) emitReturn(irBlock *ir.Block, r *ssa.Return) {
 		retVal = t.translateValue(irBlock, r.Results[0])
 
 	default:
-		retVal = irconstant.NewUndef(irBlock.Parent.Sig.RetType)
+		retVal = irconstant.NewZeroInitializer(irBlock.Parent.Sig.RetType)
 		for i, goResult := range r.Results {
 			irResult := t.translateValue(irBlock, goResult)
 			retVal = irBlock.NewInsertValue(retVal, irResult, uint64(i))
