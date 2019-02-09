@@ -148,7 +148,7 @@ func isSigned(typ gotypes.Type) bool {
 		return false
 	}
 
-	return basic.Info()&gotypes.IsString != 0
+	return basic.Info()&gotypes.IsUnsigned == 0
 }
 
 func isBool(typ gotypes.Type) bool {
