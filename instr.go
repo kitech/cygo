@@ -112,7 +112,9 @@ func (t *translator) emitAlloc(irBlock *ir.Block, a *ssa.Alloc) {
 	}
 
 	goAllocedType := a.Type().Underlying().(*types.Pointer).Elem()
-	irAlloca := irBlock.NewAlloca(t.goToIRType(goAllocedType))
+	irAllocedType := t.goToIRType(goAllocedType)
+	irAlloca := irBlock.NewAlloca(irAllocedType)
+	irBlock.NewStore(irconstant.NewZeroInitializer(irAllocedType), irAlloca)
 	t.goToIRValue[a] = irAlloca
 }
 
@@ -124,10 +126,14 @@ func (t *translator) emitAllocHeap(irBlock *ir.Block, a *ssa.Alloc) {
 		t.builtinMalloc = m
 	}
 
-	// TODO(pwaller): Use LLVM size, not Go size..?
-	sz := sizeof(a.Type())
-	irPtr := irBlock.NewCall(t.builtinMalloc, irconstant.NewInt(irtypes.I64, sz))
-	t.goToIRValue[a] = irBlock.NewBitCast(irPtr, t.goToIRType(a.Type()))
+	goElemType := a.Type().(*gotypes.Pointer).Elem()
+	sz := sizeof(goElemType)
+	irVoidPtr := irBlock.NewCall(t.builtinMalloc, irconstant.NewInt(irtypes.I64, sz))
+	irPtr := irBlock.NewBitCast(irVoidPtr, t.goToIRType(a.Type()))
+	t.goToIRValue[a] = irPtr
+
+	irElemZero := irconstant.NewZeroInitializer(t.goToIRType(goElemType))
+	irBlock.NewStore(irElemZero, irPtr)
 }
 
 func (t *translator) emitBinOp(irBlock *ir.Block, b *ssa.BinOp) {
