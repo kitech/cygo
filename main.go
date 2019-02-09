@@ -44,7 +44,7 @@ func main() {
 		log.Fatalf("packages contain errors")
 	}
 
-	prog, _ := ssautil.AllPackages(initial, ssa.NaiveForm)
+	prog, _ := ssautil.AllPackages(initial, 0)
 	prog.Build()
 
 	t := translator{
