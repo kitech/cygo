@@ -174,11 +174,10 @@ func (t *translator) emitBinOpLogical(
 	case token.AND:
 		t.goToIRValue[b] = irBlock.NewAnd(irX, irY)
 	case token.AND_NOT:
-		log.Println("unimplemented: AND_NOT replaced with junk")
-		t.goToIRValue[b] = irBlock.NewAnd(irX, irY)
-		// irBlock.
-		// panic("unimplemented: AND_NOT")
-		// t.goToIRValue[b] = irBlock.NewSub(irX, irY)
+		// TODO(pwaller): Correctness test
+		irOnes := irConstantOnes(int(sizeof(goParamType) * 8))
+		irNotY := irBlock.NewXor(irY, irOnes)
+		t.goToIRValue[b] = irBlock.NewAnd(irX, irNotY)
 	case token.OR:
 		t.goToIRValue[b] = irBlock.NewOr(irX, irY)
 	case token.XOR:
