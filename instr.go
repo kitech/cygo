@@ -119,7 +119,6 @@ func (t *translator) emitAlloc(irBlock *ir.Block, a *ssa.Alloc) {
 }
 
 func (t *translator) emitAllocHeap(irBlock *ir.Block, a *ssa.Alloc) {
-	log.Printf("unimplemented: emitAllocHeap")
 
 	if t.builtinMalloc == nil {
 		m := t.m.NewFunc("malloc", irtypes.I8Ptr, ir.NewParam("size", irtypes.I64))

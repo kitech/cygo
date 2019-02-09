@@ -19,6 +19,7 @@ func (t *translator) goToIRType(typ gotypes.Type) irtypes.Type {
 
 func (t *translator) goToIRTypeImpl(typ gotypes.Type) irtypes.Type {
 	typ = typ.Underlying()
+
 	switch typ := typ.(type) {
 	case *gotypes.Array:
 		irElemType := t.goToIRType(typ.Elem())

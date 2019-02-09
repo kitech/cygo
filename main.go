@@ -60,9 +60,20 @@ func main() {
 	packages.Visit(initial, func(p *packages.Package) bool {
 		return true
 	}, func(p *packages.Package) {
-		log.Println("Visit ", p)
 		ssaPkg := prog.Package(p.Types)
 		t.emitPackage(ssaPkg)
+
+		if p.Name == "main" {
+			ssaMain := ssaPkg.Func("main")
+			ssaInit := ssaPkg.Func("init")
+			irMain := t.goToIRValue[ssaMain].(*ir.Func)
+			irInit := t.goToIRValue[ssaInit].(*ir.Func)
+
+			var insts []ir.Instruction
+			insts = append(insts, ir.NewCall(irInit))
+			insts = append(insts, irMain.Blocks[0].Insts...)
+			irMain.Blocks[0].Insts = insts
+		}
 	})
 
 	os.Stdout.WriteString(t.m.String())
@@ -91,17 +102,9 @@ func (t *translator) emitPackage(p *ssa.Package) {
 		// log.Println("Consider member", m.String())
 		switch m := m.(type) {
 		case *ssa.Function:
-			if m.Name() == "init" {
-				// TODO(pwaller): For now don't care about init.
-				continue
-			}
 			funcs = append(funcs, m)
 
 		case *ssa.Global:
-			if m.Name() == "init$guard" {
-				// TODO(pwaller): For now don't care about init.
-				continue
-			}
 			globs = append(globs, m)
 
 		case *ssa.NamedConst:
@@ -161,9 +164,31 @@ func (t *translator) emitFunctionDecl(f *ssa.Function) *ir.Func {
 
 	irSig := t.goToIRType(f.Signature).(*irtypes.FuncType)
 
-	irFunc := t.m.NewFunc(f.String(), irSig.RetType, irParams...)
+	irFuncName := funcName(f)
+	irFunc := t.m.NewFunc(irFuncName, irSig.RetType, irParams...)
+
+	if len(f.Blocks) == 0 {
+		// For functions with no body, just return zero.
+		log.Println("emitting empty function body...", f.String())
+		irBlock := irFunc.NewBlock("")
+		irRetValue := irconstant.NewZeroInitializer(irSig.RetType)
+		irBlock.Term = irBlock.NewRet(irRetValue)
+	}
+
+	if irFuncName != "main" { // for dead code elimination, mark everything but main private.
+		// irFunc.Linkage = irenum.LinkagePrivate
+	}
+
 	t.goToIRValue[f] = irFunc
 	return irFunc
+}
+
+func funcName(f *ssa.Function) string {
+	if f.Name() == "main" {
+		// There can be one main...
+		return f.Name()
+	}
+	return f.String()
 }
 
 func (t *translator) emitFunctionBody(irFunc *ir.Func, f *ssa.Function) {
