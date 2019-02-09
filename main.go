@@ -8,6 +8,7 @@ import (
 	"sort"
 
 	"github.com/llir/llvm/ir"
+	irconstant "github.com/llir/llvm/ir/constant"
 	irenum "github.com/llir/llvm/ir/enum"
 	irtypes "github.com/llir/llvm/ir/types"
 	irvalue "github.com/llir/llvm/ir/value"
@@ -24,7 +25,7 @@ type translator struct {
 	goToIRValue map[ssa.Value]irvalue.Value
 
 	builtinPrintln, builtinMalloc irvalue.Value
-	constantStrings               map[string]irvalue.Value
+	constantStrings               map[string]irconstant.Constant
 	goToIRTypeCache               map[gotypes.Type]irtypes.Type
 }
 
@@ -50,16 +51,9 @@ func main() {
 		m: ir.Module{
 			TargetTriple: "x86_64-pc-linux-gnu",
 		},
-		constantStrings: map[string]irvalue.Value{},
+		constantStrings: map[string]irconstant.Constant{},
+		goToIRValue:     map[ssa.Value]irvalue.Value{},
 		goToIRTypeCache: map[gotypes.Type]irtypes.Type{},
-	}
-
-	if t.goToIRValue == nil {
-		t.goToIRValue = map[ssa.Value]irvalue.Value{}
-	} else {
-		for k := range t.goToIRValue {
-			delete(t.goToIRValue, k)
-		}
 	}
 
 	packages.Visit(initial, func(p *packages.Package) bool {
