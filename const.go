@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	goconstant "go/constant"
+	"strings"
 
 	"golang.org/x/tools/go/ssa"
 
@@ -67,6 +68,9 @@ func (t *translator) constantString(irBlock *ir.Block, s string) irconstant.Cons
 	}
 
 	irConstantS := irconstant.NewCharArrayFromString(s + "\x00")
+
+	// TODO(pwaller): Ensure non-colliding names (foo_ and foo\x00).
+	constName := strings.ReplaceAll(s, "\x00", "_")
 
 	irGlobal := t.m.NewGlobalDef("$const_str_"+constName, irConstantS)
 	irGlobal.Immutable = true

@@ -30,10 +30,39 @@ func (t *translator) emitCallBuiltinPrintln(
 		if i != 0 {
 			irBlock.NewCall(t.builtinPrintln, space)
 		}
+
+		if isString(goArg.Type()) {
+			t.emitWriteString(irBlock, goArg)
+			continue
+		}
+
 		fmt, val := t.makePrintArg(irBlock, goArg)
 		irBlock.NewCall(t.builtinPrintln, fmt, val)
 	}
 	irBlock.NewCall(t.builtinPrintln, newLine)
+}
+
+func (t *translator) emitWriteString(
+	irBlock *ir.Block,
+	goArg ssa.Value,
+) {
+	irStr := t.translateValue(irBlock, goArg)
+	irStrPtr := irBlock.NewExtractValue(irStr, 0)
+	irStrLen := irBlock.NewExtractValue(irStr, 1)
+
+	irStderr := irconstant.NewInt(irtypes.I32, 2)
+
+	if t.builtinWrite == nil {
+		f := t.m.NewFunc("write",
+			irtypes.Void,
+			ir.NewParam("fd", irtypes.I32),
+			ir.NewParam("buf", irtypes.I8Ptr),
+			ir.NewParam("count", irtypes.I64),
+		)
+		t.builtinWrite = f
+	}
+
+	irBlock.NewCall(t.builtinWrite, irStderr, irStrPtr, irStrLen)
 }
 
 func (t *translator) makePrintArg(
