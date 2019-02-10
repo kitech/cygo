@@ -134,6 +134,7 @@ func lower(out io.Writer, args []string) error {
 		ssaPkg := prog.Package(p.Types)
 		t.emitPackage(ssaPkg)
 
+		log.Printf("Visit package %q", p.Name)
 		if p.Name == "main" {
 			t.emitMainInitCall(ssaPkg)
 		}
@@ -167,7 +168,7 @@ func sortedMembers(nameToMember map[string]ssa.Member) (members []ssa.Member) {
 }
 
 func (t *translator) emitPackage(p *ssa.Package) {
-	log.Println(p.Pkg.Path())
+	log.Println("emitPackage:", p.Pkg.Path(), p.Pkg.Name())
 
 	var (
 		funcs      []*ssa.Function
@@ -253,6 +254,7 @@ func (t *translator) emitFunctionDecl(f *ssa.Function) *ir.Func {
 		irBlock := irFunc.NewBlock("")
 		irRetValue := irconstant.NewZeroInitializer(irSig.RetType)
 		irBlock.Term = irBlock.NewRet(irRetValue)
+		// f.Package().Pkg
 	}
 
 	if irFuncName != "main" { // for dead code elimination, mark everything but main private.
