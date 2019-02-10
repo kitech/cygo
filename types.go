@@ -62,7 +62,11 @@ func (t *translator) goToIRTypeImpl(typ gotypes.Type) irtypes.Type {
 
 	case *gotypes.Slice:
 		irElemType := t.goToIRType(typ.Elem())
-		return irtypes.NewStruct(irtypes.NewPointer(irElemType), irtypes.I64, irtypes.I64)
+		return irtypes.NewStruct(
+			irtypes.NewPointer(irElemType),
+			irtypes.I64,
+			irtypes.I64,
+		)
 
 	case *gotypes.Struct:
 		var irFieldTypes []irtypes.Type

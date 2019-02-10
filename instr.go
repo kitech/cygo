@@ -476,11 +476,36 @@ func (t *translator) emitCallBuiltinAppend(
 	irBlock *ir.Block,
 	c *ssa.Call,
 ) {
-	// For now, pass through original arg unmodified.
-	t.goToIRValue[c] = t.translateValue(irBlock, c.Call.Args[0])
+	t.goToIRValue[c] = irconstant.NewUndef(t.goToIRType(c.Type()))
 
-	// TODO(pwaller): implement properly...
-	log.Println("unimplemented: emitCallBuiltinAppend")
+	return
+
+	irAppendee := t.translateValue(irBlock, c.Call.Args[0])
+	irAppendeePtr := irBlock.NewExtractValue(irAppendee, 0)
+	irAppendeeLen := irBlock.NewExtractValue(irAppendee, 1)
+	irAppendeeCap := irBlock.NewExtractValue(irAppendee, 2)
+
+	irAppended := t.translateValue(irBlock, c.Call.Args[1])
+	irAppendedPtr := irBlock.NewExtractValue(irAppended, 0)
+	irAppendedLen := irBlock.NewExtractValue(irAppended, 1)
+
+	// TODO(pwaller): It's probably wrong to use the Go elem size here.
+	// But we don't currently have an easy way to compute the llir one.
+	goElemSize := sizeof(c.Call.Args[0].Type().(*gotypes.Slice).Elem())
+
+	// irAppendeePtr.Type().(*irtypes.PointerType).ElemType
+
+	irElemSize := irconstant.NewInt(irtypes.I64, goElemSize)
+
+	t.goToIRValue[c] = irBlock.NewCall(
+		t.builtins.Append(t),
+		irBlock.NewBitCast(irAppendeePtr, irtypes.I8Ptr),
+		irAppendeeLen,
+		irAppendeeCap,
+		irBlock.NewBitCast(irAppendedPtr, irtypes.I8Ptr),
+		irAppendedLen,
+		irElemSize,
+	)
 }
 
 func (t *translator) emitChangeInterface(irBlock *ir.Block, c *ssa.ChangeInterface) {

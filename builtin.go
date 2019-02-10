@@ -2,11 +2,14 @@ package main
 
 import (
 	ir "github.com/llir/llvm/ir"
+	irconstant "github.com/llir/llvm/ir/constant"
 	irenum "github.com/llir/llvm/ir/enum"
 	irtypes "github.com/llir/llvm/ir/types"
+	irvalue "github.com/llir/llvm/ir/value"
 )
 
 type builtins struct {
+	append,
 	malloc,
 	memcpy,
 	printf,
@@ -70,4 +73,52 @@ func (b *builtins) Write(t *translator) *ir.Func {
 		)
 	}
 	return b.write
+}
+
+func (b *builtins) Append(t *translator) *ir.Func {
+	if b.append == nil {
+		// anySlice := irtypes.NewStruct(irtypes.I8Ptr, irtypes.I64, irtypes.I64)
+
+		irPtr := ir.NewParam("ptr", irtypes.I8Ptr)
+		irLen := ir.NewParam("len", irtypes.I64)
+		irCap := ir.NewParam("cap", irtypes.I64)
+		irMorePtr := ir.NewParam("moreptr", irtypes.I8Ptr)
+		irMoreLen := ir.NewParam("morelen", irtypes.I64)
+		irElemSize := ir.NewParam("elemsize", irtypes.I64)
+
+		b.append = t.m.NewFunc(
+			"append",
+			irtypes.NewStruct(irtypes.I8Ptr, irtypes.I64, irtypes.I64),
+			irPtr, irLen, irCap, irMorePtr, irMoreLen, irElemSize,
+		)
+
+		// TODO(pwaller): Implement this
+		// entry := b.append.NewBlock("entry")
+		// doResize := b.append.NewBlock("doResize")
+		// doInsert := b.append.NewBlock("doInsert")
+
+		// irNewLen := entry.NewAdd(irLen, irMoreLen)
+		// needResize := entry.NewICmp(irenum.IPredUGE, irNewLen, irCap)
+
+		// entry.NewCondBr(needResize, doResize, doInsert)
+
+		// doInsert.
+
+		// entry.New
+		// panic("unimplemented")
+	}
+	return b.append
+}
+
+func makeStruct(irBlock *ir.Block, values ...irvalue.Value) (ret irvalue.Value) {
+	// structType :=
+	var types []irtypes.Type
+	for _, v := range values {
+		types = append(types, v.Type())
+	}
+	ret = irconstant.NewUndef(irtypes.NewStruct(types...))
+	for i, v := range values {
+		ret = irBlock.NewInsertValue(ret, v, uint64(i))
+	}
+	return ret
 }
