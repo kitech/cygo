@@ -16,30 +16,25 @@ func (t *translator) emitCallBuiltinPrintln(
 	irBlock *ir.Block,
 	c *ssa.Call,
 ) {
-	if t.builtinPrintln == nil {
-		pl := t.m.NewFunc("printf", irtypes.Void, ir.NewParam("fmt", irtypes.I8Ptr))
-		pl.Sig.Variadic = true
-		t.builtinPrintln = pl
-	}
-
 	newLine := t.constantString(irBlock, "\n")
 	space := t.constantString(irBlock, " ")
 
 	goArgs := c.Call.Args
 	for i, goArg := range goArgs {
 		if i != 0 {
-			irBlock.NewCall(t.builtinPrintln, space)
+			irBlock.NewCall(t.builtins.Printf(t), space)
 		}
 
 		if isString(goArg.Type()) {
+			// Strings use write() so that nul bytes can be written.
 			t.emitWriteString(irBlock, goArg)
 			continue
 		}
 
 		fmt, val := t.makePrintArg(irBlock, goArg)
-		irBlock.NewCall(t.builtinPrintln, fmt, val)
+		irBlock.NewCall(t.builtins.Printf(t), fmt, val)
 	}
-	irBlock.NewCall(t.builtinPrintln, newLine)
+	irBlock.NewCall(t.builtins.Printf(t), newLine)
 }
 
 func (t *translator) emitWriteString(
@@ -52,17 +47,7 @@ func (t *translator) emitWriteString(
 
 	irStderr := irconstant.NewInt(irtypes.I32, 2)
 
-	if t.builtinWrite == nil {
-		f := t.m.NewFunc("write",
-			irtypes.Void,
-			ir.NewParam("fd", irtypes.I32),
-			ir.NewParam("buf", irtypes.I8Ptr),
-			ir.NewParam("count", irtypes.I64),
-		)
-		t.builtinWrite = f
-	}
-
-	irBlock.NewCall(t.builtinWrite, irStderr, irStrPtr, irStrLen)
+	irBlock.NewCall(t.builtins.Write(t), irStderr, irStrPtr, irStrLen)
 }
 
 func (t *translator) makePrintArg(

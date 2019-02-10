@@ -119,15 +119,12 @@ func (t *translator) emitAlloc(irBlock *ir.Block, a *ssa.Alloc) {
 }
 
 func (t *translator) emitAllocHeap(irBlock *ir.Block, a *ssa.Alloc) {
-
-	if t.builtinMalloc == nil {
-		m := t.m.NewFunc("malloc", irtypes.I8Ptr, ir.NewParam("size", irtypes.I64))
-		t.builtinMalloc = m
-	}
-
 	goElemType := a.Type().(*gotypes.Pointer).Elem()
 	sz := sizeof(goElemType)
-	irVoidPtr := irBlock.NewCall(t.builtinMalloc, irconstant.NewInt(irtypes.I64, sz))
+	irVoidPtr := irBlock.NewCall(
+		t.builtins.Malloc(t),
+		irconstant.NewInt(irtypes.I64, sz),
+	)
 	irPtr := irBlock.NewBitCast(irVoidPtr, t.goToIRType(a.Type()))
 	t.goToIRValue[a] = irPtr
 
@@ -387,16 +384,6 @@ func (t *translator) emitBinOpCmpStr(
 	irBlock *ir.Block,
 	b *ssa.BinOp,
 ) {
-	if t.builtinStrNCmp == nil {
-		t.builtinStrNCmp = t.m.NewFunc(
-			"strncmp",
-			irtypes.I32,
-			ir.NewParam("x", irtypes.I8Ptr),
-			ir.NewParam("y", irtypes.I8Ptr),
-			ir.NewParam("n", irtypes.I64),
-		)
-	}
-
 	irX := t.translateValue(irBlock, b.X)
 	irY := t.translateValue(irBlock, b.Y)
 
@@ -409,16 +396,17 @@ func (t *translator) emitBinOpCmpStr(
 	irCond := irBlock.NewICmp(irenum.IPredULE, irXLen, irYLen)
 	irMinLen := irBlock.NewSelect(irCond, irXLen, irYLen)
 
-	irStrNCmp := irBlock.NewCall(t.builtinStrNCmp, irXPtr, irYPtr, irMinLen)
+	irStrncmp := t.builtins.Strncmp(t)
+	irStrNCmpRet := irBlock.NewCall(irStrncmp, irXPtr, irYPtr, irMinLen)
 
-	irConstZero := irconstant.NewInt(t.builtinStrNCmp.Sig.RetType.(*irtypes.IntType), 0)
+	irConstZero := irconstant.NewInt(irStrncmp.Sig.RetType.(*irtypes.IntType), 0)
 
 	irPred, ok := goSignedToOpToIPred[signed][b.Op]
 	if !ok {
 		panic(fmt.Errorf("unimplemented: str comparison with %q", b.Op))
 	}
 
-	t.goToIRValue[b] = irBlock.NewICmp(irPred, irStrNCmp, irConstZero)
+	t.goToIRValue[b] = irBlock.NewICmp(irPred, irStrNCmpRet, irConstZero)
 }
 
 func (t *translator) emitCall(irBlock *ir.Block, c *ssa.Call) {

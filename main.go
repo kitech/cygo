@@ -27,7 +27,7 @@ type translator struct {
 
 	goToIRValue map[ssa.Value]irvalue.Value
 
-	builtinPrintln, builtinMalloc, builtinStrNCmp, builtinWrite *ir.Func
+	builtins builtins
 
 	constantStrings map[string]irconstant.Constant
 	goToIRTypeCache map[gotypes.Type]irtypes.Type
