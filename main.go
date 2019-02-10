@@ -119,7 +119,10 @@ func (t *translator) emitPackage(p *ssa.Package) {
 		case *ssa.Type:
 			gotypesObj, ok := m.Object().Type().(*gotypes.Named)
 			if !ok {
-				log.Printf("skipping methods of type %q: %T", m.String(), m.Object().Type())
+				if m.String() != "unsafe.Pointer" {
+					log.Printf("skipping methods of type %q: %T",
+						m.String(), m.Object().Type())
+				}
 				continue // Nothing to represent for now.
 			}
 			for i, n := 0, gotypesObj.NumMethods(); i < n; i++ {
