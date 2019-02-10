@@ -8,7 +8,6 @@ import (
 
 	ir "github.com/llir/llvm/ir"
 	irconstant "github.com/llir/llvm/ir/constant"
-	irenum "github.com/llir/llvm/ir/enum"
 	irtypes "github.com/llir/llvm/ir/types"
 	irvalue "github.com/llir/llvm/ir/value"
 )
@@ -88,28 +87,4 @@ func (t *translator) makePrintArg(
 
 	val = t.translateValue(irBlock, goArg)
 	return fmtStr, val
-
-	// msg := "makePrintArg: unimplemented goArg type: %T: %v"
-	// panic(fmt.Errorf(msg, goArg, goArg.Type()))
-	// fmtStr := t.constantString("")
-	// switch goType := goType.(type)
-}
-
-// constantString makes a global array representing the string s.
-func (t *translator) constantString(irBlock *ir.Block, s string) irconstant.Constant {
-	irC, ok := t.constantStrings[s]
-	if ok {
-		return irC
-	}
-
-	irConstantS := irconstant.NewCharArrayFromString(s + "\x00")
-
-	irGlobal := t.m.NewGlobalDef("$const_str_"+s, irConstantS)
-	irGlobal.Immutable = true
-	irGlobal.Linkage = irenum.LinkagePrivate
-
-	irZero := irconstant.NewInt(irtypes.I32, 0)
-	irC = irconstant.NewGetElementPtr(irGlobal, irZero, irZero)
-	t.constantStrings[s] = irC
-	return irC
 }
