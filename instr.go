@@ -669,8 +669,6 @@ func (t *translator) emitField(irBlock *ir.Block, f *ssa.Field) {
 }
 
 func (t *translator) emitFieldAddr(irBlock *ir.Block, f *ssa.FieldAddr) {
-	// log.Printf("unimplemented: emitFieldAddr")
-	// f.X
 	irX := t.translateValue(irBlock, f.X)
 	irZero := irconstant.NewInt(irtypes.I32, 0)
 	irIndex := irconstant.NewInt(irtypes.I32, int64(f.Field))
@@ -698,7 +696,6 @@ func (t *translator) emitIndexAddr(irBlock *ir.Block, i *ssa.IndexAddr) {
 	goXType := i.X.Type().Underlying()
 	switch goXType := goXType.(type) {
 	case *gotypes.Slice:
-
 		irSlice := t.translateValue(irBlock, i.X)
 		irPtr := irBlock.NewExtractValue(irSlice, 0)
 		irIndex := t.translateValue(irBlock, i.Index)
@@ -720,9 +717,8 @@ func (t *translator) emitIndexAddr(irBlock *ir.Block, i *ssa.IndexAddr) {
 		// panic("unhandled emitIndexArray")
 
 	default:
-		panic("unhandled emitIndexArray")
+		panic(fmt.Errorf("unhandled emitIndexArray: %T: %v", goXType, goXType))
 	}
-
 }
 
 func (t *translator) emitJump(irBlock *ir.Block, j *ssa.Jump) {
@@ -919,7 +915,6 @@ func (t *translator) emitStore(irBlock *ir.Block, s *ssa.Store) {
 
 func (t *translator) emitTypeAssert(irBlock *ir.Block, ta *ssa.TypeAssert) {
 	if ta.CommaOk {
-
 		commaOKType := irtypes.NewStruct(t.goToIRType(ta.AssertedType), irtypes.I1)
 		// TODO(pwaller): Undef until we have an implementation.
 		t.goToIRValue[ta] = irconstant.NewUndef(commaOKType)
