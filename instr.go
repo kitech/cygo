@@ -848,7 +848,39 @@ func (t *translator) emitSend(irBlock *ir.Block, s *ssa.Send) {
 }
 
 func (t *translator) emitSlice(irBlock *ir.Block, s *ssa.Slice) {
-	if isPtrToArray(s.X.Type()) {
+	switch {
+	case isSlice(s.X.Type()):
+		// TODO(pwaller): Bounds checks.
+		// TODO(pwaller): Copying of underlying data.
+		irX := t.translateValue(irBlock, s.X)
+		irSlicePtr := irBlock.NewExtractValue(irX, 0)
+		irOrigLen := irBlock.NewExtractValue(irX, 1)
+
+		var irLo irvalue.Value = irconstant.NewInt(irtypes.I64, 0)
+		var irHi irvalue.Value = irOrigLen
+		var irNewSlicePtr irvalue.Value = irSlicePtr
+
+		if s.Low != nil {
+			irLo = t.translateValue(irBlock, s.Low)
+			irSlicePtrInt := irBlock.NewPtrToInt(irSlicePtr, irtypes.I64)
+			irNewSlicePtrInt := irBlock.NewAdd(irSlicePtrInt, irLo)
+			irNewSlicePtr = irBlock.NewIntToPtr(irNewSlicePtrInt, irtypes.I8Ptr)
+		}
+		if s.High != nil {
+			irHi = t.translateValue(irBlock, s.High)
+		}
+		irNewLen := irBlock.NewSub(irHi, irLo)
+
+		var irS irvalue.Value = irconstant.NewUndef(t.goToIRType(s.Type()))
+		irS = irBlock.NewInsertValue(irS, irNewSlicePtr, 0)
+		irS = irBlock.NewInsertValue(irS, irNewLen, 1)
+		irS = irBlock.NewInsertValue(irS, irNewLen, 1)
+
+		t.goToIRValue[s] = irS
+
+	case isPtrToArray(s.X.Type()):
+		// TODO(pwaller): Bounds checks.
+		// TODO(pwaller): Copying of underlying data.
 		irX := t.translateValue(irBlock, s.X)
 		irZero := irconstant.NewInt(irtypes.I32, 0)
 		irSlicePtr := irBlock.NewGetElementPtr(irX, irZero, irZero)
@@ -862,15 +894,13 @@ func (t *translator) emitSlice(irBlock *ir.Block, s *ssa.Slice) {
 		irS = irBlock.NewInsertValue(irS, irLen, 1)
 
 		t.goToIRValue[s] = irS
-		//
-		// log.Printf("unimplemented: emitSlice: %v", s)
 		return
+	default:
+		// TODO(pwaller): Hack: not yet implemented.
+		t.goToIRValue[s] = irconstant.NewUndef(t.goToIRType(s.Type()))
+
+		log.Printf("unimplemented: emitSlice: %v", s)
 	}
-
-	// Hack: not yet implemented.
-	t.goToIRValue[s] = irconstant.NewUndef(t.goToIRType(s.Type()))
-
-	log.Printf("unimplemented: emitSlice: %v", s)
 }
 
 func (t *translator) emitStore(irBlock *ir.Block, s *ssa.Store) {
