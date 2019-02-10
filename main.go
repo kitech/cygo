@@ -4,8 +4,10 @@ import (
 	"fmt"
 	gotypes "go/types"
 	"io"
+	"io/ioutil"
 	"log"
 	"os"
+	"os/exec"
 	"sort"
 
 	"github.com/llir/llvm/ir"
@@ -37,10 +39,45 @@ func main() {
 		args = []string{"."}
 	}
 
+	if len(args) >= 2 && args[0] == "run" {
+		err := run(args[1:])
+		if err != nil {
+			log.Fatal(err)
+		}
+		return
+	}
+
 	err := lower(os.Stdout, args)
 	if err != nil {
 		log.Fatal(err)
 	}
+}
+
+func run(args []string) error {
+	fd, err := ioutil.TempFile("", "x_*.ll")
+	if err != nil {
+		return fmt.Errorf("ioutil.TempFile: %v", err)
+	}
+	defer os.Remove(fd.Name())
+	defer fd.Close()
+
+	err = lower(fd, args)
+	if err != nil {
+		return fmt.Errorf("lower: %v", err)
+	}
+
+	clang := exec.Command("clang", "-O3", fd.Name())
+	clang.Stdout = os.Stdout
+	clang.Stderr = os.Stderr
+	err = clang.Run()
+	if err != nil {
+		return fmt.Errorf("clang: %v", err)
+	}
+
+	aout := exec.Command("./a.out")
+	aout.Stdout = os.Stdout
+	aout.Stderr = os.Stderr
+	return aout.Run()
 }
 
 func lower(out io.Writer, args []string) error {
