@@ -2,11 +2,16 @@ package main
 
 import (
 	ir "github.com/llir/llvm/ir"
+	irenum "github.com/llir/llvm/ir/enum"
 	irtypes "github.com/llir/llvm/ir/types"
 )
 
 type builtins struct {
-	printf, malloc, memcpy, strncmp, write *ir.Func
+	malloc,
+	memcpy,
+	printf,
+	strncmp,
+	write *ir.Func
 }
 
 func (b *builtins) Printf(t *translator) *ir.Func {
@@ -26,6 +31,8 @@ func (b *builtins) Malloc(t *translator) *ir.Func {
 			irtypes.I8Ptr,
 			ir.NewParam("size", irtypes.I64),
 		)
+
+		b.malloc.ReturnAttrs = append(b.malloc.ReturnAttrs, irenum.ReturnAttrNoAlias)
 	}
 	return b.malloc
 }
