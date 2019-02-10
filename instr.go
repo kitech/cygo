@@ -583,12 +583,13 @@ func (t *translator) emitConvertSlice(irBlock *ir.Block, c *ssa.Convert) {
 	fromV, toT := t.translateValue(irBlock, c.X), t.goToIRType(to)
 
 	switch {
-	case isSlice(from) && isString(to): // s string := b []byte
+	case isString(to): // s string := b []byte
 		// Grab pointer and len.
 		irSlicePtr := irBlock.NewExtractValue(fromV, 0)
 		irLen := irBlock.NewExtractValue(fromV, 1)
 
-		// TODO(pwaller): If necessary, bitcast for string type here.
+		// TODO(pwaller): Require alloc and copy here.
+		log.Printf("unimplemented: emitConvertSlice: string not copied")
 
 		// Construct string type.
 		var irStr irvalue.Value = irconstant.NewUndef(toT)
@@ -599,7 +600,30 @@ func (t *translator) emitConvertSlice(irBlock *ir.Block, c *ssa.Convert) {
 	default:
 		panic(fmt.Errorf("unimplemented: emitConvertSlice: %v <- %v", to, from))
 	}
+}
 
+func (t *translator) emitConvertString(irBlock *ir.Block, c *ssa.Convert) {
+	from, to := c.X.Type(), c.Type()
+	fromV, toT := t.translateValue(irBlock, c.X), t.goToIRType(to)
+
+	switch {
+	case isSlice(to): // b []byte := s string
+		// Grab pointer and len.
+		irSlicePtr := irBlock.NewExtractValue(fromV, 0)
+		irLen := irBlock.NewExtractValue(fromV, 1)
+
+		log.Printf("unimplemented: emitConvertSlice: string not copied")
+
+		// Construct slice type.
+		var irSlice irvalue.Value = irconstant.NewUndef(toT)
+		irSlice = irBlock.NewInsertValue(irSlice, irSlicePtr, 0)
+		irSlice = irBlock.NewInsertValue(irSlice, irLen, 1)
+		irSlice = irBlock.NewInsertValue(irSlice, irLen, 2)
+		t.goToIRValue[c] = irSlice
+
+	default:
+		panic(fmt.Errorf("unimplemented: emitConvertSlice: %v <- %v", to, from))
+	}
 }
 
 func (t *translator) emitConvert(irBlock *ir.Block, c *ssa.Convert) {
@@ -614,8 +638,7 @@ func (t *translator) emitConvert(irBlock *ir.Block, c *ssa.Convert) {
 		t.emitConvertFloat(irBlock, c)
 
 	case isString(from):
-		log.Printf("unimplemented: emitConvert: %v <- %v", to, from)
-		t.goToIRValue[c] = irconstant.NewUndef(t.goToIRType(to))
+		t.emitConvertString(irBlock, c)
 
 	case isPointer(from):
 		t.goToIRValue[c] = irBlock.NewBitCast(fromV, toT)
