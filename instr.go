@@ -576,18 +576,26 @@ func (t *translator) emitConvertSlice(irBlock *ir.Block, c *ssa.Convert) {
 		irSlicePtr := irBlock.NewExtractValue(fromV, 0)
 		irLen := irBlock.NewExtractValue(fromV, 1)
 
-		// TODO(pwaller): Require alloc and copy here.
-		log.Printf("unimplemented: emitConvertSlice: string not copied")
+		irNewStringPtr := t.copyBytes(irBlock, irSlicePtr, irLen)
 
 		// Construct string type.
 		var irStr irvalue.Value = irconstant.NewUndef(toT)
-		irStr = irBlock.NewInsertValue(irStr, irSlicePtr, 0)
+		irStr = irBlock.NewInsertValue(irStr, irNewStringPtr, 0)
 		irStr = irBlock.NewInsertValue(irStr, irLen, 1)
 		t.goToIRValue[c] = irStr
 
 	default:
 		panic(fmt.Errorf("unimplemented: emitConvertSlice: %v <- %v", to, from))
 	}
+}
+
+// copyBytes copies irLen bytes from irPtr into newly allocated memory.
+func (t *translator) copyBytes(
+	irBlock *ir.Block, irPtr, irLen irvalue.Value,
+) irvalue.Value {
+	irNewPtr := irBlock.NewCall(t.builtins.Malloc(t), irLen)
+	irBlock.NewCall(t.builtins.Memcpy(t), irNewPtr, irPtr, irLen)
+	return irNewPtr
 }
 
 func (t *translator) emitConvertString(irBlock *ir.Block, c *ssa.Convert) {
@@ -600,11 +608,11 @@ func (t *translator) emitConvertString(irBlock *ir.Block, c *ssa.Convert) {
 		irSlicePtr := irBlock.NewExtractValue(fromV, 0)
 		irLen := irBlock.NewExtractValue(fromV, 1)
 
-		log.Printf("unimplemented: emitConvertSlice: string not copied")
+		irNewStringPtr := t.copyBytes(irBlock, irSlicePtr, irLen)
 
 		// Construct slice type.
 		var irSlice irvalue.Value = irconstant.NewUndef(toT)
-		irSlice = irBlock.NewInsertValue(irSlice, irSlicePtr, 0)
+		irSlice = irBlock.NewInsertValue(irSlice, irNewStringPtr, 0)
 		irSlice = irBlock.NewInsertValue(irSlice, irLen, 1)
 		irSlice = irBlock.NewInsertValue(irSlice, irLen, 2)
 		t.goToIRValue[c] = irSlice
