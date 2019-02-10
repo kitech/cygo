@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	gotypes "go/types"
+	"io"
 	"log"
 	"os"
 	"sort"
@@ -36,13 +37,20 @@ func main() {
 		args = []string{"."}
 	}
 
+	err := lower(os.Stdout, args)
+	if err != nil {
+		log.Fatal(err)
+	}
+}
+
+func lower(out io.Writer, args []string) error {
 	cfg := &packages.Config{Mode: packages.LoadAllSyntax}
 	initial, err := packages.Load(cfg, args...)
 	if err != nil {
-		log.Fatal("packages.Load: ", err)
+		return fmt.Errorf("packages.Load: ", err)
 	}
 	if packages.PrintErrors(initial) > 0 {
-		log.Fatalf("packages contain errors")
+		return fmt.Errorf("packages contain errors")
 	}
 
 	prog, _ := ssautil.AllPackages(initial, 0)
@@ -69,7 +77,8 @@ func main() {
 		}
 	})
 
-	os.Stdout.WriteString(t.m.String())
+	_, err = io.WriteString(out, t.m.String())
+	return err
 }
 
 // emitMainInitCall inserts a call to init() at the top of the main() func.
