@@ -35,6 +35,7 @@ func main() {
 	if len(args) == 0 {
 		args = []string{"."}
 	}
+
 	cfg := &packages.Config{Mode: packages.LoadAllSyntax}
 	initial, err := packages.Load(cfg, args...)
 	if err != nil {
@@ -64,19 +65,24 @@ func main() {
 		t.emitPackage(ssaPkg)
 
 		if p.Name == "main" {
-			ssaMain := ssaPkg.Func("main")
-			ssaInit := ssaPkg.Func("init")
-			irMain := t.goToIRValue[ssaMain].(*ir.Func)
-			irInit := t.goToIRValue[ssaInit].(*ir.Func)
-
-			var insts []ir.Instruction
-			insts = append(insts, ir.NewCall(irInit))
-			insts = append(insts, irMain.Blocks[0].Insts...)
-			irMain.Blocks[0].Insts = insts
+			t.emitMainInitCall(ssaPkg)
 		}
 	})
 
 	os.Stdout.WriteString(t.m.String())
+}
+
+// emitMainInitCall inserts a call to init() at the top of the main() func.
+func (t *translator) emitMainInitCall(p *ssa.Package) {
+	goMain := p.Func("main")
+	goInit := p.Func("init")
+	irMain := t.goToIRValue[goMain].(*ir.Func)
+	irInit := t.goToIRValue[goInit].(*ir.Func)
+
+	var insts []ir.Instruction
+	insts = append(insts, ir.NewCall(irInit))
+	insts = append(insts, irMain.Blocks[0].Insts...)
+	irMain.Blocks[0].Insts = insts
 }
 
 func sortedMembers(nameToMember map[string]ssa.Member) (members []ssa.Member) {
