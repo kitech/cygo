@@ -39,12 +39,21 @@ func main() {
 		args = []string{"."}
 	}
 
-	if len(args) >= 2 && args[0] == "run" {
-		err := run(args[1:])
-		if err != nil {
-			log.Fatal(err)
+	if len(args) >= 2 {
+		switch args[0] {
+		case "run":
+			err := run(args[1:])
+			if err != nil {
+				log.Fatal(err)
+			}
+			return
+		case "build":
+			err := build("./a.out", args[1:])
+			if err != nil {
+				log.Fatal(err)
+			}
+			return
 		}
-		return
 	}
 
 	err := lower(os.Stdout, args)
@@ -54,6 +63,26 @@ func main() {
 }
 
 func run(args []string) error {
+	fdAOut, err := ioutil.TempFile("", "a.*.out")
+	if err != nil {
+		return fmt.Errorf("ioutil.TempFile: %v", err)
+	}
+	exePath := fdAOut.Name()
+	_ = fdAOut.Close()
+	defer os.Remove(exePath)
+
+	err = build(exePath, args)
+	if err != nil {
+		return err
+	}
+
+	exe := exec.Command(exePath)
+	exe.Stdout = os.Stdout
+	exe.Stderr = os.Stderr
+	return exe.Run()
+}
+
+func build(exePath string, args []string) error {
 	fd, err := ioutil.TempFile("", "x_*.ll")
 	if err != nil {
 		return fmt.Errorf("ioutil.TempFile: %v", err)
@@ -66,18 +95,14 @@ func run(args []string) error {
 		return fmt.Errorf("lower: %v", err)
 	}
 
-	clang := exec.Command("clang", "-O3", fd.Name())
+	clang := exec.Command("clang", "-O3", "-o", exePath, fd.Name())
 	clang.Stdout = os.Stdout
 	clang.Stderr = os.Stderr
 	err = clang.Run()
 	if err != nil {
 		return fmt.Errorf("clang: %v", err)
 	}
-
-	aout := exec.Command("./a.out")
-	aout.Stdout = os.Stdout
-	aout.Stderr = os.Stderr
-	return aout.Run()
+	return nil
 }
 
 func lower(out io.Writer, args []string) error {
