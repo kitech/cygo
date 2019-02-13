@@ -9,4 +9,4 @@ require (
 	golang.org/x/tools v0.0.0-20190208222737-3744606dbb67
 )
 
-// replace github.com/llir/llvm => ./llvm
+replace github.com/llir/llvm => ./llvm
