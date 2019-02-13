@@ -39,7 +39,7 @@ func main() {
 		args = []string{"."}
 	}
 
-	if len(args) >= 2 {
+	if len(args) >= 1 {
 		switch args[0] {
 		case "run":
 			err := run(args[1:])
