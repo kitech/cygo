@@ -109,7 +109,7 @@ func lower(out io.Writer, args []string) error {
 	cfg := &packages.Config{Mode: packages.LoadAllSyntax}
 	initial, err := packages.Load(cfg, args...)
 	if err != nil {
-		return fmt.Errorf("packages.Load: ", err)
+		return fmt.Errorf("packages.Load: %v", err)
 	}
 	if packages.PrintErrors(initial) > 0 {
 		return fmt.Errorf("packages contain errors")
