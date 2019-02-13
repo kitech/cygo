@@ -134,9 +134,8 @@ func lower(out io.Writer, args []string) error {
 		ssaPkg := prog.Package(p.Types)
 		t.emitPackage(ssaPkg)
 
-		log.Printf("Visit package %q", p.Name)
 		if p.Name == "main" {
-			t.emitMainInitCall(ssaPkg)
+			t.emitEntryPoint(ssaPkg)
 		}
 	})
 
@@ -145,16 +144,17 @@ func lower(out io.Writer, args []string) error {
 }
 
 // emitMainInitCall inserts a call to init() at the top of the main() func.
-func (t *translator) emitMainInitCall(p *ssa.Package) {
+func (t *translator) emitEntryPoint(p *ssa.Package) {
 	goMain := p.Func("main")
 	goInit := p.Func("init")
 	irMain := t.goToIRValue[goMain].(*ir.Func)
 	irInit := t.goToIRValue[goInit].(*ir.Func)
 
-	var insts []ir.Instruction
-	insts = append(insts, ir.NewCall(irInit))
-	insts = append(insts, irMain.Blocks[0].Insts...)
-	irMain.Blocks[0].Insts = insts
+	irEntryPoint := t.m.NewFunc("main", irtypes.I32)
+	irBlock := irEntryPoint.NewBlock("entry")
+	irBlock.NewCall(irInit)
+	irBlock.NewCall(irMain)
+	irBlock.NewRet(irconstant.NewInt(irtypes.I32, 0))
 }
 
 func sortedMembers(nameToMember map[string]ssa.Member) (members []ssa.Member) {
@@ -168,7 +168,7 @@ func sortedMembers(nameToMember map[string]ssa.Member) (members []ssa.Member) {
 }
 
 func (t *translator) emitPackage(p *ssa.Package) {
-	log.Println("emitPackage:", p.Pkg.Path(), p.Pkg.Name())
+	// log.Println("emitPackage:", p.Pkg.Path(), p.Pkg.Name())
 
 	var (
 		funcs      []*ssa.Function
@@ -245,7 +245,7 @@ func (t *translator) emitFunctionDecl(f *ssa.Function) *ir.Func {
 
 	irSig := t.goToIRType(f.Signature).(*irtypes.FuncType)
 
-	irFuncName := funcName(f)
+	irFuncName := f.String()
 	irFunc := t.m.NewFunc(irFuncName, irSig.RetType, irParams...)
 
 	if len(f.Blocks) == 0 {
@@ -258,19 +258,11 @@ func (t *translator) emitFunctionDecl(f *ssa.Function) *ir.Func {
 	}
 
 	if irFuncName != "main" { // for dead code elimination, mark everything but main private.
-		// irFunc.Linkage = irenum.LinkagePrivate
+		irFunc.Linkage = irenum.LinkagePrivate
 	}
 
 	t.goToIRValue[f] = irFunc
 	return irFunc
-}
-
-func funcName(f *ssa.Function) string {
-	if f.Name() == "main" {
-		// There can be one main...
-		return f.Name()
-	}
-	return f.String()
 }
 
 func (t *translator) emitFunctionBody(irFunc *ir.Func, f *ssa.Function) {
