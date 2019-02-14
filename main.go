@@ -146,7 +146,13 @@ func lower(out io.Writer, args []string) error {
 // emitMainInitCall inserts a call to init() at the top of the main() func.
 func (t *translator) emitEntryPoint(p *ssa.Package) {
 	goMain := p.Func("main")
+	if goMain == nil {
+		panic("no main")
+	}
 	goInit := p.Func("init")
+	if goInit == nil {
+		panic("no init")
+	}
 	irMain := t.goToIRValue[goMain].(*ir.Func)
 	irInit := t.goToIRValue[goInit].(*ir.Func)
 
