@@ -86,6 +86,9 @@ func (t *translator) makePrintArg(
 
 		return fmtStr, val
 
+	case isPointer(goType):
+		fmtStr = t.constantString(irBlock, "%p")
+
 	default:
 		panic(fmt.Errorf("makePrintArg: unknown type: %T: %v: %v", goType, goType, goArg))
 	}
