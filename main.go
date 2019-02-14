@@ -203,6 +203,7 @@ func (t *translator) emitPackage(p *ssa.Package) {
 				}
 				continue // Nothing to represent for now.
 			}
+
 			for i, n := 0, gotypesObj.NumMethods(); i < n; i++ {
 				funcs = append(funcs, p.Prog.FuncValue(gotypesObj.Method(i)))
 			}
@@ -215,10 +216,6 @@ func (t *translator) emitPackage(p *ssa.Package) {
 			panic(fmt.Errorf("unhandled member: %T", m))
 		}
 	}
-
-	// First resolve named types, since these can be recursive and other things
-	// may depend on them.
-	log.Println("TODO: need to dealwith recursive named types")
 
 	for _, g := range globs {
 		t.emitGlobal(g)
@@ -260,7 +257,6 @@ func (t *translator) emitFunctionDecl(f *ssa.Function) *ir.Func {
 		irBlock := irFunc.NewBlock("")
 		irRetValue := irconstant.NewZeroInitializer(irSig.RetType)
 		irBlock.Term = irBlock.NewRet(irRetValue)
-		// f.Package().Pkg
 	}
 
 	if irFuncName != "main" { // for dead code elimination, mark everything but main private.

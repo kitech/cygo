@@ -12,8 +12,21 @@ func (t *translator) goToIRType(typ gotypes.Type) irtypes.Type {
 	if ok {
 		return x
 	}
+
+	var namedType *irtypes.Type
+	if _, ok := typ.(*gotypes.Named); ok {
+		// If the type is named, it might be recursive and need to refer to itself.
+		t.goToIRTypeCache[typ] = t.m.NewTypeDef(typ.String(), &irtypes.StructType{})
+		namedType = &t.m.TypeDefs[len(t.m.TypeDefs)-1]
+	}
+
 	x = t.goToIRTypeImpl(typ)
 	t.goToIRTypeCache[typ] = x
+
+	if namedType != nil {
+		*namedType = x
+		x.SetName(typ.String())
+	}
 	return x
 }
 
