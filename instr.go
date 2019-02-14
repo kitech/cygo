@@ -370,6 +370,18 @@ func (t *translator) emitBinOpCmp(
 
 		t.goToIRValue[b] = irBlock.NewICmp(iPred, irXInt, irYInt)
 
+	case isPointer(goParamType):
+		iPred := irenum.IPredEQ
+		if b.Op == token.NEQ {
+			iPred = irenum.IPredNE
+		}
+
+		// TODO(pwaller): Pointer comparisons are actually allowed, no need to convert to int.
+		irXInt := irBlock.NewPtrToInt(irX, irtypes.I64)
+		irYInt := irBlock.NewPtrToInt(irY, irtypes.I64)
+
+		t.goToIRValue[b] = irBlock.NewICmp(iPred, irXInt, irYInt)
+
 	case isStruct(goParamType):
 		log.Printf("unimplemented: emitBinOpCmp: struct: %T %v", goParamType, goParamType)
 		t.goToIRValue[b] = irconstant.NewUndef(irtypes.I1)
