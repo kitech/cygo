@@ -123,6 +123,9 @@ var basicToIR = map[gotypes.BasicKind]irtypes.Type{
 	gotypes.Float32: irtypes.Float,
 	gotypes.Float64: irtypes.Double,
 
+	gotypes.Complex64:  irtypes.NewStruct(irtypes.Float, irtypes.Float),
+	gotypes.Complex128: irtypes.NewStruct(irtypes.Double, irtypes.Double),
+
 	gotypes.String: irtypes.NewStruct(irtypes.I8Ptr, irtypes.I64),
 
 	gotypes.UnsafePointer: irtypes.I8Ptr,
