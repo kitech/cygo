@@ -698,7 +698,8 @@ func (t *translator) emitExtract(irBlock *ir.Block, e *ssa.Extract) {
 }
 
 func (t *translator) emitField(irBlock *ir.Block, f *ssa.Field) {
-	log.Printf("unimplemented: emitField")
+	irX := t.translateValue(irBlock, f.X)
+	t.goToIRValue[f] = irBlock.NewExtractValue(irX, uint64(f.Field))
 }
 
 func (t *translator) emitFieldAddr(irBlock *ir.Block, f *ssa.FieldAddr) {
