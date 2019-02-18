@@ -67,6 +67,7 @@ func (t *translator) goToIRTypeImpl(typ gotypes.Type) irtypes.Type {
 		}
 
 		var irParamTypes []irtypes.Type
+		irParamTypes = append(irParamTypes, irtypes.I8Ptr)
 		if typ.Recv() != nil {
 			irParamTypes = append(irParamTypes, t.goToIRType(typ.Recv().Type()))
 		}
@@ -74,7 +75,10 @@ func (t *translator) goToIRTypeImpl(typ gotypes.Type) irtypes.Type {
 			irParamTypes = append(irParamTypes, t.goToIRType(typ.Params().At(i).Type()))
 		}
 
-		return irtypes.NewFunc(irRetType, irParamTypes...)
+		irFunc := irtypes.NewFunc(irRetType, irParamTypes...)
+		irFuncPtr := irtypes.NewPointer(irFunc)
+		// { %funcType FuncPtr, i8* ClosureEnv }
+		return irtypes.NewStruct(irFuncPtr, irtypes.I8Ptr)
 
 	case *gotypes.Slice:
 		irElemType := t.goToIRType(typ.Elem())

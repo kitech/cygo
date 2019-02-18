@@ -229,14 +229,39 @@ func (t *translator) emitPackage(p *ssa.Package) {
 		irFuncs = append(irFuncs, irFunc)
 	}
 
-	for i, goFunc := range funcs {
-		irFunc := irFuncs[i]
-		t.emitFunctionBody(irFunc, goFunc)
+	for _, goFunc := range funcs {
+		t.emitFunctionBody(goFunc)
 	}
 }
 
 func (t *translator) emitFunctionDecl(f *ssa.Function) *ir.Func {
+	for _, anonF := range f.AnonFuncs {
+		t.emitFunctionDecl(anonF)
+	}
+
 	var irParams []*ir.Param
+	var irLoadFreeVars *ir.Block
+
+	if len(f.FreeVars) != 0 {
+		irLoadFreeVars = ir.NewBlock("loadFreeVars")
+
+		irClosureEnvAsI8Ptr := ir.NewParam("$closureEnv", irtypes.I8Ptr)
+		irParams = append(irParams, irClosureEnvAsI8Ptr)
+
+		var irFreeVarTypes []irtypes.Type
+		for _, goFreeVar := range f.FreeVars {
+			irFreeVarTypes = append(irFreeVarTypes, t.goToIRType(goFreeVar.Type()))
+		}
+		irClosureEnvPtrType := irtypes.NewPointer(irtypes.NewStruct(irFreeVarTypes...))
+		irClosureEnvPtr := irLoadFreeVars.NewBitCast(irClosureEnvAsI8Ptr, irClosureEnvPtrType)
+		for i, goFreeVar := range f.FreeVars {
+			irZero := irconstant.NewInt(irtypes.I32, 0)
+			irIdx := irconstant.NewInt(irtypes.I32, int64(i))
+			irFreeVarPtr := irLoadFreeVars.NewGetElementPtr(irClosureEnvPtr, irZero, irIdx)
+			irFreeVar := irLoadFreeVars.NewLoad(irFreeVarPtr)
+			t.goToIRValue[goFreeVar] = irFreeVar
+		}
+	}
 
 	// Note: this includes the reciever on methods.
 	for _, goParam := range f.Params {
@@ -246,10 +271,20 @@ func (t *translator) emitFunctionDecl(f *ssa.Function) *ir.Func {
 		t.goToIRValue[goParam] = irP
 	}
 
-	irSig := t.goToIRType(f.Signature).(*irtypes.FuncType)
+	// TODO(pwaller): note that irSig is going to be incorrect in the presence of free vars...
+	irSig := t.goToIRType(f.Signature).(*irtypes.StructType).
+		Fields[0].(*irtypes.PointerType).
+		ElemType.(*irtypes.FuncType)
+
+	// irRetType := t.goToIRType()
 
 	irFuncName := f.String()
 	irFunc := t.m.NewFunc(irFuncName, irSig.RetType, irParams...)
+
+	if irLoadFreeVars != nil {
+		// Terminator is set later.
+		irFunc.Blocks = append(irFunc.Blocks, irLoadFreeVars)
+	}
 
 	if len(f.Blocks) == 0 {
 		// For functions with no body, just return zero.
@@ -267,17 +302,23 @@ func (t *translator) emitFunctionDecl(f *ssa.Function) *ir.Func {
 	return irFunc
 }
 
-func (t *translator) emitFunctionBody(irFunc *ir.Func, f *ssa.Function) {
+func (t *translator) emitFunctionBody(f *ssa.Function) {
+	for _, anonF := range f.AnonFuncs {
+		t.emitFunctionBody(anonF)
+	}
+
+	irFunc := t.goToIRValue[f].(*ir.Func)
 	// Bulk of translation happens here, except for terminators and phis which
 	// can't be hooked up until their targets are constructed. So that happens
 	// below.
+	blockMap := map[*ssa.BasicBlock]*ir.Block{}
 	for _, goBB := range f.Blocks {
-		t.emitBlock(irFunc, goBB)
+		blockMap[goBB] = t.emitBlock(irFunc, goBB)
 	}
 
 	// Fixup Phi incoming edges.
-	for i, goBB := range f.Blocks {
-		irBlock := irFunc.Blocks[i]
+	for _, goBB := range f.Blocks {
+		irBlock := blockMap[goBB]
 
 		for _, goInstr := range goBB.Instrs {
 			goPhi, ok := goInstr.(*ssa.Phi)
@@ -298,14 +339,16 @@ func (t *translator) emitFunctionBody(irFunc *ir.Func, f *ssa.Function) {
 		}
 	}
 
-	if len(f.Blocks) == 0 {
-		// No blocks to convert, but they may have been synthesized.
-		return
-	}
+	// if len(f.Blocks) == 0 {
+	// 	// No blocks to convert, but they may have been synthesized.
+	// 	return
+	// }
 
 	// Fixup branching terminators.
-	for bbIdx, irBB := range irFunc.Blocks {
-		goBB := f.Blocks[bbIdx]
+	// for bbIdx, irBB := range irFunc.Blocks {
+	// goBB := f.Blocks[bbIdx]
+	for _, goBB := range f.Blocks {
+		irBB := blockMap[goBB]
 
 		switch irTerm := irBB.Term.(type) {
 		case *ir.TermBr:
@@ -316,9 +359,13 @@ func (t *translator) emitFunctionBody(irFunc *ir.Func, f *ssa.Function) {
 			irTerm.TargetFalse = irFunc.Blocks[goBB.Succs[1].Index]
 		}
 	}
+
+	if irFunc.Blocks[0].Term == nil {
+		irFunc.Blocks[0].NewBr(blockMap[f.Blocks[0]])
+	}
 }
 
-func (t *translator) emitBlock(irFunc *ir.Func, goBB *ssa.BasicBlock) {
+func (t *translator) emitBlock(irFunc *ir.Func, goBB *ssa.BasicBlock) *ir.Block {
 	irBlock := irFunc.NewBlock(fmt.Sprintf("bb_%03d", goBB.Index))
 	for _, goInst := range goBB.Instrs {
 		t.emitInstr(irBlock, goInst)
@@ -328,6 +375,7 @@ func (t *translator) emitBlock(irFunc *ir.Func, goBB *ssa.BasicBlock) {
 		lastI := goBB.Instrs[len(goBB.Instrs)-1]
 		panic(fmt.Sprintf("terminator not set, should be %T", lastI))
 	}
+	return irBlock
 }
 
 func (t *translator) emitGlobal(g *ssa.Global) {

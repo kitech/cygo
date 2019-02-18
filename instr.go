@@ -440,8 +440,23 @@ func (t *translator) emitCall(irBlock *ir.Block, c *ssa.Call) {
 		irArgs = append(irArgs, irArg)
 	}
 
+	irCallee := t.translateValue(irBlock, c.Call.Value)
+
+	if _, ok := irCallee.Type().(*irtypes.StructType); ok {
+		irClosure := irCallee
+		irCallee := irBlock.NewExtractValue(irCallee, 0)
+		log.Printf("NewCall(%T: %v, %v %T)", irCallee.Type(), irCallee.Type(), irCallee, irCallee)
+		irArgs = append([]irvalue.Value{irClosure}, irArgs...)
+		irCall := irBlock.NewCall(
+			irCallee,
+			irArgs...,
+		)
+		t.goToIRValue[c] = irCall
+		return
+	}
+
 	irCall := irBlock.NewCall(
-		t.translateValue(irBlock, c.Call.Value),
+		irCallee,
 		irArgs...,
 	)
 	t.goToIRValue[c] = irCall
@@ -790,7 +805,34 @@ func (t *translator) emitMakeChan(irBlock *ir.Block, m *ssa.MakeChan) {
 }
 
 func (t *translator) emitMakeClosure(irBlock *ir.Block, m *ssa.MakeClosure) {
-	log.Printf("unimplemented: emitMakeClosure")
+	// log.Printf("unimplemented: emitMakeClosure")
+	// log.Printf("makeClosure: %T: %v", m.Type(), m.Type())
+
+	// irBindingTypes = append(irBindingTypes, irtypes.NewPointer(t.goToIRType(m.Type())))
+	var irBindingTypes []irtypes.Type
+	for _, goBinding := range m.Bindings {
+		irBindingTypes = append(irBindingTypes, t.goToIRType(goBinding.Type()))
+	}
+
+	irClosureEnvType := irtypes.NewStruct(irBindingTypes...)
+
+	var irClosureEnv irvalue.Value = irconstant.NewUndef(irClosureEnvType)
+
+	// irClosureEnv = irBlock.NewInsertValue(irClosureEnv, , 0)
+
+	for i, goBinding := range m.Bindings {
+		irBinding := t.translateValue(irBlock, goBinding)
+		irClosureEnv = irBlock.NewInsertValue(irClosureEnv, irBinding, uint64(i))
+	}
+
+	// { %funcType FuncPtr, i8* ClosureEnv }
+	var irClosure irvalue.Value = irconstant.NewUndef(t.goToIRType(m.Type()))
+	irClosure = irBlock.NewInsertValue(irClosure, t.translateValue(irBlock, m.Fn), 0)
+
+	irClosureEnvI8Ptr := irBlock.NewBitCast(irClosureEnv, irtypes.I8Ptr)
+	irClosure = irBlock.NewInsertValue(irClosure, irClosureEnvI8Ptr, 1)
+
+	t.goToIRValue[m] = irClosure
 }
 
 func (t *translator) emitMakeInterface(irBlock *ir.Block, m *ssa.MakeInterface) {
@@ -817,7 +859,8 @@ func (t *translator) emitNext(irBlock *ir.Block, n *ssa.Next) {
 }
 
 func (t *translator) emitPanic(irBlock *ir.Block, p *ssa.Panic) {
-	irBlock.Term = ir.NewUnreachable()
+
+	irBlock.NewUnreachable()
 	log.Printf("unimplemented: emitPanic: generating unreachable")
 }
 

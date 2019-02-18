@@ -14,6 +14,8 @@ import (
 	irvalue "github.com/llir/llvm/ir/value"
 )
 
+// TODO(pwaller): Should not require irBlock parameter. I had it here because I didn't know how to construct constant strings, but now I've figured that out.
+
 func (t *translator) goConstToIR(
 	irBlock *ir.Block,
 	goConst *ssa.Const,
