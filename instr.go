@@ -215,8 +215,31 @@ func (t *translator) emitBinOpArith(
 		if b.Op != token.ADD {
 			panic(fmt.Errorf("emitBinOpArith: unknown op %q on strings", b.Op))
 		}
-		t.goToIRValue[b] = t.translateValue(irBlock, b.X) // Take left hand side only for now. Bogus result.
-		log.Printf("unimplemented: emitBinOpArithString +")
+
+		irX := t.translateValue(irBlock, b.X)
+		irY := t.translateValue(irBlock, b.Y)
+
+		irXPtr := irBlock.NewExtractValue(irX, 0)
+		irXLen := irBlock.NewExtractValue(irX, 1)
+		irYPtr := irBlock.NewExtractValue(irY, 0)
+		irYLen := irBlock.NewExtractValue(irY, 1)
+
+		irNewLen := irBlock.NewAdd(irXLen, irYLen)
+		irNewPtr := irBlock.NewCall(t.builtins.Malloc(t), irNewLen)
+		irNewPtrAsInt := irBlock.NewPtrToInt(irNewPtr, irtypes.I64)
+
+		irNewPtrYOff := irBlock.NewIntToPtr(
+			irBlock.NewAdd(irNewPtrAsInt, irXLen), irtypes.I8Ptr,
+		)
+
+		irBlock.NewCall(t.builtins.Memcpy(t), irNewPtr, irXPtr, irXLen)
+		irBlock.NewCall(t.builtins.Memcpy(t), irNewPtrYOff, irYPtr, irYLen)
+
+		var irSum irvalue.Value = irconstant.NewUndef(t.goToIRType(b.Type()))
+		irSum = irBlock.NewInsertValue(irSum, irNewPtr, 0)
+		irSum = irBlock.NewInsertValue(irSum, irNewLen, 1)
+
+		t.goToIRValue[b] = irSum
 		return
 	}
 
