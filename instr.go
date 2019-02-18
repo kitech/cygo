@@ -506,6 +506,18 @@ func (t *translator) emitCallBuiltin(
 		irLen := irBlock.NewExtractValue(irArg, lenFieldIdx)
 		t.goToIRValue[c] = irLen
 
+	case "cap":
+		if len(goArgs) != 1 {
+			panic(fmt.Errorf("cap() only accepts one argument, got %d", len(goArgs)))
+		}
+
+		goArg := goArgs[0]
+		irArg := t.translateValue(irBlock, goArg)
+
+		const capFieldIdx = 2
+		irCap := irBlock.NewExtractValue(irArg, capFieldIdx)
+		t.goToIRValue[c] = irCap
+
 	case "append":
 		t.emitCallBuiltinAppend(irBlock, c)
 
