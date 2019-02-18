@@ -333,14 +333,14 @@ func (t *translator) emitFunctionBody(f *ssa.Function) {
 	// Bulk of translation happens here, except for terminators and phis which
 	// can't be hooked up until their targets are constructed. So that happens
 	// below.
-	blockMap := map[*ssa.BasicBlock]*ir.Block{}
+	goBlockToIR := map[*ssa.BasicBlock]*ir.Block{}
 	for _, goBB := range f.Blocks {
-		blockMap[goBB] = t.emitBlock(irFunc, goBB)
+		goBlockToIR[goBB] = t.emitBlock(irFunc, goBB)
 	}
 
 	// Fixup Phi incoming edges.
 	for _, goBB := range f.Blocks {
-		irBlock := blockMap[goBB]
+		irBlock := goBlockToIR[goBB]
 
 		for _, goInstr := range goBB.Instrs {
 			goPhi, ok := goInstr.(*ssa.Phi)
@@ -361,16 +361,11 @@ func (t *translator) emitFunctionBody(f *ssa.Function) {
 		}
 	}
 
-	// if len(f.Blocks) == 0 {
-	// 	// No blocks to convert, but they may have been synthesized.
-	// 	return
-	// }
-
 	// Fixup branching terminators.
 	// for bbIdx, irBB := range irFunc.Blocks {
 	// goBB := f.Blocks[bbIdx]
 	for _, goBB := range f.Blocks {
-		irBB := blockMap[goBB]
+		irBB := goBlockToIR[goBB]
 
 		switch irTerm := irBB.Term.(type) {
 		case *ir.TermBr:
@@ -383,7 +378,7 @@ func (t *translator) emitFunctionBody(f *ssa.Function) {
 	}
 
 	if irFunc.Blocks[0].Term == nil {
-		irFunc.Blocks[0].NewBr(blockMap[f.Blocks[0]])
+		irFunc.Blocks[0].NewBr(goBlockToIR[f.Blocks[0]])
 	}
 }
 
