@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/exec"
 	"sort"
+	"strings"
 
 	"github.com/llir/llvm/ir"
 	irconstant "github.com/llir/llvm/ir/constant"
@@ -292,14 +293,6 @@ func (t *translator) emitFunctionDecl(f *ssa.Function) *ir.Func {
 		irFunc.Blocks = append(irFunc.Blocks, irLoadFreeVars)
 	}
 
-	if len(f.Blocks) == 0 {
-		// For functions with no body, just return zero.
-		log.Println("emitting empty function body...", f.String())
-		irBlock := irFunc.NewBlock("")
-		irRetValue := irconstant.NewZeroInitializer(irSig.RetType)
-		irBlock.Term = irBlock.NewRet(irRetValue)
-	}
-
 	if irFuncName != "main" { // for dead code elimination, mark everything but main private.
 		irFunc.Linkage = irenum.LinkagePrivate
 	}
@@ -314,6 +307,29 @@ func (t *translator) emitFunctionBody(f *ssa.Function) {
 	}
 
 	irFunc := t.goToIRValue[f].(*ir.Func)
+
+	if len(f.Blocks) == 0 {
+		// This function has no blocks; it is likely implemented in assembly.
+		// Look for an equivalent function with lower-case name, that's where
+		// the pure go implementation usually resides.
+		goGenericImpl := f.Package().Func(strings.ToLower(f.Name()))
+		if goGenericImpl != nil {
+			irGenericImpl := t.goToIRValue[goGenericImpl]
+			var irArgs []irvalue.Value
+			for _, irParam := range irFunc.Params {
+				irArgs = append(irArgs, irParam)
+			}
+			irBlock := irFunc.NewBlock("")
+			irRetValue := irBlock.NewCall(irGenericImpl, irArgs...)
+			irBlock.Term = irBlock.NewRet(irRetValue)
+		} else {
+			log.Println("emitting empty function body...", f.String())
+			irBlock := irFunc.NewBlock("")
+			irRetValue := irconstant.NewZeroInitializer(irFunc.Sig.RetType)
+			irBlock.Term = irBlock.NewRet(irRetValue)
+		}
+	}
+
 	// Bulk of translation happens here, except for terminators and phis which
 	// can't be hooked up until their targets are constructed. So that happens
 	// below.
