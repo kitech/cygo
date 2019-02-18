@@ -888,6 +888,7 @@ func (t *translator) emitMakeInterface(irBlock *ir.Block, m *ssa.MakeInterface) 
 
 func (t *translator) emitMakeMap(irBlock *ir.Block, m *ssa.MakeMap) {
 	log.Printf("unimplemented: emitMakeMap")
+	t.goToIRValue[m] = irconstant.NewUndef(t.goToIRType(m.Type()))
 }
 
 func (t *translator) emitMakeSlice(irBlock *ir.Block, m *ssa.MakeSlice) {
