@@ -95,7 +95,13 @@ func build(exePath string, args []string) error {
 		return fmt.Errorf("lower: %v", err)
 	}
 
-	clang := exec.Command("clang", "-O3", "-o", exePath, fd.Name())
+	clang := exec.Command(
+		"clang",
+		"-Wno-override-module",
+		"-O3",
+		"-o", exePath,
+		fd.Name(),
+	)
 	clang.Stdout = os.Stdout
 	clang.Stderr = os.Stderr
 	err = clang.Run()
