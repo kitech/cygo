@@ -93,6 +93,14 @@ func (t *translator) makePrintArg(
 	case isPointer(goType):
 		fmtStr = t.constantString(irBlock, "%p")
 
+	case isInterface(goType):
+		fmtStr = t.constantString(irBlock, "%p")
+
+		val = irBlock.NewExtractValue(
+			t.translateValue(irBlock, goArg),
+			0,
+		)
+
 	default:
 		panic(fmt.Errorf("makePrintArg: unknown type: %T: %v: %v", goType, goType, goArg))
 	}
