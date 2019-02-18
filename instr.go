@@ -761,7 +761,17 @@ func (t *translator) emitIf(irBlock *ir.Block, i *ssa.If) {
 }
 
 func (t *translator) emitIndex(irBlock *ir.Block, i *ssa.Index) {
-	log.Printf("unimplemented: emitIndex")
+	irX := t.translateValue(irBlock, i.X)
+	irIndex := t.translateValue(irBlock, i.Index)
+	// TODO(pwaller): Woah yuck, have to do an alloca? This could use a lot of
+	// stack :(. Not sure what else we can do here. LLVM seemingly has no notion
+	// of dynamic index into an array value. Perhaps the best we can do is move
+	// the alloca up to the point of definition and do some sort of escape
+	// analysis. Grim. For now, do the horrible thing.
+	irXPtr := irBlock.NewAlloca(irX.Type())
+	irBlock.NewStore(irX, irXPtr)
+	irPtr := irBlock.NewGetElementPtr(irXPtr, irconstant.NewInt(irtypes.I32, 0), irIndex)
+	t.goToIRValue[i] = irBlock.NewLoad(irPtr)
 }
 
 func (t *translator) emitIndexAddr(irBlock *ir.Block, i *ssa.IndexAddr) {
