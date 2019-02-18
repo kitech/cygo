@@ -69,6 +69,9 @@ func (t *translator) makePrintArg(
 
 		fmtStr = t.constantString(irBlock, "%"+fmt)
 
+	case isFloat(goType):
+		fmtStr = t.constantString(irBlock, "%+e")
+
 	case isString(goType):
 		fmtStr = t.constantString(irBlock, "%s")
 
