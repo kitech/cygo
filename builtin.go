@@ -19,8 +19,9 @@ type builtins struct {
 
 func (b *builtins) Printf(t *translator) *ir.Func {
 	if b.printf == nil {
-		b.printf = t.m.NewFunc("printf",
+		b.printf = t.m.NewFunc("dprintf",
 			irtypes.Void,
+			ir.NewParam("fd", irtypes.I32),
 			ir.NewParam("fmt", irtypes.I8Ptr),
 		)
 		b.printf.Sig.Variadic = true

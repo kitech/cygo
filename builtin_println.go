@@ -18,11 +18,12 @@ func (t *translator) emitCallBuiltinPrintln(
 ) {
 	newLine := t.constantString(irBlock, "\n")
 	space := t.constantString(irBlock, " ")
+	irStderr := irconstant.NewInt(irtypes.I32, 2)
 
 	goArgs := c.Call.Args
 	for i, goArg := range goArgs {
 		if i != 0 {
-			irBlock.NewCall(t.builtins.Printf(t), space)
+			irBlock.NewCall(t.builtins.Printf(t), irStderr, space)
 		}
 
 		if isString(goArg.Type()) {
@@ -32,9 +33,9 @@ func (t *translator) emitCallBuiltinPrintln(
 		}
 
 		fmt, val := t.makePrintArg(irBlock, goArg)
-		irBlock.NewCall(t.builtins.Printf(t), fmt, val)
+		irBlock.NewCall(t.builtins.Printf(t), irStderr, fmt, val)
 	}
-	irBlock.NewCall(t.builtins.Printf(t), newLine)
+	irBlock.NewCall(t.builtins.Printf(t), irStderr, newLine)
 }
 
 func (t *translator) emitWriteString(
