@@ -56,14 +56,15 @@ func (t *translator) goConstToIR(
 		irTyp := t.goToIRType(goConstType).(*irtypes.FloatType)
 		return irconstant.NewFloat(irTyp, goConst.Float64())
 
-	case isConstant(goConstType):
-		irTyp := t.goToIRType(goConstType).(*irtypes.FloatType)
-		return irconstant.NewFloat(irTyp, goConst.Float64())
-		// irTyp := t.goToIRType(goConstType).(*irtypes.StructType)
-		// goConst.Complex128()
-		goconstant.Real(goConst)
+	case isComplex(goConstType):
+		irFloatTyp := t.goToIRType(goConstType).(*irtypes.StructType).Fields[0].(*irtypes.FloatType)
 
-		return irconstant.NewStruct(irReal, irImag)
+		c := goConst.Complex128()
+
+		return irconstant.NewStruct(
+			irconstant.NewFloat(irFloatTyp, real(c)),
+			irconstant.NewFloat(irFloatTyp, imag(c)),
+		)
 
 	default:
 		msg := "unimplemented constant: %v: %s"
