@@ -31,6 +31,20 @@ func (t *translator) emitCallBuiltinPrintln(
 			t.emitWriteString(irBlock, goArg)
 			continue
 		}
+		if isSlice(goArg.Type()) {
+			irSlice := t.translateValue(irBlock, goArg)
+			irPtr := irBlock.NewExtractValue(irSlice, 0)
+			irLen := irBlock.NewExtractValue(irSlice, 1)
+			irCap := irBlock.NewExtractValue(irSlice, 2)
+
+			irBlock.NewCall(
+				t.builtins.Printf(t),
+				irStderr,
+				t.constantString(irBlock, "[%d/%d]%p"),
+				irLen, irCap, irPtr,
+			)
+			continue
+		}
 
 		fmt, val := t.makePrintArg(irBlock, goArg)
 		irBlock.NewCall(t.builtins.Printf(t), irStderr, fmt, val)
