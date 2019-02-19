@@ -66,6 +66,9 @@ func (t *translator) goConstToIR(
 			irconstant.NewFloat(irFloatTyp, imag(c)),
 		)
 
+	case isUnsafePointer(goConstType):
+		return irconstant.NewInt(irtypes.I64, goConst.Int64())
+
 	default:
 		msg := "unimplemented constant: %v: %s"
 		panic(fmt.Sprintf(msg, goConst.Value.Kind(), goConst))
