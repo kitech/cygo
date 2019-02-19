@@ -409,6 +409,14 @@ func (t *translator) emitBinOpCmp(
 		log.Printf("unimplemented: emitBinOpCmp: struct: %T %v", goParamType, goParamType)
 		t.goToIRValue[b] = irconstant.NewUndef(irtypes.I1)
 
+	case isComplex(goParamType):
+		log.Printf("unimplemented: complex comparison")
+		t.goToIRValue[b] = irconstant.NewUndef(irtypes.I1)
+
+	case isSignature(goParamType):
+		log.Printf("unimplemented: signature comparison")
+		t.goToIRValue[b] = irconstant.NewUndef(irtypes.I1)
+
 	default:
 		msg := "unimplemented: emitBinOpCmp: %T: %v"
 		panic(fmt.Errorf(msg, goParamType, goParamType))
@@ -530,7 +538,9 @@ func (t *translator) emitCallBuiltin(
 
 	default:
 		// TODO(pwaller): A number of missing builtins.
-		panic(fmt.Errorf("unimplemented: emitCallBuiltin: %v", goBuiltin.Name()))
+		log.Printf("unimplemented: emitCallBuiltin: %v", goBuiltin.Name())
+		t.goToIRValue[c] = irconstant.NewUndef(t.goToIRType(c.Type()))
+		// panic(fmt.Errorf("unimplemented: emitCallBuiltin: %v", goBuiltin.Name()))
 	}
 }
 
@@ -576,6 +586,7 @@ func (t *translator) emitChangeInterface(irBlock *ir.Block, c *ssa.ChangeInterfa
 
 func (t *translator) emitChangeType(irBlock *ir.Block, c *ssa.ChangeType) {
 	log.Printf("unimplemented: emitChangeType")
+	t.goToIRValue[c] = irconstant.NewUndef(t.goToIRType(c.Type()))
 }
 
 func (t *translator) emitConvertInt(irBlock *ir.Block, c *ssa.Convert) {
@@ -589,6 +600,12 @@ func (t *translator) emitConvertInt(irBlock *ir.Block, c *ssa.Convert) {
 		} else {
 			t.goToIRValue[c] = irBlock.NewUIToFP(fromV, toT)
 		}
+		return
+	}
+
+	if isUnsafePointer(to) {
+		// Noop?
+		t.goToIRValue[c] = fromV
 		return
 	}
 
@@ -711,6 +728,9 @@ func (t *translator) emitConvertString(irBlock *ir.Block, c *ssa.Convert) {
 
 func (t *translator) emitConvert(irBlock *ir.Block, c *ssa.Convert) {
 	from, to := c.X.Type(), c.Type()
+	if gotypes.Identical(from.Underlying(), to.Underlying()) {
+		panic("this branch firing...")
+	}
 	fromV, toT := t.translateValue(irBlock, c.X), t.goToIRType(to)
 
 	switch {
@@ -802,13 +822,9 @@ func (t *translator) emitIndexAddr(irBlock *ir.Block, i *ssa.IndexAddr) {
 		}
 
 		irArrayPtr := t.translateValue(irBlock, i.X)
-		// irPtr := irBlock.NewExtractValue(irSlice, 0)
 		irIndex := t.translateValue(irBlock, i.Index)
 		irZero := irconstant.NewInt(irtypes.I64, 0)
 		t.goToIRValue[i] = irBlock.NewGetElementPtr(irArrayPtr, irZero, irIndex)
-
-		// Check that goXType.Elem() is an array.
-		// panic("unhandled emitIndexArray")
 
 	default:
 		panic(fmt.Errorf("unhandled emitIndexArray: %T: %v", goXType, goXType))
@@ -842,7 +858,8 @@ func (t *translator) emitLookup(irBlock *ir.Block, l *ssa.Lookup) {
 	// 	case *
 	// }
 
-	log.Printf("unimplemented: emitLookup")
+	t.goToIRValue[l] = irconstant.NewUndef(t.goToIRType(l.Type()))
+	log.Printf("unimplemented: emitLookupMap")
 }
 
 func (t *translator) emitMakeChan(irBlock *ir.Block, m *ssa.MakeChan) {
@@ -933,7 +950,6 @@ func (t *translator) emitRange(irBlock *ir.Block, r *ssa.Range) {
 }
 
 func (t *translator) emitReturn(irBlock *ir.Block, r *ssa.Return) {
-	// _ = irvalue.Value(nil)
 	var retVal irvalue.Value
 	switch {
 	case len(r.Results) == 0:
@@ -947,8 +963,6 @@ func (t *translator) emitReturn(irBlock *ir.Block, r *ssa.Return) {
 			irResult := t.translateValue(irBlock, goResult)
 			retVal = irBlock.NewInsertValue(retVal, irResult, uint64(i))
 		}
-		// retVal
-		// panic("multiple return not yet supported.")
 	}
 	irBlock.Term = ir.NewRet(retVal)
 }
@@ -1113,6 +1127,10 @@ func (t *translator) emitUnOp(irBlock *ir.Block, u *ssa.UnOp) {
 		}
 
 		panic(fmt.Errorf("unimplemented: UnOp: %q: %s; t = %v", u.Op, u, goXType))
+
+	case token.ARROW:
+		log.Printf("unimplemented: channel recv")
+		t.goToIRValue[u] = irconstant.NewUndef(t.goToIRType(u.Type()))
 
 	default:
 		panic(fmt.Errorf("unimplemented: UnOp: %q: %s", u.Op, u))

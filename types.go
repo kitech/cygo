@@ -170,6 +170,15 @@ func isFloat(typ gotypes.Type) bool {
 	return basic.Info()&gotypes.IsFloat != 0
 }
 
+func isComplex(typ gotypes.Type) bool {
+	basic, ok := typ.Underlying().(*gotypes.Basic)
+	if !ok {
+		return false
+	}
+
+	return basic.Info()&gotypes.IsComplex != 0
+}
+
 func isInteger(typ gotypes.Type) bool {
 	basic, ok := typ.Underlying().(*gotypes.Basic)
 	if !ok {
@@ -228,6 +237,19 @@ func isArray(typ gotypes.Type) bool {
 
 func isPtrToArray(typ gotypes.Type) bool {
 	return isPointer(typ) && isArray(typ.(*gotypes.Pointer).Elem())
+}
+
+func isUnsafePointer(typ gotypes.Type) bool {
+	basic, ok := typ.Underlying().(*gotypes.Basic)
+	if !ok {
+		return false
+	}
+	return basic.Kind() == gotypes.UnsafePointer
+}
+
+func isSignature(typ gotypes.Type) bool {
+	_, ok := typ.Underlying().(*gotypes.Signature)
+	return ok
 }
 
 var sizeof = gotypes.SizesFor("gc", "amd64").Sizeof
