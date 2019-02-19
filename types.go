@@ -252,4 +252,9 @@ func isSignature(typ gotypes.Type) bool {
 	return ok
 }
 
+func isChan(typ gotypes.Type) bool {
+	_, ok := typ.Underlying().(*gotypes.Chan)
+	return ok
+}
+
 var sizeof = gotypes.SizesFor("gc", "amd64").Sizeof

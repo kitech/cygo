@@ -393,7 +393,7 @@ func (t *translator) emitBinOpCmp(
 
 		t.goToIRValue[b] = irBlock.NewICmp(iPred, irXInt, irYInt)
 
-	case isPointer(goParamType):
+	case isPointer(goParamType) || isChan(goParamType):
 		iPred := irenum.IPredEQ
 		if b.Op == token.NEQ {
 			iPred = irenum.IPredNE
