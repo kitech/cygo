@@ -283,8 +283,6 @@ func (t *translator) emitFunctionDecl(f *ssa.Function) *ir.Func {
 		Fields[0].(*irtypes.PointerType).
 		ElemType.(*irtypes.FuncType)
 
-	// irRetType := t.goToIRType()
-
 	irFuncName := f.String()
 	irFunc := t.m.NewFunc(irFuncName, irSig.RetType, irParams...)
 
@@ -432,6 +430,7 @@ func (t *translator) translateValue(
 		return irPhi
 
 	default:
-		panic(fmt.Sprintf("unknown goValue: %T: %v", goValue, goValue))
+		log.Printf("unknown goValue: %T: %v", goValue, goValue)
+		return irconstant.NewUndef(t.goToIRType(goValue.Type()))
 	}
 }

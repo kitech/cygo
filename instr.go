@@ -417,6 +417,14 @@ func (t *translator) emitBinOpCmp(
 		log.Printf("unimplemented: signature comparison")
 		t.goToIRValue[b] = irconstant.NewUndef(irtypes.I1)
 
+	case isSlice(goParamType):
+		log.Printf("unimplemented: slice comparison")
+		t.goToIRValue[b] = irconstant.NewUndef(irtypes.I1)
+
+	case isArray(goParamType):
+		log.Printf("unimplemented: array comparison")
+		t.goToIRValue[b] = irconstant.NewUndef(irtypes.I1)
+
 	default:
 		msg := "unimplemented: emitBinOpCmp: %T: %v"
 		panic(fmt.Errorf(msg, goParamType, goParamType))
@@ -863,6 +871,7 @@ func (t *translator) emitLookup(irBlock *ir.Block, l *ssa.Lookup) {
 }
 
 func (t *translator) emitMakeChan(irBlock *ir.Block, m *ssa.MakeChan) {
+	t.goToIRValue[m] = irconstant.NewUndef(t.goToIRType(m.Type()))
 	log.Printf("unimplemented: emitMakeChan")
 }
 
@@ -914,10 +923,13 @@ func (t *translator) emitMakeSlice(irBlock *ir.Block, m *ssa.MakeSlice) {
 }
 
 func (t *translator) emitMapUpdate(irBlock *ir.Block, m *ssa.MapUpdate) {
+	// t.goToIRValue[m] = irconstant.NewUndef(t.goToIRType(m.Type()))
 	log.Printf("unimplemented: emitMapUpdate")
 }
 
 func (t *translator) emitNext(irBlock *ir.Block, n *ssa.Next) {
+	log.Printf("Next: %v %v", n, n.Type())
+	t.goToIRValue[n] = irconstant.NewUndef(t.goToIRType(n.Type()))
 	log.Printf("unimplemented: emitNext")
 }
 
@@ -973,6 +985,7 @@ func (t *translator) emitRunDefers(irBlock *ir.Block, r *ssa.RunDefers) {
 }
 
 func (t *translator) emitSelect(irBlock *ir.Block, s *ssa.Select) {
+	t.goToIRValue[s] = irconstant.NewUndef(t.goToIRType(s.Type()))
 	log.Printf("unimplemented: emitSelect")
 }
 
@@ -1130,6 +1143,10 @@ func (t *translator) emitUnOp(irBlock *ir.Block, u *ssa.UnOp) {
 
 	case token.ARROW:
 		log.Printf("unimplemented: channel recv")
+		t.goToIRValue[u] = irconstant.NewUndef(t.goToIRType(u.Type()))
+
+	case token.XOR:
+		log.Printf("unimplemented: token.XOR (^)")
 		t.goToIRValue[u] = irconstant.NewUndef(t.goToIRType(u.Type()))
 
 	default:
