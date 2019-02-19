@@ -1047,7 +1047,7 @@ func (t *translator) emitSliceOfSlice(irBlock *ir.Block, s *ssa.Slice) {
 	var irS irvalue.Value = irconstant.NewUndef(t.goToIRType(s.Type()))
 	irS = irBlock.NewInsertValue(irS, irNewSlicePtr, 0)
 	irS = irBlock.NewInsertValue(irS, irNewLen, 1)
-	irS = irBlock.NewInsertValue(irS, irNewLen, 1)
+	irS = irBlock.NewInsertValue(irS, irNewLen, 2)
 
 	t.goToIRValue[s] = irS
 }
@@ -1065,7 +1065,7 @@ func (t *translator) emitSliceOfArray(irBlock *ir.Block, s *ssa.Slice) {
 	var irS irvalue.Value = irconstant.NewUndef(t.goToIRType(s.Type()))
 	irS = irBlock.NewInsertValue(irS, irSlicePtr, 0)
 	irS = irBlock.NewInsertValue(irS, irLen, 1)
-	irS = irBlock.NewInsertValue(irS, irLen, 1)
+	irS = irBlock.NewInsertValue(irS, irLen, 2)
 
 	t.goToIRValue[s] = irS
 }
