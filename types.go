@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	gotypes "go/types"
+	"math/rand"
 
 	irtypes "github.com/llir/llvm/ir/types"
 )
@@ -18,10 +19,10 @@ func (t *translator) goToIRType(typ gotypes.Type) irtypes.Type {
 	if isNamedStruct(typ) {
 		// If the type is named, it might be recursive and need to refer to itself.
 		namedStruct = &irtypes.StructType{}
-		t.goToIRTypeCache[typ] = t.m.NewTypeDef(typ.String(), namedStruct)
+		t.goToIRTypeCache[typ] = t.m.NewTypeDef(getTypeName(typ), namedStruct)
 	} else if isNamedSignature(typ) {
 		namedSig = &irtypes.StructType{}
-		t.goToIRTypeCache[typ] = t.m.NewTypeDef(typ.String(), namedSig)
+		t.goToIRTypeCache[typ] = t.m.NewTypeDef(getTypeName(typ), namedSig)
 	}
 
 	x = t.goToIRTypeImpl(typ)
@@ -32,7 +33,7 @@ func (t *translator) goToIRType(typ gotypes.Type) irtypes.Type {
 	} else if namedSig != nil {
 		*namedSig = *x.(*irtypes.StructType)
 		x = namedSig
-		x.SetName(typ.String())
+		x.SetName(getTypeName(typ))
 	}
 
 	t.goToIRTypeCache[typ] = x
@@ -55,6 +56,14 @@ func isNamedSignature(typ gotypes.Type) bool {
 	}
 	_, ok = named.Underlying().(*gotypes.Signature)
 	return ok
+}
+
+// getTypeName makes a unique type for a name. Note that the 'qualified' type
+// name might not be globally unique because named types may be defined within
+// an inner scope (such as a function, or if block)
+func getTypeName(typ gotypes.Type) string {
+	// TODO(pwaller): Something better than a random int, which is a bit messy.
+	return fmt.Sprintf("%s-%d", typ.String(), rand.Int())
 }
 
 func (t *translator) goToIRTypeImpl(typ gotypes.Type) irtypes.Type {
