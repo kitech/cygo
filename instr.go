@@ -926,19 +926,26 @@ func (t *translator) emitMakeClosure(irBlock *ir.Block, m *ssa.MakeClosure) {
 	irClosureEnvType := irtypes.NewStruct(irBindingTypes...)
 
 	var irClosureEnv irvalue.Value = irconstant.NewUndef(irClosureEnvType)
-
-	// irClosureEnv = irBlock.NewInsertValue(irClosureEnv, , 0)
-
 	for i, goBinding := range m.Bindings {
 		irBinding := t.translateValue(irBlock, goBinding)
 		irClosureEnv = irBlock.NewInsertValue(irClosureEnv, irBinding, uint64(i))
 	}
 
+	irClosureEnvI8Ptr := irBlock.NewCall(
+		t.builtins.Malloc(t),
+		// TODO(pwaller): Compute actual size. Think we might want to form the
+		// go struct and use gosizes, perhaps... See:
+		// https://github.com/llir/llvm/issues/66 - and the idea to use
+		// llvm.objectsize.
+		irconstant.NewInt(irtypes.I64, 1024),
+	)
+
+	irBlock.NewStore(irClosureEnv, irBlock.NewBitCast(irClosureEnvI8Ptr, irtypes.NewPointer(irClosureEnvType)))
+
 	// { %funcType FuncPtr, i8* ClosureEnv }
 	var irClosure irvalue.Value = irconstant.NewUndef(t.goToIRType(m.Type()))
 	irClosure = irBlock.NewInsertValue(irClosure, t.translateValue(irBlock, m.Fn), 0)
 
-	irClosureEnvI8Ptr := irBlock.NewBitCast(irClosureEnv, irtypes.I8Ptr)
 	irClosure = irBlock.NewInsertValue(irClosure, irClosureEnvI8Ptr, 1)
 
 	t.goToIRValue[m] = irClosure
