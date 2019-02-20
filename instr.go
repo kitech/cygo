@@ -638,8 +638,7 @@ func (t *translator) emitConvertInt(irBlock *ir.Block, c *ssa.Convert) {
 	}
 
 	if isUnsafePointer(to) {
-		// Noop?
-		t.goToIRValue[c] = fromV
+		t.goToIRValue[c] = irBlock.NewIntToPtr(fromV, toT)
 		return
 	}
 
@@ -786,6 +785,11 @@ func (t *translator) emitConvert(irBlock *ir.Block, c *ssa.Convert) {
 		t.emitConvertString(irBlock, c)
 
 	case isPointer(from):
+		if isInteger(to) {
+			t.goToIRValue[c] = irBlock.NewPtrToInt(fromV, toT)
+			return
+		}
+
 		t.goToIRValue[c] = irBlock.NewBitCast(fromV, toT)
 
 	case isSlice(from):
