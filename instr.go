@@ -1082,7 +1082,7 @@ func (t *translator) emitSliceOfSlice(irBlock *ir.Block, s *ssa.Slice) {
 		irLo = t.translateValue(irBlock, s.Low)
 		irSlicePtrInt := irBlock.NewPtrToInt(irSlicePtr, irtypes.I64)
 		irNewSlicePtrInt := irBlock.NewAdd(irSlicePtrInt, irLo)
-		irNewSlicePtr = irBlock.NewIntToPtr(irNewSlicePtrInt, irtypes.I8Ptr)
+		irNewSlicePtr = irBlock.NewIntToPtr(irNewSlicePtrInt, irSlicePtr.Type())
 	}
 	if s.High != nil {
 		irHi = t.translateValue(irBlock, s.High)
