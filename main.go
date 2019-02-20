@@ -356,9 +356,11 @@ func (t *translator) emitFunctionBody(f *ssa.Function) {
 
 			for j, goEdgeValue := range goPhi.Edges {
 				irEdgeValue := t.translateValue(irBlock, goEdgeValue)
+				goPredecessor := f.Blocks[goBB.Preds[j].Index]
+				irPredecessor := goBlockToIR[goPredecessor]
 				irPhi.Incs = append(irPhi.Incs, &ir.Incoming{
 					X:    irEdgeValue,
-					Pred: irFunc.Blocks[goBB.Preds[j].Index],
+					Pred: irPredecessor,
 				})
 			}
 
@@ -374,11 +376,11 @@ func (t *translator) emitFunctionBody(f *ssa.Function) {
 
 		switch irTerm := irBB.Term.(type) {
 		case *ir.TermBr:
-			irTerm.Target = irFunc.Blocks[goBB.Succs[0].Index]
+			irTerm.Target = goBlockToIR[f.Blocks[goBB.Succs[0].Index]]
 
 		case *ir.TermCondBr:
-			irTerm.TargetTrue = irFunc.Blocks[goBB.Succs[0].Index]
-			irTerm.TargetFalse = irFunc.Blocks[goBB.Succs[1].Index]
+			irTerm.TargetTrue = goBlockToIR[f.Blocks[goBB.Succs[0].Index]]
+			irTerm.TargetFalse = goBlockToIR[f.Blocks[goBB.Succs[1].Index]]
 		}
 	}
 
