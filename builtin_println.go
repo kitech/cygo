@@ -45,6 +45,19 @@ func (t *translator) emitCallBuiltinPrintln(
 			)
 			continue
 		}
+		if isComplex(goArg.Type()) {
+			irComplex := t.translateValue(irBlock, goArg)
+			irReal := irBlock.NewExtractValue(irComplex, 0)
+			irImag := irBlock.NewExtractValue(irComplex, 1)
+
+			irBlock.NewCall(
+				t.builtins.Printf(t),
+				irStderr,
+				t.constantString(irBlock, "(%f+%fi)"),
+				irReal, irImag,
+			)
+			continue
+		}
 
 		fmt, val := t.makePrintArg(irBlock, goArg)
 		irBlock.NewCall(t.builtins.Printf(t), irStderr, fmt, val)
