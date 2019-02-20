@@ -311,19 +311,26 @@ func (t *translator) emitFunctionBody(f *ssa.Function) {
 		// Look for an equivalent function with lower-case name, that's where
 		// the pure go implementation usually resides.
 		goGenericImpl := f.Package().Func(strings.ToLower(f.Name()))
-		if goGenericImpl != nil {
+		if goGenericImpl != nil && goGenericImpl != f {
 			irGenericImpl := t.goToIRValue[goGenericImpl]
 			var irArgs []irvalue.Value
 			for _, irParam := range irFunc.Params {
 				irArgs = append(irArgs, irParam)
 			}
 			irBlock := irFunc.NewBlock("")
-			irRetValue := irBlock.NewCall(irGenericImpl, irArgs...)
+			var irRetValue irvalue.Value
+			irCallResult := irBlock.NewCall(irGenericImpl, irArgs...)
+			if !irFunc.Sig.RetType.Equal(irtypes.Void) {
+				irRetValue = irCallResult
+			}
 			irBlock.Term = irBlock.NewRet(irRetValue)
 		} else {
 			log.Println("emitting empty function body...", f.String())
 			irBlock := irFunc.NewBlock("")
-			irRetValue := irconstant.NewZeroInitializer(irFunc.Sig.RetType)
+			var irRetValue irvalue.Value
+			if !irFunc.Sig.RetType.Equal(irtypes.Void) {
+				irRetValue = irconstant.NewZeroInitializer(irFunc.Sig.RetType)
+			}
 			irBlock.Term = irBlock.NewRet(irRetValue)
 		}
 	}
