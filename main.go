@@ -417,6 +417,16 @@ func (t *translator) translateValue(
 	irBlock *ir.Block,
 	goValue ssa.Value,
 ) irvalue.Value {
+	if _, isFunc := goValue.(*ssa.Function); isFunc {
+		// References to functions need to be jammed into a closure value with
+		// the closure pointer being nil.
+		var irValue irvalue.Value
+		irValue = irconstant.NewZeroInitializer(t.goToIRType(goValue.Type()))
+		// Hmm, need to emit closure caller here...
+		irValue = irBlock.NewInsertValue(irValue, t.goToIRValue[goValue], 0)
+		return irValue // { FuncValue, nil }
+	}
+
 	irValue, ok := t.goToIRValue[goValue]
 	if ok {
 		return irValue

@@ -492,28 +492,28 @@ func (t *translator) emitCall(irBlock *ir.Block, c *ssa.Call) {
 		irArgs = append(irArgs, irArg)
 	}
 
-	irCallee := t.translateValue(irBlock, c.Call.Value)
+	c.Call.StaticCallee()
 
-	if _, ok := irCallee.Type().(*irtypes.StructType); ok {
-		irClosure := irCallee
-		irCallee := irBlock.NewExtractValue(irCallee, 0)
-		log.Printf("NewCall(%T: %v, %v %T)", irCallee.Type(), irCallee.Type(), irCallee, irCallee)
-		irArgs = append([]irvalue.Value{irClosure}, irArgs...)
-		irCall := irBlock.NewCall(
-			irCallee,
-			irArgs...,
-		)
-		t.goToIRValue[c] = irCall
-		return
-	}
+	t.emitCallClosure(irBlock, c, irArgs)
 
 	irCall := irBlock.NewCall(
 		irCallee,
 		irArgs...,
 	)
 	t.goToIRValue[c] = irCall
+}
 
-	// log.Printf("unimplemented: emitCall: %v", c)
+func (t *translator) emitCallClosure(irBlock *ir.Block, c *ssa.Call, irArgs []irvalue.Value) {
+	irCallee := t.translateValue(irBlock, c.Call.Value)
+
+	irClosure := irBlock.NewExtractValue(irCallee, 1)
+	irCallee := irBlock.NewExtractValue(irCallee, 0)
+	irArgs = append([]irvalue.Value{irClosure}, irArgs...)
+	irCall := irBlock.NewCall(
+		irCallee,
+		irArgs...,
+	)
+	t.goToIRValue[c] = irCall
 }
 
 func (t *translator) emitCallBuiltin(
@@ -914,7 +914,7 @@ func (t *translator) emitMakeChan(irBlock *ir.Block, m *ssa.MakeChan) {
 }
 
 func (t *translator) emitMakeClosure(irBlock *ir.Block, m *ssa.MakeClosure) {
-	// log.Printf("unimplemented: emitMakeClosure")
+	log.Printf("unimplemented: emitMakeClosure")
 	// log.Printf("makeClosure: %T: %v", m.Type(), m.Type())
 
 	// irBindingTypes = append(irBindingTypes, irtypes.NewPointer(t.goToIRType(m.Type())))
