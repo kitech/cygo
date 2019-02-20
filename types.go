@@ -14,10 +14,14 @@ func (t *translator) goToIRType(typ gotypes.Type) irtypes.Type {
 	}
 
 	var namedStruct *irtypes.StructType
+	var namedSig *irtypes.StructType
 	if isNamedStruct(typ) {
 		// If the type is named, it might be recursive and need to refer to itself.
 		namedStruct = &irtypes.StructType{}
 		t.goToIRTypeCache[typ] = t.m.NewTypeDef(typ.String(), namedStruct)
+	} else if isNamedSignature(typ) {
+		namedSig = &irtypes.StructType{}
+		t.goToIRTypeCache[typ] = t.m.NewTypeDef(typ.String(), namedSig)
 	}
 
 	x = t.goToIRTypeImpl(typ)
@@ -25,6 +29,10 @@ func (t *translator) goToIRType(typ gotypes.Type) irtypes.Type {
 	if namedStruct != nil {
 		namedStruct.Fields = x.(*irtypes.StructType).Fields
 		x = namedStruct
+	} else if namedSig != nil {
+		*namedSig = *x.(*irtypes.StructType)
+		x = namedSig
+		x.SetName(typ.String())
 	}
 
 	t.goToIRTypeCache[typ] = x
@@ -37,6 +45,15 @@ func isNamedStruct(typ gotypes.Type) bool {
 		return false
 	}
 	_, ok = named.Underlying().(*gotypes.Struct)
+	return ok
+}
+
+func isNamedSignature(typ gotypes.Type) bool {
+	named, ok := typ.(*gotypes.Named)
+	if !ok {
+		return false
+	}
+	_, ok = named.Underlying().(*gotypes.Signature)
 	return ok
 }
 
