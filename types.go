@@ -69,13 +69,13 @@ func (t *translator) goToIRTypeImpl(typ gotypes.Type) irtypes.Type {
 		return t.goBasicToIRType(typ)
 
 	case *gotypes.Chan:
-		return irtypes.NewPointer(&irtypes.StructType{Opaque: true})
+		return irtypes.NewPointer(&irtypes.StructType{})
 
 	case *gotypes.Interface:
 		return irtypes.NewStruct(irtypes.I8Ptr, irtypes.I8Ptr)
 
 	case *gotypes.Map:
-		return irtypes.NewPointer(&irtypes.StructType{Opaque: true})
+		return irtypes.NewPointer(&irtypes.StructType{})
 
 	// case *gotypes.Named:
 
