@@ -24,7 +24,12 @@ func (t *translator) emitInstr(irBlock *ir.Block, goInst ssa.Instruction) {
 			return
 		}
 		p := t.prog.Fset.Position(goInst.Pos())
+
 		log.Printf("panic while processing %s at %s", goInst, p)
+		for i, op := range goInst.Operands(nil) {
+			irOp := t.goToIRValue[*op]
+			log.Printf("  operand %d: %T: %v: %v -- %T: %v", i, *op, (*op).Type(), *op, irOp, irOp)
+		}
 
 		panic(err)
 	}()
