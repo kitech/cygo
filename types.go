@@ -258,4 +258,9 @@ func isChan(typ gotypes.Type) bool {
 	return ok
 }
 
+func isMap(typ gotypes.Type) bool {
+	_, ok := typ.Underlying().(*gotypes.Map)
+	return ok
+}
+
 var sizeof = gotypes.SizesFor("gc", "amd64").Sizeof

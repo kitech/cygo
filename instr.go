@@ -430,6 +430,10 @@ func (t *translator) emitBinOpCmp(
 		log.Printf("unimplemented: array comparison")
 		t.goToIRValue[b] = irconstant.NewUndef(irtypes.I1)
 
+	case isMap(goParamType):
+		log.Printf("unimplemented: map comparison")
+		t.goToIRValue[b] = irconstant.NewUndef(irtypes.I1)
+
 	default:
 		msg := "unimplemented: emitBinOpCmp: %T: %v"
 		panic(fmt.Errorf(msg, goParamType, goParamType))
@@ -521,6 +525,13 @@ func (t *translator) emitCallBuiltin(
 		}
 
 		goArg := goArgs[0]
+
+		if isMap(goArg.Type()) {
+			log.Printf("unimplemented: len(map)")
+			t.goToIRValue[c] = irconstant.NewInt(irtypes.I32, 0)
+			return
+		}
+
 		irArg := t.translateValue(irBlock, goArg)
 
 		const lenFieldIdx = 1
@@ -595,6 +606,7 @@ func (t *translator) emitCallBuiltinAppend(
 
 func (t *translator) emitChangeInterface(irBlock *ir.Block, c *ssa.ChangeInterface) {
 	log.Printf("unimplemented: emitChangeInterface")
+	t.goToIRValue[c] = irconstant.NewUndef(t.goToIRType(c.Type()))
 }
 
 func (t *translator) emitChangeType(irBlock *ir.Block, c *ssa.ChangeType) {
@@ -613,6 +625,11 @@ func (t *translator) emitConvertInt(irBlock *ir.Block, c *ssa.Convert) {
 		} else {
 			t.goToIRValue[c] = irBlock.NewUIToFP(fromV, toT)
 		}
+		return
+	}
+	if isString(to) {
+		t.goToIRValue[c] = irconstant.NewUndef(t.goToIRType(c.Type()))
+		log.Printf("unimplemented: emitConvertInt to string")
 		return
 	}
 
@@ -715,6 +732,11 @@ func (t *translator) copyBytes(
 	return irNewPtr
 }
 
+func (t *translator) emitConvertComplex(irBlock *ir.Block, c *ssa.Convert) {
+	t.goToIRValue[c] = irconstant.NewUndef(t.goToIRType(c.Type()))
+	log.Printf("unimplemented: emitConvertComplex: %v", c)
+}
+
 func (t *translator) emitConvertString(irBlock *ir.Block, c *ssa.Convert) {
 	from, to := c.X.Type(), c.Type()
 	fromV, toT := t.translateValue(irBlock, c.X), t.goToIRType(to)
@@ -747,6 +769,9 @@ func (t *translator) emitConvert(irBlock *ir.Block, c *ssa.Convert) {
 	fromV, toT := t.translateValue(irBlock, c.X), t.goToIRType(to)
 
 	switch {
+	case isComplex(from):
+		t.emitConvertComplex(irBlock, c)
+
 	case isInteger(from):
 		t.emitConvertInt(irBlock, c)
 
