@@ -183,12 +183,16 @@ func (t *translator) emitBinOpLogical(
 	case token.XOR:
 		t.goToIRValue[b] = irBlock.NewXor(irX, irY)
 	case token.SHL:
-		if sizeof(b.X.Type()) != sizeof(b.Y.Type()) {
+		if sizeof(b.X.Type()) > sizeof(b.Y.Type()) {
+			irY = irBlock.NewZExt(irY, irX.Type())
+		} else if sizeof(b.X.Type()) < sizeof(b.Y.Type()) {
 			irY = irBlock.NewTrunc(irY, irX.Type())
 		}
 		t.goToIRValue[b] = irBlock.NewShl(irX, irY)
 	case token.SHR:
-		if sizeof(b.X.Type()) != sizeof(b.Y.Type()) {
+		if sizeof(b.X.Type()) > sizeof(b.Y.Type()) {
+			irY = irBlock.NewZExt(irY, irX.Type())
+		} else if sizeof(b.X.Type()) < sizeof(b.Y.Type()) {
 			irY = irBlock.NewTrunc(irY, irX.Type())
 		}
 		if isSigned(goParamType) {
