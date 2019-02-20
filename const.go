@@ -67,7 +67,8 @@ func (t *translator) goConstToIR(
 		)
 
 	case isUnsafePointer(goConstType):
-		return irconstant.NewInt(irtypes.I64, goConst.Int64())
+		irInt := irconstant.NewInt(irtypes.I64, goConst.Int64())
+		return irconstant.NewIntToPtr(irInt, t.goToIRType(goConstType))
 
 	default:
 		msg := "unimplemented constant: %v: %s"
