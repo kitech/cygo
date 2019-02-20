@@ -83,10 +83,13 @@ func (t *translator) constantString(irBlock *ir.Block, s string) irconstant.Cons
 		return irC
 	}
 
-	irConstantS := irconstant.NewCharArrayFromString(s + "\x00")
+	nul := string([]byte{0}) // Constant string "\x00" is a problem
+
+	irConstantS := irconstant.NewCharArrayFromString(s + nul)
 
 	// TODO(pwaller): Ensure non-colliding names (foo_ and foo\x00).
-	constName := strings.ReplaceAll(s, "\x00", "_")
+	// This makes having the constant string "\x00" in the program a problem.
+	constName := strings.ReplaceAll(s, nul, "<nul>")
 
 	irGlobal := t.m.NewGlobalDef("$const_str_"+constName, irConstantS)
 	irGlobal.Immutable = true
