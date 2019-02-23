@@ -146,7 +146,7 @@ func (t *translator) goToIRTypeImpl(typ gotypes.Type) irtypes.Type {
 }
 
 var basicToIR = map[gotypes.BasicKind]irtypes.Type{
-	gotypes.Invalid: irtypes.NewPointer(&irtypes.StructType{Opaque: true}),
+	gotypes.Invalid: irtypes.NewPointer(&irtypes.StructType{}),
 	gotypes.Bool:    irtypes.I1,
 
 	gotypes.Int:     irtypes.I64,
