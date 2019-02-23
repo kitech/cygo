@@ -137,16 +137,24 @@ func lower(out io.Writer, args []string) error {
 		goToIRTypeCache: map[gotypes.Type]irtypes.Type{},
 	}
 
+	// TODO(pwaller):
+	// packages.Visit generates a deep callgraph. Instead, build a slice
+	// and operate on those directly to avoid big stack traces on failure.
+	var toTranslate []*ssa.Package
 	packages.Visit(initial, func(p *packages.Package) bool {
 		return true
 	}, func(p *packages.Package) {
 		ssaPkg := prog.Package(p.Types)
+		toTranslate = append(toTranslate, ssaPkg)
+	})
+
+	for _, ssaPkg := range toTranslate {
 		t.emitPackage(ssaPkg)
 
-		if p.Name == "main" {
+		if ssaPkg.Pkg.Name() == "main" {
 			t.emitEntryPoint(ssaPkg)
 		}
-	})
+	}
 
 	_, err = io.WriteString(out, t.m.String())
 	return err
