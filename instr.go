@@ -979,9 +979,16 @@ func (t *translator) emitNext(irBlock *ir.Block, n *ssa.Next) {
 }
 
 func (t *translator) emitPanic(irBlock *ir.Block, p *ssa.Panic) {
-
+	irBlock.NewCall(
+		t.builtins.Printf(t),
+		irconstant.NewInt(irtypes.I32, 2),
+		t.constantString(irBlock, "panic(TODO(pwaller): better message)\n"),
+	)
+	irBlock.NewCall(
+		t.builtins.Exit(t),
+		irconstant.NewInt(irtypes.I32, 42),
+	)
 	irBlock.NewUnreachable()
-	log.Printf("unimplemented: emitPanic: generating unreachable")
 }
 
 func (t *translator) emitPhi(irBlock *ir.Block, p *ssa.Phi) {

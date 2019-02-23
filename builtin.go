@@ -10,11 +10,22 @@ import (
 
 type builtins struct {
 	append,
+	exit,
 	malloc,
 	memcpy,
 	printf,
 	strncmp,
 	write *ir.Func
+}
+
+func (b *builtins) Exit(t *translator) *ir.Func {
+	if b.exit == nil {
+		b.exit = t.m.NewFunc("_exit",
+			irtypes.Void,
+			ir.NewParam("status", irtypes.I32),
+		)
+	}
+	return b.exit
 }
 
 func (b *builtins) Printf(t *translator) *ir.Func {
