@@ -44,7 +44,9 @@ func main() {
 		switch args[0] {
 		case "run":
 			err := run(args[1:])
-			if err != nil {
+			if err, ok := err.(*exec.ExitError); ok {
+				os.Exit(err.ExitCode())
+			} else if err != nil {
 				log.Fatal(err)
 			}
 			return
