@@ -432,8 +432,11 @@ func (t *translator) translateValue(
 		// the closure pointer being nil.
 		var irValue irvalue.Value
 		irValue = irconstant.NewZeroInitializer(t.goToIRType(goValue.Type()))
-		// Hmm, need to emit closure caller here...
-		irValue = irBlock.NewInsertValue(irValue, t.goToIRValue[goValue], 0)
+
+		// Hmm, need to emit closure caller here, if the function is not a closure.
+		log.Printf("WARNING: GENERATED BOGUS FUNC PTR")
+
+		// irValue = irBlock.NewInsertValue(irValue, t.goToIRValue[goValue], 0)
 		return irValue // { FuncValue, nil }
 	}
 

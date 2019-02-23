@@ -492,22 +492,36 @@ func (t *translator) emitCall(irBlock *ir.Block, c *ssa.Call) {
 		irArgs = append(irArgs, irArg)
 	}
 
-	c.Call.StaticCallee()
+	switch goCallee := c.Call.Value.(type) {
+	case *ssa.Function:
+		// Not using translateValue machinary here.
+		irCallee := t.goToIRValue[goCallee]
+		// irCallee := t.translateValue(irBlock, goCallee)
+		t.goToIRValue[c] = irBlock.NewCall(
+			irCallee,
+			irArgs...,
+		)
 
-	t.emitCallClosure(irBlock, c, irArgs)
+	case *ssa.MakeClosure:
+		t.goToIRValue[c] = irconstant.NewUndef(t.goToIRType(c.Type()))
+		log.Println("unimplemented: MakeClosure call")
+		// panic(fmt.Errorf("unimplemented: MakeClosure call"))
+	default:
+		log.Println("unimplemented: non-static call")
+		t.goToIRValue[c] = irconstant.NewUndef(t.goToIRType(c.Type()))
+		// panic(fmt.Errorf("unimplemented: non-static call"))
+	}
+}
 
-	irCall := irBlock.NewCall(
-		irCallee,
-		irArgs...,
-	)
-	t.goToIRValue[c] = irCall
+func (t *translator) emitCallStatic(irBlock *ir.Block, c *ssa.Call, irArgs []irvalue.Value) {
+
 }
 
 func (t *translator) emitCallClosure(irBlock *ir.Block, c *ssa.Call, irArgs []irvalue.Value) {
 	irCallee := t.translateValue(irBlock, c.Call.Value)
 
 	irClosure := irBlock.NewExtractValue(irCallee, 1)
-	irCallee := irBlock.NewExtractValue(irCallee, 0)
+	irCallee = irBlock.NewExtractValue(irCallee, 0)
 	irArgs = append([]irvalue.Value{irClosure}, irArgs...)
 	irCall := irBlock.NewCall(
 		irCallee,
@@ -944,7 +958,14 @@ func (t *translator) emitMakeClosure(irBlock *ir.Block, m *ssa.MakeClosure) {
 
 	// { %funcType FuncPtr, i8* ClosureEnv }
 	var irClosure irvalue.Value = irconstant.NewUndef(t.goToIRType(m.Type()))
-	irClosure = irBlock.NewInsertValue(irClosure, t.translateValue(irBlock, m.Fn), 0)
+	irFn := t.goToIRValue[m.Fn]
+	// log.Printf("irFn = %T %v -- %T - %v", irFn, irFn, m.Fn, m.Fn)
+	// t.translateValue(irBlock, m.Fn)
+	if irFn != nil {
+		irClosure = irBlock.NewInsertValue(irClosure, irFn, 0)
+	} else {
+		log.Printf("unimplemented closure type: (e.g. Type{}.Foo)")
+	}
 
 	irClosure = irBlock.NewInsertValue(irClosure, irClosureEnvI8Ptr, 1)
 
@@ -953,7 +974,24 @@ func (t *translator) emitMakeClosure(irBlock *ir.Block, m *ssa.MakeClosure) {
 
 func (t *translator) emitMakeInterface(irBlock *ir.Block, m *ssa.MakeInterface) {
 	log.Printf("unimplemented: emitMakeInterface")
-	t.goToIRValue[m] = irconstant.NewUndef(t.goToIRType(m.Type()))
+	// ms := t.prog.MethodSets.MethodSet(m.X.Type())
+	// log.Printf("%T: %v", ms, ms)
+	// t.goToIRValue[m] = irconstant.NewUndef(t.goToIRType(m.Type()))
+	var irValue irvalue.Value = irconstant.NewUndef(t.goToIRType(m.Type()))
+	irX := t.translateValue(irBlock, m.X)
+	if _, ok := m.X.(*ssa.Function); ok {
+		irX = t.goToIRValue[m.X]
+		if irX == nil {
+			irX = irconstant.NewUndef(irtypes.I8Ptr)
+			// panic("blarg")
+		}
+	} else if !isPointer(m.X.Type()) {
+		// t.builtins.Malloc(t)
+		irX = irconstant.NewUndef(irtypes.I8Ptr)
+	}
+	irXI8Ptr := irBlock.NewBitCast(irX, irtypes.I8Ptr)
+	irValue = irBlock.NewInsertValue(irValue, irXI8Ptr, 1)
+	t.goToIRValue[m] = irValue
 
 }
 
@@ -1080,6 +1118,7 @@ func (t *translator) emitSliceOfSlice(irBlock *ir.Block, s *ssa.Slice) {
 	irX := t.translateValue(irBlock, s.X)
 	irSlicePtr := irBlock.NewExtractValue(irX, 0)
 	irOrigLen := irBlock.NewExtractValue(irX, 1)
+	log.Printf("irX Type: %v %v", irX.Type(), irOrigLen)
 
 	var irLo irvalue.Value = irconstant.NewInt(irtypes.I64, 0)
 	var irHi irvalue.Value = irOrigLen
