@@ -57,6 +57,12 @@ func main() {
 				log.Fatal(err)
 			}
 			return
+		case "debug":
+			err := debug(args[1:])
+			if err != nil {
+				log.Fatal(err)
+			}
+			return
 		}
 	}
 
@@ -81,6 +87,20 @@ func run(args []string) error {
 	}
 
 	exe := exec.Command(exePath)
+	exe.Stdout = os.Stdout
+	exe.Stderr = os.Stderr
+	return exe.Run()
+}
+
+func debug(args []string) error {
+	const exePath = "a.out"
+	err := build(exePath, args)
+	if err != nil {
+		return err
+	}
+
+	exe := exec.Command("gdb", "-ex=r", "-ex=bt", "--args", exePath)
+	exe.Stdin = os.Stdin
 	exe.Stdout = os.Stdout
 	exe.Stderr = os.Stderr
 	return exe.Run()
