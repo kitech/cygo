@@ -44,10 +44,10 @@ func main() {
 		switch args[0] {
 		case "run":
 			err := run(args[1:])
-			if err, ok := err.(*exec.ExitError); ok {
+			if err, ok := err.(*exec.ExitError); ok && err.ExitCode() != -1 {
 				os.Exit(err.ExitCode())
 			} else if err != nil {
-				log.Fatal(err)
+				log.Fatalln("program failed:", err)
 			}
 			return
 		case "build":
