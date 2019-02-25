@@ -1149,12 +1149,18 @@ func (t *translator) emitSliceOfString(irBlock *ir.Block, s *ssa.Slice) {
 
 	if s.Low != nil {
 		irLo = t.translateValue(irBlock, s.Low)
+		if !irLo.Type().Equal(irtypes.I64) {
+			irLo = irBlock.NewZExt(irLo, irtypes.I64)
+		}
 		irSlicePtrInt := irBlock.NewPtrToInt(irSlicePtr, irtypes.I64)
 		irNewSlicePtrInt := irBlock.NewAdd(irSlicePtrInt, irLo)
 		irNewSlicePtr = irBlock.NewIntToPtr(irNewSlicePtrInt, irtypes.I8Ptr)
 	}
 	if s.High != nil {
 		irHi = t.translateValue(irBlock, s.High)
+		if !irHi.Type().Equal(irtypes.I64) {
+			irHi = irBlock.NewZExt(irHi, irtypes.I64)
+		}
 	}
 	irNewLen := irBlock.NewSub(irHi, irLo)
 
