@@ -1036,8 +1036,20 @@ func (t *translator) emitMakeMap(irBlock *ir.Block, m *ssa.MakeMap) {
 }
 
 func (t *translator) emitMakeSlice(irBlock *ir.Block, m *ssa.MakeSlice) {
-	t.goToIRValue[m] = irconstant.NewUndef(t.goToIRType(m.Type()))
-	log.Printf("unimplemented: emitMakeSlice")
+	irLen := t.translateValue(irBlock, m.Len)
+	irCap := t.translateValue(irBlock, m.Cap)
+
+	// TODO(pwaller): improve element size computation.
+	goElemType := m.Type().Underlying().(*gotypes.Slice).Elem()
+	irElemType := t.goToIRType(goElemType)
+	goElemSize := sizeof(goElemType)
+	irElemSize := irconstant.NewInt(irtypes.I64, goElemSize)
+
+	irAllocSize := irBlock.NewMul(irCap, irElemSize)
+	irPtrI8 := irBlock.NewCall(t.builtins.Malloc(t), irAllocSize)
+	irPtr := irBlock.NewBitCast(irPtrI8, irtypes.NewPointer(irElemType))
+
+	t.goToIRValue[m] = makeStruct(irBlock, irPtr, irLen, irCap)
 }
 
 func (t *translator) emitMapUpdate(irBlock *ir.Block, m *ssa.MapUpdate) {
