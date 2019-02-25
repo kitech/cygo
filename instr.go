@@ -752,7 +752,8 @@ func (t *translator) emitConvertSlice(irBlock *ir.Block, c *ssa.Convert) {
 	fromV, toT := t.translateValue(irBlock, c.X), t.goToIRType(to)
 
 	switch {
-	case isString(to): // s string := b []byte
+	// TODO(pwaller): []rune to string
+	case isString(to) && from.Underlying().(*gotypes.Slice).Elem().String() == "byte": // s string := b []byte
 		// Grab pointer and len.
 		irSlicePtr := irBlock.NewExtractValue(fromV, 0)
 		irLen := irBlock.NewExtractValue(fromV, 1)
@@ -766,7 +767,9 @@ func (t *translator) emitConvertSlice(irBlock *ir.Block, c *ssa.Convert) {
 		t.goToIRValue[c] = irStr
 
 	default:
-		panic(fmt.Errorf("unimplemented: emitConvertSlice: %v <- %v", to, from))
+		t.goToIRValue[c] = irconstant.NewUndef(t.goToIRType(c.Type()))
+		log.Printf("unimplemented: emitConvertSlice: %v <- %v", to, from)
+		// panic(fmt.Errorf("unimplemented: emitConvertSlice: %v <- %v", to, from))
 	}
 }
 
@@ -789,7 +792,7 @@ func (t *translator) emitConvertString(irBlock *ir.Block, c *ssa.Convert) {
 	fromV, toT := t.translateValue(irBlock, c.X), t.goToIRType(to)
 
 	switch {
-	case isSlice(to): // b []byte := s string
+	case isSlice(to) && to.Underlying().(*gotypes.Slice).Elem().String() == "byte": // b []byte := s string
 		// Grab pointer and len.
 		irSlicePtr := irBlock.NewExtractValue(fromV, 0)
 		irLen := irBlock.NewExtractValue(fromV, 1)
@@ -804,7 +807,9 @@ func (t *translator) emitConvertString(irBlock *ir.Block, c *ssa.Convert) {
 		t.goToIRValue[c] = irSlice
 
 	default:
-		panic(fmt.Errorf("unimplemented: emitConvertSlice: %v <- %v", to, from))
+		t.goToIRValue[c] = irconstant.NewUndef(t.goToIRType(c.Type()))
+		log.Printf("unimplemented: emitConvertSlice: %v <- %v", to, from)
+		// panic(fmt.Errorf("unimplemented: emitConvertSlice: %v <- %v", to, from))
 	}
 }
 
