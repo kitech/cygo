@@ -46,7 +46,8 @@ func main() {
 			err := run(args[1:])
 			if err, ok := err.(*exec.ExitError); ok && err.ExitCode() != -1 {
 				os.Exit(err.ExitCode())
-			} else if err != nil {
+			}
+			if err != nil {
 				log.Fatalln("program failed:", err)
 			}
 			return
@@ -96,6 +97,19 @@ func build(exePath string, args []string) error {
 	err = lower(fd, args)
 	if err != nil {
 		return fmt.Errorf("lower: %v", err)
+	}
+
+	optVerify := exec.Command(
+		"opt",
+		"-verify",
+		"-o", "/dev/null",
+		fd.Name(),
+	)
+	optVerify.Stdout = os.Stdout
+	optVerify.Stderr = os.Stderr
+	err = optVerify.Run()
+	if err != nil {
+		return fmt.Errorf("opt -verify: %v", err)
 	}
 
 	clang := exec.Command(
