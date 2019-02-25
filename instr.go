@@ -590,10 +590,6 @@ func (t *translator) emitCallBuiltinAppend(
 	irBlock *ir.Block,
 	c *ssa.Call,
 ) {
-	t.goToIRValue[c] = irconstant.NewUndef(t.goToIRType(c.Type()))
-
-	return
-
 	irAppendee := t.translateValue(irBlock, c.Call.Args[0])
 	irAppendeePtr := irBlock.NewExtractValue(irAppendee, 0)
 	irAppendeeLen := irBlock.NewExtractValue(irAppendee, 1)
@@ -609,7 +605,7 @@ func (t *translator) emitCallBuiltinAppend(
 	goElemSize := sizeof(c.Call.Args[0].Type().(*gotypes.Slice).Elem())
 	irElemSize := irconstant.NewInt(irtypes.I64, goElemSize)
 
-	t.goToIRValue[c] = irBlock.NewCall(
+	irNewGenericSlice := irBlock.NewCall(
 		t.builtins.Append(t),
 		irBlock.NewBitCast(irAppendeePtr, irtypes.I8Ptr),
 		irAppendeeLen,
@@ -617,6 +613,14 @@ func (t *translator) emitCallBuiltinAppend(
 		irBlock.NewBitCast(irAppendedPtr, irtypes.I8Ptr),
 		irAppendedLen,
 		irElemSize,
+	)
+
+	irPtrType := irAppendeePtr.Type()
+	t.goToIRValue[c] = makeStruct(
+		irBlock,
+		irBlock.NewBitCast(irBlock.NewExtractValue(irNewGenericSlice, 0), irPtrType),
+		irBlock.NewExtractValue(irNewGenericSlice, 1),
+		irBlock.NewExtractValue(irNewGenericSlice, 2),
 	)
 }
 

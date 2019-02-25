@@ -89,7 +89,6 @@ func (b *builtins) Write(t *translator) *ir.Func {
 
 func (b *builtins) Append(t *translator) *ir.Func {
 	if b.append == nil {
-
 		// TODO(pwaller): Different word than 'more'.
 		// TODO(pwaller): More consistent naming convention (more first, or ptr/len first?)
 
@@ -106,20 +105,68 @@ func (b *builtins) Append(t *translator) *ir.Func {
 			irPtr, irLen, irCap, irMorePtr, irMoreLen, irElemSize,
 		)
 
-		// TODO(pwaller): Implement this
-		// entry := b.append.NewBlock("entry")
-		// doResize := b.append.NewBlock("doResize")
-		// doInsert := b.append.NewBlock("doInsert")
+		entry := b.append.NewBlock("entry")
+		doInsert := b.append.NewBlock("doInsert")
+		doResize := b.append.NewBlock("doResize")
 
-		// irNewLen := entry.NewAdd(irLen, irMoreLen)
-		// needResize := entry.NewICmp(irenum.IPredUGE, irNewLen, irCap)
+		irNewLen := entry.NewAdd(irLen, irMoreLen)
+		needResize := entry.NewICmp(irenum.IPredUGE, irNewLen, irCap)
 
-		// entry.NewCondBr(needResize, doResize, doInsert)
+		entry.NewCondBr(needResize, doResize, doInsert)
 
-		// doInsert.
+		// Insert path.
+		{
+			blk := doInsert
 
-		// entry.New
-		// panic("unimplemented")
+			// Copy appended elements.
+			irPtrStart := blk.NewIntToPtr(
+				// irPtr + offset
+				blk.NewAdd(
+					blk.NewPtrToInt(irPtr, irtypes.I64),
+					blk.NewMul(irLen, irElemSize), // offset
+				),
+				irtypes.I8Ptr,
+			)
+			irExtraSize := blk.NewMul(irMoreLen, irElemSize)
+			blk.NewCall(b.Memcpy(t), irPtrStart, irMorePtr, irExtraSize)
+
+			// Return new slice value.
+			irNewPtr := irPtr
+			irNewCap := irCap
+			irNewSlice := makeStruct(doInsert, irNewPtr, irNewLen, irNewCap)
+			blk.NewRet(irNewSlice)
+		}
+
+		// Resize path.
+		{
+			blk := doResize
+
+			irNewCap := irNewLen // TODO(pwaller): Better growth function.
+			irNewCapSize := blk.NewMul(irNewCap, irElemSize)
+
+			// Allocate new capacity.
+			irNewPtr := blk.NewCall(b.Malloc(t), irNewCapSize)
+
+			// Copy the original slice data into newly alloc'd memory.
+			irOrigSize := blk.NewMul(irLen, irElemSize)
+			blk.NewCall(b.Memcpy(t), irNewPtr, irPtr, irOrigSize)
+
+			// Copy appended elements.
+			irNewPtrMore := blk.NewIntToPtr(
+				// irNewPtr + offset
+				blk.NewAdd(
+					blk.NewPtrToInt(irNewPtr, irtypes.I64),
+					blk.NewMul(irLen, irElemSize), // offset
+				),
+				irtypes.I8Ptr,
+			)
+			irExtraSize := blk.NewMul(irMoreLen, irElemSize)
+			blk.NewCall(b.Memcpy(t), irNewPtrMore, irMorePtr, irExtraSize)
+
+			// Return new slice value.
+			irNewSlice := makeStruct(blk, irNewPtr, irNewLen, irNewCap)
+			blk.NewRet(irNewSlice)
+		}
 	}
 	return b.append
 }
