@@ -575,8 +575,7 @@ func (t *translator) emitCallBuiltin(
 		t.emitCallBuiltinPrintln(irBlock, c)
 
 	case "copy":
-		log.Printf("unimplemented: builtin: copy: %v", c)
-		t.goToIRValue[c] = irconstant.NewUndef(t.goToIRType(c.Type()))
+		t.emitCallBuiltinCopy(irBlock, c)
 
 	default:
 		// TODO(pwaller): A number of missing builtins.
@@ -584,6 +583,35 @@ func (t *translator) emitCallBuiltin(
 		t.goToIRValue[c] = irconstant.NewUndef(t.goToIRType(c.Type()))
 		// panic(fmt.Errorf("unimplemented: emitCallBuiltin: %v", goBuiltin.Name()))
 	}
+}
+
+func (t *translator) emitCallBuiltinCopy(
+	irBlock *ir.Block,
+	c *ssa.Call,
+) {
+	// TODO(pwaller): improve element size computation.
+	goElemSize := sizeof(c.Call.Args[0].Type().Underlying().(*gotypes.Slice).Elem())
+	irElemSize := irconstant.NewInt(irtypes.I64, goElemSize)
+
+	irDst := t.translateValue(irBlock, c.Call.Args[0])
+	irSrc := t.translateValue(irBlock, c.Call.Args[1])
+
+	irDstPtr := irBlock.NewExtractValue(irDst, 0)
+	irSrcPtr := irBlock.NewExtractValue(irSrc, 0)
+	irDstLen := irBlock.NewExtractValue(irDst, 1)
+	irSrcLen := irBlock.NewExtractValue(irSrc, 1)
+
+	irLenDstLTSrc := irBlock.NewICmp(irenum.IPredULE, irDstLen, irSrcLen)
+	irCopyLen := irBlock.NewSelect(irLenDstLTSrc, irDstLen, irSrcLen)
+
+	irCopySize := irBlock.NewMul(irCopyLen, irElemSize)
+	irBlock.NewCall(t.builtins.Memcpy(t),
+		irBlock.NewBitCast(irDstPtr, irtypes.I8Ptr),
+		irBlock.NewBitCast(irSrcPtr, irtypes.I8Ptr),
+		irCopySize,
+	)
+
+	t.goToIRValue[c] = irCopyLen
 }
 
 func (t *translator) emitCallBuiltinAppend(
