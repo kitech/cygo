@@ -1038,7 +1038,13 @@ func (t *translator) emitMakeMap(irBlock *ir.Block, m *ssa.MakeMap) {
 
 func (t *translator) emitMakeSlice(irBlock *ir.Block, m *ssa.MakeSlice) {
 	irLen := t.translateValue(irBlock, m.Len)
+	if !irLen.Type().Equal(irtypes.I64) {
+		irLen = irBlock.NewZExt(irLen, irtypes.I64)
+	}
 	irCap := t.translateValue(irBlock, m.Cap)
+	if !irCap.Type().Equal(irtypes.I64) {
+		irCap = irBlock.NewZExt(irCap, irtypes.I64)
+	}
 
 	// TODO(pwaller): improve element size computation.
 	goElemType := m.Type().Underlying().(*gotypes.Slice).Elem()
