@@ -1118,7 +1118,6 @@ func (t *translator) emitSliceOfSlice(irBlock *ir.Block, s *ssa.Slice) {
 	irX := t.translateValue(irBlock, s.X)
 	irSlicePtr := irBlock.NewExtractValue(irX, 0)
 	irOrigLen := irBlock.NewExtractValue(irX, 1)
-	log.Printf("irX Type: %v %v", irX.Type(), irOrigLen)
 
 	var irLo irvalue.Value = irconstant.NewInt(irtypes.I64, 0)
 	var irHi irvalue.Value = irOrigLen
