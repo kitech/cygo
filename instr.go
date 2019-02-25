@@ -659,8 +659,7 @@ func (t *translator) emitChangeInterface(irBlock *ir.Block, c *ssa.ChangeInterfa
 }
 
 func (t *translator) emitChangeType(irBlock *ir.Block, c *ssa.ChangeType) {
-	log.Printf("unimplemented: emitChangeType")
-	t.goToIRValue[c] = irconstant.NewUndef(t.goToIRType(c.Type()))
+	t.goToIRValue[c] = t.translateValue(irBlock, c.X)
 }
 
 func (t *translator) emitConvertInt(irBlock *ir.Block, c *ssa.Convert) {
