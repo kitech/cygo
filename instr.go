@@ -1176,7 +1176,13 @@ func (t *translator) emitSliceOfSlice(irBlock *ir.Block, s *ssa.Slice) {
 			irLo = irBlock.NewZExt(irLo, irtypes.I64)
 		}
 		irSlicePtrInt := irBlock.NewPtrToInt(irSlicePtr, irtypes.I64)
-		irNewSlicePtrInt := irBlock.NewAdd(irSlicePtrInt, irLo)
+
+		// TODO(pwaller): improve element size computation.
+		goElemSize := sizeof(s.Type().Underlying().(*gotypes.Slice).Elem())
+		irElemSize := irconstant.NewInt(irtypes.I64, goElemSize)
+		irLowOffset := irBlock.NewMul(irLo, irElemSize)
+
+		irNewSlicePtrInt := irBlock.NewAdd(irSlicePtrInt, irLowOffset)
 		irNewSlicePtr = irBlock.NewIntToPtr(irNewSlicePtrInt, irSlicePtr.Type())
 	}
 	if s.High != nil {
@@ -1203,12 +1209,39 @@ func (t *translator) emitSliceOfArray(irBlock *ir.Block, s *ssa.Slice) {
 	irSlicePtr := irBlock.NewGetElementPtr(irX, irZero, irZero)
 
 	arrayLen := s.X.Type().(*gotypes.Pointer).Elem().Underlying().(*gotypes.Array).Len()
-	irLen := irconstant.NewInt(irtypes.I64, arrayLen)
+	irOrigLen := irconstant.NewInt(irtypes.I64, arrayLen)
+
+	var irLo irvalue.Value = irconstant.NewInt(irtypes.I64, 0)
+	var irHi irvalue.Value = irOrigLen
+	var irNewSlicePtr irvalue.Value = irSlicePtr
+
+	if s.Low != nil {
+		irLo = t.translateValue(irBlock, s.Low)
+		if !irLo.Type().Equal(irtypes.I64) {
+			irLo = irBlock.NewZExt(irLo, irtypes.I64)
+		}
+		irSlicePtrInt := irBlock.NewPtrToInt(irSlicePtr, irtypes.I64)
+
+		// TODO(pwaller): improve element size computation.
+		goElemSize := sizeof(s.Type().Underlying().(*gotypes.Slice).Elem())
+		irElemSize := irconstant.NewInt(irtypes.I64, goElemSize)
+		irLowOffset := irBlock.NewMul(irLo, irElemSize)
+
+		irNewSlicePtrInt := irBlock.NewAdd(irSlicePtrInt, irLowOffset)
+		irNewSlicePtr = irBlock.NewIntToPtr(irNewSlicePtrInt, irSlicePtr.Type())
+	}
+	if s.High != nil {
+		irHi = t.translateValue(irBlock, s.High)
+		if !irHi.Type().Equal(irtypes.I64) {
+			irHi = irBlock.NewZExt(irHi, irtypes.I64)
+		}
+	}
+	irNewLen := irBlock.NewSub(irHi, irLo)
 
 	var irS irvalue.Value = irconstant.NewUndef(t.goToIRType(s.Type()))
-	irS = irBlock.NewInsertValue(irS, irSlicePtr, 0)
-	irS = irBlock.NewInsertValue(irS, irLen, 1)
-	irS = irBlock.NewInsertValue(irS, irLen, 2)
+	irS = irBlock.NewInsertValue(irS, irNewSlicePtr, 0)
+	irS = irBlock.NewInsertValue(irS, irNewLen, 1)
+	irS = irBlock.NewInsertValue(irS, irNewLen, 2)
 
 	t.goToIRValue[s] = irS
 }
