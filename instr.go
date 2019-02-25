@@ -1228,7 +1228,7 @@ func (t *translator) emitUnOp(irBlock *ir.Block, u *ssa.UnOp) {
 			panic(fmt.Errorf("unimplemented: UnOp: %q: %s", u.Op, u))
 		}
 
-	case token.NOT:
+	case token.NOT, token.XOR:
 		if isInteger(goXType) || isBool(goXType) {
 			irOnes := irConstantOnes(int(sizeof(goXType) * 8))
 			t.goToIRValue[u] = irBlock.NewXor(irX, irOnes)
@@ -1239,10 +1239,6 @@ func (t *translator) emitUnOp(irBlock *ir.Block, u *ssa.UnOp) {
 
 	case token.ARROW:
 		log.Printf("unimplemented: channel recv")
-		t.goToIRValue[u] = irconstant.NewUndef(t.goToIRType(u.Type()))
-
-	case token.XOR:
-		log.Printf("unimplemented: token.XOR (^)")
 		t.goToIRValue[u] = irconstant.NewUndef(t.goToIRType(u.Type()))
 
 	default:
