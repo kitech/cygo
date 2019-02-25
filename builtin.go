@@ -89,7 +89,9 @@ func (b *builtins) Write(t *translator) *ir.Func {
 
 func (b *builtins) Append(t *translator) *ir.Func {
 	if b.append == nil {
-		// anySlice := irtypes.NewStruct(irtypes.I8Ptr, irtypes.I64, irtypes.I64)
+
+		// TODO(pwaller): Different word than 'more'.
+		// TODO(pwaller): More consistent naming convention (more first, or ptr/len first?)
 
 		irPtr := ir.NewParam("ptr", irtypes.I8Ptr)
 		irLen := ir.NewParam("len", irtypes.I64)
@@ -123,7 +125,6 @@ func (b *builtins) Append(t *translator) *ir.Func {
 }
 
 func makeStruct(irBlock *ir.Block, values ...irvalue.Value) (ret irvalue.Value) {
-	// structType :=
 	var types []irtypes.Type
 	for _, v := range values {
 		types = append(types, v.Type())

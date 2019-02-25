@@ -151,9 +151,6 @@ func lower(out io.Writer, args []string) error {
 		goToIRTypeCache: map[gotypes.Type]irtypes.Type{},
 	}
 
-	// TODO(pwaller):
-	// packages.Visit generates a deep callgraph. Instead, build a slice
-	// and operate on those directly to avoid big stack traces on failure.
 	var toTranslate []*ssa.Package
 	packages.Visit(initial, func(p *packages.Package) bool {
 		return true

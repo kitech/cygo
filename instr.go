@@ -605,10 +605,8 @@ func (t *translator) emitCallBuiltinAppend(
 
 	// TODO(pwaller): It's probably wrong to use the Go elem size here.
 	// But we don't currently have an easy way to compute the llir one.
+	// See https://github.com/llir/llvm/issues/66
 	goElemSize := sizeof(c.Call.Args[0].Type().(*gotypes.Slice).Elem())
-
-	// irAppendeePtr.Type().(*irtypes.PointerType).ElemType
-
 	irElemSize := irconstant.NewInt(irtypes.I64, goElemSize)
 
 	t.goToIRValue[c] = irBlock.NewCall(
