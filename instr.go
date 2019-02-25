@@ -241,8 +241,8 @@ func (t *translator) emitBinOpArith(
 			irBlock.NewAdd(irNewPtrAsInt, irXLen), irtypes.I8Ptr,
 		)
 
-		irBlock.NewCall(t.builtins.Memcpy(t), irNewPtr, irXPtr, irXLen)
-		irBlock.NewCall(t.builtins.Memcpy(t), irNewPtrYOff, irYPtr, irYLen)
+		irBlock.NewCall(t.builtins.Memcpy(t), irNewPtr, irXPtr, irXLen, irconstant.False)
+		irBlock.NewCall(t.builtins.Memcpy(t), irNewPtrYOff, irYPtr, irYLen, irconstant.False)
 
 		var irSum irvalue.Value = irconstant.NewUndef(t.goToIRType(b.Type()))
 		irSum = irBlock.NewInsertValue(irSum, irNewPtr, 0)
@@ -609,6 +609,7 @@ func (t *translator) emitCallBuiltinCopy(
 		irBlock.NewBitCast(irDstPtr, irtypes.I8Ptr),
 		irBlock.NewBitCast(irSrcPtr, irtypes.I8Ptr),
 		irCopySize,
+		irconstant.False,
 	)
 
 	t.goToIRValue[c] = irCopyLen
@@ -778,7 +779,7 @@ func (t *translator) copyBytes(
 	irBlock *ir.Block, irPtr, irLen irvalue.Value,
 ) irvalue.Value {
 	irNewPtr := irBlock.NewCall(t.builtins.Malloc(t), irLen)
-	irBlock.NewCall(t.builtins.Memcpy(t), irNewPtr, irPtr, irLen)
+	irBlock.NewCall(t.builtins.Memcpy(t), irNewPtr, irPtr, irLen, irconstant.False)
 	return irNewPtr
 }
 

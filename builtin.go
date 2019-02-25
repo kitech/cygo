@@ -54,11 +54,12 @@ func (b *builtins) Malloc(t *translator) *ir.Func {
 func (b *builtins) Memcpy(t *translator) *ir.Func {
 	if b.memcpy == nil {
 		b.memcpy = t.m.NewFunc(
-			"memcpy",
+			"llvm.memcpy.p0i8.p0i8.i64",
 			irtypes.Void,
 			ir.NewParam("dst", irtypes.I8Ptr),
 			ir.NewParam("src", irtypes.I8Ptr),
 			ir.NewParam("n", irtypes.I64),
+			ir.NewParam("volatile", irtypes.I1),
 		)
 	}
 	return b.memcpy
@@ -128,7 +129,7 @@ func (b *builtins) Append(t *translator) *ir.Func {
 				irtypes.I8Ptr,
 			)
 			irExtraSize := blk.NewMul(irMoreLen, irElemSize)
-			blk.NewCall(b.Memcpy(t), irPtrStart, irMorePtr, irExtraSize)
+			blk.NewCall(b.Memcpy(t), irPtrStart, irMorePtr, irExtraSize, irconstant.False)
 
 			// Return new slice value.
 			irNewPtr := irPtr
@@ -149,7 +150,7 @@ func (b *builtins) Append(t *translator) *ir.Func {
 
 			// Copy the original slice data into newly alloc'd memory.
 			irOrigSize := blk.NewMul(irLen, irElemSize)
-			blk.NewCall(b.Memcpy(t), irNewPtr, irPtr, irOrigSize)
+			blk.NewCall(b.Memcpy(t), irNewPtr, irPtr, irOrigSize, irconstant.False)
 
 			// Copy appended elements.
 			irNewPtrMore := blk.NewIntToPtr(
@@ -161,7 +162,7 @@ func (b *builtins) Append(t *translator) *ir.Func {
 				irtypes.I8Ptr,
 			)
 			irExtraSize := blk.NewMul(irMoreLen, irElemSize)
-			blk.NewCall(b.Memcpy(t), irNewPtrMore, irMorePtr, irExtraSize)
+			blk.NewCall(b.Memcpy(t), irNewPtrMore, irMorePtr, irExtraSize, irconstant.False)
 
 			// Return new slice value.
 			irNewSlice := makeStruct(blk, irNewPtr, irNewLen, irNewCap)
