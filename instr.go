@@ -124,7 +124,7 @@ func (t *translator) emitAlloc(irBlock *ir.Block, a *ssa.Alloc) {
 }
 
 func (t *translator) emitAllocHeap(irBlock *ir.Block, a *ssa.Alloc) {
-	goElemType := a.Type().(*gotypes.Pointer).Elem()
+	goElemType := a.Type().Underlying().(*gotypes.Pointer).Elem()
 	sz := sizeof(goElemType)
 	irVoidPtr := irBlock.NewCall(
 		t.builtins.Malloc(t),
@@ -630,7 +630,7 @@ func (t *translator) emitCallBuiltinAppend(
 	// TODO(pwaller): It's probably wrong to use the Go elem size here.
 	// But we don't currently have an easy way to compute the llir one.
 	// See https://github.com/llir/llvm/issues/66
-	goElemSize := sizeof(c.Call.Args[0].Type().(*gotypes.Slice).Elem())
+	goElemSize := sizeof(c.Call.Args[0].Type().Underlying().(*gotypes.Slice).Elem())
 	irElemSize := irconstant.NewInt(irtypes.I64, goElemSize)
 
 	irNewGenericSlice := irBlock.NewCall(
