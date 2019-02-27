@@ -7,6 +7,7 @@ import (
 	gotypes "go/types"
 	"log"
 	"math/big"
+	"runtime"
 
 	"golang.org/x/tools/go/ssa"
 
@@ -416,26 +417,32 @@ func (t *translator) emitBinOpCmp(
 
 	case isStruct(goParamType):
 		log.Printf("unimplemented: emitBinOpCmp: struct: %T %v", goParamType, goParamType)
+		t.doTrap(irBlock)
 		t.goToIRValue[b] = irconstant.NewUndef(irtypes.I1)
 
 	case isComplex(goParamType):
 		log.Printf("unimplemented: complex comparison")
+		t.doTrap(irBlock)
 		t.goToIRValue[b] = irconstant.NewUndef(irtypes.I1)
 
 	case isSignature(goParamType):
 		log.Printf("unimplemented: signature comparison")
+		t.doTrap(irBlock)
 		t.goToIRValue[b] = irconstant.NewUndef(irtypes.I1)
 
 	case isSlice(goParamType):
 		log.Printf("unimplemented: slice comparison")
+		t.doTrap(irBlock)
 		t.goToIRValue[b] = irconstant.NewUndef(irtypes.I1)
 
 	case isArray(goParamType):
 		log.Printf("unimplemented: array comparison")
+		t.doTrap(irBlock)
 		t.goToIRValue[b] = irconstant.NewUndef(irtypes.I1)
 
 	case isMap(goParamType):
 		log.Printf("unimplemented: map comparison")
+		t.doTrap(irBlock)
 		t.goToIRValue[b] = irconstant.NewUndef(irtypes.I1)
 
 	default:
@@ -475,6 +482,7 @@ func (t *translator) emitBinOpCmpStr(
 
 func (t *translator) emitCall(irBlock *ir.Block, c *ssa.Call) {
 	if c.Call.IsInvoke() {
+		t.doTrap(irBlock)
 		t.goToIRValue[c] = irconstant.NewUndef(t.goToIRType(c.Type()))
 		log.Printf("unimplemented: emitCall & c.Call.IsInvoke(): %v", c)
 		return
@@ -503,11 +511,16 @@ func (t *translator) emitCall(irBlock *ir.Block, c *ssa.Call) {
 		)
 
 	case *ssa.MakeClosure:
+		t.doTrap(irBlock)
 		t.goToIRValue[c] = irconstant.NewUndef(t.goToIRType(c.Type()))
 		log.Println("unimplemented: MakeClosure call")
 		// panic(fmt.Errorf("unimplemented: MakeClosure call"))
+
 	default:
 		log.Println("unimplemented: non-static call")
+
+		log.Println("unimplemented: non-static call")
+		t.doTrap(irBlock)
 		t.goToIRValue[c] = irconstant.NewUndef(t.goToIRType(c.Type()))
 		// panic(fmt.Errorf("unimplemented: non-static call"))
 	}
@@ -546,7 +559,8 @@ func (t *translator) emitCallBuiltin(
 
 		if isMap(goArg.Type()) {
 			log.Printf("unimplemented: len(map)")
-			t.goToIRValue[c] = irconstant.NewInt(irtypes.I32, 0)
+			t.doTrap(irBlock)
+			t.goToIRValue[c] = irconstant.NewUndef(t.goToIRType(c.Type()))
 			return
 		}
 
@@ -580,6 +594,7 @@ func (t *translator) emitCallBuiltin(
 	default:
 		// TODO(pwaller): A number of missing builtins.
 		log.Printf("unimplemented: emitCallBuiltin: %v", goBuiltin.Name())
+		t.doTrap(irBlock)
 		t.goToIRValue[c] = irconstant.NewUndef(t.goToIRType(c.Type()))
 		// panic(fmt.Errorf("unimplemented: emitCallBuiltin: %v", goBuiltin.Name()))
 	}
@@ -655,6 +670,7 @@ func (t *translator) emitCallBuiltinAppend(
 
 func (t *translator) emitChangeInterface(irBlock *ir.Block, c *ssa.ChangeInterface) {
 	log.Printf("unimplemented: emitChangeInterface")
+	t.doTrap(irBlock)
 	t.goToIRValue[c] = irconstant.NewUndef(t.goToIRType(c.Type()))
 }
 
@@ -676,6 +692,7 @@ func (t *translator) emitConvertInt(irBlock *ir.Block, c *ssa.Convert) {
 		return
 	}
 	if isString(to) {
+		t.doTrap(irBlock)
 		t.goToIRValue[c] = irconstant.NewUndef(t.goToIRType(c.Type()))
 		log.Printf("unimplemented: emitConvertInt to string")
 		return
@@ -767,6 +784,7 @@ func (t *translator) emitConvertSlice(irBlock *ir.Block, c *ssa.Convert) {
 		t.goToIRValue[c] = irStr
 
 	default:
+		t.doTrap(irBlock)
 		t.goToIRValue[c] = irconstant.NewUndef(t.goToIRType(c.Type()))
 		log.Printf("unimplemented: emitConvertSlice: %v <- %v", to, from)
 		// panic(fmt.Errorf("unimplemented: emitConvertSlice: %v <- %v", to, from))
@@ -783,6 +801,7 @@ func (t *translator) copyBytes(
 }
 
 func (t *translator) emitConvertComplex(irBlock *ir.Block, c *ssa.Convert) {
+	t.doTrap(irBlock)
 	t.goToIRValue[c] = irconstant.NewUndef(t.goToIRType(c.Type()))
 	log.Printf("unimplemented: emitConvertComplex: %v", c)
 }
@@ -807,6 +826,7 @@ func (t *translator) emitConvertString(irBlock *ir.Block, c *ssa.Convert) {
 		t.goToIRValue[c] = irSlice
 
 	default:
+		t.doTrap(irBlock)
 		t.goToIRValue[c] = irconstant.NewUndef(t.goToIRType(c.Type()))
 		log.Printf("unimplemented: emitConvertSlice: %v <- %v", to, from)
 		// panic(fmt.Errorf("unimplemented: emitConvertSlice: %v <- %v", to, from))
@@ -953,11 +973,13 @@ func (t *translator) emitLookup(irBlock *ir.Block, l *ssa.Lookup) {
 	// 	case *
 	// }
 
+	t.doTrap(irBlock)
 	t.goToIRValue[l] = irconstant.NewUndef(t.goToIRType(l.Type()))
 	log.Printf("unimplemented: emitLookupMap")
 }
 
 func (t *translator) emitMakeChan(irBlock *ir.Block, m *ssa.MakeChan) {
+	t.doTrap(irBlock)
 	t.goToIRValue[m] = irconstant.NewUndef(t.goToIRType(m.Type()))
 	log.Printf("unimplemented: emitMakeChan")
 }
@@ -1009,6 +1031,10 @@ func (t *translator) emitMakeClosure(irBlock *ir.Block, m *ssa.MakeClosure) {
 
 func (t *translator) emitMakeInterface(irBlock *ir.Block, m *ssa.MakeInterface) {
 	log.Printf("unimplemented: emitMakeInterface")
+	t.goToIRValue[m] = irconstant.NewUndef(t.goToIRType(m.Type()))
+	t.doTrap(irBlock)
+	return
+
 	// ms := t.prog.MethodSets.MethodSet(m.X.Type())
 	// log.Printf("%T: %v", ms, ms)
 	// t.goToIRValue[m] = irconstant.NewUndef(t.goToIRType(m.Type()))
@@ -1032,6 +1058,7 @@ func (t *translator) emitMakeInterface(irBlock *ir.Block, m *ssa.MakeInterface) 
 
 func (t *translator) emitMakeMap(irBlock *ir.Block, m *ssa.MakeMap) {
 	log.Printf("unimplemented: emitMakeMap")
+	t.doTrap(irBlock)
 	t.goToIRValue[m] = irconstant.NewUndef(t.goToIRType(m.Type()))
 }
 
@@ -1059,12 +1086,14 @@ func (t *translator) emitMakeSlice(irBlock *ir.Block, m *ssa.MakeSlice) {
 }
 
 func (t *translator) emitMapUpdate(irBlock *ir.Block, m *ssa.MapUpdate) {
+	t.doTrap(irBlock)
 	// t.goToIRValue[m] = irconstant.NewUndef(t.goToIRType(m.Type()))
 	log.Printf("unimplemented: emitMapUpdate")
 }
 
 func (t *translator) emitNext(irBlock *ir.Block, n *ssa.Next) {
 	log.Printf("Next: %v %v", n, n.Type())
+	t.doTrap(irBlock)
 	t.goToIRValue[n] = irconstant.NewUndef(t.goToIRType(n.Type()))
 	log.Printf("unimplemented: emitNext")
 }
@@ -1124,16 +1153,18 @@ func (t *translator) emitReturn(irBlock *ir.Block, r *ssa.Return) {
 
 func (t *translator) emitRunDefers(irBlock *ir.Block, r *ssa.RunDefers) {
 	// TODO(pwaller): A no-op for now.
-	// log.Printf("unimplemented: emitRunDefers")
+	log.Printf("unimplemented: emitRunDefers")
 }
 
 func (t *translator) emitSelect(irBlock *ir.Block, s *ssa.Select) {
+	t.doTrap(irBlock)
 	t.goToIRValue[s] = irconstant.NewUndef(t.goToIRType(s.Type()))
 	log.Printf("unimplemented: emitSelect")
 }
 
 func (t *translator) emitSend(irBlock *ir.Block, s *ssa.Send) {
 	log.Printf("unimplemented: emitSend")
+	t.doTrap(irBlock)
 }
 
 func (t *translator) emitSliceOfString(irBlock *ir.Block, s *ssa.Slice) {
@@ -1271,6 +1302,7 @@ func (t *translator) emitSlice(irBlock *ir.Block, s *ssa.Slice) {
 
 	default:
 		// TODO(pwaller): Hack: not yet implemented.
+		t.doTrap(irBlock)
 		t.goToIRValue[s] = irconstant.NewUndef(t.goToIRType(s.Type()))
 
 		log.Printf("unimplemented: emitSlice: %v %T: %v", s, s.X.Type(), s.X.Type())
@@ -1287,12 +1319,14 @@ func (t *translator) emitTypeAssert(irBlock *ir.Block, ta *ssa.TypeAssert) {
 	if ta.CommaOk {
 		commaOKType := irtypes.NewStruct(t.goToIRType(ta.AssertedType), irtypes.I1)
 		// TODO(pwaller): Undef until we have an implementation.
+		t.doTrap(irBlock)
 		t.goToIRValue[ta] = irconstant.NewUndef(commaOKType)
 		log.Printf("unimplemented: emitTypeAssert")
 		return
 	}
 
 	// TODO(pwaller): Undef until we have an implementation.
+	t.doTrap(irBlock)
 	t.goToIRValue[ta] = irconstant.NewUndef(t.goToIRType(ta.AssertedType))
 	log.Printf("unimplemented: emitTypeAssert")
 }
@@ -1331,6 +1365,7 @@ func (t *translator) emitUnOp(irBlock *ir.Block, u *ssa.UnOp) {
 
 	case token.ARROW:
 		log.Printf("unimplemented: channel recv")
+		t.doTrap(irBlock)
 		t.goToIRValue[u] = irconstant.NewUndef(t.goToIRType(u.Type()))
 
 	default:
@@ -1348,4 +1383,32 @@ func irConstantOnes(nBits int) irvalue.Value {
 		Typ: irtypes.NewInt(uint64(nBits)),
 		X:   bigOnes,
 	}
+}
+
+func (t *translator) doTrap(irBlock *ir.Block, msg ...string) {
+	pc, _, _, ok := runtime.Caller(1)
+	callerName, callerFile, callerLine := "", "", 0
+	if ok {
+		frames := runtime.CallersFrames([]uintptr{pc})
+		frame, _ := frames.Next()
+		callerName = frame.Func.Name()
+		callerFile, callerLine = frame.Func.FileLine(pc)
+	}
+
+	extra := ""
+	if len(msg) != 0 {
+		extra = msg[0]
+	}
+
+	irBlock.NewCall(
+		t.builtins.Printf(t),
+		irconstant.NewInt(irtypes.I32, 2),
+		t.constantString(irBlock, "doTrap from %s %s:%d -- %s\n"),
+		t.constantString(irBlock, callerName),
+		t.constantString(irBlock, callerFile),
+		irconstant.NewInt(irtypes.I32, int64(callerLine)),
+		t.constantString(irBlock, extra),
+	)
+
+	irBlock.NewCall(t.builtins.Trap(t))
 }

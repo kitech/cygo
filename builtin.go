@@ -15,6 +15,7 @@ type builtins struct {
 	memcpy,
 	printf,
 	strncmp,
+	trap,
 	write *ir.Func
 }
 
@@ -76,6 +77,14 @@ func (b *builtins) Strncmp(t *translator) *ir.Func {
 	}
 	return b.strncmp
 }
+
+func (b *builtins) Trap(t *translator) *ir.Func {
+	if b.trap == nil {
+		b.trap = t.m.NewFunc("llvm.trap", irtypes.Void)
+	}
+	return b.trap
+}
+
 func (b *builtins) Write(t *translator) *ir.Func {
 	if b.write == nil {
 		b.write = t.m.NewFunc("write",

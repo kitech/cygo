@@ -372,6 +372,7 @@ func (t *translator) emitFunctionBody(f *ssa.Function) {
 			if !irFunc.Sig.RetType.Equal(irtypes.Void) {
 				irRetValue = irconstant.NewZeroInitializer(irFunc.Sig.RetType)
 			}
+			t.doTrap(irBlock, f.String())
 			irBlock.Term = irBlock.NewRet(irRetValue)
 		}
 	}
@@ -494,6 +495,7 @@ func (t *translator) translateValue(
 
 	default:
 		log.Printf("unknown goValue: %T: %v", goValue, goValue)
+		t.doTrap(irBlock)
 		return irconstant.NewUndef(t.goToIRType(goValue.Type()))
 	}
 }
