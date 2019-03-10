@@ -348,33 +348,8 @@ func (t *translator) emitFunctionBody(f *ssa.Function) {
 	irFunc := t.goToIRValue[f].(*ir.Func)
 
 	if len(f.Blocks) == 0 {
-		// This function has no blocks; it is likely implemented in assembly.
-		// Look for an equivalent function with lower-case name, that's where
-		// the pure go implementation usually resides.
-		goGenericImpl := f.Package().Func(strings.ToLower(f.Name()))
-		if goGenericImpl != nil && goGenericImpl != f {
-			irGenericImpl := t.goToIRValue[goGenericImpl]
-			var irArgs []irvalue.Value
-			for _, irParam := range irFunc.Params {
-				irArgs = append(irArgs, irParam)
-			}
-			irBlock := irFunc.NewBlock("")
-			var irRetValue irvalue.Value
-			irCallResult := irBlock.NewCall(irGenericImpl, irArgs...)
-			if !irFunc.Sig.RetType.Equal(irtypes.Void) {
-				irRetValue = irCallResult
-			}
-			irBlock.Term = irBlock.NewRet(irRetValue)
-		} else {
-			log.Println("emitting empty function body...", f.String())
-			irBlock := irFunc.NewBlock("")
-			var irRetValue irvalue.Value
-			if !irFunc.Sig.RetType.Equal(irtypes.Void) {
-				irRetValue = irconstant.NewZeroInitializer(irFunc.Sig.RetType)
-			}
-			t.doTrap(irBlock, f.String())
-			irBlock.Term = irBlock.NewRet(irRetValue)
-		}
+		t.emitEmptyFunc(irFunc, f)
+		return
 	}
 
 	// Bulk of translation happens here, except for terminators and phis which
@@ -428,6 +403,36 @@ func (t *translator) emitFunctionBody(f *ssa.Function) {
 
 	if irFunc.Blocks[0].Term == nil {
 		irFunc.Blocks[0].NewBr(goBlockToIR[f.Blocks[0]])
+	}
+}
+
+func (t *translator) emitEmptyFunc(irFunc *ir.Func, f *ssa.Function) {
+	// This function has no blocks; it is likely implemented in assembly.
+	// Look for an equivalent function with lower-case name, that's where
+	// the pure go implementation usually resides.
+	goGenericImpl := f.Package().Func(strings.ToLower(f.Name()))
+	if goGenericImpl != nil && goGenericImpl != f {
+		irGenericImpl := t.goToIRValue[goGenericImpl]
+		var irArgs []irvalue.Value
+		for _, irParam := range irFunc.Params {
+			irArgs = append(irArgs, irParam)
+		}
+		irBlock := irFunc.NewBlock("")
+		var irRetValue irvalue.Value
+		irCallResult := irBlock.NewCall(irGenericImpl, irArgs...)
+		if !irFunc.Sig.RetType.Equal(irtypes.Void) {
+			irRetValue = irCallResult
+		}
+		irBlock.Term = irBlock.NewRet(irRetValue)
+	} else {
+		log.Println("emitting empty function body...", f.String())
+		irBlock := irFunc.NewBlock("")
+		var irRetValue irvalue.Value
+		if !irFunc.Sig.RetType.Equal(irtypes.Void) {
+			irRetValue = irconstant.NewZeroInitializer(irFunc.Sig.RetType)
+		}
+		t.doTrap(irBlock, f.String())
+		irBlock.Term = irBlock.NewRet(irRetValue)
 	}
 }
 
