@@ -29,4 +29,10 @@ void println(const char* fmt, ...);
 // TODO
 #define gogorun
 
+extern void cxrt_init_routine_env();
+extern void cxrt_routine_post(void (*f)());
+
+#include <sys/types.h>
+extern pid_t gettid();
+
 #endif

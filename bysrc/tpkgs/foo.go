@@ -7,7 +7,8 @@ func bar() int {
 	return 0
 }
 
-func foo() []string {
+func foo() {
+	println("foo called")
 	return nil
 }
 
@@ -29,4 +30,6 @@ func main() {
 	println(5)
 
 	println("aaa")
+
+	bar()
 }

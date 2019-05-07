@@ -57,12 +57,17 @@ func (this *g2nc) genFuncDecl(scope *ast.Scope, d *ast.FuncDecl) {
 	this.genFieldList(scope, d.Type.Results, true, false, "")
 	this.out(d.Name.String())
 	this.out("()").outnl()
+	scope = ast.NewScope(scope)
+	scope.Insert(ast.NewObj(ast.Fun, d.Name.Name))
 	this.genBlockStmt(scope, d.Body)
 	this.outnl()
 }
 
 func (this *g2nc) genBlockStmt(scope *ast.Scope, stmt *ast.BlockStmt) {
 	this.out("{").outnl()
+	if scope.Lookup("main") != nil {
+		this.out("{ cxrt_init_routine_env(); }").outnl()
+	}
 	scope = ast.NewScope(scope)
 	for idx, s := range stmt.List {
 		this.genStmt(scope, s, idx)
@@ -89,8 +94,10 @@ func (this *g2nc) genStmt(scope *ast.Scope, stmt ast.Stmt, idx int) {
 	}
 }
 func (this *g2nc) genGoStmt(scope *ast.Scope, stmt *ast.GoStmt) {
-	this.out("gogorun")
-	this.genCallExpr(scope, stmt.Call)
+	calleename := stmt.Call.Fun.(*ast.Ident).Name
+	this.out("// gogorun", calleename).outnl()
+	this.out(fmt.Sprintf("cxrt_routine_post(%s);", calleename)).outnl()
+	// this.genCallExpr(scope, stmt.Call)
 }
 func (c *g2nc) genCallExpr(scope *ast.Scope, e *ast.CallExpr) {
 	c.genExpr(scope, e)
