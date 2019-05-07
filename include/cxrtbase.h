@@ -1,7 +1,9 @@
 #ifndef _CXRT_BASE_H_
 #define _CXRT_BASE_H_
 
+#include <stdio.h>
 #include <stdlib.h>
+#include <pthread.h>
 #include <stdint.h>
 
 typedef uint8_t bool;
@@ -23,5 +25,8 @@ typedef struct {
 } string;
 
 void println(const char* fmt, ...);
+
+// TODO
+#define gogorun
 
 #endif

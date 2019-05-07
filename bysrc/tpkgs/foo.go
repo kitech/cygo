@@ -1,12 +1,7 @@
 package foo
 
-import (
-	"fmt"
-	"time"
-)
-
 func bar() int {
-	fmt.Println(time.Now())
+	//	fmt.Println(time.Now())
 	foo()
 	go foo()
 	return 0
@@ -30,4 +25,8 @@ type color struct {
 func main() {
 	c := &color{}
 	println(c)
+
+	println(5)
+
+	println("aaa")
 }
