@@ -42,7 +42,8 @@ func (t *translator) goConstToIR(
 		s := goconstant.StringVal(goConst.Value)
 		irConstantS := t.constantString(irBlock, s)
 		irLen := irconstant.NewInt(irtypes.I64, int64(len(s)))
-		return irconstant.NewStruct(irConstantS, irLen)
+		stty := irtypes.NewStruct(irtypes.I8Ptr, irtypes.I64)
+		return irconstant.NewStruct(stty, irConstantS, irLen)
 
 	case isInteger(goConstType):
 		irTyp := t.goToIRType(goConstType).(*irtypes.IntType)
@@ -61,7 +62,8 @@ func (t *translator) goConstToIR(
 
 		c := goConst.Complex128()
 
-		return irconstant.NewStruct(
+		stty := irtypes.NewStruct(irtypes.Float, irtypes.Float)
+		return irconstant.NewStruct(stty,
 			irconstant.NewFloat(irFloatTyp, real(c)),
 			irconstant.NewFloat(irFloatTyp, imag(c)),
 		)
