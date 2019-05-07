@@ -19,3 +19,15 @@ func foo() []string {
 func foo1() string {
 	return ""
 }
+
+type color struct {
+	r byte
+	g byte
+	b byte
+	a byte
+}
+
+func main() {
+	c := &color{}
+	println(c)
+}
