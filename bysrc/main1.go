@@ -23,5 +23,6 @@ func main() {
 	g2n.psctx = psctx
 	g2n.genpkgs()
 	code := g2n.code()
-	ioutil.WriteFile("opkgs/foo.nim", []byte(code), 0644)
+	code = "#include <cxrtbase.h>\n\n" + code
+	ioutil.WriteFile("opkgs/foo.c", []byte(code), 0644)
 }

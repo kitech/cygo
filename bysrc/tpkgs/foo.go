@@ -5,12 +5,17 @@ import (
 	"time"
 )
 
-func bar() (int, error) {
+func bar() int {
 	fmt.Println(time.Now())
 	foo()
-	return 0, nil
+	go foo()
+	return 0
 }
 
 func foo() []string {
 	return nil
+}
+
+func foo1() string {
+	return ""
 }

@@ -44,18 +44,24 @@ func (this *g2nc) genDecl(d ast.Decl) {
 
 func (this *g2nc) genFuncDecl(d *ast.FuncDecl) {
 	log.Println(d.Name)
-	this.out("proc ", d.Name.String())
+	this.genFieldList(d.Type.Results, true)
+	this.out(d.Name.String())
 	this.out("()")
-	this.genFieldList(d.Type.Results)
-	this.outeq()
+	this.outnl()
+	this.out("{}")
 	this.outnl()
 }
 
-func (this *g2nc) genFieldList(flds *ast.FieldList) {
+func (this *g2nc) genFieldList(flds *ast.FieldList, ovoid bool) {
+	log.Println(flds, ovoid)
 	if flds == nil {
 		return
 	}
-	this.out(": ")
+	if flds.NumFields() == 0 {
+		this.out("void")
+		return
+	}
+
 	for idx, fld := range flds.List {
 		_, _ = idx, fld
 		this.genExpr(fld.Type)
@@ -63,13 +69,15 @@ func (this *g2nc) genFieldList(flds *ast.FieldList) {
 }
 
 func (this *g2nc) genExpr(e ast.Expr) {
-	log.Println(reflect.TypeOf(e))
+	// log.Println(reflect.TypeOf(e))
 	switch te := e.(type) {
 	case *ast.Ident:
 		log.Println(te.Name, te.String(), te.IsExported(), te.Obj)
-		this.out(te.Name)
+		this.out(te.Name, " ")
 	case *ast.ArrayType:
-
+		log.Println("unimplemented", te, reflect.TypeOf(e))
+	default:
+		log.Println(reflect.TypeOf(e))
 	}
 }
 
@@ -77,8 +85,8 @@ func (this *g2nc) outeq() { this.out("=") }
 func (this *g2nc) outnl() { this.out("\n") }
 func (this *g2nc) out(ss ...string) {
 	for _, s := range ss {
-		fmt.Print(s)
-		this.sb.WriteString(s)
+		fmt.Print(s, " ")
+		this.sb.WriteString(s + " ")
 	}
 }
 
