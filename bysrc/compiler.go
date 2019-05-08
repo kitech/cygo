@@ -8,6 +8,8 @@ import (
 	"log"
 	"reflect"
 	"strings"
+
+	"golang.org/x/tools/go/ast/astutil"
 )
 
 type g2nc struct {
@@ -45,6 +47,7 @@ func (this *g2nc) genfile(scope *ast.Scope, name string, f *ast.File) {
 func (this *g2nc) genDecl(scope *ast.Scope, d ast.Decl) {
 	switch td := d.(type) {
 	case *ast.FuncDecl:
+		this.genPreFuncDecl(scope, td)
 		this.genFuncDecl(scope, td)
 	case *ast.GenDecl:
 		this.genGenDecl(scope, td)
@@ -52,12 +55,30 @@ func (this *g2nc) genDecl(scope *ast.Scope, d ast.Decl) {
 		log.Println("unimplemented", reflect.TypeOf(d))
 	}
 }
-
+func (this *g2nc) genPreFuncDecl(scope *ast.Scope, d *ast.FuncDecl) {
+	// goroutines struct and functions wrapper
+	var gostmts []*ast.GoStmt
+	astutil.Apply(d, func(c *astutil.Cursor) bool {
+		switch t := c.Node().(type) {
+		case *ast.GoStmt:
+			gostmts = append(gostmts, t)
+		}
+		return true
+	}, nil)
+	if len(gostmts) > 0 {
+		log.Println("found gostmts", d.Name.Name, len(gostmts))
+	}
+	for _, stmt := range gostmts {
+		this.genRoutineStargs(scope, stmt.Call)
+		this.genRoutineStwrap(scope, stmt.Call)
+	}
+}
 func (this *g2nc) genFuncDecl(scope *ast.Scope, d *ast.FuncDecl) {
-	log.Println(d.Name)
-	this.genFieldList(scope, d.Type.Results, true, false, "")
+	this.genFieldList(scope, d.Type.Results, true, false, "", false)
 	this.out(d.Name.String())
-	this.out("()").outnl()
+	this.out("(")
+	this.genFieldList(scope, d.Type.Params, false, true, ",", true)
+	this.out(")").outnl()
 	scope = ast.NewScope(scope)
 	scope.Insert(ast.NewObj(ast.Fun, d.Name.Name))
 	this.genBlockStmt(scope, d.Body)
@@ -81,7 +102,7 @@ func (this *g2nc) genStmt(scope *ast.Scope, stmt ast.Stmt, idx int) {
 	case *ast.AssignStmt:
 		log.Println(t.Tok.String(), t.Lhs)
 		for i := 0; i < len(t.Rhs); i++ {
-			this.out(this.exprType(scope, t.Rhs[i]))
+			this.out(this.exprTypeName(scope, t.Rhs[i]))
 			this.genExpr(scope, t.Lhs[i])
 			this.out(" = ")
 			this.genExpr(scope, t.Rhs[i])
@@ -95,22 +116,79 @@ func (this *g2nc) genStmt(scope *ast.Scope, stmt ast.Stmt, idx int) {
 	}
 }
 func (this *g2nc) genGoStmt(scope *ast.Scope, stmt *ast.GoStmt) {
-	calleename := stmt.Call.Fun.(*ast.Ident).Name
-	this.out("// gogorun", calleename).outnl()
-	this.out(fmt.Sprintf("cxrt_routine_post(%s);", calleename)).outnl()
+	// calleename := stmt.Call.Fun.(*ast.Ident).Name
 	// this.genCallExpr(scope, stmt.Call)
+	// define function in function in c?
+	// this.genRoutineStargs(scope, stmt.Call)
+	// this.genRoutineStwrap(scope, stmt.Call)
+	this.genRoutineWcall(scope, stmt.Call)
 }
+func (c *g2nc) genRoutineStargs(scope *ast.Scope, e *ast.CallExpr) {
+	funame := e.Fun.(*ast.Ident).Name
+	if _, ok := c.psctx.grstargs[funame]; ok {
+		return
+	}
+
+	c.out("typedef struct {")
+	for idx, ae := range e.Args {
+		fldname := fmt.Sprintf("a%d", idx)
+		fldtype := c.exprTypeName(scope, ae)
+		log.Println(funame, fldtype, fldname)
+		c.out(fldtype, fldname).outfh().outnl()
+	}
+	c.out("}", funame+"_routine_args").outfh().outnl()
+}
+func (c *g2nc) genRoutineStwrap(scope *ast.Scope, e *ast.CallExpr) {
+	funame := e.Fun.(*ast.Ident).Name
+	if _, ok := c.psctx.grstargs[funame]; ok {
+		return
+	}
+	c.psctx.grstargs[funame] = true
+
+	stname := funame + "_routine_args"
+	c.out("void", funame+"_routine", "(void* vpargs)").outnl()
+	c.out("{").outnl()
+	c.out(stname, "*args = (", stname, "*)vpargs").outfh().outnl()
+	c.out(funame, "(")
+	for idx, _ := range e.Args {
+		fldname := fmt.Sprintf("args->a%d", idx)
+		c.out(fldname)
+		c.out(gopp.IfElseStr(idx == len(e.Args)-1, "", ","))
+	}
+	c.out(")").outfh().outnl()
+	c.out("}").outnl().outnl()
+}
+func (c *g2nc) genRoutineWcall(scope *ast.Scope, e *ast.CallExpr) {
+	funame := e.Fun.(*ast.Ident).Name
+	wfname := funame + "_routine"
+	stname := funame + "_routine_args"
+
+	c.out("// gogorun", funame).outnl()
+	c.out("{")
+	c.out(stname, "*args = (", stname, "*)calloc(1, sizeof(", stname, "))").outfh().outnl()
+	for idx, arg := range e.Args {
+		c.out(fmt.Sprintf("args->a%d", idx), "=")
+		c.genExpr(scope, arg)
+		c.outfh().outnl()
+	}
+	c.out(fmt.Sprintf("cxrt_routine_post(%s, args);", wfname)).outnl()
+	c.out("}").outnl()
+}
+
 func (c *g2nc) genCallExpr(scope *ast.Scope, e *ast.CallExpr) {
 	c.genExpr(scope, e)
 }
 
-func (this *g2nc) genFieldList(scope *ast.Scope, flds *ast.FieldList, ovoid bool, withname bool, linebrk string) {
-	log.Println(flds, ovoid)
-	if flds == nil {
+// keepvoid
+// skiplast 作用于linebrk
+func (this *g2nc) genFieldList(scope *ast.Scope, flds *ast.FieldList,
+	keepvoid bool, withname bool, linebrk string, skiplast bool) {
+	log.Println(flds, keepvoid)
+	if keepvoid && (flds == nil || flds.NumFields() == 0) {
+		this.out("void")
 		return
 	}
-	if flds.NumFields() == 0 {
-		this.out("void")
+	if flds == nil {
 		return
 	}
 
@@ -120,7 +198,8 @@ func (this *g2nc) genFieldList(scope *ast.Scope, flds *ast.FieldList, ovoid bool
 		if withname && len(fld.Names) > 0 {
 			this.genExpr(scope, fld.Names[0])
 		}
-		this.out(linebrk)
+		outskip := skiplast && (idx == len(flds.List)-1)
+		this.out(gopp.IfElseStr(outskip, "", linebrk))
 	}
 }
 
@@ -133,7 +212,7 @@ func (this *g2nc) genExpr(scope *ast.Scope, e ast.Expr) {
 	case *ast.ArrayType:
 		log.Println("unimplemented", te, reflect.TypeOf(e))
 	case *ast.StructType:
-		this.genFieldList(scope, te.Fields, false, true, ";\n")
+		this.genFieldList(scope, te.Fields, false, true, ";\n", false)
 	case *ast.UnaryExpr:
 		log.Println(te.Op.String(), te.X)
 		switch t2 := te.X.(type) {
@@ -188,16 +267,18 @@ func (this *g2nc) genExpr(scope *ast.Scope, e ast.Expr) {
 		log.Println("unknown", reflect.TypeOf(e), te)
 	}
 }
-func (this *g2nc) exprType(scope *ast.Scope, e ast.Expr) string {
+func (this *g2nc) exprTypeName(scope *ast.Scope, e ast.Expr) string {
 	switch te := e.(type) {
 	case *ast.Ident:
 		return te.Name
 	case *ast.ArrayType:
 	case *ast.StructType:
 	case *ast.UnaryExpr:
-		return this.exprType(scope, te.X) + "*"
+		return this.exprTypeName(scope, te.X) + "*"
 	case *ast.CompositeLit:
-		return this.exprType(scope, te.Type)
+		return this.exprTypeName(scope, te.Type)
+	case *ast.BasicLit:
+		return strings.ToLower(te.Kind.String())
 	default:
 		log.Println(reflect.TypeOf(e), te)
 	}
@@ -265,7 +346,7 @@ func (this *g2nc) outfh() *g2nc   { return this.out(";") }
 func (this *g2nc) outnl() *g2nc   { return this.out("\n") }
 func (this *g2nc) out(ss ...string) *g2nc {
 	for _, s := range ss {
-		fmt.Print(s, " ")
+		// fmt.Print(s, " ")
 		this.sb.WriteString(s + " ")
 	}
 	return this

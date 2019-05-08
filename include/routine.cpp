@@ -21,7 +21,8 @@ void done()
 }
 
 extern "C"
-void cxrt_routine_post(void (*f)()) {
-    pPool->Post(f, &done);
+void cxrt_routine_post(void (*f)(void*), void*arg) {
+    auto fo = std::bind(f, arg);
+    pPool->Post(fo, &done);
 }
 

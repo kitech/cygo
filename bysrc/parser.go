@@ -12,13 +12,14 @@ import (
 )
 
 type ParserContext struct {
-	path    string
-	fset    *token.FileSet
-	pkgs    map[string]*ast.Package
-	typkgs  *types.Package
-	conf    types.Config
-	info    types.Info
-	cursors map[ast.Node]*astutil.Cursor
+	path     string
+	fset     *token.FileSet
+	pkgs     map[string]*ast.Package
+	typkgs   *types.Package
+	conf     types.Config
+	info     types.Info
+	cursors  map[ast.Node]*astutil.Cursor
+	grstargs map[string]bool // goroutines packed arguments structure
 }
 
 func NewParserContext(path string) *ParserContext {
@@ -28,6 +29,7 @@ func NewParserContext(path string) *ParserContext {
 	this.info.Defs = make(map[*ast.Ident]types.Object)
 	this.info.Uses = make(map[*ast.Ident]types.Object)
 	this.cursors = make(map[ast.Node]*astutil.Cursor)
+	this.grstargs = make(map[string]bool)
 
 	return this
 }

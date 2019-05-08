@@ -4,6 +4,7 @@ func bar() int {
 	//	fmt.Println(time.Now())
 	foo()
 	go foo()
+	go foo2(1, 2)
 	return 0
 }
 
@@ -13,6 +14,10 @@ func foo() {
 
 func foo1() string {
 	return ""
+}
+
+func foo2(a int, b int) {
+	println("foo2 called", a)
 }
 
 type color struct {
