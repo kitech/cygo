@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"go/ast"
 	"go/types"
+	"gopp"
 	"log"
 	"reflect"
 	"strings"
@@ -156,11 +157,17 @@ func (this *g2nc) genExpr(scope *ast.Scope, e ast.Expr) {
 			this.out(fmt.Sprintf(`"%s"`, strings.Join(tyfmts, " ")))
 			this.out(", ")
 
-			for _, e := range te.Args {
+			for idx, e := range te.Args {
 				this.genExpr(scope, e)
+				this.out(gopp.IfElseStr(idx == len(te.Args)-1, "", ", "))
 			}
 		}
-		this.out(")").outfh().outnl()
+		this.out(")")
+		// check if real need, ;\n
+		c := this.psctx.cursors[te]
+		if c.Name() != "Args" {
+			this.outfh().outnl()
+		}
 	case *ast.BasicLit:
 		ety := this.info.TypeOf(e)
 		switch t := ety.Underlying().(type) {
@@ -196,7 +203,20 @@ func (this *g2nc) exprType(scope *ast.Scope, e ast.Expr) string {
 	return ""
 }
 func (this *g2nc) exprTypeFmt(scope *ast.Scope, e ast.Expr) string {
+
 	ety := this.info.TypeOf(e)
+	log.Println(reflect.TypeOf(e), ety)
+	if ety == nil {
+		switch t := e.(type) {
+		case *ast.CallExpr:
+			// TODO builtin type preput to types.Info
+			switch t.Fun.(*ast.Ident).Name {
+			case "gettid":
+				return "d"
+			}
+		}
+	}
+
 	// eval := this.info.Types[e]
 	switch t := ety.Underlying().(type) {
 	case *types.Pointer:

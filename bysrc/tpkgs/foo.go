@@ -9,7 +9,6 @@ func bar() int {
 
 func foo() {
 	println("foo called")
-	return nil
 }
 
 func foo1() string {
@@ -29,7 +28,7 @@ func main() {
 
 	println(5)
 
-	println("aaa")
+	println("aaa", 123, gettid())
 
 	bar()
 }
