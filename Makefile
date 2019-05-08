@@ -9,6 +9,9 @@ dmb: cor
 cor:
 	g++ -g -O2 -std=c++11 -o routine.o -c include/routine.cpp -I./libgo/libgo
 
+run:
+	LD_LIBRARY_PATH=./libgo ./dm0
+
 clean:
 	rm -f *.o
 

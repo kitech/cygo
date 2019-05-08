@@ -31,4 +31,5 @@ func main() {
 	println("aaa", 123, gettid())
 
 	bar()
+	sleep(5)
 }

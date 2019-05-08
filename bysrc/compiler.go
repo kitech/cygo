@@ -146,9 +146,10 @@ func (this *g2nc) genExpr(scope *ast.Scope, e ast.Expr) {
 	case *ast.CompositeLit:
 		log.Println(te.Type, te.Elts)
 	case *ast.CallExpr:
+		funame := te.Fun.(*ast.Ident).Name
 		this.genExpr(scope, te.Fun)
 		this.out("(")
-		if len(te.Args) > 0 {
+		if funame == "println" && len(te.Args) > 0 {
 			var tyfmts []string
 			for _, e := range te.Args {
 				tyfmt := this.exprTypeFmt(scope, e)
@@ -156,13 +157,13 @@ func (this *g2nc) genExpr(scope *ast.Scope, e ast.Expr) {
 			}
 			this.out(fmt.Sprintf(`"%s"`, strings.Join(tyfmts, " ")))
 			this.out(", ")
-
-			for idx, e := range te.Args {
-				this.genExpr(scope, e)
-				this.out(gopp.IfElseStr(idx == len(te.Args)-1, "", ", "))
-			}
+		}
+		for idx, e := range te.Args {
+			this.genExpr(scope, e)
+			this.out(gopp.IfElseStr(idx == len(te.Args)-1, "", ", "))
 		}
 		this.out(")")
+
 		// check if real need, ;\n
 		c := this.psctx.cursors[te]
 		if c.Name() != "Args" {
@@ -173,9 +174,9 @@ func (this *g2nc) genExpr(scope *ast.Scope, e ast.Expr) {
 		switch t := ety.Underlying().(type) {
 		case *types.Basic:
 			switch t.Kind() {
-			case types.Int:
+			case types.Int, types.UntypedInt:
 				this.out(te.Value)
-			case types.String:
+			case types.String, types.UntypedString:
 				this.out(fmt.Sprintf("%s", te.Value))
 			default:
 				log.Println("unknown", t.String())
