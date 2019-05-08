@@ -2,6 +2,14 @@
 
 #include <stdarg.h>
 
+static void cxrt_init_gc_env() { GC_INIT(); }
+
+extern void cxrt_init_routine_env();
+void cxrt_init_env() {
+    cxrt_init_gc_env();
+    cxrt_init_routine_env();
+}
+
 void println(const char* fmt, ...) {
     va_list arg;
     int done;

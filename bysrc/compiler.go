@@ -88,7 +88,8 @@ func (this *g2nc) genFuncDecl(scope *ast.Scope, d *ast.FuncDecl) {
 func (this *g2nc) genBlockStmt(scope *ast.Scope, stmt *ast.BlockStmt) {
 	this.out("{").outnl()
 	if scope.Lookup("main") != nil {
-		this.out("{ cxrt_init_routine_env(); }").outnl()
+		this.out("{ cxrt_init_env(); }").outnl()
+		this.out("{ // func init() }").outnl()
 	}
 	scope = ast.NewScope(scope)
 	for idx, s := range stmt.List {
@@ -165,7 +166,7 @@ func (c *g2nc) genRoutineWcall(scope *ast.Scope, e *ast.CallExpr) {
 
 	c.out("// gogorun", funame).outnl()
 	c.out("{")
-	c.out(stname, "*args = (", stname, "*)calloc(1, sizeof(", stname, "))").outfh().outnl()
+	c.out(stname, "*args = (", stname, "*)GC_malloc(sizeof(", stname, "))").outfh().outnl()
 	for idx, arg := range e.Args {
 		c.out(fmt.Sprintf("args->a%d", idx), "=")
 		c.genExpr(scope, arg)
@@ -217,7 +218,7 @@ func (this *g2nc) genExpr(scope *ast.Scope, e ast.Expr) {
 		log.Println(te.Op.String(), te.X)
 		switch t2 := te.X.(type) {
 		case *ast.CompositeLit:
-			this.out(fmt.Sprintf("(%v*)calloc(1, sizeof(%v));", t2.Type, t2.Type)).outnl()
+			this.out(fmt.Sprintf("(%v*)GC_malloc(sizeof(%v));", t2.Type, t2.Type)).outnl()
 		default:
 			log.Println(reflect.TypeOf(te), t2)
 		}

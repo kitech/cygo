@@ -1,6 +1,7 @@
 package foo
 
 func bar() int {
+	sleep(1)
 	//	fmt.Println(time.Now())
 	foo()
 	go foo()
