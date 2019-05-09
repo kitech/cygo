@@ -8,7 +8,7 @@ extern "C"
 void cxrt_init_routine_env() {
     pPool = co::AsyncCoroutinePool::Create();
     pPool->InitCoroutinePool(512);
-    pPool->Start(2,6);
+    pPool->Start(2,5);
 }
 
 void foo()
@@ -41,8 +41,10 @@ void cxrt_chan_send(void*vch, void*arg) {
 extern "C"
 void* cxrt_chan_recv(void*vch) {
     co_chan<void*>* ch = static_cast<co_chan<void*>*>(vch);
+    co_chan<void*>& ch2 = (*ch);
+
     void*ret = 0;
-    (*ch) >> ret;
+    ch2 >> ret;
     return ret;
 }
 

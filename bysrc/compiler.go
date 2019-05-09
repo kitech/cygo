@@ -115,6 +115,14 @@ func (this *g2nc) genStmt(scope *ast.Scope, stmt ast.Stmt, idx int) {
 		this.genBranchStmt(scope, t)
 	case *ast.DeclStmt:
 		this.genDeclStmt(scope, t)
+	case *ast.IfStmt:
+		this.genIfStmt(scope, t)
+	case *ast.BlockStmt:
+		this.genBlockStmt(scope, t)
+	case *ast.SwitchStmt:
+		this.genSwitchStmt(scope, t)
+	case *ast.CaseClause:
+		this.genCaseClause(scope, t)
 	default:
 		log.Println("unknown", reflect.TypeOf(stmt), t)
 	}
@@ -149,7 +157,7 @@ func (c *g2nc) genRoutineStargs(scope *ast.Scope, e *ast.CallExpr) {
 	for idx, ae := range e.Args {
 		fldname := fmt.Sprintf("a%d", idx)
 		fldtype := c.exprTypeName(scope, ae)
-		log.Println(funame, fldtype, fldname)
+		log.Println(funame, fldtype, fldname, reflect.TypeOf(ae))
 		c.out(fldtype, fldname).outfh().outnl()
 	}
 	c.out("}", funame+"_routine_args").outfh().outnl()
@@ -218,15 +226,143 @@ func (c *g2nc) genDeclStmt(scope *ast.Scope, s *ast.DeclStmt) {
 	c.genDecl(scope, s.Decl)
 }
 
-func (c *g2nc) genCallExpr(scope *ast.Scope, e *ast.CallExpr) {
-	c.genExpr(scope, e)
+func (c *g2nc) genIfStmt(scope *ast.Scope, s *ast.IfStmt) {
+	if s.Init != nil {
+		c.genStmt(scope, s.Init, 0)
+	}
+	c.out("if (")
+	c.genExpr(scope, s.Cond)
+	c.out(")")
+	c.genBlockStmt(scope, s.Body)
+	if s.Else != nil {
+		c.out("else")
+		c.genStmt(scope, s.Else, 0)
+	}
+}
+func (c *g2nc) genSwitchStmt(scope *ast.Scope, s *ast.SwitchStmt) {
+	tagty := c.info.TypeOf(s.Tag)
+	log.Println(tagty, reflect.TypeOf(tagty), reflect.TypeOf(tagty.Underlying()))
+	switch tty := tagty.(type) {
+	case *types.Basic:
+		switch tty.Kind() {
+		case types.Int:
+			c.genSwitchStmtNum(scope, s)
+		default:
+			log.Println("unknown", tagty, reflect.TypeOf(tagty))
+		}
+	default:
+		log.Println("unknown", tagty, reflect.TypeOf(tagty))
+	}
+
+}
+func (c *g2nc) genSwitchStmtNum(scope *ast.Scope, s *ast.SwitchStmt) {
+	c.out("switch (")
+	c.genExpr(scope, s.Tag)
+	c.out(")")
+	c.genBlockStmt(scope, s.Body)
+}
+func (c *g2nc) genSwitchStmtStr(scope *ast.Scope, s *ast.SwitchStmt) {
+	log.Println(s.Tag)
+}
+func (c *g2nc) genCaseClause(scope *ast.Scope, s *ast.CaseClause) {
+	log.Println(s.List, s.Body)
+	if len(s.List) == 0 {
+		// default
+		c.out("default:").outnl()
+		for idx, s_ := range s.Body {
+			c.genStmt(scope, s_, idx)
+		}
+	} else {
+		if len(s.List) != len(s.Body) {
+			log.Println("wtf", s.List, s.Body)
+		}
+		// TODO precheck if have fallthrough
+		for idx, e := range s.List {
+			c.out("case")
+			c.genExpr(scope, e)
+			c.out(":").outnl()
+			c.genStmt(scope, s.Body[idx], idx)
+			c.out("break").outfh().outnl()
+		}
+	}
+}
+
+func (c *g2nc) genCallExpr(scope *ast.Scope, te *ast.CallExpr) {
+	funame := te.Fun.(*ast.Ident).Name
+	if funame == "make" {
+		c.genCallExprMake(scope, te)
+	} else {
+		c.genCallExprNorm(scope, te)
+	}
+}
+func (c *g2nc) genCallExprMake(scope *ast.Scope, te *ast.CallExpr) {
+	log.Println("CallExpr", te.Fun)
+	itep := te.Args[0]
+	var lenep ast.Expr
+	if len(te.Args) > 1 {
+		lenep = te.Args[1]
+	}
+
+	log.Println(reflect.TypeOf(itep))
+	switch ity := itep.(type) {
+	case *ast.ChanType:
+		log.Println("elemty", reflect.TypeOf(ity.Value), c.info.TypeOf(ity.Value))
+		elemtyx := c.info.TypeOf(ity.Value)
+		log.Println(elemtyx, reflect.TypeOf(elemtyx))
+		switch elemty := elemtyx.(type) {
+		case *types.Basic:
+			switch elemty.Kind() {
+			case types.Int:
+				log.Println("it's chan, and elem int", lenep)
+			default:
+				log.Println("unknown", elemtyx, elemty)
+			}
+		default:
+			log.Println("unknown", elemtyx, elemty)
+		}
+		c.out("cxrt_chan_new(")
+		if lenep == nil {
+			c.out("0")
+		} else {
+			c.genExpr(scope, lenep)
+		}
+		c.out(")")
+	default:
+		log.Println("unknown", itep, ity, lenep)
+	}
+}
+func (c *g2nc) genCallExprNorm(scope *ast.Scope, te *ast.CallExpr) {
+	// c.genExpr(scope, e)
+	funame := te.Fun.(*ast.Ident).Name
+	c.genExpr(scope, te.Fun)
+	c.out("(")
+	if funame == "println" && len(te.Args) > 0 {
+		var tyfmts []string
+		for _, e1 := range te.Args {
+			tyfmt := c.exprTypeFmt(scope, e1)
+			tyfmts = append(tyfmts, "%"+tyfmt)
+		}
+		c.out(fmt.Sprintf(`"%s"`, strings.Join(tyfmts, " ")))
+		c.out(", ")
+	}
+	for idx, e1 := range te.Args {
+		c.genExpr(scope, e1)
+		c.out(gopp.IfElseStr(idx == len(te.Args)-1, "", ", "))
+	}
+	c.out(")")
+
+	// check if real need, ;\n
+	cs := c.psctx.cursors[te]
+	if cs.Name() != "Args" {
+		c.outfh().outnl()
+	}
 }
 
 // keepvoid
 // skiplast 作用于linebrk
 func (this *g2nc) genFieldList(scope *ast.Scope, flds *ast.FieldList,
 	keepvoid bool, withname bool, linebrk string, skiplast bool) {
-	log.Println(flds, keepvoid)
+
 	if keepvoid && (flds == nil || flds.NumFields() == 0) {
 		this.out("void")
 		return
@@ -258,39 +394,31 @@ func (this *g2nc) genExpr(scope *ast.Scope, e ast.Expr) {
 		this.genFieldList(scope, te.Fields, false, true, ";\n", false)
 	case *ast.UnaryExpr:
 		log.Println(te.Op.String(), te.X)
+		switch te.Op.String() {
+		case "<-":
+			this.out("{")
+			this.out("void* rvx = cxrt_chan_recv(")
+			this.genExpr(scope, te.X)
+			this.out(")").outfh().outnl()
+			this.out(" // c = rv->v").outfh().outnl()
+			this.out("}").outnl()
+			return
+		default:
+			log.Println("unknown", te.Op.String())
+		}
 		switch t2 := te.X.(type) {
 		case *ast.CompositeLit:
 			this.out(fmt.Sprintf("(%v*)GC_malloc(sizeof(%v));", t2.Type, t2.Type)).outnl()
+		case *ast.UnaryExpr:
+			log.Println(t2, t2.X, t2.Op)
 		default:
-			log.Println(reflect.TypeOf(te), t2)
+			log.Println(reflect.TypeOf(te), t2, reflect.TypeOf(te.X))
 		}
 		this.genExpr(scope, te.X)
 	case *ast.CompositeLit:
 		log.Println(te.Type, te.Elts)
 	case *ast.CallExpr:
-		funame := te.Fun.(*ast.Ident).Name
-		this.genExpr(scope, te.Fun)
-		this.out("(")
-		if funame == "println" && len(te.Args) > 0 {
-			var tyfmts []string
-			for _, e := range te.Args {
-				tyfmt := this.exprTypeFmt(scope, e)
-				tyfmts = append(tyfmts, "%"+tyfmt)
-			}
-			this.out(fmt.Sprintf(`"%s"`, strings.Join(tyfmts, " ")))
-			this.out(", ")
-		}
-		for idx, e := range te.Args {
-			this.genExpr(scope, e)
-			this.out(gopp.IfElseStr(idx == len(te.Args)-1, "", ", "))
-		}
-		this.out(")")
-
-		// check if real need, ;\n
-		c := this.psctx.cursors[te]
-		if c.Name() != "Args" {
-			this.outfh().outnl()
-		}
+		this.genCallExpr(scope, te)
 	case *ast.BasicLit:
 		ety := this.info.TypeOf(e)
 		switch t := ety.Underlying().(type) {
@@ -310,6 +438,8 @@ func (this *g2nc) genExpr(scope *ast.Scope, e ast.Expr) {
 		this.genExpr(scope, te.X)
 		this.out(te.Op.String())
 		this.genExpr(scope, te.Y)
+	case *ast.ChanType:
+		this.out("void*")
 	default:
 		log.Println("unknown", reflect.TypeOf(e), e, te)
 	}
@@ -317,19 +447,38 @@ func (this *g2nc) genExpr(scope *ast.Scope, e ast.Expr) {
 func (this *g2nc) exprTypeName(scope *ast.Scope, e ast.Expr) string {
 	switch te := e.(type) {
 	case *ast.Ident:
+		ety := this.info.TypeOf(e)
+		switch rety := ety.(type) {
+		case *types.Chan:
+			return "void*"
+		default:
+			log.Println("unknown", ety, rety)
+		}
 		return te.Name
 	case *ast.ArrayType:
+		log.Println("todo")
 	case *ast.StructType:
+		log.Println("todo")
 	case *ast.UnaryExpr:
 		return this.exprTypeName(scope, te.X) + "*"
 	case *ast.CompositeLit:
 		return this.exprTypeName(scope, te.Type)
 	case *ast.BasicLit:
 		return strings.ToLower(te.Kind.String())
+	case *ast.CallExpr:
+		switch te.Fun.(*ast.Ident).Name {
+		case "make":
+			return this.exprTypeName(scope, te.Args[0])
+		default:
+			rety := this.info.TypeOf(e)
+			log.Println(rety, reflect.TypeOf(rety))
+		}
+	case *ast.ChanType:
+		return "void*"
 	default:
-		log.Println(reflect.TypeOf(e), te)
+		log.Println("unknown", reflect.TypeOf(e), te, this.info.TypeOf(e))
 	}
-	return ""
+	return "unknown"
 }
 func (this *g2nc) exprTypeFmt(scope *ast.Scope, e ast.Expr) string {
 
