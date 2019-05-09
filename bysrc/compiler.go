@@ -89,7 +89,7 @@ func (this *g2nc) genBlockStmt(scope *ast.Scope, stmt *ast.BlockStmt) {
 	this.out("{").outnl()
 	if scope.Lookup("main") != nil {
 		this.out("{ cxrt_init_env(); }").outnl()
-		this.out("{ // func init() }").outnl()
+		this.out("{ \n // func init() \n }").outnl()
 	}
 	scope = ast.NewScope(scope)
 	for idx, s := range stmt.List {
@@ -98,23 +98,38 @@ func (this *g2nc) genBlockStmt(scope *ast.Scope, stmt *ast.BlockStmt) {
 	this.out("}").outnl()
 }
 
+// clause index?
 func (this *g2nc) genStmt(scope *ast.Scope, stmt ast.Stmt, idx int) {
 	switch t := stmt.(type) {
 	case *ast.AssignStmt:
-		log.Println(t.Tok.String(), t.Lhs)
-		for i := 0; i < len(t.Rhs); i++ {
-			this.out(this.exprTypeName(scope, t.Rhs[i]))
-			this.genExpr(scope, t.Lhs[i])
-			this.out(" = ")
-			this.genExpr(scope, t.Rhs[i])
-		}
+		this.genAssignStmt(scope, t)
 	case *ast.ExprStmt:
 		this.genExpr(scope, t.X)
 	case *ast.GoStmt:
 		this.genGoStmt(scope, t)
+	case *ast.ForStmt:
+		this.genForStmt(scope, t)
+	case *ast.IncDecStmt:
+		this.genIncDecStmt(scope, t)
+	case *ast.BranchStmt:
+		this.genBranchStmt(scope, t)
+	case *ast.DeclStmt:
+		this.genDeclStmt(scope, t)
 	default:
-		log.Println(reflect.TypeOf(stmt), t)
+		log.Println("unknown", reflect.TypeOf(stmt), t)
 	}
+}
+func (c *g2nc) genAssignStmt(scope *ast.Scope, s *ast.AssignStmt) {
+	// log.Println(s.Tok.String(), s.Tok.Precedence(), s.Tok.IsOperator(), s.Tok.IsLiteral(), s.Lhs)
+	for i := 0; i < len(s.Rhs); i++ {
+		if s.Tok.String() == ":=" {
+			c.out(c.exprTypeName(scope, s.Rhs[i]))
+		}
+		c.genExpr(scope, s.Lhs[i])
+		c.out(" = ")
+		c.genExpr(scope, s.Rhs[i])
+	}
+
 }
 func (this *g2nc) genGoStmt(scope *ast.Scope, stmt *ast.GoStmt) {
 	// calleename := stmt.Call.Fun.(*ast.Ident).Name
@@ -174,6 +189,33 @@ func (c *g2nc) genRoutineWcall(scope *ast.Scope, e *ast.CallExpr) {
 	}
 	c.out(fmt.Sprintf("cxrt_routine_post(%s, args);", wfname)).outnl()
 	c.out("}").outnl()
+}
+
+func (c *g2nc) genForStmt(scope *ast.Scope, s *ast.ForStmt) {
+	c.out("for (")
+	c.genStmt(scope, s.Init, 0)
+	c.out(";")
+	c.genExpr(scope, s.Cond)
+	c.out(";")
+	c.genStmt(scope, s.Post, 0)
+	c.out(")")
+	c.genBlockStmt(scope, s.Body)
+}
+func (c *g2nc) genIncDecStmt(scope *ast.Scope, s *ast.IncDecStmt) {
+	c.genExpr(scope, s.X)
+	if s.Tok.IsOperator() {
+		c.out(s.Tok.String())
+	}
+}
+func (c *g2nc) genBranchStmt(scope *ast.Scope, s *ast.BranchStmt) {
+	c.out(s.Tok.String())
+	if s.Label != nil {
+		c.out(s.Label.Name)
+	}
+	c.outfh().outnl()
+}
+func (c *g2nc) genDeclStmt(scope *ast.Scope, s *ast.DeclStmt) {
+	c.genDecl(scope, s.Decl)
 }
 
 func (c *g2nc) genCallExpr(scope *ast.Scope, e *ast.CallExpr) {
@@ -264,8 +306,12 @@ func (this *g2nc) genExpr(scope *ast.Scope, e ast.Expr) {
 		default:
 			log.Println("unknown", t, reflect.TypeOf(t))
 		}
+	case *ast.BinaryExpr:
+		this.genExpr(scope, te.X)
+		this.out(te.Op.String())
+		this.genExpr(scope, te.Y)
 	default:
-		log.Println("unknown", reflect.TypeOf(e), te)
+		log.Println("unknown", reflect.TypeOf(e), e, te)
 	}
 }
 func (this *g2nc) exprTypeName(scope *ast.Scope, e ast.Expr) string {
@@ -296,7 +342,11 @@ func (this *g2nc) exprTypeFmt(scope *ast.Scope, e ast.Expr) string {
 			switch t.Fun.(*ast.Ident).Name {
 			case "gettid":
 				return "d"
+			default:
+				log.Println("unknown", t)
 			}
+		default:
+			log.Println("unknown", e)
 		}
 	}
 
@@ -321,14 +371,14 @@ func (this *g2nc) exprTypeFmt(scope *ast.Scope, e ast.Expr) string {
 
 func (this *g2nc) genGenDecl(scope *ast.Scope, d *ast.GenDecl) {
 	log.Println(d.Tok, d.Specs, len(d.Specs), d.Tok.IsKeyword(), d.Tok.IsLiteral(), d.Tok.IsOperator())
-	log.Println(reflect.TypeOf(d.Specs))
 	for _, spec := range d.Specs {
-		log.Println(reflect.TypeOf(spec))
 		switch tspec := spec.(type) {
 		case *ast.TypeSpec:
 			this.genTypeSpec(scope, tspec)
+		case *ast.ValueSpec:
+			this.genValueSpec(scope, tspec)
 		default:
-			log.Println(reflect.TypeOf(d))
+			log.Println("unknown", reflect.TypeOf(d), reflect.TypeOf(spec))
 		}
 	}
 }
@@ -339,6 +389,25 @@ func (this *g2nc) genTypeSpec(scope *ast.Scope, spec *ast.TypeSpec) {
 	this.genExpr(scope, spec.Type)
 	this.out("}", spec.Name.Name, ";")
 	this.outnl()
+}
+func (c *g2nc) genValueSpec(scope *ast.Scope, spec *ast.ValueSpec) {
+	for idx, name := range spec.Names {
+		if spec.Type == nil {
+			v := spec.Values[idx]
+			c.out(c.exprTypeName(scope, v))
+		} else {
+			c.genExpr(scope, spec.Type)
+		}
+		c.out(name.Name)
+		if idx < len(spec.Values) {
+			c.out("=")
+			c.genExpr(scope, spec.Values[idx])
+		} else {
+			// TODO set default value
+			c.out("=", "{0}")
+		}
+		c.outfh().outnl()
+	}
 }
 
 func (this *g2nc) outeq() *g2nc   { return this.out("=") }
