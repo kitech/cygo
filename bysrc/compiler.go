@@ -58,10 +58,14 @@ func (this *g2nc) genDecl(scope *ast.Scope, d ast.Decl) {
 func (this *g2nc) genPreFuncDecl(scope *ast.Scope, d *ast.FuncDecl) {
 	// goroutines struct and functions wrapper
 	var gostmts []*ast.GoStmt
+	var sdstmts []*ast.SendStmt
+	// var rvstmts []* UnaryExpr
 	astutil.Apply(d, func(c *astutil.Cursor) bool {
 		switch t := c.Node().(type) {
 		case *ast.GoStmt:
 			gostmts = append(gostmts, t)
+		case *ast.SendStmt:
+			sdstmts = append(sdstmts, t)
 		}
 		return true
 	}, nil)
@@ -71,6 +75,9 @@ func (this *g2nc) genPreFuncDecl(scope *ast.Scope, d *ast.FuncDecl) {
 	for _, stmt := range gostmts {
 		this.genRoutineStargs(scope, stmt.Call)
 		this.genRoutineStwrap(scope, stmt.Call)
+	}
+	for _, stmt := range sdstmts {
+		this.genChanStargs(scope, stmt.Chan) // chan structure args
 	}
 }
 func (this *g2nc) genFuncDecl(scope *ast.Scope, d *ast.FuncDecl) {
@@ -123,6 +130,8 @@ func (this *g2nc) genStmt(scope *ast.Scope, stmt ast.Stmt, idx int) {
 		this.genSwitchStmt(scope, t)
 	case *ast.CaseClause:
 		this.genCaseClause(scope, t)
+	case *ast.SendStmt:
+		this.genSendStmt(scope, t)
 	default:
 		log.Println("unknown", reflect.TypeOf(stmt), t)
 	}
@@ -358,6 +367,62 @@ func (c *g2nc) genCallExprNorm(scope *ast.Scope, te *ast.CallExpr) {
 	}
 }
 
+// chan structure args
+func (c *g2nc) genChanStargs(scope *ast.Scope, e ast.Expr) {
+	var elemtyname = c.chanElemTypeName(e)
+	// typedef struct { int  elem; } chan_arg_int;
+	c.out("typedef struct {", elemtyname, " elem;} chan_arg_"+elemtyname).outfh().outnl()
+}
+func (c *g2nc) genSendStmt(scope *ast.Scope, s *ast.SendStmt) {
+	var elemtyname = c.chanElemTypeName(s.Chan)
+	var chanargname = "chan_arg_" + elemtyname
+	c.out("{").outnl()
+	c.outf("%s* args = (%s*)GC_malloc(sizeof(%s))", chanargname, chanargname, chanargname).outfh().outnl()
+	c.out("args->elem = ")
+	c.genExpr(scope, s.Value)
+	c.outfh().outnl()
+	c.outf("cxrt_chan_send(")
+	c.genExpr(scope, s.Chan)
+	c.out(", args)").outfh().outnl()
+	c.out("}").outnl()
+}
+func (c *g2nc) genRecvStmt(scope *ast.Scope, e ast.Expr) {
+	var elemtyname = c.chanElemTypeName(e)
+	var chanargname = "chan_arg_" + elemtyname
+
+	c.out("{")
+	c.out("void* rvx = cxrt_chan_recv(")
+	c.genExpr(scope, e)
+	c.out(")").outfh().outnl()
+	c.out(" // c = rv->v").outfh().outnl()
+	c.outf("%s rv = ((%s*)rvx)->elem", elemtyname, chanargname).outfh().outnl()
+	c.out("}").outnl()
+}
+func (c *g2nc) chanElemTypeName(e ast.Expr) string {
+	var elemtyname = ""
+	chtyx := c.info.TypeOf(e)
+	switch t := chtyx.(type) {
+	case *types.Chan:
+		switch te := t.Elem().(type) {
+		case *types.Basic:
+			switch te.Kind() {
+			case types.Int:
+				elemtyname = "int"
+			default:
+				log.Println("unknown", te, te.Kind())
+			}
+		default:
+			log.Println("unknown", t)
+		}
+	default:
+		log.Println("unknown", chtyx)
+	}
+	if elemtyname == "" {
+		log.Println("cannot resolve chan element typename", e, reflect.TypeOf(e))
+	}
+	return elemtyname
+}
+
 // keepvoid
 // skiplast 作用于linebrk
 func (this *g2nc) genFieldList(scope *ast.Scope, flds *ast.FieldList,
@@ -396,12 +461,7 @@ func (this *g2nc) genExpr(scope *ast.Scope, e ast.Expr) {
 		log.Println(te.Op.String(), te.X)
 		switch te.Op.String() {
 		case "<-":
-			this.out("{")
-			this.out("void* rvx = cxrt_chan_recv(")
-			this.genExpr(scope, te.X)
-			this.out(")").outfh().outnl()
-			this.out(" // c = rv->v").outfh().outnl()
-			this.out("}").outnl()
+			this.genRecvStmt(scope, te.X)
 			return
 		default:
 			log.Println("unknown", te.Op.String())
@@ -568,6 +628,11 @@ func (this *g2nc) out(ss ...string) *g2nc {
 		// fmt.Print(s, " ")
 		this.sb.WriteString(s + " ")
 	}
+	return this
+}
+func (this *g2nc) outf(format string, args ...interface{}) *g2nc {
+	s := fmt.Sprintf(format, args...)
+	this.out(s)
 	return this
 }
 

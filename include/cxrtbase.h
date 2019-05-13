@@ -4,6 +4,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <pthread.h>
+#include <unistd.h>
 #include <stdint.h>
 #include <gc/gc.h> // must put after <pthread.h>
 #include <gc/cord.h>
