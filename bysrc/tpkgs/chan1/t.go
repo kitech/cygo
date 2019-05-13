@@ -7,13 +7,13 @@ func node0(no int, c chan int) {
 
 func node1(no int, c chan int) {
 	println("node1", no)
-	<-c
-	println("node1 done", no)
+	rno := <-c
+	println("node1 done", no, rno)
 }
 
 func main() {
 	var c = make(chan int, 5)
-	go node0(5, c)
-	go node1(8, c)
+	go node0(51, c)
+	go node1(81, c)
 	sleep(5)
 }

@@ -139,12 +139,37 @@ func (this *g2nc) genStmt(scope *ast.Scope, stmt ast.Stmt, idx int) {
 func (c *g2nc) genAssignStmt(scope *ast.Scope, s *ast.AssignStmt) {
 	// log.Println(s.Tok.String(), s.Tok.Precedence(), s.Tok.IsOperator(), s.Tok.IsLiteral(), s.Lhs)
 	for i := 0; i < len(s.Rhs); i++ {
-		if s.Tok.String() == ":=" {
-			c.out(c.exprTypeName(scope, s.Rhs[i]))
+		var ischrv = false
+		var chexpr ast.Expr
+		switch e := s.Rhs[i].(type) {
+		case *ast.UnaryExpr:
+			if e.Op.String() == "<-" {
+				ischrv = true
+				chexpr = e.X
+			}
 		}
-		c.genExpr(scope, s.Lhs[i])
-		c.out(" = ")
-		c.genExpr(scope, s.Rhs[i])
+		if ischrv {
+			if s.Tok.String() == ":=" {
+				c.out(c.chanElemTypeName(chexpr))
+				c.genExpr(scope, s.Lhs[i])
+				c.outfh().outnl()
+			}
+
+			var pscope = ast.NewScope(scope)
+			var varobj = ast.NewObj(ast.Var, "varname")
+			varobj.Data = s.Lhs[i]
+			pscope.Insert(varobj)
+			c.genExpr(pscope, s.Rhs[i])
+
+		} else {
+			if s.Tok.String() == ":=" {
+				c.out(c.exprTypeName(scope, s.Rhs[i]))
+			}
+			c.genExpr(scope, s.Lhs[i])
+
+			c.out(" = ")
+			c.genExpr(scope, s.Rhs[i])
+		}
 	}
 
 }
@@ -395,7 +420,14 @@ func (c *g2nc) genRecvStmt(scope *ast.Scope, e ast.Expr) {
 	c.genExpr(scope, e)
 	c.out(")").outfh().outnl()
 	c.out(" // c = rv->v").outfh().outnl()
-	c.outf("%s rv = ((%s*)rvx)->elem", elemtyname, chanargname).outfh().outnl()
+	c.outf("%s rvp = ((%s*)rvx)->elem", elemtyname, chanargname).outfh().outnl()
+
+	varobj := scope.Lookup("varname")
+	if varobj != nil {
+		c.genExpr(scope, varobj.Data.(ast.Expr)) // left
+		c.out("= rvp").outfh().outnl()
+	}
+
 	c.out("}").outnl()
 }
 func (c *g2nc) chanElemTypeName(e ast.Expr) string {
