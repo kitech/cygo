@@ -41,6 +41,7 @@ type
     PMachine = ptr Machine
     Machine = ref object
         id*: int
+        ngrs*: Table[int, proc()] # 新任务，未分配栈
         grs*: Table[int,PGoroutine] # grid => # Deque[PGoroutine]
         gr*: PGoroutine # 当前在执行的
         pklk*: Lock # park lock
@@ -61,6 +62,7 @@ type
 const GOMAXPROC = 3 # testing with 3
 proc goro_machine_new():Machine =
     var mc = new Machine
+    mc.ngrs = initTable[int, proc()]()
     mc.grs = initTable[int, PGoroutine]()
     mc.pklk.initLock()
     mc.pkcd.initCond()
@@ -81,22 +83,33 @@ var pre  = rtenv.addr
 
 var mcid {.threadvar.} : int
 
-proc goro_create() : Goroutine =
+proc goro_nxtid() : int =
     pre.gridno += 1
+    return pre.gridno
+
+proc goro_create(id : int) : Goroutine =
+    # pre.gridno += 1
     var gr = new Goroutine
-    gr.id = pre.gridno
+    gr.id = id
     gr.stk = new Stack
     gr.stk.sp = allocShared0(dftstksz)
     gr.stk.sz = dftstksz
     return gr
 
 # 添加到0 goro
-proc goro_post(fn:proc) =
-    var gr = goro_create()
+proc goro_post0(fn:proc) =
+    var gr = goro_create(goro_nxtid())
     pre.grrefs.add(gr.id, gr)
     var pgr = pre.grrefs[gr.id].addr
     var mc = pre.mcs[0]
     mc.grs.add(gr.id, pgr)
+    mc.pkcd.signal()
+    return
+
+proc goro_post(fn:proc) =
+    var id = goro_nxtid()
+    var mc = pre.mcs[0]
+    mc.ngrs.add(id, fn)
     mc.pkcd.signal()
     return
 
@@ -128,9 +141,19 @@ proc processor_proc0(pm : PMachine) =
         if pm.grs.len == 0: pm.pkcd.wait(pm.pklk)
 
         linfo "grcnt", pm.grs.len
+        # move to ready queue
+        for id, fn in pm.ngrs:
+            var gr = goro_create(id)
+            gr.state = Runnable
+            pre.grrefs.add(id, gr)
+            pm.grs.add(id, pre.grrefs[id].addr)
+
+        # clean temp queue
         var grids : seq[int]
-        for id,gr in pm.grs: grids.add(id)
-        for id in grids: pm.grs.del(id)
+        for id,_ in pm.ngrs: grids.add(id)
+        for id in grids: pm.ngrs.del(id)
+
+        # find free m and ready task
 
     return
 

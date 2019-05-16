@@ -1,3 +1,4 @@
+#include <stdlib.h>
 #include "coro.h"
 
 // core functions 有些是宏，所以就再包一下

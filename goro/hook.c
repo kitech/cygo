@@ -246,6 +246,10 @@ unsigned int sleep(unsigned int seconds)
 {
     if (!sleep_f) initHook();
     linfo("%d\n", seconds);
+
+    {
+        sleep_f(seconds);
+    }
     return 0;
 }
 
@@ -253,6 +257,10 @@ int usleep(useconds_t usec)
 {
     if (!usleep_f) initHook();
     linfo("%d\n", usec);
+
+    {
+        usleep_f(usec);
+    }
     return 0;
 }
 
