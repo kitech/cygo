@@ -64,7 +64,7 @@ epoll_wait_t epoll_wait_f = NULL;
 
 #define HKDEBUG 1
 #define linfo(fmt, ...)                                                 \
-    do { if (HKDEBUG) fprintf(stderr, "%s:%d:%s ", __FILE__, __LINE__, __FUNCTION__); } while (0); \
+    do { if (HKDEBUG) fprintf(stderr, "%s:%d %s: ", __FILE__, __LINE__, __FUNCTION__); } while (0); \
     do { if (HKDEBUG) fprintf(stderr, fmt, __VA_ARGS__); } while (0) ;
 
 int pipe(int pipefd[2])
@@ -278,6 +278,10 @@ int close(int fd)
 {
     if (!close_f) initHook();
     linfo("%d\n", fd);
+
+    {
+        return close_f(fd);
+    }
     return 0;
 }
 
@@ -285,6 +289,10 @@ int __close(int fd)
 {
     if (!close_f) initHook();
     linfo("%d\n", fd);
+    {
+        return close_f(fd);
+    }
+    return 0;
 }
 
 int fcntl_wip(int __fd, int __cmd, ...)
@@ -335,7 +343,13 @@ int dup3(int oldfd, int newfd, int flags)
 int fclose(FILE* fp)
 {
     if (!fclose_f) initHook();
-    linfo("%p\n", fp);
+    int fd = fileno(fp);
+    linfo("%p, %d\n", fp, fd);
+
+    {
+        return fclose_f(fp);
+    }
+    return 0;
 }
 
 #if defined(LIBGO_SYS_Linux)

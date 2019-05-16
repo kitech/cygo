@@ -17,6 +17,7 @@
 typedef struct coro_stack coro_stack;
 
 typedef enum {waiting = 0, runnable, executing, finished, } grstate;
+const dftstksz = 128*1024;
 
 typedef struct {
     int id;
@@ -43,6 +44,8 @@ typedef struct noro {
     bool noroinited;
     pthread_mutex_t noroinitmu;
     pthread_cond_t noroinitcd;
+
+    int eph;
 } noro;
 
 
@@ -102,7 +105,8 @@ void* noro_processor0(void*arg) {
             array_get_at(arr, i, &key);
             goroutine* gr = 0;
             hashtable_get(mc->ngrs, key, &gr);
-            linfo("process %d\n", gr->id);
+            coro_stack_alloc(&gr->stack, dftstksz);
+            linfo("process %d, %d\n", gr->id, dftstksz);
         }
 
         // cleanout
@@ -111,6 +115,8 @@ void* noro_processor0(void*arg) {
             array_get_at(arr, i, &key);
             hashtable_remove(mc->ngrs, key, 0);
         }
+
+        // find free machine and runnable goroutine
     }
 }
 void* noro_processor(void*arg) {

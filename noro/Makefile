@@ -5,9 +5,10 @@ all:
 	gcc ${CFLAGS} -o coro.o -c ../goro/coro.c
 	gcc ${CFLAGS} -o corowp.o -c ../goro/corowp.c
 	gcc ${CFLAGS} -o hook.o -c ../goro/hook.c
+	gcc ${CFLAGS} -o hookcb.o -c ../goro/hookcb.c
 	gcc ${CFLAGS} -o noro.o -c noro.c
 	gcc ${CFLAGS} -o main.o -c main.c
-	gcc -o noro main.o noro.o hook.o corowp.o coro.o ${LDFLAGS}
+	gcc -o noro main.o noro.o hookcb.o hook.o corowp.o coro.o ${LDFLAGS}
 
 clean:
 	rm -f noro *.o
