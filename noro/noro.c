@@ -1,13 +1,14 @@
 
-#include <noro.h>
-
 #include <unistd.h>
 #include <stdio.h>
+#include <assert.h>
 
 #include <gc/gc.h>
 #include <coro.h>
 #include <collectc/hashtable.h>
 #include <collectc/array.h>
+
+#include <noro.h>
 
 #define HKDEBUG 1
 #define linfo(fmt, ...)                                                 \
@@ -16,7 +17,7 @@
 
 typedef struct coro_stack coro_stack;
 
-typedef enum {waiting = 0, runnable, executing, finished, } grstate;
+typedef enum grstate {runnable=0, executing, waiting, finished, } grstate;
 const int dftstksz = 128*1024;
 
 typedef struct goroutine {
@@ -24,6 +25,8 @@ typedef struct goroutine {
     coro_func fnproc;
     void* arg;
     coro_stack stack;
+    coro_context coctx;
+    coro_context coctx0;
     grstate state;
 } goroutine;
 
@@ -45,13 +48,22 @@ typedef struct noro {
     pthread_mutex_t noroinitmu;
     pthread_cond_t noroinitcd;
 
-    int eph;
+    int eph; // epoll handler
 } noro;
+
+
+///
+extern void corowp_create(coro_context *ctx, coro_func coro, void *arg, void *sptr,  size_t ssze);
+extern void corowp_transfer(coro_context *prev, coro_context *next);
+extern void corowp_destroy (coro_context *ctx);
+extern int corowp_stack_alloc (coro_stack *stack, unsigned int size);
+extern void corowp_stack_free(coro_stack* stack);
 
 
 static noro* gnr__ = 0;
 HashTableConf* noro_dft_htconf();
 int noro_nxtid(noro*nr);
+
 
 goroutine* noro_goroutine_new(int id, coro_func fn, void* arg) {
     goroutine* gr = (goroutine*)GC_malloc(sizeof(goroutine));
@@ -60,6 +72,13 @@ goroutine* noro_goroutine_new(int id, coro_func fn, void* arg) {
     gr->arg = arg;
     return gr;
 }
+// init stack and context
+void noro_goroutine_new2(goroutine*gr) {
+    corowp_create(&gr->coctx0, 0, 0, 0, 0);
+    corowp_stack_alloc(&gr->stack, dftstksz);
+    corowp_create(&gr->coctx, gr->fnproc, gr->arg, gr->stack.sptr, dftstksz);
+}
+
 machine* noro_machine_new(int id) {
     machine* mc = (machine*)GC_malloc(sizeof(machine));
     mc->id = id;
@@ -70,7 +89,8 @@ machine* noro_machine_new(int id) {
 }
 machine* noro_machine_get(int id) {
     machine* mc = 0;
-    (machine*)hashtable_get(gnr__->mcs, (void*)(uintptr_t)id, &mc);
+    hashtable_get(gnr__->mcs, (void*)(uintptr_t)id, &mc);
+    linfo("get mc %d=%p\n", id, mc);
     return mc;
 }
 
@@ -84,9 +104,15 @@ void noro_post(coro_func fn, void*arg) {
     pthread_cond_signal(&mc->pkcd);
 }
 
+void* noro_processor_netpoller(void*arg) {
+    machine* mc = (machine*)arg;
+    linfo("%d\n", mc->id);
+}
+
 void* noro_processor0(void*arg) {
     machine* mc = (machine*)arg;
     linfo("%d\n", mc->id);
+    gnr__->noroinited = true;
     pthread_cond_signal(&gnr__->noroinitcd);
 
     for (;;) {
@@ -105,7 +131,8 @@ void* noro_processor0(void*arg) {
             array_get_at(arr, i, &key);
             goroutine* gr = 0;
             hashtable_get(mc->ngrs, key, &gr);
-            coro_stack_alloc(&gr->stack, dftstksz);
+            assert(gr != 0);
+            noro_goroutine_new2(gr);
             linfo("process %d, %d\n", gr->id, dftstksz);
         }
 
@@ -123,8 +150,37 @@ void* noro_processor(void*arg) {
     machine* mc = (machine*)arg;
     linfo("%d\n", mc->id);
     for (;;) {
-        sleep(3);
+        // check global queue
+        machine* mc0 = noro_machine_get(0);
+        if (mc0 == 0) {
+            pthread_cond_wait(&mc->pkcd, &mc->pkmu);
+            continue;
+        }
+        Array* arr = 0;
+        hashtable_get_keys(mc0->grs, &arr);
+        goroutine* rungr = 0;
+        for (int i = 0; i < array_size(arr); i ++) {
+            goroutine* gr = 0;
+            void* key = 0;
+            array_get_at(arr, i, &key); assert(key != 0);
+            hashtable_get(mc0->grs, key, &gr); assert(gr != 0);
+            if (gr->state == runnable) {
+                linfo("found a runnable job %d\n", (uintptr_t)key);
+                rungr = gr;
+                break;
+            }
+        }
+        if (rungr != 0) {
+        } else {
+            linfo("no task, parking... %d\n", mc->id);
+            pthread_cond_wait(&mc->pkcd, &mc->pkmu);
+        }
+        // sleep(3);
     }
+}
+
+void coro_processor_yield(int fd) {
+    linfo("yield %d\n", fd);
 }
 
 HashTableConf* noro_dft_htconf() { return &gnr__->htconf; }
@@ -157,14 +213,16 @@ noro* noro_new() {
 }
 
 void noro_init(noro* nr) {
-    for (int i = 2; i >= 0; i --) {
+    for (int i = 3; i >= 0; i --) {
         pthread_t* t = (pthread_t*)GC_malloc(sizeof(pthread_t));
         hashtable_add(nr->mths, (void*)(uintptr_t)i, t);
         machine* mc = noro_machine_new(i);
         hashtable_add(nr->mcs, (void*)(uintptr_t)i, mc);
         if (i == 0) {
             pthread_create(t, 0, noro_processor0, (void*)mc);
-        }else{
+        } else if (i == 1) {
+            pthread_create(t, 0, noro_processor_netpoller, (void*)mc);
+        } else {
             pthread_create(t, 0, noro_processor, (void*)mc);
         }
     }

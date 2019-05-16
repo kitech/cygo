@@ -1,5 +1,6 @@
 #include <unistd.h>
 #include <stdio.h>
+#include <assert.h>
 
 #include <gc/gc.h>
 #include <coro.h>
@@ -29,8 +30,23 @@ int noro_epoll_wait(int epfd, struct epoll_event *events,
     return epoll_wait_f(epfd, events, maxevents, timeout);
 }
 
+#include <unistd.h>
+#include <sys/syscall.h>
+
+pid_t gettid() {
+#ifdef SYS_gettid
+    pid_t tid = syscall(SYS_gettid);
+    return tid;
+#else
+#error "SYS_gettid unavailable on this system"
+    return 0;
+#endif
+}
+
 void hello(void*arg) {
-    linfo("called %p\n", arg);
+    int tid = gettid();
+    linfo("called %p %d\n", arg, tid);
+    // assert(1==2);
 }
 
 static noro* nr;
@@ -38,9 +54,9 @@ int main() {
     nr = noro_new();
     noro_init(nr);
     noro_wait_init_done(nr);
-    linfo("noro init done %d\n", 1);
+    linfo("noro init done %d, %d\n", 12345, gettid());
     sleep(1);
-    noro_post(&hello, 0);
+    noro_post(hello, (void*)(uintptr_t)5);
     socket(PF_INET, SOCK_STREAM, 0);
     sleep(5);
     return 0;
