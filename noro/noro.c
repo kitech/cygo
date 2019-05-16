@@ -17,9 +17,9 @@
 typedef struct coro_stack coro_stack;
 
 typedef enum {waiting = 0, runnable, executing, finished, } grstate;
-const dftstksz = 128*1024;
+const int dftstksz = 128*1024;
 
-typedef struct {
+typedef struct goroutine {
     int id;
     coro_func fnproc;
     void* arg;
@@ -27,7 +27,7 @@ typedef struct {
     grstate state;
 } goroutine;
 
-typedef struct {
+typedef struct machine {
     int id;
     HashTable* ngrs; // id => goroutine* 新任务，未分配栈
     HashTable* grs;  // # grid => goroutine*
@@ -70,7 +70,7 @@ machine* noro_machine_new(int id) {
 }
 machine* noro_machine_get(int id) {
     machine* mc = 0;
-    (machine*)hashtable_get(gnr__->mcs, (void*)id, &mc);
+    (machine*)hashtable_get(gnr__->mcs, (void*)(uintptr_t)id, &mc);
     return mc;
 }
 
@@ -80,7 +80,7 @@ void noro_post(coro_func fn, void*arg) {
     goroutine* gr = noro_goroutine_new(id, fn, arg);
     machine* mc = noro_machine_get(0);
     linfo("mc=%p\n", mc);
-    hashtable_add(mc->ngrs, (void*)id, gr);
+    hashtable_add(mc->ngrs, (void*)(uintptr_t)id, gr);
     pthread_cond_signal(&mc->pkcd);
 }
 
@@ -132,7 +132,7 @@ int noro_nxtid(noro*nr) { return ++nr->gridno; }
 
 int hashtable_cmp_int(const void *key1, const void *key2) {
     if (key1 == key2) return 0;
-    else if((int)(key1)>(int)(key2)) return 1;
+    else if((uintptr_t)(key1) > (uintptr_t)(key2)) return 1;
     else return -1;
 }
 
@@ -159,9 +159,9 @@ noro* noro_new() {
 void noro_init(noro* nr) {
     for (int i = 2; i >= 0; i --) {
         pthread_t* t = (pthread_t*)GC_malloc(sizeof(pthread_t));
-        hashtable_add(nr->mths, (void*)i, t);
+        hashtable_add(nr->mths, (void*)(uintptr_t)i, t);
         machine* mc = noro_machine_new(i);
-        hashtable_add(nr->mcs, (void*)i, mc);
+        hashtable_add(nr->mcs, (void*)(uintptr_t)i, mc);
         if (i == 0) {
             pthread_create(t, 0, noro_processor0, (void*)mc);
         }else{

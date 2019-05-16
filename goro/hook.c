@@ -67,28 +67,58 @@ epoll_wait_t epoll_wait_f = NULL;
     do { if (HKDEBUG) fprintf(stderr, "%s:%d %s: ", __FILE__, __LINE__, __FUNCTION__); } while (0); \
     do { if (HKDEBUG) fprintf(stderr, fmt, __VA_ARGS__); } while (0) ;
 
+#include "hookcb.h"
+
 int pipe(int pipefd[2])
 {
     if (!socket_f) initHook();
     linfo("%d\n", pipefd[0]);
+
+    int rv = pipe_f(pipefd);
+    if (rv == 0) {
+        hookcb_oncreate(pipefd[0], FDISPIPE, false, 0,0,0);
+        hookcb_oncreate(pipefd[1], FDISPIPE, false, 0,0,0);
+    }
+    return rv;
 }
 #if defined(LIBGO_SYS_Linux)
 int pipe2(int pipefd[2], int flags)
 {
     if (!socket_f) initHook();
     linfo("%d\n", flags);
+
+    int rv = pipe2_f(pipefd, flags);
+    if (rv == 0) {
+        hookcb_oncreate(pipefd[0], FDISPIPE, !!(flags&O_NONBLOCK), 0,0,0);
+        hookcb_oncreate(pipefd[1], FDISPIPE, !!(flags&O_NONBLOCK), 0,0,0);
+    }
+    return rv;
 }
 #endif
 int socket(int domain, int type, int protocol)
 {
     if (!socket_f) initHook();
     printf("socket_f=%p\n",socket_f);
+
+    int sock = socket_f(domain, type, protocol);
+    if (sock >= 0) {
+        hookcb_oncreate(sock, FDISSOCKET, false, domain, type, protocol);
+    }
+    linfo("task(%s) hook socket, returns %d.\n", "", sock);
+    return sock;
 }
 
 int socketpair(int domain, int type, int protocol, int sv[2])
 {
     if (!socketpair_f) initHook();
     linfo("%d\n", type);
+
+    int rv = socketpair_f(domain, type, protocol, sv);
+    if (rv == 0) {
+        hookcb_oncreate(sv[0], FDISSOCKET, false, domain, type, protocol);
+        hookcb_oncreate(sv[1], FDISSOCKET, false, domain, type, protocol);
+    }
+    return rv;
 }
 
 int connect(int fd, const struct sockaddr *addr, socklen_t addrlen)
@@ -279,6 +309,7 @@ int close(int fd)
     if (!close_f) initHook();
     linfo("%d\n", fd);
 
+    hookcb_onclose(fd);
     {
         return close_f(fd);
     }
@@ -289,6 +320,8 @@ int __close(int fd)
 {
     if (!close_f) initHook();
     linfo("%d\n", fd);
+
+    hookcb_onclose(fd);
     {
         return close_f(fd);
     }
@@ -346,6 +379,7 @@ int fclose(FILE* fp)
     int fd = fileno(fp);
     linfo("%p, %d\n", fp, fd);
 
+    hookcb_onclose(fd);
     {
         return fclose_f(fp);
     }

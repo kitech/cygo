@@ -11,9 +11,6 @@
 
 #include "hookcb.h"
 
-const ISSOCKET = 0;
-const ISPIPE = 1;
-
 #define HKDEBUG 1
 #define linfo(fmt, ...)                                                 \
     do { if (HKDEBUG) fprintf(stderr, "%s:%d:%s ", __FILE__, __LINE__, __FUNCTION__); } while (0); \
@@ -58,9 +55,9 @@ int fdcontext_set_nonblocking(fdcontext*fdctx, bool isNonBlocking) {
     return fcntl_f(fd, F_SETFL,
             isNonBlocking ? (flags | O_NONBLOCK) : (flags & ~O_NONBLOCK));
 }
-bool fdcontext_is_socket(fdcontext*fdctx) {return fdctx->fdty == ISSOCKET; }
+bool fdcontext_is_socket(fdcontext*fdctx) {return fdctx->fdty == FDISSOCKET; }
 bool fdcontext_is_tcpsocket(fdcontext*fdctx) {
-    return fdctx->fdty == ISSOCKET && fdctx->sockty == SOCK_STREAM;
+    return fdctx->fdty == FDISSOCKET && fdctx->sockty == SOCK_STREAM;
 }
 bool fdcontext_is_nonblocking(fdcontext*fdctx){ return fdctx->isNonBlocking; }
 
@@ -69,7 +66,7 @@ static hookcb* ghkcb__ = {0};
 
 static int hashtable_cmp_int(const void *key1, const void *key2) {
     if (key1 == key2) return 0;
-    else if((int)(key1)>(int)(key2)) return 1;
+    else if((uintptr_t)(key1) > (uintptr_t)(key2)) return 1;
     else return -1;
 }
 
@@ -78,9 +75,11 @@ hookcb* hookcb_new() {
     hookcb* hkcb = (hookcb*)calloc(1, sizeof(hookcb));
     HashTableConf htconf;
     hashtable_conf_init(&htconf);
-    htconf.hash = hashtable_cmp_int;
+    htconf.hash = hashtable_hash_ptr;
+    htconf.key_compare = hashtable_cmp_int;
     htconf.key_length = sizeof(void*);
-    hashtable_new_conf(&htconf, hkcb->fdctxs);
+    hashtable_new_conf(&htconf, &hkcb->fdctxs);
+
     return hkcb;
 }
 
@@ -108,17 +107,20 @@ void hookcb_oncreate(int fd, int fdty, bool isNonBlocking, int domain, int sockt
     fdctx->sockty = sockty;
     fdctx->protocol = protocol;
 
-    hashtable_add(hkcb->fdctxs, (void*)fd, (void*)fdctx);
+    hashtable_add(hkcb->fdctxs, (void*)(uintptr_t)fd, (void*)fdctx);
 }
 
 void hookcb_onclose(int fd) {
     hookcb* hkcb = hookcb_get();
     if (hkcb == 0) return ;
-    linfo("fd closed %d", fd);
+    linfo("fd closed %d\n", fd);
 
     fdcontext* fdctx = 0;
-    hashtable_remove(hkcb->fdctxs, (void*)fd, (void**)&fdctx);
-    assert(fdctx != 0);
+    hashtable_remove(hkcb->fdctxs, (void*)(uintptr_t)fd, (void**)&fdctx);
+    // maybe not found when just startup
+    if (fdctx == 0) {
+        linfo("fd not found in context %d\n", fd);
+    }
 }
 
 void hookcb_ondup(int from, int to) {
@@ -126,7 +128,7 @@ void hookcb_ondup(int from, int to) {
     if (hkcb == 0) return ;
 
     fdcontext* fdctx = 0;
-    hashtable_get(hkcb->fdctxs, (void*)from, (void**)&fdctx);
+    hashtable_get(hkcb->fdctxs, (void*)(uintptr_t)from, (void**)&fdctx);
     assert(fdctx != 0);
     fdcontext* tofdctx = fdcontext_new(to);
     memcpy(tofdctx, fdctx, sizeof(fdcontext));
@@ -135,10 +137,10 @@ void hookcb_ondup(int from, int to) {
 
 fdcontext* hookcb_get_fdcontext(int fd) {
     hookcb* hkcb = hookcb_get();
-    if (hkcb == 0) return ;
+    if (hkcb == 0) return 0;
 
     fdcontext* fdctx = 0;
-    hashtable_get(hkcb->fdctxs, (void*)fd, (void**)&fdctx);
+    hashtable_get(hkcb->fdctxs, (void*)(uintptr_t)fd, (void**)&fdctx);
     assert(fdctx != 0);
     return fdctx;
 }

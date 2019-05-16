@@ -41,6 +41,7 @@ int main() {
     linfo("noro init done %d\n", 1);
     sleep(1);
     noro_post(&hello, 0);
+    socket(PF_INET, SOCK_STREAM, 0);
     sleep(5);
     return 0;
 }

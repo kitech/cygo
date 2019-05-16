@@ -3,6 +3,9 @@
 
 #include <stdbool.h>
 
+#define FDISSOCKET  1
+#define FDISPIPE  2
+
 typedef struct fdcontext fdcontext;
 typedef struct hookcb hookcb;
 
@@ -16,6 +19,9 @@ void hookcb_oncreate(int fd, int fdty, bool isNonBlocking, int domain, int sockt
 void hookcb_onclose(int fd) ;
 void hookcb_ondup(int from, int to) ;
 fdcontext* hookcb_get_fdcontext(int fd);
+
+// processor callbacks, impl in noro.c
+extern void noro_processor_yield(int fd);
 
 #endif
 
