@@ -6,7 +6,7 @@ import tables
 import deques
 import locks
 
-
+include "coro.nim"
 include "nimlog.nim"
 include "nimplus.nim"
 
