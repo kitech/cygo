@@ -1,2 +1,2 @@
 all:
-	nim --threads:on c goro.nim
+	nim --threads:on --listcmd c goro.nim

@@ -1,3 +1,5 @@
+{.passc:"-g -O0"}
+
 import os
 import asyncdispatch
 import asyncfutures
@@ -6,9 +8,10 @@ import tables
 import deques
 import locks
 
-include "coro.nim"
 include "nimlog.nim"
 include "nimplus.nim"
+include "coro.nim"
+include "hook.nim"
 
 const dftstksz = 128 * 1024
 
@@ -117,8 +120,10 @@ proc processor_proc0(pm : PMachine) =
     linfo "started...", pm.id, pre.mcs.len
     linfo "currmcid", goro_current_machine()
     linfo repr(pre.goroinitev)
+    pre.goroinited = true
     pre.goroinitev.trigger()
     pre.goroinitcd.signal()
+    linfo "proc0 signaled"
     while true:
         if pm.grs.len == 0: pm.pkcd.wait(pm.pklk)
 
@@ -166,7 +171,8 @@ linfo repr(pre.goroinitev)
 
 goro_init()
 
-pre.goroinitcd.wait(pre.goroinitlk)
+linfo "wait proc0 ..."
+if not pre.goroinited: pre.goroinitcd.wait(pre.goroinitlk)
 linfo "goro inited done"
 pre.goroinitcd.deinitCond()
 pre.goroinitlk.deinitLock()
