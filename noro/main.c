@@ -43,10 +43,43 @@ pid_t gettid() {
 #endif
 }
 
+#include <noro.h>
+#include <coro.h>
+
+typedef struct coro_stack coro_stack;
+
+///
+extern void corowp_create(coro_context *ctx, coro_func coro, void *arg, void *sptr,  size_t ssze);
+extern void corowp_transfer(coro_context *prev, coro_context *next);
+extern void corowp_destroy (coro_context *ctx);
+extern int corowp_stack_alloc (coro_stack *stack, unsigned int size);
+extern void corowp_stack_free(coro_stack* stack);
+
+
+
+// 每个goroutine同时只能属于某一个machine
+typedef struct goroutine {
+    int id;
+    coro_func fnproc;
+    void* arg;
+    void* mystack;
+    coro_stack stack;
+    coro_context coctx;
+    coro_context coctx0;
+    int state;
+    int pkstate;
+} goroutine;
+
+
 void hello(void*arg) {
     int tid = gettid();
     linfo("called %p %d\n", arg, tid);
+    goroutine* gr = (goroutine*)arg;
+    // linfo("called %p %d %d\n", arg, tid, gr->id);
+    // corowp_transfer(&gr->coctx, &gr->coctx0);
+
     // assert(1==2);
+    // sleep(2);
 }
 
 static noro* nr;
