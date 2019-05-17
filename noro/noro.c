@@ -27,7 +27,6 @@ typedef struct goroutine {
     int id;
     coro_func fnproc;
     void* arg;
-    void* mystack;
     coro_stack stack;
     coro_context coctx;
     coro_context coctx0;
@@ -82,7 +81,6 @@ goroutine* noro_goroutine_new(int id, coro_func fn, void* arg) {
 void noro_goroutine_new2(goroutine*gr) {
     corowp_create(&gr->coctx0, 0, 0, 0, 0);
     corowp_stack_alloc(&gr->stack, dftstkusz);
-    // gr->mystack = calloc(1, dftstksz);
     gr->state = runnable;
     // 这一句会让fnproc直接执行，但是可能需要的是创建与执行分开。原来是针对-DCORO_PTHREAD
     // corowp_create(&gr->coctx, gr->fnproc, gr->arg, gr->stack.sptr, dftstksz);
@@ -93,16 +91,11 @@ void noro_goroutine_forward(goroutine* gr) {
 }
 void noro_goroutine_run(goroutine* gr) {
     gr->state = executing;
-    // linfo("run gr %d@%p\n", dftstksz, gr->mystack);
-    linfo("run gr %d@%p\n", gr->stack.ssze, gr->stack.sptr);
-    // corowp_create(&gr->coctx, gr->fnproc, gr->arg, gr->stack.sptr, gr->stack.ssze);
-    // corowp_create(&gr->coctx, gr->fnproc, gr, gr->mystack, dftstksz);
+    // 对-DCORO_PTHREAD来说，这句是真正开始执行
     corowp_create(&gr->coctx, noro_goroutine_forward, gr, gr->stack.sptr, gr->stack.ssze);
-    linfo("done? %d\n", 1);
+    // 对-DCORO_UCONTEXT/-DCORO_ASM等来说，这句是真正开始执行
     corowp_transfer(&gr->coctx0, &gr->coctx);
-    linfo("done? %d\n", 1);
     // corowp_transfer(&gr->coctx, &gr->coctx0); // 这句要写在函数fnproc退出之前？
-    // linfo("done? %d\n", 1);
     gr->state = finished;
 }
 
@@ -269,9 +262,7 @@ void* noro_processor(void*arg) {
             }
         }
         if (rungr != 0) {
-            linfo("a gr starting %d@t%d\n", rungr->id, gettid());
             noro_goroutine_run(rungr);
-            linfo("a gr finished %d@t%d\n", rungr->id, gettid());
         } else {
             mc->parking = true;
             linfo("no task, parking... %d\n", mc->id);
