@@ -1,6 +1,6 @@
 # -DCORO_PTHREAD -DCORO_ASM 
-CFLAGS=-g -O0 -D_GNU_SOURCE -DCORO_STACKALLOC -DCORO_UCONTEXT -DHAVE_UCONTEXT_H -DHAVE_SETJMP_H -DHAVE_SIGALTSTACK -I. -I../goro -I./cltc/include
-LDFLAGS=-L./cltc/lib -lcollectc -lgc -lpthread -ldl
+CFLAGS=-g -O0 -D_GNU_SOURCE -DCORO_STACKALLOC -DCORO_UCONTEXT -DHAVE_UCONTEXT_H -DHAVE_SETJMP_H -DHAVE_SIGALTSTACK -I. -I../goro -I./cltc/include -I./include -DGC_PTHREADS
+LDFLAGS=-L./cltc/lib -lcollectc -L../bdwgc/.libs/ -lgc -lpthread -ldl
 
 all:
 	gcc ${CFLAGS} -o coro.o -c ../goro/coro.c

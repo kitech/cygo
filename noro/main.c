@@ -47,6 +47,8 @@ void hello(void*arg) {
     int tid = gettid();
     linfo("called %p %d\n", arg, tid);
     // assert(1==2);
+    for (int i = 0; i < 9; i++)
+        GC_malloc(5550);
     sleep(2);
 }
 
@@ -57,8 +59,12 @@ int main() {
     noro_wait_init_done(nr);
     linfo("noro init done %d, %d\n", 12345, gettid());
     sleep(1);
-    noro_post(hello, (void*)(uintptr_t)5);
-    socket(PF_INET, SOCK_STREAM, 0);
+    for (;;) {
+        for (int i = 0; i < 9; i ++) GC_malloc(5678);
+        noro_post(hello, (void*)(uintptr_t)5);
+        socket(PF_INET, SOCK_STREAM, 0);
+        sleep(1);
+    }
     sleep(5);
     return 0;
 }

@@ -171,7 +171,7 @@ ssize_t recvmsg(int sockfd, struct msghdr *msg, int flags)
 ssize_t write(int fd, const void *buf, size_t count)
 {
     if (!write_f) initHook();
-    linfo("%d %d\n", fd, count);
+    // linfo("%d %d\n", fd, count);
 
     {
         return write_f(fd, buf, count);
@@ -275,7 +275,7 @@ int select_wip(int nfds, fd_set *readfds, fd_set *writefds,
 unsigned int sleep(unsigned int seconds)
 {
     if (!sleep_f) initHook();
-    linfo("%d\n", seconds);
+    // linfo("%d\n", seconds);
 
     {
         sleep_f(seconds);
@@ -286,7 +286,7 @@ unsigned int sleep(unsigned int seconds)
 int usleep(useconds_t usec)
 {
     if (!usleep_f) initHook();
-    linfo("%d\n", usec);
+    // linfo("%d\n", usec);
 
     {
         usleep_f(usec);

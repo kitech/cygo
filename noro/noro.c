@@ -5,6 +5,8 @@
 #include <pthread.h>
 
 #include <gc/gc.h>
+// #define GC_PTHREADS 1
+// #include <private/pthread_support.h>
 #include <coro.h>
 #include <collectc/hashtable.h>
 #include <collectc/array.h>
@@ -32,6 +34,9 @@ typedef struct goroutine {
     coro_context coctx0;
     grstate state;
     int pkstate;
+    struct GC_stack_base* stksb;
+    void* gchandle;
+    int  mcid;
 } goroutine;
 
 typedef struct machine {
@@ -42,6 +47,8 @@ typedef struct machine {
     pthread_mutex_t pkmu; // pack lock
     pthread_cond_t pkcd;
     bool parking;
+    struct GC_stack_base stksb;
+    void* gchandle;
 } machine;
 
 typedef struct noro {
@@ -80,23 +87,65 @@ goroutine* noro_goroutine_new(int id, coro_func fn, void* arg) {
 // alloc stack and context
 void noro_goroutine_new2(goroutine*gr) {
     corowp_create(&gr->coctx0, 0, 0, 0, 0);
-    corowp_stack_alloc(&gr->stack, dftstkusz);
+    // corowp_stack_alloc(&gr->stack, dftstkusz);
+    gr->stack.sptr = GC_malloc_uncollectable(dftstksz);
+    gr->stack.ssze = dftstksz;
     gr->state = runnable;
+    // GC_add_roots(gr->stack.sptr, gr->stack.sptr+(gr->stack.ssze));
     // 这一句会让fnproc直接执行，但是可能需要的是创建与执行分开。原来是针对-DCORO_PTHREAD
     // corowp_create(&gr->coctx, gr->fnproc, gr->arg, gr->stack.sptr, dftstksz);
 }
+// setback
+void* noro_gc_set_stackbottom2(goroutine* gr) {
+    linfo("hehre %d\n",1);
+    // GC_disable();
+    struct GC_stack_base sb = {0};
+    sb.mem_base = (void*)((uintptr_t)(gr->stksb->mem_base));
+    GC_set_stackbottom(gr->gchandle, gr->stksb); // 一定要swap/transfer之前调用
+    GC_register_my_thread(gr->stksb);
+
+    // GC_enable();
+}
+void* noro_gc_set_stackbottom(goroutine* gr) {
+    linfo("hehre %d %p\n",gettid(), gr->gchandle);
+    // GC_disable();
+    struct GC_stack_base sb = {0};
+    sb.mem_base = (void*)((uintptr_t)(gr->stksb->mem_base));
+
+    uint64_t sp = (uint64_t)gr->stack.sptr;
+    sp += gr->stack.ssze+1;
+    sp &= ~15;
+    sb.mem_base = (void*)sp;
+    GC_set_stackbottom(gr->gchandle, &sb); // 一定要swap/transfer之前调用
+    // GC_enable();
+}
 void noro_goroutine_forward(goroutine* gr) {
+    struct GC_stack_base sb = {0};
+    void* h2 = GC_get_my_stackbottom(&sb);
+    linfo("hehre %d %p=?%p\n",gettid(), gr->gchandle, h2);
+    linfo("hehre %d %p=?%p\n",gettid(), gr->stksb->mem_base, sb.mem_base);
+    // linfo("hehe %d\n", ((GC_thread)gr->gchandle)->flags);
+    GC_call_with_alloc_lock(noro_gc_set_stackbottom, gr);
+
     gr->fnproc(gr->arg);
-    corowp_transfer(&gr->coctx, &gr->coctx0);
+
+    corowp_transfer(&gr->coctx, &gr->coctx0); // 这句要写在函数fnproc退出之前？
+    GC_call_with_alloc_lock(noro_gc_set_stackbottom2, gr);
 }
 void noro_goroutine_run(goroutine* gr) {
+    linfo("hehre %d\n",1);
     gr->state = executing;
     // 对-DCORO_PTHREAD来说，这句是真正开始执行
     corowp_create(&gr->coctx, noro_goroutine_forward, gr, gr->stack.sptr, gr->stack.ssze);
+
+    GC_gcollect();
+    GC_disable();
     // 对-DCORO_UCONTEXT/-DCORO_ASM等来说，这句是真正开始执行
     corowp_transfer(&gr->coctx0, &gr->coctx);
     // corowp_transfer(&gr->coctx, &gr->coctx0); // 这句要写在函数fnproc退出之前？
     gr->state = finished;
+    GC_enable();
+    GC_gcollect();
 }
 
 machine* noro_machine_new(int id) {
@@ -111,6 +160,16 @@ machine* noro_machine_get(int id) {
     machine* mc = 0;
     hashtable_get(gnr__->mcs, (void*)(uintptr_t)id, &mc);
     linfo("get mc %d=%p\n", id, mc);
+    if (mc != 0) {
+        if (mc->id != id) {
+            linfo("get mc %d=%p, found=%d, size=%d\n", id, mc, mc->id, hashtable_size(gnr__->mcs));
+
+            machine* mc2 = 0;
+            hashtable_get(gnr__->mcs, (void*)(uintptr_t)id, &mc2);
+            linfo("get mc %d=%p found=%d\n", id, mc2, mc2->id);
+        }
+        // assert(mc->id == id);
+    }
     return mc;
 }
 void noro_machine_gradd(machine* mc, goroutine* gr) {
@@ -141,7 +200,11 @@ void noro_post(coro_func fn, void*arg) {
     int id = noro_nxtid(gnr__);
     goroutine* gr = noro_goroutine_new(id, fn, arg);
     machine* mc = noro_machine_get(1);
-    linfo("mc=%p\n", mc);
+    linfo("mc=%p, %d %p, %d\n", mc, mc->id, mc->ngrs, hashtable_size(mc->ngrs));
+    if (mc != 0 && mc->id != 1) {
+        linfo("nothing mc=%p, %d %p, %d\n", mc, mc->id, mc->ngrs, hashtable_size(mc->ngrs));
+        return;
+    }
     hashtable_add(mc->ngrs, (void*)(uintptr_t)id, gr);
     pthread_cond_signal(&mc->pkcd);
 }
@@ -153,7 +216,13 @@ void noro_processor_setname(int id) {
 }
 void* noro_processor_netpoller(void*arg) {
     machine* mc = (machine*)arg;
-    linfo("%d, %d\n", mc->id, gettid());
+    struct GC_stack_base sb;
+    memset (&sb, 0, sizeof(sb));
+    GC_get_stack_base(&sb);
+    GC_register_my_thread(&sb);
+    linfo("stack base %p\n", sb.mem_base);
+
+    linfo("%d, %d %d\n", mc->id, gettid(), GC_thread_is_registered());
     noro_processor_setname(mc->id);
     for (;;) {
         sleep(600);
@@ -162,7 +231,13 @@ void* noro_processor_netpoller(void*arg) {
 
 void* noro_processor0(void*arg) {
     machine* mc = (machine*)arg;
-    linfo("%d %d\n", mc->id, gettid());
+    struct GC_stack_base sb;
+    memset (&sb, 0, sizeof(sb));
+    GC_get_stack_base(&sb);
+    GC_register_my_thread(&sb);
+    linfo("stack base %p\n", sb.mem_base);
+
+    linfo("%d %d %d\n", mc->id, gettid(), GC_thread_is_registered());
     noro_processor_setname(mc->id);
     gnr__->noroinited = true;
     pthread_cond_signal(&gnr__->noroinitcd);
@@ -234,7 +309,17 @@ void* noro_processor0(void*arg) {
 }
 void* noro_processor(void*arg) {
     machine* mc = (machine*)arg;
-    linfo("%d %d\n", mc->id, gettid());
+    struct GC_stack_base sb;
+    memset (&sb, 0, sizeof(sb));
+    GC_get_stack_base(&sb);
+    GC_register_my_thread(&sb);
+    linfo("stack base %p\n", sb.mem_base);
+    void* stkh = GC_get_my_stackbottom(&mc->stksb);
+    linfo("stkh %p, sb=%p %p\n", stkh, &mc->stksb, pthread_self());
+    mc->gchandle = stkh;
+    // GC_set_stackbottom(stkh, &mc->stksb);
+
+    linfo("%d %d %d\n", mc->id, gettid(), GC_thread_is_registered());
     noro_processor_setname(mc->id);
 
     for (;;) {
@@ -262,6 +347,9 @@ void* noro_processor(void*arg) {
             }
         }
         if (rungr != 0) {
+            rungr->stksb = &mc->stksb;
+            rungr->gchandle = mc->gchandle;
+            rungr->mcid = mc->id;
             noro_goroutine_run(rungr);
         } else {
             mc->parking = true;
@@ -292,6 +380,15 @@ noro* noro_new() {
         linfo("wtf...%d\n",1);
         return gnr__;
     }
+
+    // GC_enable_incremental();
+    // GC_set_rate(5);
+    // GC_set_all_interior_pointers(1);
+    // GC_set_push_other_roots(noro_push_other_roots);
+    GC_INIT();
+    GC_allow_register_threads();
+    linfo("gcfreq=%d\n", GC_get_full_freq()); // 19
+    GC_set_full_freq(5);
 
     noro* nr = (noro*)GC_malloc(sizeof(noro));
     hashtable_conf_init(&nr->htconf);
