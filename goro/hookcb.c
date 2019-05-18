@@ -5,7 +5,7 @@
 #include <fcntl.h>
 #include <sys/socket.h>
 
-#include <gc/gc.h>
+// #include <gc/gc.h>
 #include <collectc/hashtable.h>
 #include <collectc/array.h>
 
@@ -35,7 +35,7 @@ typedef struct hookcb {
 } hookcb;
 
 fdcontext* fdcontext_new(int fd) {
-    fdcontext* fdctx = (fdcontext*)GC_malloc(sizeof(fdcontext));
+    fdcontext* fdctx = (fdcontext*)malloc(sizeof(fdcontext));
     return fdctx;
 }
 

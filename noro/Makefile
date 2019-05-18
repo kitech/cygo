@@ -3,7 +3,7 @@
 # lin上能用的也UCONTEXT/SJLJ/ASM
 # win上能用的是啥
 CFLAGS=-g -O0 -D_GNU_SOURCE -DCORO_STACKALLOC -DCORO_UCONTEXT -DHAVE_UCONTEXT_H -DHAVE_SETJMP_H -DHAVE_SIGALTSTACK -I. -I../goro -I./cltc/include -I./include -DGC_PTHREADS
-LDFLAGS=-L./cltc/lib -lcollectc -L../bdwgc/.libs/ -lgc -lpthread -ldl
+LDFLAGS=-L./cltc/lib -lcollectc -lpthread -ldl
 
 all:
 	gcc ${CFLAGS} -o coro.o -c ../goro/coro.c

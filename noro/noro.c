@@ -34,7 +34,7 @@ typedef struct goroutine {
     coro_context coctx0;
     grstate state;
     int pkstate;
-    struct GC_stack_base* stksb;
+    //    struct GC_stack_base* stksb;
     void* gchandle;
     int  mcid;
 } goroutine;
@@ -47,7 +47,7 @@ typedef struct machine {
     pthread_mutex_t pkmu; // pack lock
     pthread_cond_t pkcd;
     bool parking;
-    struct GC_stack_base stksb;
+    // struct GC_stack_base stksb;
     void* gchandle;
 } machine;
 
@@ -78,7 +78,7 @@ int noro_nxtid(noro*nr);
 
 
 goroutine* noro_goroutine_new(int id, coro_func fn, void* arg) {
-    goroutine* gr = (goroutine*)GC_malloc(sizeof(goroutine));
+    goroutine* gr = (goroutine*)malloc(sizeof(goroutine));
     gr->id = id;
     gr->fnproc = fn;
     gr->arg = arg;
@@ -87,9 +87,9 @@ goroutine* noro_goroutine_new(int id, coro_func fn, void* arg) {
 // alloc stack and context
 void noro_goroutine_new2(goroutine*gr) {
     corowp_create(&gr->coctx0, 0, 0, 0, 0);
-    // corowp_stack_alloc(&gr->stack, dftstkusz);
-    gr->stack.sptr = GC_malloc_uncollectable(dftstksz);
-    gr->stack.ssze = dftstksz;
+    corowp_stack_alloc(&gr->stack, dftstkusz);
+    // gr->stack.sptr = GC_malloc_uncollectable(dftstksz);
+    // gr->stack.ssze = dftstksz;
     gr->state = runnable;
     // GC_add_roots(gr->stack.sptr, gr->stack.sptr+(gr->stack.ssze));
     // 这一句会让fnproc直接执行，但是可能需要的是创建与执行分开。原来是针对-DCORO_PTHREAD
@@ -97,41 +97,41 @@ void noro_goroutine_new2(goroutine*gr) {
 }
 
 // setback
-void noro_check_stackbottom(goroutine* gr) {
-    struct GC_stack_base sb = {0};
-    void* gch = GC_get_my_stackbottom(&sb);
-    assert(gch == gr->gchandle);
-    assert(sb.mem_base == gr->stksb->mem_base);
-}
-void noro_gc_register_my_thread(goroutine* gr){
-    struct GC_stack_base sb = {0};
-    GC_get_stack_base(&sb);
+/* void noro_check_stackbottom(goroutine* gr) { */
+/*     struct GC_stack_base sb = {0}; */
+/*     void* gch = GC_get_my_stackbottom(&sb); */
+/*     assert(gch == gr->gchandle); */
+/*     assert(sb.mem_base == gr->stksb->mem_base); */
+/* } */
+/* void noro_gc_register_my_thread(goroutine* gr){ */
+/*     struct GC_stack_base sb = {0}; */
+/*     GC_get_stack_base(&sb); */
 
-    uint64_t sp = (uint64_t)gr->stack.sptr;
-    sp += gr->stack.ssze;
-    sp &= ~15;
-    sb.mem_base = (void*)sp;
-    GC_register_my_thread(&sb);
-}
-void* noro_gc_set_stackbottom2(goroutine* gr) {
-    linfo("hehre %d\n",1);
-    struct GC_stack_base sb = {0};
-    sb.mem_base = (void*)((uintptr_t)(gr->stksb->mem_base));
-    GC_set_stackbottom(gr->gchandle, gr->stksb); // 一定要swap/transfer之前调用
-    // GC_register_my_thread(gr->stksb);
-}
-void* noro_gc_set_stackbottom(goroutine* gr) {
-    linfo("hehre %d %p\n",gettid(), gr->gchandle);
-    struct GC_stack_base sb = {0};
-    sb.mem_base = (void*)((uintptr_t)(gr->stksb->mem_base));
-    GC_get_stack_base(&sb);
+/*     uint64_t sp = (uint64_t)gr->stack.sptr; */
+/*     sp += gr->stack.ssze; */
+/*     sp &= ~15; */
+/*     sb.mem_base = (void*)sp; */
+/*     GC_register_my_thread(&sb); */
+/* } */
+/* void* noro_gc_set_stackbottom2(goroutine* gr) { */
+/*     linfo("hehre %d\n",1); */
+/*     struct GC_stack_base sb = {0}; */
+/*     sb.mem_base = (void*)((uintptr_t)(gr->stksb->mem_base)); */
+/*     GC_set_stackbottom(gr->gchandle, gr->stksb); // 一定要swap/transfer之前调用 */
+/*     // GC_register_my_thread(gr->stksb); */
+/* } */
+/* void* noro_gc_set_stackbottom(goroutine* gr) { */
+/*     linfo("hehre %d %p\n",gettid(), gr->gchandle); */
+/*     struct GC_stack_base sb = {0}; */
+/*     sb.mem_base = (void*)((uintptr_t)(gr->stksb->mem_base)); */
+/*     GC_get_stack_base(&sb); */
 
-    uint64_t sp = (uint64_t)gr->stack.sptr;
-    sp += gr->stack.ssze;
-    sp &= ~15;
-    sb.mem_base = (void*)sp;
-    GC_set_stackbottom(gr->gchandle, &sp); // 一定要swap/transfer之前调用
-}
+/*     uint64_t sp = (uint64_t)gr->stack.sptr; */
+/*     sp += gr->stack.ssze; */
+/*     sp &= ~15; */
+/*     sb.mem_base = (void*)sp; */
+/*     GC_set_stackbottom(gr->gchandle, &sp); // 一定要swap/transfer之前调用 */
+/* } */
 void noro_goroutine_forward(goroutine* gr) {
     // GC_call_with_alloc_lock(noro_gc_set_stackbottom, gr);
 
@@ -149,17 +149,15 @@ void noro_goroutine_run(goroutine* gr) {
     corowp_create(&gr->coctx, noro_goroutine_forward, gr, gr->stack.sptr, gr->stack.ssze);
     linfo("after create co %d\n", gr->id);
 
-    GC_gcollect();
     // 对-DCORO_UCONTEXT/-DCORO_ASM等来说，这句是真正开始执行
     corowp_transfer(&gr->coctx0, &gr->coctx);
     // corowp_transfer(&gr->coctx, &gr->coctx0); // 这句要写在函数fnproc退出之前？
     gr->state = finished;
     linfo("coro end??? %d\n", 1);
-    GC_gcollect();
 }
 
 machine* noro_machine_new(int id) {
-    machine* mc = (machine*)GC_malloc(sizeof(machine));
+    machine* mc = (machine*)malloc(sizeof(machine));
     mc->id = id;
     linfo("htconf=%o\n", noro_dft_htconf());
     hashtable_new_conf(noro_dft_htconf(), &mc->ngrs);
@@ -226,13 +224,8 @@ void noro_processor_setname(int id) {
 }
 void* noro_processor_netpoller(void*arg) {
     machine* mc = (machine*)arg;
-    struct GC_stack_base sb;
-    memset (&sb, 0, sizeof(sb));
-    GC_get_stack_base(&sb);
-    GC_register_my_thread(&sb);
-    linfo("stack base %p\n", sb.mem_base);
 
-    linfo("%d, %d %d\n", mc->id, gettid(), GC_thread_is_registered());
+    linfo("%d, %d\n", mc->id, gettid());
     noro_processor_setname(mc->id);
     for (;;) {
         sleep(600);
@@ -241,13 +234,7 @@ void* noro_processor_netpoller(void*arg) {
 
 void* noro_processor0(void*arg) {
     machine* mc = (machine*)arg;
-    struct GC_stack_base sb;
-    memset (&sb, 0, sizeof(sb));
-    GC_get_stack_base(&sb);
-    GC_register_my_thread(&sb);
-    linfo("stack base %p\n", sb.mem_base);
-
-    linfo("%d %d %d\n", mc->id, gettid(), GC_thread_is_registered());
+    linfo("%d %d\n", mc->id, gettid());
     noro_processor_setname(mc->id);
     gnr__->noroinited = true;
     pthread_cond_signal(&gnr__->noroinitcd);
@@ -319,17 +306,7 @@ void* noro_processor0(void*arg) {
 }
 void* noro_processor(void*arg) {
     machine* mc = (machine*)arg;
-    struct GC_stack_base sb;
-    memset (&sb, 0, sizeof(sb));
-    GC_get_stack_base(&sb);
-    GC_register_my_thread(&sb);
-    linfo("stack base %p\n", sb.mem_base);
-    void* stkh = GC_get_my_stackbottom(&mc->stksb);
-    linfo("stkh %p, sb=%p %p\n", stkh, &mc->stksb, pthread_self());
-    mc->gchandle = stkh;
-    // GC_set_stackbottom(stkh, &mc->stksb);
-
-    linfo("%d %d %d\n", mc->id, gettid(), GC_thread_is_registered());
+    linfo("%d %d\n", mc->id, gettid());
     noro_processor_setname(mc->id);
 
     for (;;) {
@@ -357,7 +334,7 @@ void* noro_processor(void*arg) {
             }
         }
         if (rungr != 0) {
-            rungr->stksb = &mc->stksb;
+            // rungr->stksb = &mc->stksb;
             rungr->gchandle = mc->gchandle;
             rungr->mcid = mc->id;
             noro_goroutine_run(rungr);
@@ -398,13 +375,13 @@ noro* noro_new() {
     // GC_set_rate(5);
     // GC_set_all_interior_pointers(1);
     // GC_set_push_other_roots(noro_gc_push_other_roots);
-    GC_INIT();
-    GC_allow_register_threads();
+    // GC_INIT();
+    // GC_allow_register_threads();
     // linfo("main thread registered: %d\n", GC_thread_is_registered()); // yes
-    linfo("gcfreq=%d\n", GC_get_full_freq()); // 19
-    GC_set_full_freq(5);
+    // linfo("gcfreq=%d\n", GC_get_full_freq()); // 19
+    // GC_set_full_freq(5);
 
-    noro* nr = (noro*)GC_malloc(sizeof(noro));
+    noro* nr = (noro*)malloc(sizeof(noro));
     hashtable_conf_init(&nr->htconf);
     nr->htconf.key_length = sizeof(void*);
     nr->htconf.hash = hashtable_hash_ptr;
@@ -420,7 +397,7 @@ noro* noro_new() {
 // 开启的总线程数除了以下，还有libgc的线程（3个？）
 void noro_init(noro* nr) {
     for (int i = 5; i > 0; i --) {
-        pthread_t* t = (pthread_t*)GC_malloc(sizeof(pthread_t));
+        pthread_t* t = (pthread_t*)malloc(sizeof(pthread_t));
         hashtable_add(nr->mths, (void*)(uintptr_t)i, t);
         machine* mc = noro_machine_new(i);
         hashtable_add(nr->mcs, (void*)(uintptr_t)i, mc);
