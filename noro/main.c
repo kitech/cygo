@@ -50,6 +50,7 @@ void hello(void*arg) {
     for (int i = 0; i < 9; i++)
         GC_malloc(5550);
     sleep(2);
+    linfo("hello end %d\n", tid); // this tid not begin tid???
 }
 
 static noro* nr;
@@ -60,10 +61,14 @@ int main() {
     linfo("noro init done %d, %d\n", 12345, gettid());
     sleep(1);
     for (;;) {
-        for (int i = 0; i < 9; i ++) GC_malloc(5678);
+        for (int i = 0; i < 9; i ++) {
+            GC_malloc(5678);
+        }
         noro_post(hello, (void*)(uintptr_t)5);
         socket(PF_INET, SOCK_STREAM, 0);
-        sleep(1);
+        linfo("before main sleep %d\n", time(0));
+        sleep(50);
+        linfo("after main sleep %d\n", time(0));
     }
     sleep(5);
     return 0;
