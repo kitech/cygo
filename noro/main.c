@@ -45,13 +45,17 @@ pid_t gettid() {
 
 void hello(void*arg) {
     int tid = gettid();
-    linfo("called %p %d\n", arg, tid);
+    linfo("called %p %d, %ld\n", arg, tid, time(0));
     // assert(1==2);
     for (int i = 0; i < 9; i++) {
-        malloc(5550);
+        // malloc(5550);
+    }
+    for (int i = 0; i < 100; i ++) {
+        linfo("hello step. %d %d\n", i, tid);
+        sleep(3);
     }
     sleep(2);
-    linfo("hello end %d\n", tid); // this tid not begin tid???
+    linfo("hello end %d %ld\n", tid, time(0)); // this tid not begin tid???
 }
 
 static noro* nr;
@@ -61,6 +65,9 @@ int main() {
     noro_wait_init_done(nr);
     linfo("noro init done %d, %d\n", 12345, gettid());
     sleep(1);
+    for (int i = 0; i < 3; i ++) {
+        noro_post(hello, (void*)(uintptr_t)i);
+    }
     for (;;) {
         for (int i = 0; i < 9; i ++) {
             // malloc(5678);
@@ -68,7 +75,7 @@ int main() {
         noro_post(hello, (void*)(uintptr_t)5);
         socket(PF_INET, SOCK_STREAM, 0);
         linfo("before main sleep %d\n", time(0));
-        sleep(50);
+        sleep(300);
         linfo("after main sleep %d\n", time(0));
     }
     sleep(5);
