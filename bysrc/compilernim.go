@@ -39,10 +39,20 @@ func (this *g2nim) genpkg(name string, pkg *ast.Package) {
 func (this *g2nim) genfile(scope *ast.Scope, name string, f *ast.File) {
 	log.Println(name)
 
-	// decls order?
+	// non-func decls
 	for _, d := range f.Decls {
+		switch r := d.(type) {
+		case *ast.FuncDecl:
+		default:
+			this.genDecl(scope, d)
+		}
+	}
+
+	// ordered funcDeclsv
+	for _, d := range this.psctx.funcDeclsv {
 		this.genDecl(scope, d)
 	}
+
 }
 
 func (this *g2nim) genDecl(scope *ast.Scope, d ast.Decl) {
