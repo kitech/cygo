@@ -22,13 +22,6 @@ func main() {
 	g2n := g2nim{}
 	g2n.psctx = psctx
 	g2n.genpkgs()
-
-	code := "import os, threadpool\n\n"
-	code += "include \"nrtbase.nim\"\n\n"
-	code += g2n.code()
-	code += "\n\n"
-	code += "main()"
-	code += "\n\n"
-
-	ioutil.WriteFile("opkgs/foo.nim", []byte(code), 0644)
+	code, ext := g2n.code()
+	ioutil.WriteFile("opkgs/foo."+ext, []byte(code), 0644)
 }

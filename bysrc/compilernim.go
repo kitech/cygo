@@ -749,6 +749,14 @@ func (this *g2nim) decrindent() {
 	this.indent--
 }
 
-func (this *g2nim) code() string {
-	return this.sb.String()
+// return code, extname
+func (this *g2nim) code() (string, string) {
+	code := "import os, threadpool\n\n"
+	code += "include \"nrtbase.nim\"\n\n"
+	code += this.sb.String()
+	code += "\n\n"
+	code += "main()"
+	code += "\n\n"
+
+	return code, "nim"
 }

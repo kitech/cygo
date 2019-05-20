@@ -668,6 +668,7 @@ func (this *g2nc) outf(format string, args ...interface{}) *g2nc {
 	return this
 }
 
-func (this *g2nc) code() string {
-	return this.sb.String()
+func (this *g2nc) code() (string, string) {
+	code := "#include <cxrtbase.h>\n\n" + this.sb.String()
+	return code, "c"
 }
