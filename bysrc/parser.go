@@ -65,9 +65,24 @@ func (this *ParserContext) Init() error {
 		"typedefs", len(this.typeDeclsm), "funcdefs", len(this.funcDeclsm))
 
 	nodes := this.gb.TopologicalSort()
-	for idx, node := range nodes {
-		log.Println(idx, node.Value, *node.Value)
+	for _, node := range nodes {
 		this.funcDeclsv = append(this.funcDeclsv, this.funcDeclsm[(*node.Value).(string)])
+	}
+	// unused decls
+	for _, d := range this.funcDeclsm {
+		if _, ok := builtinfns[d.Name.Name]; ok {
+			continue
+		}
+		invec := false
+		for _, d1 := range this.funcDeclsv {
+			if d1 == d {
+				invec = true
+				break
+			}
+		}
+		if !invec {
+			this.funcDeclsv = append(this.funcDeclsv, d)
+		}
 	}
 
 	return err
