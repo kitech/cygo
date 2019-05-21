@@ -1,7 +1,7 @@
 #ifndef _NORO_GC_H_
 #define _NOGO_GC_H_
 
-// #define USE_BDWGC
+#define USE_BDWGC
 
 #ifdef USE_BDWGC
 

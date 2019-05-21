@@ -50,14 +50,16 @@ void hello(void*arg) {
     linfo("called %p %d, %ld\n", arg, tid, time(0));
     // assert(1==2);
     for (int i = 0; i < 9; i++) {
-        NORO_MALLOC(5550);
+        NORO_MALLOC(15550);
     }
-    for (int i = 0; i < 100; i ++) {
+    for (int i = 0; i < 1; i ++) {
         linfo("hello step. %d %d\n", i, tid);
-        sleep(3);
+        sleep(1);
+        NORO_MALLOC(25550);
     }
     sleep(2);
     linfo("hello end %d %ld\n", tid, time(0)); // this tid not begin tid???
+    assert(gettid() == tid);
 }
 
 static noro* nr;
@@ -72,12 +74,12 @@ int main() {
     }
     for (;;) {
         for (int i = 0; i < 9; i ++) {
-            // malloc(5678);
+            NORO_MALLOC(35679);
         }
         noro_post(hello, (void*)(uintptr_t)5);
         socket(PF_INET, SOCK_STREAM, 0);
         linfo("before main sleep %d\n", time(0));
-        sleep(300);
+        sleep(1);
         linfo("after main sleep %d\n", time(0));
     }
     sleep(5);

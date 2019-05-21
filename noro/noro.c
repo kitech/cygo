@@ -29,11 +29,12 @@ typedef struct goroutine {
     coro_func fnproc;
     void* arg;
     coro_stack stack;
+    struct GC_stack_base mystksb; // mine for GC
     coro_context coctx;
     coro_context coctx0;
     grstate state;
     int pkstate;
-    //    struct GC_stack_base* stksb;
+    struct GC_stack_base* stksb; // machine's
     void* gchandle;
     int  mcid;
 } goroutine;
@@ -46,7 +47,7 @@ typedef struct machine {
     pthread_mutex_t pkmu; // pack lock
     pthread_cond_t pkcd;
     bool parking;
-    // struct GC_stack_base stksb;
+    struct GC_stack_base stksb;
     void* gchandle;
 } machine;
 
@@ -86,9 +87,10 @@ goroutine* noro_goroutine_new(int id, coro_func fn, void* arg) {
 // alloc stack and context
 void noro_goroutine_new2(goroutine*gr) {
     corowp_create(&gr->coctx0, 0, 0, 0, 0);
-    corowp_stack_alloc(&gr->stack, dftstkusz);
-    // gr->stack.sptr = GC_malloc_uncollectable(dftstksz);
-    // gr->stack.ssze = dftstksz;
+    // corowp_stack_alloc(&gr->stack, dftstkusz);
+    gr->stack.sptr = GC_malloc_uncollectable(dftstksz);
+    gr->stack.ssze = dftstksz;
+    gr->mystksb.mem_base = (void*)((uintptr_t)gr->stack.sptr + dftstksz);
     gr->state = runnable;
     // GC_add_roots(gr->stack.sptr, gr->stack.sptr+(gr->stack.ssze));
     // 这一句会让fnproc直接执行，但是可能需要的是创建与执行分开。原来是针对-DCORO_PTHREAD
@@ -131,12 +133,31 @@ void noro_goroutine_new2(goroutine*gr) {
 /*     sb.mem_base = (void*)sp; */
 /*     GC_set_stackbottom(gr->gchandle, &sp); // 一定要swap/transfer之前调用 */
 /* } */
+
+// 恢复到线程原始的栈
+void* setbottom0(void*arg) {
+    goroutine* gr = (goroutine*)arg;
+    GC_set_stackbottom(gr->gchandle, gr->stksb);
+    // GC_stackbottom = sb2.bottom;
+    return 0;
+}
+// coroutine动态栈
+void* setbottom1(void*arg) {
+    goroutine* gr = (goroutine*)arg;
+
+    GC_set_stackbottom(gr->gchandle, &gr->mystksb);
+    // GC_stackbottom = sb1.bottom;
+    return 0;
+}
+
 void noro_goroutine_forward(void* arg) {
     goroutine* gr = (goroutine*)arg;
     // GC_call_with_alloc_lock(noro_gc_set_stackbottom, gr);
+    GC_call_with_alloc_lock(setbottom1, gr);
 
     gr->fnproc(gr->arg);
 
+    GC_call_with_alloc_lock(setbottom0, gr);
     // 这个跳回ctx应该是不对的
     corowp_transfer(&gr->coctx, &gr->coctx0); // 这句要写在函数fnproc退出之前？
     // GC_call_with_alloc_lock(noro_gc_set_stackbottom2, gr);
@@ -306,6 +327,10 @@ void* noro_processor0(void*arg) {
 }
 void* noro_processor(void*arg) {
     machine* mc = (machine*)arg;
+    GC_get_stack_base(&mc->stksb);
+    GC_register_my_thread(&mc->stksb);
+    mc->gchandle = GC_get_my_stackbottom(&mc->stksb);
+
     linfo("%d %d\n", mc->id, gettid());
     noro_processor_setname(mc->id);
 
@@ -334,7 +359,7 @@ void* noro_processor(void*arg) {
             }
         }
         if (rungr != 0) {
-            // rungr->stksb = &mc->stksb;
+            rungr->stksb = &mc->stksb;
             rungr->gchandle = mc->gchandle;
             rungr->mcid = mc->id;
             noro_goroutine_run(rungr);
