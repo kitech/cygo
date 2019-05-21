@@ -15,7 +15,8 @@
 #define HKDEBUG 1
 #define linfo(fmt, ...)                                                 \
     do { if (HKDEBUG) fprintf(stderr, "%s:%d:%s ", __FILE__, __LINE__, __FUNCTION__); } while (0); \
-    do { if (HKDEBUG) fprintf(stderr, fmt, __VA_ARGS__); } while (0) ;
+    do { if (HKDEBUG) fprintf(stderr, fmt, __VA_ARGS__); } while (0) ;  \
+    do { if (HKDEBUG) fflush(stderr); } while (0) ;
 
 typedef struct coro_stack coro_stack;
 
@@ -97,42 +98,6 @@ void noro_goroutine_new2(goroutine*gr) {
     // corowp_create(&gr->coctx, gr->fnproc, gr->arg, gr->stack.sptr, dftstksz);
 }
 
-// setback
-/* void noro_check_stackbottom(goroutine* gr) { */
-/*     struct GC_stack_base sb = {0}; */
-/*     void* gch = GC_get_my_stackbottom(&sb); */
-/*     assert(gch == gr->gchandle); */
-/*     assert(sb.mem_base == gr->stksb->mem_base); */
-/* } */
-/* void noro_gc_register_my_thread(goroutine* gr){ */
-/*     struct GC_stack_base sb = {0}; */
-/*     GC_get_stack_base(&sb); */
-
-/*     uint64_t sp = (uint64_t)gr->stack.sptr; */
-/*     sp += gr->stack.ssze; */
-/*     sp &= ~15; */
-/*     sb.mem_base = (void*)sp; */
-/*     GC_register_my_thread(&sb); */
-/* } */
-/* void* noro_gc_set_stackbottom2(goroutine* gr) { */
-/*     linfo("hehre %d\n",1); */
-/*     struct GC_stack_base sb = {0}; */
-/*     sb.mem_base = (void*)((uintptr_t)(gr->stksb->mem_base)); */
-/*     GC_set_stackbottom(gr->gchandle, gr->stksb); // 一定要swap/transfer之前调用 */
-/*     // GC_register_my_thread(gr->stksb); */
-/* } */
-/* void* noro_gc_set_stackbottom(goroutine* gr) { */
-/*     linfo("hehre %d %p\n",gettid(), gr->gchandle); */
-/*     struct GC_stack_base sb = {0}; */
-/*     sb.mem_base = (void*)((uintptr_t)(gr->stksb->mem_base)); */
-/*     GC_get_stack_base(&sb); */
-
-/*     uint64_t sp = (uint64_t)gr->stack.sptr; */
-/*     sp += gr->stack.ssze; */
-/*     sp &= ~15; */
-/*     sb.mem_base = (void*)sp; */
-/*     GC_set_stackbottom(gr->gchandle, &sp); // 一定要swap/transfer之前调用 */
-/* } */
 
 // 恢复到线程原始的栈
 void* setbottom0(void*arg) {
@@ -152,7 +117,6 @@ void* setbottom1(void*arg) {
 
 void noro_goroutine_forward(void* arg) {
     goroutine* gr = (goroutine*)arg;
-    // GC_call_with_alloc_lock(noro_gc_set_stackbottom, gr);
     GC_call_with_alloc_lock(setbottom1, gr);
 
     gr->fnproc(gr->arg);
@@ -160,21 +124,19 @@ void noro_goroutine_forward(void* arg) {
     GC_call_with_alloc_lock(setbottom0, gr);
     // 这个跳回ctx应该是不对的
     corowp_transfer(&gr->coctx, &gr->coctx0); // 这句要写在函数fnproc退出之前？
-    // GC_call_with_alloc_lock(noro_gc_set_stackbottom2, gr);
 }
 void noro_goroutine_run(goroutine* gr) {
- 
+
     gr->state = executing;
     // 对-DCORO_PTHREAD来说，这句是真正开始执行
-    linfo("before create co %d\n", gr->id);
     corowp_create(&gr->coctx, noro_goroutine_forward, gr, gr->stack.sptr, gr->stack.ssze);
-    linfo("after create co %d\n", gr->id);
 
     // 对-DCORO_UCONTEXT/-DCORO_ASM等来说，这句是真正开始执行
     corowp_transfer(&gr->coctx0, &gr->coctx);
     // corowp_transfer(&gr->coctx, &gr->coctx0); // 这句要写在函数fnproc退出之前？
     gr->state = finished;
     linfo("coro end??? %d\n", 1);
+    // TODO coro 结束，回收coro栈
 }
 
 machine* noro_machine_new(int id) {
@@ -353,7 +315,7 @@ void* noro_processor(void*arg) {
             array_get_at(arr, i, &key); assert(key != 0);
             hashtable_get(mc0->grs, key, (void**)&gr); assert(gr != 0);
             if (gr->state == runnable) {
-                linfo("found a runnable job %d\n", (uintptr_t)key);
+                linfo("found a runnable job %d on %d\n", (uintptr_t)key, mc0->id);
                 rungr = gr;
                 break;
             }

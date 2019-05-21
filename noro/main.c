@@ -13,7 +13,8 @@
 #define HKDEBUG 1
 #define linfo(fmt, ...)                                                 \
     do { if (HKDEBUG) fprintf(stderr, "%s:%d:%s ", __FILE__, __LINE__, __FUNCTION__); } while (0); \
-    do { if (HKDEBUG) fprintf(stderr, fmt, __VA_ARGS__); } while (0) ;
+    do { if (HKDEBUG) fprintf(stderr, fmt, __VA_ARGS__); } while (0) ; \
+    do { if (HKDEBUG) fflush(stderr); } while (0) ;
 
 
 #include <sys/epoll.h>
@@ -72,15 +73,16 @@ int main() {
     for (int i = 0; i < 3; i ++) {
         noro_post(hello, (void*)(uintptr_t)i);
     }
+    // seems there is race condition when strart up, and malloc big size object below.
+    // so collectc once with lucky
+    GC_gcollect();
     for (;;) {
         for (int i = 0; i < 9; i ++) {
             NORO_MALLOC(35679);
         }
         noro_post(hello, (void*)(uintptr_t)5);
         socket(PF_INET, SOCK_STREAM, 0);
-        linfo("before main sleep %d\n", time(0));
         sleep(1);
-        linfo("after main sleep %d\n", time(0));
     }
     sleep(5);
     return 0;
