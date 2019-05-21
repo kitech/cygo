@@ -18,6 +18,7 @@ const dftstksz = 128 * 1024
 proc GC_addStack(bottom: pointer) {.cdecl, importc.}
 proc GC_removeStack(bottom: pointer) {.cdecl, importc.}
 proc GC_setActiveStack(bottom: pointer) {.cdecl, importc.}
+# proc GC_setStackBottom(bottom: pointer) {.cdecl, importc.}
 
 type
     Grstate = enum
