@@ -5,14 +5,14 @@
 #include <pthread.h>
 #include <unistd.h>
 
-#define GC_THREADS
+#define GC_THREADS 1
 #include <gc.h>
 
-#include <ucontext.h>
+#include <coro.h>
 
 #define STACK_SIZE 1024*64
 
-ucontext_t child, parent;
+coro_context child, parent;
 
 struct thr_hndl_sb_s {
     void *gc_thread_handle;
@@ -39,7 +39,7 @@ void* setbottom1(void*arg) {
     return 0;
 }
 
-void threadFunction() {
+void threadFunction(void* arg) {
     GC_call_with_alloc_lock(setbottom1, 0);
 
     GC_gcollect();
@@ -50,7 +50,7 @@ void threadFunction() {
 
     printf("Child: Switch to parent\n");
     GC_call_with_alloc_lock(setbottom0, 0);
-    swapcontext( &child, &parent );
+    coro_transfer( &child, &parent );
 
     for (int i = 0; i < 900; i++) {
         GC_call_with_alloc_lock(setbottom1, 0);
@@ -61,7 +61,7 @@ void threadFunction() {
 
         printf("Child: Switch to parent2, %d\n", i);
         GC_call_with_alloc_lock(setbottom0, 0);
-        swapcontext( &child, &parent );
+        coro_transfer( &child, &parent );
     }
 }
 
@@ -72,29 +72,23 @@ void* main2th(void* arg) {
 
     void *mem = GC_MALLOC(1000);
 
-    getcontext( &child );
-    child.uc_link = 0;
-    child.uc_stack.ss_sp = GC_malloc_uncollectable( STACK_SIZE );
-    child.uc_stack.ss_size = STACK_SIZE;
-    child.uc_stack.ss_flags = 0;
-    if ( child.uc_stack.ss_sp == 0 ) {
-        perror( "malloc: Could not allocate stack" );
-        exit( 1 );
-    }
-    sb1.sb.mem_base = child.uc_stack.ss_sp;
-    sb1.bottom = (void*)((uintptr_t)(sb1.sb.mem_base) + STACK_SIZE);
+    void* stksp = GC_malloc_uncollectable( STACK_SIZE );
+    sb1.sb.mem_base = stksp;
+    sb1.bottom = (void*)((uintptr_t)(stksp) + STACK_SIZE);
 
-    makecontext( &child, &threadFunction, 0);
+    coro_create(&parent, 0, 0, 0, 0);
+    coro_create(&child, &threadFunction, 0, stksp, STACK_SIZE);
 
     printf("Parent: Switch to child\n");
-    swapcontext( &parent, &child );
+    coro_transfer(&parent, &child);
+
     // 连接在当前栈与子栈之前跳转多次
     for (int i = 0; i < 900; i ++) {
         printf("Parent: Switch to child2 %d\n", i);
-        swapcontext( &parent, &child );
+        coro_transfer( &parent, &child );
     }
 
-    GC_free( child.uc_stack.ss_sp );
+    // GC_free( child.uc_stack.ss_sp );
     GC_gcollect();
     printf("thread done???\n");
 }
