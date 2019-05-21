@@ -1,12 +1,14 @@
 #include <unistd.h>
 #include <stdio.h>
 #include <assert.h>
+#include <time.h>
 
 #include <gc/gc.h>
 #include <coro.h>
 #include <collectc/hashtable.h>
 #include <collectc/array.h>
 #include "noro.h"
+#include "norogc.h"
 
 #define HKDEBUG 1
 #define linfo(fmt, ...)                                                 \
@@ -48,7 +50,7 @@ void hello(void*arg) {
     linfo("called %p %d, %ld\n", arg, tid, time(0));
     // assert(1==2);
     for (int i = 0; i < 9; i++) {
-        // malloc(5550);
+        NORO_MALLOC(5550);
     }
     for (int i = 0; i < 100; i ++) {
         linfo("hello step. %d %d\n", i, tid);

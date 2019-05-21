@@ -5,7 +5,6 @@
 #include <pthread.h>
 
 #include <gc/gc.h>
-// #define GC_PTHREADS 1
 // #include <private/pthread_support.h>
 #include <coro.h>
 #include <collectc/hashtable.h>
@@ -132,7 +131,8 @@ void noro_goroutine_new2(goroutine*gr) {
 /*     sb.mem_base = (void*)sp; */
 /*     GC_set_stackbottom(gr->gchandle, &sp); // 一定要swap/transfer之前调用 */
 /* } */
-void noro_goroutine_forward(goroutine* gr) {
+void noro_goroutine_forward(void* arg) {
+    goroutine* gr = (goroutine*)arg;
     // GC_call_with_alloc_lock(noro_gc_set_stackbottom, gr);
 
     gr->fnproc(gr->arg);
@@ -166,14 +166,14 @@ machine* noro_machine_new(int id) {
 }
 machine* noro_machine_get(int id) {
     machine* mc = 0;
-    hashtable_get(gnr__->mcs, (void*)(uintptr_t)id, &mc);
+    hashtable_get(gnr__->mcs, (void*)(uintptr_t)id, (void**)&mc);
     linfo("get mc %d=%p\n", id, mc);
     if (mc != 0) {
         if (mc->id != id) {
             linfo("get mc %d=%p, found=%d, size=%d\n", id, mc, mc->id, hashtable_size(gnr__->mcs));
 
             machine* mc2 = 0;
-            hashtable_get(gnr__->mcs, (void*)(uintptr_t)id, &mc2);
+            hashtable_get(gnr__->mcs, (void*)(uintptr_t)id, (void**)&mc2);
             linfo("get mc %d=%p found=%d\n", id, mc2, mc2->id);
         }
         // assert(mc->id == id);
@@ -255,7 +255,7 @@ void* noro_processor0(void*arg) {
         for (int i = 0; arr1 != 0 && i < array_size(arr1); i++) {
             void*key = array_peek_at(arr1, i);
             goroutine* gr = 0;
-            hashtable_get(mc->ngrs, key, &gr); assert(gr != 0);
+            hashtable_get(mc->ngrs, key, (void**)&gr); assert(gr != 0);
             noro_goroutine_new2(gr);
             linfo("process %d, %d\n", gr->id, dftstksz);
             hashtable_remove(mc->ngrs, key, 0);
@@ -281,7 +281,7 @@ void* noro_processor0(void*arg) {
                 if ((uintptr_t)key <= 2) continue;
 
                 linfo("checking machine %d/%d %d\n", j, array_size(arr2), key);
-                hashtable_get(gnr__->mcs, key, &mct); assert(mct != 0);
+                hashtable_get(gnr__->mcs, key, (void**)&mct); assert(mct != 0);
                 if (mct->parking) {
                     linfo("got a packing machine %d <- %d\n", mct->id, gr->id);
                     break;
@@ -326,7 +326,7 @@ void* noro_processor(void*arg) {
             goroutine* gr = 0;
             void* key = 0;
             array_get_at(arr, i, &key); assert(key != 0);
-            hashtable_get(mc0->grs, key, &gr); assert(gr != 0);
+            hashtable_get(mc0->grs, key, (void**)&gr); assert(gr != 0);
             if (gr->state == runnable) {
                 linfo("found a runnable job %d\n", (uintptr_t)key);
                 rungr = gr;
@@ -375,8 +375,8 @@ noro* noro_new() {
     // GC_set_rate(5);
     // GC_set_all_interior_pointers(1);
     // GC_set_push_other_roots(noro_gc_push_other_roots);
-    // GC_INIT();
-    // GC_allow_register_threads();
+    GC_INIT();
+    GC_allow_register_threads();
     // linfo("main thread registered: %d\n", GC_thread_is_registered()); // yes
     // linfo("gcfreq=%d\n", GC_get_full_freq()); // 19
     // GC_set_full_freq(5);

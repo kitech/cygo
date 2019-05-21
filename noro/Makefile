@@ -2,8 +2,9 @@
 # PTHREAD本来就不是这个目的，应该一般不用。
 # lin上能用的也UCONTEXT/SJLJ/ASM
 # win上能用的是啥
-CFLAGS=-g -O0 -D_GNU_SOURCE -DCORO_STACKALLOC -DCORO_UCONTEXT -DHAVE_UCONTEXT_H -DHAVE_SETJMP_H -DHAVE_SIGALTSTACK -I. -I../goro -I./cltc/include -I./include -DGC_PTHREADS
-LDFLAGS=-L./cltc/lib -lcollectc -lpthread -ldl
+# GC_THREADS not GC_PTHREADS
+CFLAGS=-g -O0 -D_GNU_SOURCE -DCORO_STACKALLOC -DCORO_UCONTEXT -DHAVE_UCONTEXT_H -DHAVE_SETJMP_H -DHAVE_SIGALTSTACK -I. -I../goro -I./cltc/include -I./include -DGC_THREADS
+LDFLAGS=-L./cltc/lib -lcollectc -L ../bdwgc/.libs -lgc -lpthread -ldl
 
 all:
 	gcc ${CFLAGS} -o coro.o -c ../goro/coro.c
@@ -16,4 +17,7 @@ all:
 
 clean:
 	rm -f noro *.o
+
+# some tricks
+# gdb: handle SIGXCPU SIG33 SIG35 SIGPWR nostop noprint
 

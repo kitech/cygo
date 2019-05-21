@@ -13,5 +13,4 @@ void noro_wait_init_done(noro* nr);
 
 void noro_post(void(*fn)(void*arg), void*arg);
 
-
 #endif
