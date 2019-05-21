@@ -51,8 +51,17 @@ void threadFunction() {
     GC_call_with_alloc_lock(setbottom0, 0);
     swapcontext( &child, &parent );
 
-    printf("Child: Switch to parent2\n");
-    // swapcontext( &child, &parent );
+    for (int i = 0; i < 900; i++) {
+        GC_call_with_alloc_lock(setbottom1, 0);
+        GC_MALLOC(6700);
+        sleep(1);
+        GC_MALLOC(3567);
+        // GC_gcollect();
+
+        printf("Child: Switch to parent2, %d\n", i);
+        GC_call_with_alloc_lock(setbottom0, 0);
+        swapcontext( &child, &parent );
+    }
 }
 
 
@@ -78,8 +87,11 @@ void* main2th(void* arg) {
 
     printf("Parent: Switch to child\n");
     swapcontext( &parent, &child );
-    printf("Parent: Switch to child2\n");
-    // swapcontext( &parent, &child );
+    // 连接在当前栈与子栈之前跳转多次
+    for (int i = 0; i < 900; i ++) {
+        printf("Parent: Switch to child2 %d\n", i);
+        swapcontext( &parent, &child );
+    }
 
     GC_free( child.uc_stack.ss_sp );
     GC_gcollect();
