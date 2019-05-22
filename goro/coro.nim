@@ -1,6 +1,7 @@
 {.compile:"coro.c"}
 {.compile:"corowp.c"}
-{.passc:"-DCORO_PTHREAD".}
+{.passc:"-D_GNU_SOURCE".}
+{.passc:"-DCORO_UCONTEXT".}
 {.passc:"-DHAVE_UCONTEXT_H".}
 {.passc:"-DHAVE_SETJMP_H".}
 {.passc:"-DHAVE_SIGALTSTACK".}

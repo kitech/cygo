@@ -12,8 +12,9 @@ all:
 	gcc ${CFLAGS} -o hook.o -c ../goro/hook.c
 	gcc ${CFLAGS} -o hookcb.o -c ../goro/hookcb.c
 	gcc ${CFLAGS} -o noro.o -c noro.c
+	gcc ${CFLAGS} -o noro_util.o -c noro_util.c
 	gcc ${CFLAGS} -o main.o -c main.c
-	gcc -o noro main.o noro.o hookcb.o hook.o corowp.o coro.o ${LDFLAGS}
+	gcc -o noro main.o noro.o noro_util.o hookcb.o hook.o corowp.o coro.o ${LDFLAGS}
 
 clean:
 	rm -f noro *.o

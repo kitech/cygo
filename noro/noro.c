@@ -74,12 +74,13 @@ extern void corowp_stack_free(coro_stack* stack);
 extern int gettid();
 
 static noro* gnr__ = 0;
+static void(*noro_thread_createcb)(void*arg) = 0;
 HashTableConf* noro_dft_htconf();
 int noro_nxtid(noro*nr);
 
 
 goroutine* noro_goroutine_new(int id, coro_func fn, void* arg) {
-    goroutine* gr = (goroutine*)malloc(sizeof(goroutine));
+    goroutine* gr = (goroutine*)calloc(1, sizeof(goroutine));
     gr->id = id;
     gr->fnproc = fn;
     gr->arg = arg;
@@ -140,7 +141,7 @@ void noro_goroutine_run(goroutine* gr) {
 }
 
 machine* noro_machine_new(int id) {
-    machine* mc = (machine*)malloc(sizeof(machine));
+    machine* mc = (machine*)calloc(1, sizeof(machine));
     mc->id = id;
     linfo("htconf=%o\n", noro_dft_htconf());
     hashtable_new_conf(noro_dft_htconf(), &mc->ngrs);
@@ -197,7 +198,9 @@ void noro_post(coro_func fn, void*arg) {
         return;
     }
     hashtable_add(mc->ngrs, (void*)(uintptr_t)id, gr);
+    linfo("posted %p %p %d\n", fn, arg, hashtable_size(mc->ngrs));
     pthread_cond_signal(&mc->pkcd);
+    linfo("posted %p %p\n", fn, arg);
 }
 
 void noro_processor_setname(int id) {
@@ -292,6 +295,9 @@ void* noro_processor(void*arg) {
     GC_get_stack_base(&mc->stksb);
     GC_register_my_thread(&mc->stksb);
     mc->gchandle = GC_get_my_stackbottom(&mc->stksb);
+    if (noro_thread_createcb != 0) {
+        noro_thread_createcb((void*)mc->id);
+    }
 
     linfo("%d %d\n", mc->id, gettid());
     noro_processor_setname(mc->id);
@@ -368,7 +374,7 @@ noro* noro_new() {
     // linfo("gcfreq=%d\n", GC_get_full_freq()); // 19
     // GC_set_full_freq(5);
 
-    noro* nr = (noro*)malloc(sizeof(noro));
+    noro* nr = (noro*)calloc(1, sizeof(noro));
     hashtable_conf_init(&nr->htconf);
     nr->htconf.key_length = sizeof(void*);
     nr->htconf.hash = hashtable_hash_ptr;
@@ -384,7 +390,7 @@ noro* noro_new() {
 // 开启的总线程数除了以下，还有libgc的线程（3个？）
 void noro_init(noro* nr) {
     for (int i = 5; i > 0; i --) {
-        pthread_t* t = (pthread_t*)malloc(sizeof(pthread_t));
+        pthread_t* t = (pthread_t*)calloc(1, sizeof(pthread_t));
         hashtable_add(nr->mths, (void*)(uintptr_t)i, t);
         machine* mc = noro_machine_new(i);
         hashtable_add(nr->mcs, (void*)(uintptr_t)i, mc);
@@ -397,13 +403,29 @@ void noro_init(noro* nr) {
         }
     }
 }
-void noro_free(noro* lnr) {
+void noro_destroy(noro* lnr) {
     lnr = 0;
     gnr__ = 0;
 }
 void noro_wait_init_done(noro* nr) {
+    linfo("noroinited? %d\n", nr->noroinited);
     if (nr->noroinited) {
         return;
     }
     pthread_cond_wait(&nr->noroinitcd, &nr->noroinitmu);
+}
+
+noro* noro_init_and_wait_done() {
+    noro* nr = noro_new();
+    noro_init(nr);
+    linfo("wait signal...%d\n", 0);
+    noro_wait_init_done(nr);
+    linfo("wait signal done %d\n", 0);
+    return nr;
+}
+
+void* noro_set_thread_createcb(void(*fn)(void*arg), void* arg) {
+    void(*oldfn)(void*arg) = noro_thread_createcb;
+    noro_thread_createcb = fn;
+    return oldfn;
 }

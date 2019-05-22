@@ -9,6 +9,7 @@
 #include <collectc/array.h>
 #include "noro.h"
 #include "norogc.h"
+#include "noro_util.h"
 
 #define HKDEBUG 1
 #define linfo(fmt, ...)                                                 \
@@ -31,19 +32,6 @@ int noro_epoll_create() {
 int noro_epoll_wait(int epfd, struct epoll_event *events,
                      int maxevents, int timeout) {
     return epoll_wait_f(epfd, events, maxevents, timeout);
-}
-
-#include <unistd.h>
-#include <sys/syscall.h>
-
-pid_t gettid() {
-#ifdef SYS_gettid
-    pid_t tid = syscall(SYS_gettid);
-    return tid;
-#else
-#error "SYS_gettid unavailable on this system"
-    return 0;
-#endif
 }
 
 void hello(void*arg) {
