@@ -6,3 +6,5 @@ gr0:
 gr1:
 	nim --threads:on --gc:boehm  --listcmd c goro1.nim
 
+# some tricks
+# gdb: handle SIGXCPU SIG33 SIG35 SIGPWR nostop noprint

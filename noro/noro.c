@@ -44,7 +44,7 @@ typedef struct machine {
     int id;
     HashTable* ngrs; // id => goroutine* 新任务，未分配栈
     HashTable* grs;  // # grid => goroutine*
-    goroutine* gr;   // 当前在执行的
+    goroutine* curgr;   // 当前在执行的, 这好像得用栈结构吗？(应该不需要，goroutines之间是并列关系)
     pthread_mutex_t pkmu; // pack lock
     pthread_cond_t pkcd;
     bool parking;
@@ -78,7 +78,11 @@ static void(*noro_thread_createcb)(void*arg) = 0;
 HashTableConf* noro_dft_htconf();
 int noro_nxtid(noro*nr);
 
+// 前置声明一些函数
+machine* noro_machine_get(int id);
+void noro_machine_grfree(machine* mc, int id);
 
+/////
 goroutine* noro_goroutine_new(int id, coro_func fn, void* arg) {
     goroutine* gr = (goroutine*)calloc(1, sizeof(goroutine));
     gr->id = id;
@@ -98,47 +102,85 @@ void noro_goroutine_new2(goroutine*gr) {
     // 这一句会让fnproc直接执行，但是可能需要的是创建与执行分开。原来是针对-DCORO_PTHREAD
     // corowp_create(&gr->coctx, gr->fnproc, gr->arg, gr->stack.sptr, dftstksz);
 }
+void noro_goroutine_destroy(goroutine* gr) {
+    assert(gr->state != executing);
+    int grid = gr->id;
+    int mcid = gr->mcid;
+    size_t ssze = gr->stack.ssze; // save temp value
 
+    gr->state = nostack;
+    if (gr->stack.sptr != 0) {
+        GC_FREE(gr->stack.sptr);
+    }
+    free(gr); // malloc/calloc分配的不能用GC_FREE()释放
+    ssze += sizeof(goroutine);
+
+    linfo("gr %d on %d, freed %d, %d\n", grid, mcid, ssze, sizeof(goroutine));
+}
 
 // 恢复到线程原始的栈
-void* setbottom0(void*arg) {
+void* noro_gc_setbottom0(void*arg) {
     goroutine* gr = (goroutine*)arg;
     GC_set_stackbottom(gr->gchandle, gr->stksb);
     // GC_stackbottom = sb2.bottom;
     return 0;
 }
 // coroutine动态栈
-void* setbottom1(void*arg) {
+void* noro_gc_setbottom1(void*arg) {
     goroutine* gr = (goroutine*)arg;
 
     GC_set_stackbottom(gr->gchandle, &gr->mystksb);
     // GC_stackbottom = sb1.bottom;
     return 0;
 }
-
+// 可能不需要
+coro_context* noro_goroutine_getfrom(goroutine* gr) {
+    return 0;
+}
+coro_context* noro_goroutine_getlast(goroutine* gr) {
+    return 0;
+}
 void noro_goroutine_forward(void* arg) {
     goroutine* gr = (goroutine*)arg;
-    GC_call_with_alloc_lock(setbottom1, gr);
+    GC_call_with_alloc_lock(noro_gc_setbottom1, gr);
 
     gr->fnproc(gr->arg);
+    gr->state = finished;
+    linfo("coro end??? %d\n", 1);
+    // TODO coro 结束，回收coro栈
+    // 好像应该在外层处理
 
-    GC_call_with_alloc_lock(setbottom0, gr);
-    // 这个跳回ctx应该是不对的
+    GC_call_with_alloc_lock(noro_gc_setbottom0, gr);
+
+    // 这个跳回ctx应该是不对的，有可能要跳到其他的gr而不是默认gr？
     corowp_transfer(&gr->coctx, &gr->coctx0); // 这句要写在函数fnproc退出之前？
 }
+// TODO 有时候它不一定是从ctx0跳转，或者是跳转到ctx0。这几个函数都是 noro_goroutine_run/resume,suspend
+// 一定是从ctx0跳过来的，因为所有的goroutines是由调度器发起 run/resume/suspend，而不是其中某一个goroutine发起
 void noro_goroutine_run(goroutine* gr) {
 
     gr->state = executing;
     // 对-DCORO_PTHREAD来说，这句是真正开始执行
     corowp_create(&gr->coctx, noro_goroutine_forward, gr, gr->stack.sptr, gr->stack.ssze);
+    machine* mc = noro_machine_get(gr->mcid);
+    goroutine* curgr = mc->curgr;
+    mc->curgr = gr;
+    coro_context* curcoctx = curgr == 0? &gr->coctx0 : &curgr->coctx; // 暂时无用
 
     // 对-DCORO_UCONTEXT/-DCORO_ASM等来说，这句是真正开始执行
     corowp_transfer(&gr->coctx0, &gr->coctx);
     // corowp_transfer(&gr->coctx, &gr->coctx0); // 这句要写在函数fnproc退出之前？
-    gr->state = finished;
-    linfo("coro end??? %d\n", 1);
-    // TODO coro 结束，回收coro栈
 }
+void noro_goroutine_resume(goroutine* gr) {
+    gr->state = executing;
+    // 对-DCORO_UCONTEXT/-DCORO_ASM等来说，这句是真正开始执行
+    corowp_transfer(&gr->coctx0, &gr->coctx);
+}
+void noro_goroutine_suspend(goroutine* gr) {
+    gr->state = waiting;
+    corowp_transfer(&gr->coctx0, &gr->coctx);
+}
+
 
 machine* noro_machine_new(int id) {
     machine* mc = (machine*)calloc(1, sizeof(machine));
@@ -153,6 +195,7 @@ machine* noro_machine_get(int id) {
     hashtable_get(gnr__->mcs, (void*)(uintptr_t)id, (void**)&mc);
     linfo("get mc %d=%p\n", id, mc);
     if (mc != 0) {
+        // FIXME
         if (mc->id != id) {
             linfo("get mc %d=%p, found=%d, size=%d\n", id, mc, mc->id, hashtable_size(gnr__->mcs));
 
@@ -160,7 +203,7 @@ machine* noro_machine_get(int id) {
             hashtable_get(gnr__->mcs, (void*)(uintptr_t)id, (void**)&mc2);
             linfo("get mc %d=%p found=%d\n", id, mc2, mc2->id);
         }
-        // assert(mc->id == id);
+        assert(mc->id == id);
     }
     return mc;
 }
@@ -172,6 +215,11 @@ goroutine* noro_machine_grdel(machine* mc, int id) {
     hashtable_remove(mc->grs, (void*)(uintptr_t)id, (void**)&gr);
     assert(gr != 0);
     return gr;
+}
+void noro_machine_grfree(machine* mc, int id) {
+    goroutine* gr = noro_machine_grdel(mc, id);
+    assert(gr->id == id);
+    noro_goroutine_destroy(gr);
 }
 void noro_machine_signal(machine* mc) {
     pthread_cond_signal(&mc->pkcd);
@@ -194,13 +242,12 @@ void noro_post(coro_func fn, void*arg) {
     machine* mc = noro_machine_get(1);
     linfo("mc=%p, %d %p, %d\n", mc, mc->id, mc->ngrs, hashtable_size(mc->ngrs));
     if (mc != 0 && mc->id != 1) {
+        // FIXME
         linfo("nothing mc=%p, %d %p, %d\n", mc, mc->id, mc->ngrs, hashtable_size(mc->ngrs));
         return;
     }
     hashtable_add(mc->ngrs, (void*)(uintptr_t)id, gr);
-    linfo("posted %p %p %d\n", fn, arg, hashtable_size(mc->ngrs));
     pthread_cond_signal(&mc->pkcd);
-    linfo("posted %p %p\n", fn, arg);
 }
 
 void noro_processor_setname(int id) {
@@ -331,6 +378,10 @@ void* noro_processor(void*arg) {
             rungr->gchandle = mc->gchandle;
             rungr->mcid = mc->id;
             noro_goroutine_run(rungr);
+            if (rungr->state == finished) {
+                linfo("finished gr %d\n", rungr->id);
+                noro_machine_grfree(mc0, rungr->id);
+            }
         } else {
             mc->parking = true;
             linfo("no task, parking... %d\n", mc->id);
