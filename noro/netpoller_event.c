@@ -80,18 +80,23 @@ void netpoller_evwatcher_cb(evutil_socket_t fd, short events, void* arg) {
 
     switch (d->evtyp) {
     case EV_TIMER:
-        evtimer_del(d->evt);
+        // evtimer_del(d->evt);
         break;
     case EV_IO:
-        event_del(d->evt);
+        // event_del(d->evt);
         break;
     default:
         assert(1==2);
     }
 
-    noro_processor_resume_some(d->data);
+    // if event_del then event_free, it crash
+    // if direct event_free, it ok.
+    // because non-persist event already run event_del by loop itself
+
+    void* dd = d->data;
+    event_free(d->evt);
     evdata_free(d);
-    // event_free(d->evt);
+    noro_processor_resume_some(dd);
 }
 
 static
