@@ -9,6 +9,7 @@
 #include <arpa/inet.h>
 #include <netdb.h>
 #include <assert.h>
+#include <errno.h>
 #include <stdarg.h>
 #include <poll.h>
 #if defined(LIBGO_SYS_Linux)
@@ -98,7 +99,7 @@ int pipe2(int pipefd[2], int flags)
 int socket(int domain, int type, int protocol)
 {
     if (!socket_f) initHook();
-    printf("socket_f=%p\n",socket_f);
+    // printf("socket_f=%p\n",socket_f);
 
     int sock = socket_f(domain, type, protocol);
     if (sock >= 0) {
@@ -124,7 +125,17 @@ int socketpair(int domain, int type, int protocol, int sv[2])
 int connect(int fd, const struct sockaddr *addr, socklen_t addrlen)
 {
     if (!connect_f) initHook();
-    linfo("%d\n", fd);
+    // linfo("%d\n", fd);
+    for (;;) {
+        int rv = connect_f(fd, addr, addrlen);
+        if (rv < 0 ) {
+            linfo("%d %d %d\n", fd, rv, errno);
+            noro_processor_yield(fd);
+            continue;
+        }
+        return rv;
+    }
+    return 0;
 }
 
 int accept(int sockfd, struct sockaddr *addr, socklen_t *addrlen)

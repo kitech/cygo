@@ -115,7 +115,7 @@ void noro_goroutine_destroy(goroutine* gr) {
     free(gr); // malloc/calloc分配的不能用GC_FREE()释放
     ssze += sizeof(goroutine);
 
-    linfo("gr %d on %d, freed %d, %d\n", grid, mcid, ssze, sizeof(goroutine));
+    // linfo("gr %d on %d, freed %d, %d\n", grid, mcid, ssze, sizeof(goroutine));
 }
 
 // 恢复到线程原始的栈
@@ -146,7 +146,7 @@ void noro_goroutine_forward(void* arg) {
 
     gr->fnproc(gr->arg);
     gr->state = finished;
-    linfo("coro end??? %d\n", 1);
+    // linfo("coro end??? %d\n", 1);
     // TODO coro 结束，回收coro栈
     // 好像应该在外层处理
 
@@ -178,7 +178,7 @@ void noro_goroutine_resume(goroutine* gr) {
 }
 void noro_goroutine_suspend(goroutine* gr) {
     gr->state = waiting;
-    corowp_transfer(&gr->coctx0, &gr->coctx);
+    corowp_transfer(&gr->coctx, &gr->coctx0);
 }
 
 
@@ -193,7 +193,7 @@ machine* noro_machine_new(int id) {
 machine* noro_machine_get(int id) {
     machine* mc = 0;
     hashtable_get(gnr__->mcs, (void*)(uintptr_t)id, (void**)&mc);
-    linfo("get mc %d=%p\n", id, mc);
+    // linfo("get mc %d=%p\n", id, mc);
     if (mc != 0) {
         // FIXME
         if (mc->id != id) {
@@ -207,8 +207,13 @@ machine* noro_machine_get(int id) {
     }
     return mc;
 }
+
 void noro_machine_gradd(machine* mc, goroutine* gr) {
     hashtable_add(mc->grs, (void*)(uintptr_t)gr->id, gr);
+}
+goroutine* noro_machine_grget(machine* mc, int id) {
+    goroutine* gr = 0;
+    hashtable_get(mc->grs, (void*)(uintptr_t)id, (void**)&gr);
 }
 goroutine* noro_machine_grdel(machine* mc, int id) {
     goroutine* gr = 0;
@@ -229,9 +234,10 @@ static __thread int gcurmc__ = 0; // thread local
 static __thread int gcurgr__ = 0; // thread local
 goroutine* noro_goroutine_getcur() {
     int grid = gcurgr__;
-    machine* mc1 = noro_machine_get(1);
+    int mcid = gcurmc__;
+    machine* mc1 = noro_machine_get(mcid);
     goroutine* gr = 0;
-    hashtable_get(mc1->grs, (void*)(uintptr_t)grid, (void**)gr);
+    hashtable_get(mc1->grs, (void*)(uintptr_t)grid, (void**)&gr);
     assert(gr != 0);
     return gr;
 }
@@ -240,7 +246,7 @@ void noro_post(coro_func fn, void*arg) {
     int id = noro_nxtid(gnr__);
     goroutine* gr = noro_goroutine_new(id, fn, arg);
     machine* mc = noro_machine_get(1);
-    linfo("mc=%p, %d %p, %d\n", mc, mc->id, mc->ngrs, hashtable_size(mc->ngrs));
+    // linfo("mc=%p, %d %p, %d\n", mc, mc->id, mc->ngrs, hashtable_size(mc->ngrs));
     if (mc != 0 && mc->id != 1) {
         // FIXME
         linfo("nothing mc=%p, %d %p, %d\n", mc, mc->id, mc->ngrs, hashtable_size(mc->ngrs));
@@ -267,7 +273,7 @@ void* noro_processor_netpoller(void*arg) {
 
 void* noro_processor0(void*arg) {
     machine* mc = (machine*)arg;
-    linfo("%d %d\n", mc->id, gettid());
+    // linfo("%d %d\n", mc->id, gettid());
     noro_processor_setname(mc->id);
     gnr__->noroinited = true;
     pthread_cond_signal(&gnr__->noroinitcd);
@@ -281,7 +287,7 @@ void* noro_processor0(void*arg) {
             newg = hashtable_size(mc->ngrs);
         }
 
-        linfo("newgr %d\n", newg);
+        // linfo("newgr %d\n", newg);
         Array* arr1 = 0;
         hashtable_get_keys(mc->ngrs, &arr1);
 
@@ -290,7 +296,7 @@ void* noro_processor0(void*arg) {
             goroutine* gr = 0;
             hashtable_get(mc->ngrs, key, (void**)&gr); assert(gr != 0);
             noro_goroutine_new2(gr);
-            linfo("process %d, %d\n", gr->id, dftstksz);
+            // linfo("process %d, %d\n", gr->id, dftstksz);
             hashtable_remove(mc->ngrs, key, 0);
             noro_machine_gradd(mc, gr);
         }
@@ -313,10 +319,10 @@ void* noro_processor0(void*arg) {
                 void* key = array_peek_at(arr2, j);
                 if ((uintptr_t)key <= 2) continue;
 
-                linfo("checking machine %d/%d %d\n", j, array_size(arr2), key);
+                // linfo("checking machine %d/%d %d\n", j, array_size(arr2), key);
                 hashtable_get(gnr__->mcs, key, (void**)&mct); assert(mct != 0);
                 if (mct->parking) {
-                    linfo("got a packing machine %d <- %d\n", mct->id, gr->id);
+                    // linfo("got a packing machine %d <- %d\n", mct->id, gr->id);
                     break;
                 }
                 mct = 0;
@@ -346,8 +352,9 @@ void* noro_processor(void*arg) {
         noro_thread_createcb((void*)mc->id);
     }
 
-    linfo("%d %d\n", mc->id, gettid());
+    // linfo("%d %d\n", mc->id, gettid());
     noro_processor_setname(mc->id);
+    gcurmc__ = mc->id;
 
     for (;;) {
         // check global queue
@@ -374,14 +381,16 @@ void* noro_processor(void*arg) {
             }
         }
         if (rungr != 0) {
+            gcurgr__ = rungr->id;
             rungr->stksb = &mc->stksb;
             rungr->gchandle = mc->gchandle;
             rungr->mcid = mc->id;
             noro_goroutine_run(rungr);
             if (rungr->state == finished) {
-                linfo("finished gr %d\n", rungr->id);
+                // linfo("finished gr %d\n", rungr->id);
                 noro_machine_grfree(mc0, rungr->id);
             }
+            gcurgr__ = 0;
         } else {
             mc->parking = true;
             linfo("no task, parking... %d\n", mc->id);
@@ -392,8 +401,10 @@ void* noro_processor(void*arg) {
     }
 }
 
-void coro_processor_yield(int fd) {
-    linfo("yield %d\n", fd);
+void noro_processor_yield(int fd) {
+    linfo("yield %d, mcid=%d, grid=%d\n", fd, gcurmc__, gcurgr__);
+    goroutine* gr = noro_goroutine_getcur();
+    noro_goroutine_suspend(gr);
 }
 
 HashTableConf* noro_dft_htconf() { return &gnr__->htconf; }

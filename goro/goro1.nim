@@ -59,6 +59,8 @@ proc timedoutfn0(fd:AsyncFD):bool =
     return false
 addTimer(1000, false, timedoutfn0)
 
+include "tests/tcpcon0.nim"
+
 if isMainModule:
     umain()
     while true: poll(50000)

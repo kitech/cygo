@@ -36,6 +36,7 @@ typedef struct hookcb {
 
 fdcontext* fdcontext_new(int fd) {
     fdcontext* fdctx = (fdcontext*)malloc(sizeof(fdcontext));
+    fdctx->fd = fd;
     return fdctx;
 }
 
@@ -50,10 +51,11 @@ int fdcontext_set_nonblocking(fdcontext*fdctx, bool isNonBlocking) {
     int fd = fdctx->fd;
     int flags = fcntl_f(fd, F_GETFL, 0);
     bool old = flags & O_NONBLOCK;
-    if (isNonBlocking == old) return old;
+    if (isNonBlocking == old)  return old;
 
-    return fcntl_f(fd, F_SETFL,
+    int rv = fcntl_f(fd, F_SETFL,
             isNonBlocking ? (flags | O_NONBLOCK) : (flags & ~O_NONBLOCK));
+    return rv;
 }
 bool fdcontext_is_socket(fdcontext*fdctx) {return fdctx->fdty == FDISSOCKET; }
 bool fdcontext_is_tcpsocket(fdcontext*fdctx) {
@@ -97,7 +99,7 @@ void hookcb_oncreate(int fd, int fdty, bool isNonBlocking, int domain, int sockt
     if (hkcb == 0) return ;
     if (!fd_is_nonblocking(fd)) {
         // set nonblocking???
-        linfo("fd is blocking %d\n", fd);
+        linfo("fd is blocking %d, nb=%d\n", fd, fd_is_nonblocking(fd));
     }
 
     fdcontext* fdctx = fdcontext_new(fd);
@@ -107,6 +109,10 @@ void hookcb_oncreate(int fd, int fdty, bool isNonBlocking, int domain, int sockt
     fdctx->sockty = sockty;
     fdctx->protocol = protocol;
 
+    if (!fd_is_nonblocking(fd)) {
+        int rv = fdcontext_set_nonblocking(fdctx, true);
+        assert(fd_is_nonblocking(fd) == true);
+    }
     hashtable_add(hkcb->fdctxs, (void*)(uintptr_t)fd, (void*)fdctx);
 }
 
