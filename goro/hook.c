@@ -68,7 +68,8 @@ epoll_wait_t epoll_wait_f = NULL;
     do { if (HKDEBUG) fprintf(stderr, "%s:%d %s: ", __FILE__, __LINE__, __FUNCTION__); } while (0); \
     do { if (HKDEBUG) fprintf(stderr, fmt, __VA_ARGS__); } while (0) ;
 
-#include "hookcb.h"
+// #include "hookcb.h"
+#include "noropriv.h"
 
 int pipe(int pipefd[2])
 {
@@ -126,13 +127,15 @@ int connect(int fd, const struct sockaddr *addr, socklen_t addrlen)
 {
     if (!connect_f) initHook();
     // linfo("%d\n", fd);
-    for (;;) {
+    time_t btime = time(0);
+    for (int i = 0;; i++) {
         int rv = connect_f(fd, addr, addrlen);
         if (rv < 0 ) {
-            linfo("%d %d %d\n", fd, rv, errno);
-            noro_processor_yield(fd);
+            linfo("%d %d %d %d\n", fd, rv, errno, i);
+            noro_processor_yield(fd, YIELD_TYPE_CONNECT);
             continue;
         }
+        // linfo("connect ok %d %d, %d, %d\n", fd, errno, time(0)-btime, i);
         return rv;
     }
     return 0;
@@ -299,8 +302,18 @@ int usleep(useconds_t usec)
     if (!usleep_f) initHook();
     // linfo("%d\n", usec);
 
+    time_t btime = time(0);
     {
+        linfo("%d\n", usec);
+        noro_processor_yield(usec, YIELD_TYPE_USLEEP);
+        linfo("%d, %d\n", usec, time(0)-btime);
+        return 0;
+    }
+
+    {
+        linfo("%d\n", usec);
         usleep_f(usec);
+        linfo("%d\n", usec);
     }
     return 0;
 }

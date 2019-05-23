@@ -20,16 +20,16 @@
 
 // project
 #include "yieldtypes.h"
-// #include "hookcb.h"
+#include "hookcb.h"
 #include "noro_util.h"
 #include "norogc.h"
 
 
 // for netpoller.c
 typedef struct netpoller netpoller;
-void netpoller_timer(long ns, void* gr);
-void netpoller_readfd(int fd, void* gr);
-void netpoller_writefd(int fd, void* gr);
+netpoller* netpoller_new();
+void netpoller_loop();
+void netpoller_yieldfd(int fd, int ytype, void* gr);
 
 #endif
 

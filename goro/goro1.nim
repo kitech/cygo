@@ -53,16 +53,21 @@ proc umain() =
     return
 
 proc atrivaltofn(fd:AsyncFD):bool = return false
-addTimer(5000, false, atrivaltofn)
+addTimer(16000, false, atrivaltofn)
 
 proc timedoutfn0(fd:AsyncFD):bool =
-    umain()
+    #umain()
     return false
-#addTimer(1000, false, timedoutfn0)
+addTimer(21000, false, timedoutfn0)
 
-include "tests/tcpcon0.nim"
+#include "tests/tcpcon0.nim"
 
 if isMainModule:
-    umain()
-    while true: poll(50000)
+    # umain()
+    var cnter = 0
+    while true:
+        cnter += 1
+        if cnter mod 15 == 1:
+            include "tests/usleep0.nim"
+        poll(500)
 

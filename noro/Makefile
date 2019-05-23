@@ -3,7 +3,7 @@
 # lin上能用的也UCONTEXT/SJLJ/ASM
 # win上能用的是啥
 # GC_THREADS not GC_PTHREADS
-CFLAGS=-g -O0 -D_GNU_SOURCE -DCORO_STACKALLOC -DCORO_UCONTEXT -DHAVE_UCONTEXT_H -DHAVE_SETJMP_H -DHAVE_SIGALTSTACK -I. -I../goro -I./cltc/include -I./include -DGC_THREADS
+CFLAGS=-g -O0 -std=c11 -D_GNU_SOURCE -DCORO_STACKALLOC -DCORO_UCONTEXT -DHAVE_UCONTEXT_H -DHAVE_SETJMP_H -DHAVE_SIGALTSTACK -I. -I../goro -I./cltc/include -I./include -DGC_THREADS
 LDFLAGS=-L./cltc/lib -lcollectc -lev -L ../bdwgc/.libs -lgc -lpthread -ldl
 
 all:

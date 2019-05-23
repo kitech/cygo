@@ -17,7 +17,6 @@
 typedef struct netpoller {
     struct ev_loop* loop;
     HashTable* watchers; // ev_watcher* => goroutine*
-    // HashTable* fds; // fd => ev_watcher*
 } netpoller;
 
 static netpoller* gnpl__ = 0;
@@ -25,8 +24,10 @@ static netpoller* gnpl__ = 0;
 netpoller* netpoller_new() {
     assert(gnpl__ == 0);
     netpoller* np = (netpoller*)calloc(1, sizeof(netpoller));
-    np->loop = ev_loop_new(0);
+    np->loop = ev_loop_new(ev_recommended_backends ());
     assert(np->loop != 0);
+    ev_set_io_collect_interval(np->loop, 0.1);
+    ev_set_timeout_collect_interval(np->loop, 0.1);
 
     hashtable_new(&np->watchers);
 
@@ -34,11 +35,14 @@ netpoller* netpoller_new() {
     return np;
 }
 
+static double evtmerval(struct ev_loop* loop, double val) {
+    return ev_time()-ev_now(loop)+val;
+}
 static void forevertmer_cb(struct ev_loop* loop, ev_timer* w, int revts) {
-    // linfo("forevertmer timedout %d\n", revts);
-    ev_timer_stop(loop, w);
-    ev_timer_set(w, 5.5, 0);
-    ev_timer_start(loop, w);
+    // linfo("forevertmer timedout %d, active=%d, remaining=%d\n", revts, w->active, ev_timer_remaining(loop, w));
+    // ev_timer_stop(loop, w);
+    // ev_timer_set(w, evtmerval(loop, 3.5), evtmerval(loop, 3.5));
+    // ev_timer_start(loop, w);
 }
 
 void netpoller_loop() {
@@ -47,7 +51,7 @@ void netpoller_loop() {
 
     ev_timer forevertmer;
     forevertmer.data = (void*)567;
-    ev_timer_init(&forevertmer, forevertmer_cb, 5.5, 1);
+    ev_timer_init(&forevertmer, forevertmer_cb, 0.000000001, 1); // 首次执行时间要短
     ev_timer_start(np->loop, &forevertmer);
 
     for (;;) {
@@ -58,12 +62,13 @@ void netpoller_loop() {
 }
 
 typedef struct evdata {
-    int typ;
+    int evtyp;
     void* data;
+    int ytype;
 } evdata;
-evdata* evdata_new(int typ, void* data) {
+evdata* evdata_new(int evtyp, void* data) {
     evdata* d = noro_malloc_st(evdata);
-    d->typ = EV_IO;
+    d->evtyp = evtyp;
     d->data = data;
     return d;
 }
@@ -80,11 +85,12 @@ void netpoller_evwatcher_cb(struct ev_loop* loop, ev_watcher* evw, int revents) 
     ev_io* iow = (ev_io*)evw;
     ev_timer* tmer = (ev_timer*)evw;
 
-    switch (d->typ) {
+    switch (d->evtyp) {
     case EV_IO:
         ev_io_stop(loop, iow);
         break;
     case EV_TIMER:
+        linfo("timer cb %p, active=%d, %f\n", evw, tmer->active, ev_timer_remaining(loop, tmer));
         ev_timer_stop(loop, tmer);
         break;
     default:
@@ -96,42 +102,70 @@ void netpoller_evwatcher_cb(struct ev_loop* loop, ev_watcher* evw, int revents) 
     noro_free(evw);
 }
 
-void netpoller_timer(long ns, void* gr) {
-    netpoller* np = gnpl__;
-    ev_timer* tmer = noro_malloc_st(ev_timer);
-    tmer->data = evdata_new(EV_TIMER, gr);
-    ev_timer_init(tmer, netpoller_evwatcher_cb, ns, 0);
-    ev_timer_start(np->loop, tmer);
-}
-
 static
-void netpoller_addfd(int fd, void* gr) {
-
-}
-static
-void netpoller_delfd(int fd, void* gr) {
-
-}
-static
-ev_watcher* netpoller_watcher_getoradd(int fd, void* gr) {
-    netpoller* np = gnpl__;
-}
-
 void netpoller_readfd(int fd, void* gr) {
     netpoller* np = gnpl__;
     ev_io* iow = noro_malloc_st(ev_io);
     iow->data = evdata_new(EV_IO, gr);
-    ev_io_init(iow, netpoller_evwatcher_cb, fd, EV_READ|EV__IOFDSET);
+    ev_io_init(iow, (void(*)(struct ev_loop*, ev_io*, int))netpoller_evwatcher_cb, fd, EV_READ|EV__IOFDSET);
     ev_io_start(np->loop, iow);
-    linfo("ior started %d w=%p\n", fd, iow);
 }
 
+static
 void netpoller_writefd(int fd, void* gr) {
     netpoller* np = gnpl__;
     ev_io* iow = noro_malloc_st(ev_io);
     iow->data = evdata_new(EV_IO, gr);
-    ev_io_init(iow, netpoller_evwatcher_cb, fd, EV_WRITE|EV__IOFDSET);
+    ev_io_init(iow, (void(*)(struct ev_loop*, ev_io*, int))netpoller_evwatcher_cb, fd, EV_WRITE|EV__IOFDSET);
     ev_io_start(np->loop, iow);
     linfo("iow started %d w=%p\n", fd, iow);
 }
 
+static
+void netpoller_timer(long ns, void* gr) {
+    netpoller* np = gnpl__;
+
+    // ev_suspend(np->loop);
+    // ev_resume(np->loop);
+
+    double after = ((double)ns)/1000000000.0;
+    after = evtmerval(np->loop, after);
+
+    ev_timer* tmer = noro_malloc_st(ev_timer);
+    tmer->data = evdata_new(EV_TIMER, gr);
+    ev_timer_init(tmer, (void(*)(struct ev_loop*, ev_timer*, int))netpoller_evwatcher_cb, after, 0);
+    ev_timer_start(np->loop, tmer);
+}
+
+// when ytype is SLEEP/USLEEP/NANOSLEEP, fd is the nanoseconds
+void netpoller_yieldfd(int fd, int ytype, void* gr) {
+    assert(ytype > YIELD_TYPE_NONE);
+    assert(ytype < YIELD_TYPE_MAX);
+
+    long ns = 0;
+    switch (ytype) {
+    case YIELD_TYPE_SLEEP:
+        ns = (long)fd*1000000000;
+        netpoller_timer(ns, gr);
+    case YIELD_TYPE_USLEEP:
+        ns = (long)fd*1000;
+        netpoller_timer(ns, gr);
+        break;
+    case YIELD_TYPE_NANOSLEEP:
+        ns = fd;
+        netpoller_timer(ns, gr);
+        break;
+    case YIELD_TYPE_CONNECT: case YIELD_TYPE_WRITE: case YIELD_TYPE_WRITEV:
+    case YIELD_TYPE_SEND: case YIELD_TYPE_SENDTO: case YIELD_TYPE_SENDMSG:
+        netpoller_writefd(fd, gr);
+        break;
+    default:
+        netpoller_readfd(fd, gr);
+    }
+
+    switch (ytype) {
+    case YIELD_TYPE_SLEEP: case YIELD_TYPE_USLEEP: case YIELD_TYPE_NANOSLEEP:
+        ev_now_update(gnpl__->loop);
+        ev_break(gnpl__->loop, EVBREAK_CANCEL);
+    }
+}

@@ -35,6 +35,7 @@ typedef struct goroutine {
     coro_context coctx;
     coro_context coctx0;
     grstate state;
+    bool isresume;
     int pkstate;
     struct GC_stack_base* stksb; // machine's
     void* gchandle;
@@ -162,8 +163,12 @@ void noro_goroutine_forward(void* arg) {
 void noro_goroutine_run(goroutine* gr) {
 
     gr->state = executing;
-    // 对-DCORO_PTHREAD来说，这句是真正开始执行
-    corowp_create(&gr->coctx, noro_goroutine_forward, gr, gr->stack.sptr, gr->stack.ssze);
+    if (!gr->isresume) {
+        gr->isresume = true;
+        // 对-DCORO_PTHREAD来说，这句是真正开始执行
+        corowp_create(&gr->coctx, noro_goroutine_forward, gr, gr->stack.sptr, gr->stack.ssze);
+    }
+
     machine* mc = noro_machine_get(gr->mcid);
     goroutine* curgr = mc->curgr;
     mc->curgr = gr;
@@ -175,9 +180,16 @@ void noro_goroutine_run(goroutine* gr) {
 }
 // 由于需要考虑线程的问题，不能直接在netpoller线程调用
 void noro_goroutine_resume(goroutine* gr) {
+    assert(gr->state != executing);
     gr->state = executing;
     // 对-DCORO_UCONTEXT/-DCORO_ASM等来说，这句是真正开始执行
     corowp_transfer(&gr->coctx0, &gr->coctx);
+}
+void noro_goroutine_resume_cross_thread(goroutine* gr) {
+    assert(gr->state != runnable);
+    assert(gr->state != executing);
+    gr->state = runnable;
+    noro_machine_signal(noro_machine_get(gr->mcid));
 }
 void noro_goroutine_suspend(goroutine* gr) {
     gr->state = waiting;
@@ -351,13 +363,52 @@ void* noro_processor0(void*arg) {
         }
     }
 }
+
+// schedue functions
+// prepare new task
+static
+goroutine* noro_sched_get_ready_one(machine*mc) {
+    Array* arr = 0;
+    hashtable_get_keys(mc->grs, &arr);
+    goroutine* rungr = 0;
+    for (int i = 0; arr != 0 && i < array_size(arr); i ++) {
+        goroutine* gr = 0;
+        void* key = 0;
+        array_get_at(arr, i, &key); assert(key != 0);
+        hashtable_get(mc->grs, key, (void**)&gr); assert(gr != 0);
+        if (gr->state == runnable) {
+            linfo("found a runnable job %d on %d\n", (uintptr_t)key, mc->id);
+            rungr = gr;
+            break;
+        }
+    }
+    if (arr != 0) {
+        array_destroy(arr);
+    }
+    return rungr;
+}
+static
+void noro_sched_run_one(machine* mc, goroutine* rungr) {
+    gcurgr__ = rungr->id;
+    rungr->stksb = &mc->stksb;
+    rungr->gchandle = mc->gchandle;
+    rungr->mcid = mc->id;
+    noro_goroutine_run(rungr);
+    gcurgr__ = 0;
+    if (rungr->state == finished) {
+        // linfo("finished gr %d\n", rungr->id);
+        noro_machine_grfree(mc, rungr->id);
+    }else{
+        linfo("break from gr %d, state=%d\n", rungr->id, rungr->state);
+    }
+}
 void* noro_processor(void*arg) {
     machine* mc = (machine*)arg;
     GC_get_stack_base(&mc->stksb);
     GC_register_my_thread(&mc->stksb);
     mc->gchandle = GC_get_my_stackbottom(&mc->stksb);
     if (noro_thread_createcb != 0) {
-        noro_thread_createcb((void*)mc->id);
+        noro_thread_createcb((void*)(uintptr_t)mc->id);
     }
 
     // linfo("%d %d\n", mc->id, gettid());
@@ -366,41 +417,9 @@ void* noro_processor(void*arg) {
 
     for (;;) {
         // check global queue
-        machine* mc0 = noro_machine_get(1);
-        mc0 = mc; // check outselves
-        if (mc0 == 0) {
-            mc->parking = true;
-            pthread_cond_wait(&mc->pkcd, &mc->pkmu);
-            mc->parking = false;
-            continue;
-        }
-        Array* arr = 0;
-        hashtable_get_keys(mc0->grs, &arr);
-        goroutine* rungr = 0;
-        for (int i = 0; arr != 0 && i < array_size(arr); i ++) {
-            goroutine* gr = 0;
-            void* key = 0;
-            array_get_at(arr, i, &key); assert(key != 0);
-            hashtable_get(mc0->grs, key, (void**)&gr); assert(gr != 0);
-            if (gr->state == runnable) {
-                linfo("found a runnable job %d on %d\n", (uintptr_t)key, mc0->id);
-                rungr = gr;
-                break;
-            }
-        }
+        goroutine* rungr = noro_sched_get_ready_one(mc);
         if (rungr != 0) {
-            gcurgr__ = rungr->id;
-            rungr->stksb = &mc->stksb;
-            rungr->gchandle = mc->gchandle;
-            rungr->mcid = mc->id;
-            noro_goroutine_run(rungr);
-            gcurgr__ = 0;
-            if (rungr->state == finished) {
-                // linfo("finished gr %d\n", rungr->id);
-                noro_machine_grfree(mc0, rungr->id);
-            }else{
-                linfo("break from gr %d, state=%d\n", rungr->id, rungr->state);
-            }
+            noro_sched_run_one(mc, rungr);
         } else {
             mc->parking = true;
             linfo("no task, parking... %d\n", mc->id);
@@ -411,15 +430,16 @@ void* noro_processor(void*arg) {
     }
 }
 
-void noro_processor_yield(int fd) {
+void noro_processor_yield(int fd, int ytype) {
     linfo("yield %d, mcid=%d, grid=%d\n", fd, gcurmc__, gcurgr__);
     goroutine* gr = noro_goroutine_getcur();
-    netpoller_writefd(fd, gr);
+    netpoller_yieldfd(fd, ytype, gr);
     noro_goroutine_suspend(gr);
 }
 void noro_processor_resume_some(void* cbdata) {
     goroutine* gr = (goroutine*)cbdata;
     linfo("netpoller notify, %p, id=%d\n", gr, gr->id);
+    noro_goroutine_resume_cross_thread(gr);
 }
 
 HashTableConf* noro_dft_htconf() { return &gnr__->htconf; }
