@@ -12,6 +12,7 @@ include "nimlog.nim"
 include "nimplus.nim"
 include "coro.nim"
 include "hook.nim"
+include "otherc.nim"
 
 {.compile:"../noro/noro.c".}
 {.compile:"../noro/norogc.c".}
@@ -57,7 +58,7 @@ addTimer(5000, false, atrivaltofn)
 proc timedoutfn0(fd:AsyncFD):bool =
     umain()
     return false
-addTimer(1000, false, timedoutfn0)
+#addTimer(1000, false, timedoutfn0)
 
 include "tests/tcpcon0.nim"
 

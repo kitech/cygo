@@ -11,6 +11,7 @@
 #include <collectc/array.h>
 
 #include <noro.h>
+#include <noropriv.h>
 
 #define HKDEBUG 1
 #define linfo(fmt, ...)                                                 \
@@ -62,6 +63,7 @@ typedef struct noro {
     pthread_cond_t noroinitcd;
 
     int eph; // epoll handler
+    netpoller* np;
 } noro;
 
 
@@ -171,6 +173,7 @@ void noro_goroutine_run(goroutine* gr) {
     corowp_transfer(&gr->coctx0, &gr->coctx);
     // corowp_transfer(&gr->coctx, &gr->coctx0); // 这句要写在函数fnproc退出之前？
 }
+// 由于需要考虑线程的问题，不能直接在netpoller线程调用
 void noro_goroutine_resume(goroutine* gr) {
     gr->state = executing;
     // 对-DCORO_UCONTEXT/-DCORO_ASM等来说，这句是真正开始执行
@@ -266,6 +269,11 @@ void* noro_processor_netpoller(void*arg) {
 
     linfo("%d, %d\n", mc->id, gettid());
     noro_processor_setname(mc->id);
+
+    netpoller_loop();
+
+    assert(1==2);
+    // cannot reachable
     for (;;) {
         sleep(600);
     }
@@ -386,11 +394,13 @@ void* noro_processor(void*arg) {
             rungr->gchandle = mc->gchandle;
             rungr->mcid = mc->id;
             noro_goroutine_run(rungr);
+            gcurgr__ = 0;
             if (rungr->state == finished) {
                 // linfo("finished gr %d\n", rungr->id);
                 noro_machine_grfree(mc0, rungr->id);
+            }else{
+                linfo("break from gr %d, state=%d\n", rungr->id, rungr->state);
             }
-            gcurgr__ = 0;
         } else {
             mc->parking = true;
             linfo("no task, parking... %d\n", mc->id);
@@ -404,7 +414,12 @@ void* noro_processor(void*arg) {
 void noro_processor_yield(int fd) {
     linfo("yield %d, mcid=%d, grid=%d\n", fd, gcurmc__, gcurgr__);
     goroutine* gr = noro_goroutine_getcur();
+    netpoller_writefd(fd, gr);
     noro_goroutine_suspend(gr);
+}
+void noro_processor_resume_some(void* cbdata) {
+    goroutine* gr = (goroutine*)cbdata;
+    linfo("netpoller notify, %p, id=%d\n", gr, gr->id);
 }
 
 HashTableConf* noro_dft_htconf() { return &gnr__->htconf; }
@@ -444,6 +459,8 @@ noro* noro_new() {
 
     hashtable_new_conf(&nr->htconf, &nr->mths);
     hashtable_new_conf(&nr->htconf, &nr->mcs);
+
+    nr->np = netpoller_new();
 
     gnr__ = nr;
     return nr;
