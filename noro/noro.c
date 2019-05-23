@@ -431,14 +431,14 @@ void* noro_processor(void*arg) {
 }
 
 void noro_processor_yield(int fd, int ytype) {
-    linfo("yield %d, mcid=%d, grid=%d\n", fd, gcurmc__, gcurgr__);
+    // linfo("yield %d, mcid=%d, grid=%d\n", fd, gcurmc__, gcurgr__);
     goroutine* gr = noro_goroutine_getcur();
     netpoller_yieldfd(fd, ytype, gr);
     noro_goroutine_suspend(gr);
 }
 void noro_processor_resume_some(void* cbdata) {
     goroutine* gr = (goroutine*)cbdata;
-    linfo("netpoller notify, %p, id=%d\n", gr, gr->id);
+    // linfo("netpoller notify, %p, id=%d\n", gr, gr->id);
     noro_goroutine_resume_cross_thread(gr);
 }
 
@@ -470,6 +470,7 @@ noro* noro_new() {
     // linfo("main thread registered: %d\n", GC_thread_is_registered()); // yes
     // linfo("gcfreq=%d\n", GC_get_full_freq()); // 19
     // GC_set_full_freq(5);
+    netpoller_use_threads();
 
     noro* nr = (noro*)calloc(1, sizeof(noro));
     hashtable_conf_init(&nr->htconf);

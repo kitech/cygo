@@ -3,9 +3,11 @@ proc usleep(usec:int) : int {.importc.}
 
 
 proc test_usleep0() =
-    linfo("before usleep", times.now())
-    discard usleep(1000000)
-    linfo("after usleep", times.now())
+    var btime = times.now()
+    linfo("before usleep", btime)
+    #discard usleep(1000000)
+    discard usleep(300000)
+    linfo("after usleep", times.now()-btime)
     return
 
 noro_post(test_usleep0, nil)

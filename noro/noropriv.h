@@ -30,6 +30,7 @@ typedef struct netpoller netpoller;
 netpoller* netpoller_new();
 void netpoller_loop();
 void netpoller_yieldfd(int fd, int ytype, void* gr);
+void netpoller_use_threads();
 
 #endif
 

@@ -60,7 +60,7 @@ proc timedoutfn0(fd:AsyncFD):bool =
     return false
 addTimer(21000, false, timedoutfn0)
 
-#include "tests/tcpcon0.nim"
+include "tests/tcpcon0.nim"
 
 if isMainModule:
     # umain()
@@ -68,6 +68,7 @@ if isMainModule:
     while true:
         cnter += 1
         if cnter mod 15 == 1:
-            include "tests/usleep0.nim"
+            runtest_tcpcon0()
+            #include "tests/usleep0.nim"
         poll(500)
 

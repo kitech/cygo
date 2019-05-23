@@ -8,8 +8,10 @@ var port = Port(443)
 proc connsock() =
     var sock = newSocket()
     linfo("sock", repr(sock.getFd()), now(), ip, port)
+    var btime = times.now()
     sock.connect(ip, port)
-    linfo("connect done", now())
+    linfo("connect done", times.now()-btime)
     return
 
-noro_post(connsock, nil)
+proc runtest_tcpcon0() =
+    noro_post(connsock, nil)

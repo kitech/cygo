@@ -304,16 +304,12 @@ int usleep(useconds_t usec)
 
     time_t btime = time(0);
     {
-        linfo("%d\n", usec);
         noro_processor_yield(usec, YIELD_TYPE_USLEEP);
-        linfo("%d, %d\n", usec, time(0)-btime);
         return 0;
     }
 
     {
-        linfo("%d\n", usec);
         usleep_f(usec);
-        linfo("%d\n", usec);
     }
     return 0;
 }
