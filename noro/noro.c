@@ -433,6 +433,8 @@ void noro_sched_run_one(machine* mc, goroutine* rungr) {
         linfo("break from gr %d, state=%d\n", rungr->id, rungr->state);
     }
 }
+extern void* nimgetframe1();
+extern void* nimsetframe1(void*);
 void* noro_processor(void*arg) {
     machine* mc = (machine*)arg;
     GC_get_stack_base(&mc->stksb);
@@ -446,16 +448,20 @@ void* noro_processor(void*arg) {
     noro_processor_setname(mc->id);
     gcurmc__ = mc->id;
 
+    void*nimfrm = nilptr;
+    nimfrm = nimgetframe1();
     for (;;) {
         // check global queue
         goroutine* rungr = noro_sched_get_ready_one(mc);
         if (rungr != 0) {
             noro_sched_run_one(mc, rungr);
+            // nimsetframe1(nimfrm);
             continue;
         }
         rungr = noro_sched_get_glob_one(mc);
         if (rungr != 0) {
             noro_machine_gradd(mc, rungr);
+            // nimsetframe1(nimfrm);
         } else {
             mc->parking = true;
             linfo("no task, parking... %d\n", mc->id);
@@ -466,15 +472,20 @@ void* noro_processor(void*arg) {
     }
 }
 
-void noro_processor_yield(int fd, int ytype) {
-    // TODO check是否是processor线程
+int noro_processor_yield(int fd, int ytype) {
+    // check是否是processor线程
+    if (gcurmc__ == nilptr) {
+        linfo("maybe not processor thread %d %d\n", fd, ytype)
+            // 应该不是 processor线程
+            return -1;
+    }
     // linfo("yield %d, mcid=%d, grid=%d\n", fd, gcurmc__, gcurgr__);
     goroutine* gr = noro_goroutine_getcur();
     netpoller_yieldfd(fd, ytype, gr);
     noro_goroutine_suspend(gr);
+    return 0;
 }
 void noro_processor_resume_some(void* cbdata) {
-    // TODO check当前是否空闲
     goroutine* gr = (goroutine*)cbdata;
     // linfo("netpoller notify, %p, id=%d\n", gr, gr->id);
     noro_goroutine_resume_cross_thread(gr);
@@ -529,21 +540,49 @@ noro* noro_new() {
     return nr;
 }
 
+typedef struct thrpxyarg {
+    pthread_t* thrh; void*(*osthreadproc)(void*arg); void* arg;
+} thrpxyarg;
+void noro_thread_runnerproc(thrpxyarg* parg) {
+    linfo("heheh %p\n", parg);
+    *parg->thrh = pthread_self();
+    parg->osthreadproc(parg->arg);
+}
+void noro_thread_create_default(thrpxyarg* parg) {
+    linfo("heheh %p\n", parg);
+    pthread_create(parg->thrh, 0, parg->osthreadproc, parg->arg);
+}
+static
+void (*noro_thread_create_proxy)(thrpxyarg* parg) = noro_thread_create_default;
+void noro_set_thread_create_proxy(void (*fnptr)(thrpxyarg*)) {
+    noro_thread_create_proxy = fnptr;
+}
+
 // 开启的总线程数除了以下，还有libgc的线程（3个？）
 void noro_init(noro* nr) {
+    GC_disable();
     for (int i = 5; i > 0; i --) {
         pthread_t* t = (pthread_t*)calloc(1, sizeof(pthread_t));
         hashtable_add(nr->mths, (void*)(uintptr_t)i, t);
         machine* mc = noro_machine_new(i);
         hashtable_add(nr->mcs, (void*)(uintptr_t)i, mc);
+        thrpxyarg* parg = (thrpxyarg*)calloc(1, sizeof(thrpxyarg));
+        parg->thrh = t;
+        parg->arg = mc;
         if (i == 1) {
-            pthread_create(t, 0, noro_processor0, (void*)mc);
+            // pthread_create(t, 0, noro_processor0, (void*)mc);
+            parg->osthreadproc = noro_processor0;
         } else if (i == 2) {
-            pthread_create(t, 0, noro_processor_netpoller, (void*)mc);
+            // pthread_create(t, 0, noro_processor_netpoller, (void*)mc);
+            parg->osthreadproc = noro_processor_netpoller;
         } else {
-            pthread_create(t, 0, noro_processor, (void*)mc);
+            // pthread_create(t, 0, noro_processor, (void*)mc);
+            parg->osthreadproc = noro_processor;
         }
+        assert(parg != nilptr);
+        noro_thread_create_proxy(parg);
     }
+    GC_enable();
 }
 void noro_destroy(noro* lnr) {
     lnr = 0;

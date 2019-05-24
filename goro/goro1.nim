@@ -20,19 +20,36 @@ include "otherc.nim"
 {.passc:"-I . -I ../noro -I ../noro/include -DGC_THREADS".}
 {.passl:"-L ../bdwgc/.libs -lgc -lpthread".}
 
+proc nimgetframe1():pointer {.exportc.} = getFrame()
+proc nimsetframe1(f:pointer) {.exportc.} = setFrame(cast[PFrame](f))
 var noroh : pointer
 proc noro_init_and_wait_done():pointer {.importc.}
 proc noro_post(fnptr:pointer, args:pointer) {.importc.}
 proc noro_set_thread_createcb(fnptr:pointer, args:pointer) {.importc.}
 proc noro_malloc(size:csize) : pointer {.importc.}
+proc noro_set_thread_create_proxy(fnptr:pointer) {.importc.}
+proc noro_thread_runnerproc(parg : pointer) {.importc.}
 
 proc noro_thread_createcbfn(args:pointer) =
     linfo("noro thread created", args)
     #setupForeignThreadGc()
     return
+proc noro_thread_runnerproc_nim(parg : pointer) =
+    linfo("hehooo", repr(parg))
+    noro_thread_runnerproc(parg)
+    return
+
+var nthrhs = newseq[Thread[pointer]](32)
+var nthno = -1
+proc noro_thread_create_proxy(parg : pointer) =
+    # linfo("hehooo", repr(parg))
+    nthno += 1
+    createThread(nthrhs[nthno], noro_thread_runnerproc_nim, parg)
+    return
 
 linfo "wait proc0 ..."
 noro_set_thread_createcb(noro_thread_createcbfn, nil)
+noro_set_thread_create_proxy(cast[pointer](noro_thread_create_proxy))
 noroh = noro_init_and_wait_done()
 linfo "goro inited done"
 
@@ -71,5 +88,6 @@ if isMainModule:
         if cnter mod 6 == 1:
             #runtest_tcpcon0()
             runtest_usleep((cnter/6).int + 1)
+            discard
         poll(500)
 

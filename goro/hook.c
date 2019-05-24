@@ -292,6 +292,11 @@ unsigned int sleep(unsigned int seconds)
     // linfo("%d\n", seconds);
 
     {
+        int rv = noro_processor_yield(seconds, YIELD_TYPE_SLEEP);
+        if (rv == 0) return 0;
+        // -1, goon
+    }
+    {
         sleep_f(seconds);
     }
     return 0;
@@ -304,8 +309,9 @@ int usleep(useconds_t usec)
 
     time_t btime = time(0);
     {
-        noro_processor_yield(usec, YIELD_TYPE_USLEEP);
-        return 0;
+        int rv = noro_processor_yield(usec, YIELD_TYPE_USLEEP);
+        if (rv == 0) return 0;
+        // -1, goon
     }
 
     {
@@ -317,7 +323,13 @@ int usleep(useconds_t usec)
 int nanosleep(const struct timespec *req, struct timespec *rem)
 {
     if (!nanosleep_f) initHook();
-
+    // linfo("%d, %d\n", req->tv_sec, req->tv_nsec);
+    {
+        int ns = req->tv_sec * 1000000000 + req->tv_nsec;
+        int rv = noro_processor_yield(ns, YIELD_TYPE_NANOSLEEP);
+        if (rv == 0) return 0;
+        // -1, goon
+    }
     {
         return nanosleep_f(req, rem);
     }
@@ -481,6 +493,7 @@ ATTRIBUTE_WEAK int __usleep(useconds_t usec)
 
 static int doInitHook()
 {
+    if (connect_f) return 0;
     connect_f = (connect_t)dlsym(RTLD_NEXT, "connect");
     printf("%s:%d, doInitHook %p\n", __FILE__, __LINE__, connect_f);
 
