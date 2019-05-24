@@ -5,5 +5,7 @@
 
 pid_t gettid();
 
+int (array_randcmp) (const void*a, const void*b);
+
 #endif
 

@@ -46,6 +46,7 @@ typedef struct machine {
     int id;
     HashTable* ngrs; // id => goroutine* 新任务，未分配栈
     HashTable* grs;  // # grid => goroutine*
+    pthread_mutex_t grsmu;
     goroutine* curgr;   // 当前在执行的, 这好像得用栈结构吗？(应该不需要，goroutines之间是并列关系)
     pthread_mutex_t pkmu; // pack lock
     pthread_cond_t pkcd;
@@ -224,15 +225,22 @@ machine* noro_machine_get(int id) {
 }
 
 void noro_machine_gradd(machine* mc, goroutine* gr) {
+    pthread_mutex_lock(&mc->grsmu);
     hashtable_add(mc->grs, (void*)(uintptr_t)gr->id, gr);
+    pthread_mutex_unlock(&mc->grsmu);
 }
 goroutine* noro_machine_grget(machine* mc, int id) {
     goroutine* gr = 0;
+    pthread_mutex_lock(&mc->grsmu);
     hashtable_get(mc->grs, (void*)(uintptr_t)id, (void**)&gr);
+    pthread_mutex_unlock(&mc->grsmu);
+    return gr;
 }
 goroutine* noro_machine_grdel(machine* mc, int id) {
     goroutine* gr = 0;
+    pthread_mutex_lock(&mc->grsmu);
     hashtable_remove(mc->grs, (void*)(uintptr_t)id, (void**)&gr);
+    pthread_mutex_unlock(&mc->grsmu);
     assert(gr != 0);
     return gr;
 }
@@ -335,6 +343,7 @@ void* noro_processor0(void*arg) {
             assert(gr != 0);
 
             machine* mct = 0;
+            if (arr2 != nilptr) array_sort(arr2, array_randcmp);
             for (int j = 0; arr2!=0 && j < array_size(arr2); j++) {
                 void* key = array_peek_at(arr2, j);
                 if ((uintptr_t)key <= 2) continue;
@@ -349,6 +358,7 @@ void* noro_processor0(void*arg) {
             }
             if (mct == 0) {
                 // try select random one
+                // 暂时先放在全局队列中吧
             }
             if (mct == 0) {
                 linfo("no enough mc? %d\n", 0);
@@ -361,10 +371,31 @@ void* noro_processor0(void*arg) {
                 noro_machine_signal(mct);
             }
         }
+        if (arr1 != nilptr) array_destroy(arr1);
+        if (arr2 != nilptr) array_destroy(arr2);
     }
 }
 
 // schedue functions
+goroutine* noro_sched_get_glob_one(machine*mc) {
+    Array* arr1 = 0;
+    machine* mc1 = noro_machine_get(1);
+    if (mc1 == 0) return 0;
+
+    hashtable_get_keys(mc1->grs, &arr1);
+    if (arr1 == 0) {
+        return 0;
+    }
+
+    void*key = nilptr;
+    goroutine* gr = 0;
+    array_get_at(arr1, 0, (void**)&key);
+    array_destroy(arr1);
+    if (gr != 0) {
+        noro_machine_grdel(mc1, gr);
+    }
+    return gr;
+}
 // prepare new task
 static
 goroutine* noro_sched_get_ready_one(machine*mc) {
@@ -420,6 +451,11 @@ void* noro_processor(void*arg) {
         goroutine* rungr = noro_sched_get_ready_one(mc);
         if (rungr != 0) {
             noro_sched_run_one(mc, rungr);
+            continue;
+        }
+        rungr = noro_sched_get_glob_one(mc);
+        if (rungr != 0) {
+            noro_machine_gradd(mc, rungr);
         } else {
             mc->parking = true;
             linfo("no task, parking... %d\n", mc->id);
@@ -431,15 +467,20 @@ void* noro_processor(void*arg) {
 }
 
 void noro_processor_yield(int fd, int ytype) {
+    // TODO check是否是processor线程
     // linfo("yield %d, mcid=%d, grid=%d\n", fd, gcurmc__, gcurgr__);
     goroutine* gr = noro_goroutine_getcur();
     netpoller_yieldfd(fd, ytype, gr);
     noro_goroutine_suspend(gr);
 }
 void noro_processor_resume_some(void* cbdata) {
+    // TODO check当前是否空闲
     goroutine* gr = (goroutine*)cbdata;
     // linfo("netpoller notify, %p, id=%d\n", gr, gr->id);
     noro_goroutine_resume_cross_thread(gr);
+}
+void noro_sched() {
+    noro_processor_yield(1000, YIELD_TYPE_NANOSLEEP);
 }
 
 HashTableConf* noro_dft_htconf() { return &gnr__->htconf; }
@@ -461,6 +502,7 @@ noro* noro_new() {
         return gnr__;
     }
 
+    srand(time(0));
     // GC_enable_incremental();
     // GC_set_rate(5);
     // GC_set_all_interior_pointers(1);

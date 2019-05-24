@@ -18,6 +18,8 @@
 #include <collectc/hashtable.h>
 #include <collectc/array.h>
 
+#define nilptr NULL
+
 // project
 #include "yieldtypes.h"
 #include "hookcb.h"

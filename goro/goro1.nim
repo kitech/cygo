@@ -61,14 +61,15 @@ proc timedoutfn0(fd:AsyncFD):bool =
 addTimer(21000, false, timedoutfn0)
 
 include "tests/tcpcon0.nim"
+include "tests/usleep0.nim"
 
 if isMainModule:
     # umain()
     var cnter = 0
     while true:
         cnter += 1
-        if cnter mod 15 == 1:
-            runtest_tcpcon0()
-            #include "tests/usleep0.nim"
+        if cnter mod 6 == 1:
+            #runtest_tcpcon0()
+            runtest_usleep((cnter/6).int + 1)
         poll(500)
 

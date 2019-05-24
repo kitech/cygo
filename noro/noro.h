@@ -15,5 +15,6 @@ noro* noro_init_and_wait_done();
 void* noro_set_thread_createcb(void(*fn)(void*arg), void* arg);
 
 void noro_post(void(*fn)(void*arg), void*arg);
+void noro_sched();
 
 #endif
