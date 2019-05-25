@@ -71,7 +71,8 @@ if isMainModule:
         cnter += 1
         if cnter mod 6 == 1:
             #runtest_tcpcon0()
-            runtest_usleep((cnter/6).int + 1)
+            #runtest_usleep((cnter/6).int + 1)
             discard
+        #if cnter == 3: connsock()
         poll(500)
 

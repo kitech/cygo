@@ -21,6 +21,7 @@
 #define nilptr NULL
 
 // project
+#include "rxilog.h"
 #include "yieldtypes.h"
 #include "hookcb.h"
 #include "noro_util.h"

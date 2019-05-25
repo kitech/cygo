@@ -1,6 +1,7 @@
 
 # 主要用来编译其他的c文件
 
+{.compile:"../noro/rxilog.c".}
 #{.compile:"../noro/netpoller_ev.c".}
 #{.passl:"-lev"}
 {.compile:"../noro/netpoller_event.c".}

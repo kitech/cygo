@@ -467,6 +467,7 @@ void* noro_processor(void*arg) {
     }
 }
 
+bool noro_in_processor() { return gcurmc__ != nilptr; }
 int noro_processor_yield(int fd, int ytype) {
     // check是否是processor线程
     if (gcurmc__ == nilptr) {

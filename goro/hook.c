@@ -78,8 +78,10 @@ int pipe(int pipefd[2])
 
     int rv = pipe_f(pipefd);
     if (rv == 0) {
-        hookcb_oncreate(pipefd[0], FDISPIPE, false, 0,0,0);
-        hookcb_oncreate(pipefd[1], FDISPIPE, false, 0,0,0);
+        if (noro_in_processor()) {
+            hookcb_oncreate(pipefd[0], FDISPIPE, false, 0,0,0);
+            hookcb_oncreate(pipefd[1], FDISPIPE, false, 0,0,0);
+        }
     }
     return rv;
 }
@@ -91,8 +93,10 @@ int pipe2(int pipefd[2], int flags)
 
     int rv = pipe2_f(pipefd, flags);
     if (rv == 0) {
-        hookcb_oncreate(pipefd[0], FDISPIPE, !!(flags&O_NONBLOCK), 0,0,0);
-        hookcb_oncreate(pipefd[1], FDISPIPE, !!(flags&O_NONBLOCK), 0,0,0);
+        if (noro_in_processor()) {
+            hookcb_oncreate(pipefd[0], FDISPIPE, !!(flags&O_NONBLOCK), 0,0,0);
+            hookcb_oncreate(pipefd[1], FDISPIPE, !!(flags&O_NONBLOCK), 0,0,0);
+        }
     }
     return rv;
 }
@@ -104,9 +108,12 @@ int socket(int domain, int type, int protocol)
 
     int sock = socket_f(domain, type, protocol);
     if (sock >= 0) {
-        hookcb_oncreate(sock, FDISSOCKET, false, domain, type, protocol);
+        if (noro_in_processor()) {
+            hookcb_oncreate(sock, FDISSOCKET, false, domain, type, protocol);
+            // linfo("task(%s) hook socket, returns %d.\n", "", sock);
+        }
     }
-    linfo("task(%s) hook socket, returns %d.\n", "", sock);
+
     return sock;
 }
 
@@ -117,8 +124,10 @@ int socketpair(int domain, int type, int protocol, int sv[2])
 
     int rv = socketpair_f(domain, type, protocol, sv);
     if (rv == 0) {
-        hookcb_oncreate(sv[0], FDISSOCKET, false, domain, type, protocol);
-        hookcb_oncreate(sv[1], FDISSOCKET, false, domain, type, protocol);
+        if (noro_in_processor()) {
+            hookcb_oncreate(sv[0], FDISSOCKET, false, domain, type, protocol);
+            hookcb_oncreate(sv[1], FDISSOCKET, false, domain, type, protocol);
+        }
     }
     return rv;
 }

@@ -12,6 +12,7 @@ all:
 	gcc ${CFLAGS} -o hook.o -c ../goro/hook.c
 	gcc ${CFLAGS} -o hookcb.o -c ../goro/hookcb.c
 	gcc ${CFLAGS} -o noro_util.o -c noro_util.c
+	gcc ${CFLAGS} -o rxilog.o -c rxilog.c
 	#gcc ${CFLAGS} -o netpoller_ev.o -c netpoller_ev.c
 	gcc ${CFLAGS} -o netpoller_event.o -c netpoller_event.c
 	gcc ${CFLAGS} -o norogc.o -c norogc.c
