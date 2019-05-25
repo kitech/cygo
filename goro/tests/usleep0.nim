@@ -18,7 +18,7 @@ proc test_usleep1(arg:pointer) =
     for i in 0..50:
         discard usleep(rand(320)*10000)
         linfo("inloop usleep", i, tno)
-    linfo("after usleep", times.now()-btime, tno)
+    linfo("after usleep", times.now()-btime, tno, getFrame()==nil)
     return
 
 #noro_post(test_usleep0, nil)

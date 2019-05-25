@@ -20,11 +20,11 @@ include "otherc.nim"
 {.passc:"-I . -I ../noro -I ../noro/include -DGC_THREADS".}
 {.passl:"-L ../bdwgc/.libs -lgc -lpthread".}
 
-
 var noroh : pointer
+proc noro_set_thread_createcb(fnptr:pointer, args:pointer) {.importc.}
+proc noro_set_frame_funcs(getter, setter : pointer) {.importc.}
 proc noro_init_and_wait_done():pointer {.importc.}
 proc noro_post(fnptr:pointer, args:pointer) {.importc.}
-proc noro_set_thread_createcb(fnptr:pointer, args:pointer) {.importc.}
 proc noro_malloc(size:csize) : pointer {.importc.}
 
 proc noro_thread_createcbfn(args:pointer) =
@@ -34,6 +34,7 @@ proc noro_thread_createcbfn(args:pointer) =
 
 linfo "wait proc0 ..."
 noro_set_thread_createcb(noro_thread_createcbfn, nil)
+noro_set_frame_funcs(cast[pointer](getFrame), cast[pointer](setFrame))
 noroh = noro_init_and_wait_done()
 linfo "goro inited done"
 
@@ -71,8 +72,7 @@ if isMainModule:
         cnter += 1
         if cnter mod 6 == 1:
             #runtest_tcpcon0()
-            #runtest_usleep((cnter/6).int + 1)
+            runtest_usleep((cnter/6).int + 1)
             discard
-        #if cnter == 3: connsock()
         poll(500)
 

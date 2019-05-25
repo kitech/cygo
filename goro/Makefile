@@ -4,7 +4,7 @@ gr0:
 	nim --threads:on --listcmd c goro.nim
 
 gr1:
-	nim --stacktrace:off --threads:on --gc:boehm  --listcmd c goro1.nim
+	nim --stacktrace:on --threads:on --gc:boehm  --listcmd c goro1.nim
 
 # some tricks
 # gdb: handle SIGXCPU SIG33 SIG35 SIGPWR nostop noprint

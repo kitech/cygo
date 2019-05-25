@@ -40,6 +40,8 @@ typedef struct goroutine {
     struct GC_stack_base* stksb; // machine's
     void* gchandle;
     int  mcid;
+    void* savefrm; // upper frame
+    void* myfrm; // my frame when yield
 } goroutine;
 
 typedef struct machine {
@@ -53,6 +55,7 @@ typedef struct machine {
     bool parking;
     struct GC_stack_base stksb;
     void* gchandle;
+    void* savefrm;
 } machine;
 
 typedef struct noro {
@@ -122,6 +125,16 @@ void noro_goroutine_destroy(goroutine* gr) {
     // linfo("gr %d on %d, freed %d, %d\n", grid, mcid, ssze, sizeof(goroutine));
 }
 
+// frame related for some frame based integeration
+static void* noro_get_frame_default() { return nilptr; }
+static void noro_set_frame_default(void*f) {}
+static void*(*noro_get_frame)() = noro_get_frame_default;
+static void(*noro_set_frame)(void*f) = noro_set_frame_default;
+void noro_set_frame_funcs(void*(*getter)(), void(*setter)(void*)) {
+    noro_get_frame = getter;
+    noro_set_frame = setter;
+}
+
 // 恢复到线程原始的栈
 void* noro_gc_setbottom0(void*arg) {
     goroutine* gr = (goroutine*)arg;
@@ -137,13 +150,7 @@ void* noro_gc_setbottom1(void*arg) {
     // GC_stackbottom = sb1.bottom;
     return 0;
 }
-// 可能不需要
-coro_context* noro_goroutine_getfrom(goroutine* gr) {
-    return 0;
-}
-coro_context* noro_goroutine_getlast(goroutine* gr) {
-    return 0;
-}
+
 void noro_goroutine_forward(void* arg) {
     goroutine* gr = (goroutine*)arg;
     GC_call_with_alloc_lock(noro_gc_setbottom1, gr);
@@ -152,24 +159,36 @@ void noro_goroutine_forward(void* arg) {
     gr->state = finished;
     // linfo("coro end??? %d\n", 1);
     // TODO coro 结束，回收coro栈
-    // 好像应该在外层处理
 
+    // 好像应该在外层处理
     GC_call_with_alloc_lock(noro_gc_setbottom0, gr);
 
     // 这个跳回ctx应该是不对的，有可能要跳到其他的gr而不是默认gr？
     corowp_transfer(&gr->coctx, &gr->coctx0); // 这句要写在函数fnproc退出之前？
 }
+
+// 由于需要考虑线程的问题，不能直接在netpoller线程调用
+void noro_goroutine_resume(goroutine* gr) {
+    assert(gr->isresume == true);
+    assert(gr->state != executing);
+    gr->state = executing;
+
+    if (gr->myfrm != nilptr) noro_set_frame(gr->myfrm); // 恢复goroutine的frame
+    GC_call_with_alloc_lock(noro_gc_setbottom1, gr);
+    // 对-DCORO_UCONTEXT/-DCORO_ASM等来说，这句是真正开始执行
+    corowp_transfer(&gr->coctx0, &gr->coctx);
+}
+
 // TODO 有时候它不一定是从ctx0跳转，或者是跳转到ctx0。这几个函数都是 noro_goroutine_run/resume,suspend
 // 一定是从ctx0跳过来的，因为所有的goroutines是由调度器发起 run/resume/suspend，而不是其中某一个goroutine发起
-void noro_goroutine_run(goroutine* gr) {
+void noro_goroutine_run_first(goroutine* gr) {
+    // first run
+    assert(gr->isresume == false);
+    gr->isresume = true;
+    // 对-DCORO_PTHREAD来说，这句是真正开始执行
+    corowp_create(&gr->coctx, noro_goroutine_forward, gr, gr->stack.sptr, gr->stack.ssze);
 
     gr->state = executing;
-    if (!gr->isresume) {
-        gr->isresume = true;
-        // 对-DCORO_PTHREAD来说，这句是真正开始执行
-        corowp_create(&gr->coctx, noro_goroutine_forward, gr, gr->stack.sptr, gr->stack.ssze);
-    }
-
     machine* mc = noro_machine_get(gr->mcid);
     goroutine* curgr = mc->curgr;
     mc->curgr = gr;
@@ -179,13 +198,15 @@ void noro_goroutine_run(goroutine* gr) {
     corowp_transfer(&gr->coctx0, &gr->coctx);
     // corowp_transfer(&gr->coctx, &gr->coctx0); // 这句要写在函数fnproc退出之前？
 }
-// 由于需要考虑线程的问题，不能直接在netpoller线程调用
-void noro_goroutine_resume(goroutine* gr) {
-    assert(gr->state != executing);
-    gr->state = executing;
-    // 对-DCORO_UCONTEXT/-DCORO_ASM等来说，这句是真正开始执行
-    corowp_transfer(&gr->coctx0, &gr->coctx);
+
+void noro_goroutine_run(goroutine* gr) {
+    if (gr->isresume) {
+        noro_goroutine_resume(gr);
+    } else {
+        noro_goroutine_run_first(gr);
+    }
 }
+
 void noro_goroutine_resume_cross_thread(goroutine* gr) {
     assert(gr->state != runnable);
     assert(gr->state != executing);
@@ -193,7 +214,10 @@ void noro_goroutine_resume_cross_thread(goroutine* gr) {
     noro_machine_signal(noro_machine_get(gr->mcid));
 }
 void noro_goroutine_suspend(goroutine* gr) {
+    gr->myfrm = noro_get_frame();
+    noro_set_frame(gr->savefrm);
     gr->state = waiting;
+    GC_call_with_alloc_lock(noro_gc_setbottom0, gr);
     corowp_transfer(&gr->coctx, &gr->coctx0);
 }
 
@@ -424,6 +448,7 @@ void noro_sched_run_one(machine* mc, goroutine* rungr) {
     rungr->stksb = &mc->stksb;
     rungr->gchandle = mc->gchandle;
     rungr->mcid = mc->id;
+    rungr->savefrm = mc->savefrm;
     noro_goroutine_run(rungr);
     gcurgr__ = 0;
     if (rungr->state == finished) {
@@ -447,6 +472,7 @@ void* noro_processor(void*arg) {
     noro_processor_setname(mc->id);
     gcurmc__ = mc->id;
 
+    mc->savefrm = noro_get_frame();
     for (;;) {
         // check global queue
         goroutine* rungr = noro_sched_get_ready_one(mc);
