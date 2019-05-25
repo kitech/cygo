@@ -18,13 +18,14 @@
 #include <collectc/hashtable.h>
 #include <collectc/array.h>
 
-#define nilptr NULL
+#define nilptr ((void*)NULL)
 
 // project
 #include "rxilog.h"
 #include "yieldtypes.h"
 #include "hookcb.h"
 #include "noro_util.h"
+#include "atomic.h"
 #include "norogc.h"
 
 

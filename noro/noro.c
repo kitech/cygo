@@ -277,11 +277,11 @@ void noro_machine_signal(machine* mc) {
     pthread_cond_signal(&mc->pkcd);
 }
 
-static __thread int gcurmc__ = 0; // thread local
-static __thread int gcurgr__ = 0; // thread local
+static __thread int gcurmcid__ = 0; // thread local
+static __thread int gcurgrid__ = 0; // thread local
 goroutine* noro_goroutine_getcur() {
-    int grid = gcurgr__;
-    int mcid = gcurmc__;
+    int grid = gcurgrid__;
+    int mcid = gcurmcid__;
     machine* mc1 = noro_machine_get(mcid);
     goroutine* gr = 0;
     hashtable_get(mc1->grs, (void*)(uintptr_t)grid, (void**)&gr);
@@ -416,7 +416,7 @@ goroutine* noro_sched_get_glob_one(machine*mc) {
     array_get_at(arr1, 0, (void**)&key);
     array_destroy(arr1);
     if (gr != 0) {
-        noro_machine_grdel(mc1, gr);
+        noro_machine_grdel(mc1, gr->id);
     }
     return gr;
 }
@@ -432,7 +432,7 @@ goroutine* noro_sched_get_ready_one(machine*mc) {
         array_get_at(arr, i, &key); assert(key != 0);
         hashtable_get(mc->grs, key, (void**)&gr); assert(gr != 0);
         if (gr->state == runnable) {
-            linfo("found a runnable job %d on %d\n", (uintptr_t)key, mc->id);
+            // linfo("found a runnable job %d on %d\n", (uintptr_t)key, mc->id);
             rungr = gr;
             break;
         }
@@ -444,18 +444,18 @@ goroutine* noro_sched_get_ready_one(machine*mc) {
 }
 static
 void noro_sched_run_one(machine* mc, goroutine* rungr) {
-    gcurgr__ = rungr->id;
+    gcurgrid__ = rungr->id;
     rungr->stksb = &mc->stksb;
     rungr->gchandle = mc->gchandle;
     rungr->mcid = mc->id;
     rungr->savefrm = mc->savefrm;
     noro_goroutine_run(rungr);
-    gcurgr__ = 0;
+    gcurgrid__ = 0;
     if (rungr->state == finished) {
         // linfo("finished gr %d\n", rungr->id);
         noro_machine_grfree(mc, rungr->id);
     }else{
-        linfo("break from gr %d, state=%d\n", rungr->id, rungr->state);
+        // linfo("break from gr %d, state=%d\n", rungr->id, rungr->state);
     }
 }
 
@@ -470,7 +470,7 @@ void* noro_processor(void*arg) {
 
     // linfo("%d %d\n", mc->id, gettid());
     noro_processor_setname(mc->id);
-    gcurmc__ = mc->id;
+    gcurmcid__ = mc->id;
 
     mc->savefrm = noro_get_frame();
     for (;;) {
@@ -485,7 +485,7 @@ void* noro_processor(void*arg) {
             noro_machine_gradd(mc, rungr);
         } else {
             mc->parking = true;
-            linfo("no task, parking... %d\n", mc->id);
+            // linfo("no task, parking... %d\n", mc->id);
             pthread_cond_wait(&mc->pkcd, &mc->pkmu);
             mc->parking = false;
         }
@@ -493,10 +493,10 @@ void* noro_processor(void*arg) {
     }
 }
 
-bool noro_in_processor() { return gcurmc__ != nilptr; }
+bool noro_in_processor() { return gcurmcid__ != 0; }
 int noro_processor_yield(int fd, int ytype) {
     // check是否是processor线程
-    if (gcurmc__ == nilptr) {
+    if (gcurmcid__ == 0) {
         linfo("maybe not processor thread %d %d\n", fd, ytype)
             // 应该不是 processor线程
             return -1;
@@ -528,13 +528,7 @@ int hashtable_cmp_int(const void *key1, const void *key2) {
 void noro_gc_push_other_roots() {
     linfo("push other roots %d\n", gettid());
 }
-noro* noro_get() { return gnr__;}
-noro* noro_new() {
-    if (gnr__) {
-        linfo("wtf...%d\n",1);
-        return gnr__;
-    }
-
+static void noro_init_intern() {
     srand(time(0));
     // GC_enable_incremental();
     // GC_set_rate(5);
@@ -545,7 +539,18 @@ noro* noro_new() {
     // linfo("main thread registered: %d\n", GC_thread_is_registered()); // yes
     // linfo("gcfreq=%d\n", GC_get_full_freq()); // 19
     // GC_set_full_freq(5);
+
+    // log init here
     netpoller_use_threads();
+}
+
+noro* noro_get() { return gnr__;}
+noro* noro_new() {
+    if (gnr__) {
+        linfo("wtf...%d\n",1);
+        return gnr__;
+    }
+    noro_init_intern();
 
     noro* nr = (noro*)calloc(1, sizeof(noro));
     hashtable_conf_init(&nr->htconf);

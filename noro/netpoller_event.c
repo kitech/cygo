@@ -1,6 +1,7 @@
 #include "noropriv.h"
 
 #include <event2/event.h>
+#include <event2/thread.h>
 
 // 由于 hook中没有hook epoll_wait, epoll_create,
 // 所以在这是可以使用libev/libuv。
