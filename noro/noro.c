@@ -260,6 +260,10 @@ static __thread int gcurgrid__ = 0; // thread local
 goroutine* noro_goroutine_getcur() {
     int grid = gcurgrid__;
     int mcid = gcurmcid__;
+    if (mcid == 0) {
+        linfo("Seems not goroutine, main thread %d?", mcid);
+        return 0;
+    }
     machine* mc1 = noro_machine_get(mcid);
     goroutine* gr = 0;
     hashtable_get(mc1->grs, (void*)(uintptr_t)grid, (void**)&gr);

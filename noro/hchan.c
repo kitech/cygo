@@ -18,6 +18,7 @@ typedef struct hchan {
     queue_t* sendq; // goroutine*
     mtx_t rcvqmu;
     mtx_t sndqmu;
+    bool closed;
 } hchan;
 
 hchan* hchan_new(int cap) {
@@ -28,17 +29,44 @@ hchan* hchan_new(int cap) {
     hc->sendq = queue_init(900000);
 }
 
-void hchan_dispose(hchan* hc) {
-    chan_dispose(hc->c);
-    free(hc);
-}
-
 int hchan_close(hchan* hc) {
-    return chan_close(hc->c);
+    if (hc->closed) {
+        return true;
+    }
+    hc->closed = true;
+    mtx_lock(&hc->rcvqmu);
+    while (true) {
+        goroutine* gr = (goroutine*)queue_remove(hc->recvq);
+        if (gr == nilptr) {
+            break;
+        }
+        noro_processor_resume_some(gr);
+    }
+    queue_dispose(hc->recvq);
+    mtx_unlock(&hc->rcvqmu);
+
+    mtx_lock(&hc->sndqmu);
+    while(true) {
+        goroutine* gr = (goroutine*)queue_remove(hc->sendq);
+        if (gr == nilptr) {
+            break;
+        }
+        noro_processor_resume_some(gr);
+    }
+    queue_dispose(hc->sendq);
+    mtx_unlock(&hc->sndqmu);
+
+    chan_dispose(hc->c);
+    hc->c = nilptr;
+    bzero(hc, sizeof(hchan));
+    free(hc);
+    return true;
 }
 int hchan_is_closed(hchan* hc) {
-    return chan_is_closed(hc->c);
+    return hc->closed;
 }
+int hchan_cap(hchan* hc) { return hc->cap; }
+int hchan_len(hchan* hc) { return chan_size(hc->c); }
 
 int hchan_send(hchan* hc, void* data) {
     if (hc->cap == 0) {
@@ -125,6 +153,7 @@ int hchan_recv(hchan* hc, void** pdata) {
             mtx_lock(&hc->rcvqmu);
             queue_add(hc->recvq, mygr);
             mtx_unlock(&hc->rcvqmu);
+            // linfo("chan recv %d\n", mygr->id);
             noro_processor_yield(-1, YIELD_TYPE_CHAN_RECV);
             *pdata = mygr->hcelem;
             mygr->hcelem = nilptr;

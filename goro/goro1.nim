@@ -26,6 +26,13 @@ proc noro_set_frame_funcs(getter, setter : pointer) {.importc.}
 proc noro_init_and_wait_done():pointer {.importc.}
 proc noro_post(fnptr:pointer, args:pointer) {.importc.}
 proc noro_malloc(size:csize) : pointer {.importc.}
+proc hchan_new(cap:int) : pointer {.importc.}
+proc hchan_close(hc:pointer) : bool {.importc.}
+proc hchan_is_closed(hc:pointer) : bool {.importc.}
+proc hchan_send(hc:pointer, data:pointer) : bool {.importc.}
+proc hchan_recv(hc:pointer, data:ptr pointer) : bool {.importc.}
+proc hchan_len(hc:pointer) : int {.importc.}
+proc hchan_cap(hc:pointer) : int {.importc.}
 
 proc noro_thread_createcbfn(args:pointer) =
     linfo("noro thread created", args)
@@ -64,15 +71,20 @@ addTimer(21000, false, timedoutfn0)
 
 include "tests/tcpcon0.nim"
 include "tests/usleep0.nim"
+include "tests/chan0.nim"
+
+test_chan0()
 
 if isMainModule:
     # umain()
     var cnter = 0
     while true:
         cnter += 1
+        if cnter mod 12 == 1: linfo("tickout", cnter)
         if cnter mod 6 == 1:
             #runtest_tcpcon0()
-            runtest_usleep((cnter/6).int + 1)
+            #runtest_usleep((cnter/6).int + 1)
             discard
+
         poll(500)
 
