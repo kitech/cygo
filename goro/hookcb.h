@@ -20,9 +20,5 @@ void hookcb_onclose(int fd) ;
 void hookcb_ondup(int from, int to) ;
 fdcontext* hookcb_get_fdcontext(int fd);
 
-// processor callbacks, impl in noro.c
-extern int noro_processor_yield(int fd, int ytype);
-extern bool noro_in_processor();
-
 #endif
 

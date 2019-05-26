@@ -16,12 +16,13 @@ all:
 	gcc ${CFLAGS} -o atomic.o -c atomic.c
 	gcc ${CFLAGS} -o queue.o -c queue.c
 	gcc ${CFLAGS} -o chan.o -c chan.c
+	gcc ${CFLAGS} -o hchan.o -c hchan.c
 	#gcc ${CFLAGS} -o netpoller_ev.o -c netpoller_ev.c
 	gcc ${CFLAGS} -o netpoller_event.o -c netpoller_event.c
 	gcc ${CFLAGS} -o norogc.o -c norogc.c
 	gcc ${CFLAGS} -o noro.o -c noro.c
 	gcc ${CFLAGS} -o main.o -c main.c
-	gcc -o noro main.o noro.o norogc.o netpoller_event.o chan.o queue.o atomic.o rxilog.o noro_util.o hookcb.o hook.o corowp.o coro.o ${LDFLAGS}
+	gcc -o noro main.o noro.o norogc.o netpoller_event.o hchan.o chan.o queue.o atomic.o rxilog.o noro_util.o hookcb.o hook.o corowp.o coro.o ${LDFLAGS}
 
 clean:
 	rm -f noro *.o

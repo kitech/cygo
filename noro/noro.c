@@ -19,30 +19,8 @@
     do { if (HKDEBUG) fprintf(stderr, fmt, __VA_ARGS__); } while (0) ;  \
     do { if (HKDEBUG) fflush(stderr); } while (0) ;
 
-typedef struct coro_stack coro_stack;
-
-typedef enum grstate {nostack=0, runnable, executing, waiting, finished, } grstate;
 const int dftstksz = 128*1024;
 const int dftstkusz = dftstksz/8; // unit size by sizeof(void*)
-
-// 每个goroutine同时只能属于某一个machine
-typedef struct goroutine {
-    int id;
-    coro_func fnproc;
-    void* arg;
-    coro_stack stack;
-    struct GC_stack_base mystksb; // mine for GC
-    coro_context coctx;
-    coro_context coctx0;
-    grstate state;
-    bool isresume;
-    int pkstate;
-    struct GC_stack_base* stksb; // machine's
-    void* gchandle;
-    int  mcid;
-    void* savefrm; // upper frame
-    void* myfrm; // my frame when yield
-} goroutine;
 
 typedef struct machine {
     int id;
@@ -507,8 +485,8 @@ int noro_processor_yield(int fd, int ytype) {
     noro_goroutine_suspend(gr);
     return 0;
 }
-void noro_processor_resume_some(void* cbdata) {
-    goroutine* gr = (goroutine*)cbdata;
+void noro_processor_resume_some(void* gr_) {
+    goroutine* gr = (goroutine*)gr_;
     // linfo("netpoller notify, %p, id=%d\n", gr, gr->id);
     noro_goroutine_resume_cross_thread(gr);
 }

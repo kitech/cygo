@@ -4,6 +4,8 @@
 typedef enum yield_type
     {
      YIELD_TYPE_NONE = 0,
+     YIELD_TYPE_CHAN_SEND,
+     YIELD_TYPE_CHAN_RECV,
      YIELD_TYPE_CONNECT,
      YIELD_TYPE_READ,
      YIELD_TYPE_READV,
