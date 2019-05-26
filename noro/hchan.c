@@ -59,10 +59,11 @@ int hchan_send(hchan* hc, void* data) {
             }
         } else {
             // put data to my hcelem, put self to sendq, then parking self
-            goroutine* curgr = noro_goroutine_getcur();
-            atomic_setptr(&curgr->hcelem, data);
+            goroutine* mygr = noro_goroutine_getcur();
+            assert(mygr != nilptr);
+            atomic_setptr(&mygr->hcelem, data);
             mtx_lock(&hc->sndqmu);
-            queue_add(hc->sendq, curgr);
+            queue_add(hc->sendq, mygr);
             mtx_unlock(&hc->sndqmu);
             noro_processor_yield(-1, YIELD_TYPE_CHAN_SEND);
             return 1;
@@ -71,6 +72,37 @@ int hchan_send(hchan* hc, void* data) {
         // if not full, enqueue data
         // if full, put self in sendq, then parking
         int bufsz = chan_size(hc->c);
+        if (bufsz < hc->cap) {
+            chan_send(hc->c, data);
+            mtx_lock(&hc->rcvqmu);
+            goroutine* gr = (goroutine*)queue_remove(hc->recvq);
+            mtx_unlock(&hc->rcvqmu);
+            if (gr != nilptr) {
+                noro_processor_resume_some(gr);
+            }
+            return 1;
+        }else{
+            // if has recvq, put to peer hcelem, wakeup peer and return
+            // put data to my hcelem, put self to sendq, then parking self
+            mtx_lock(&hc->rcvqmu);
+            goroutine* gr = (goroutine*)queue_remove(hc->recvq);
+            mtx_unlock(&hc->rcvqmu);
+            if (gr != nilptr) {
+                gr->hcelem = data;
+                noro_processor_resume_some(gr);
+                return 1;
+            }
+
+            goroutine* mygr = noro_goroutine_getcur();
+            assert(mygr != nilptr);
+            atomic_setptr(&mygr->hcelem, data);
+            mtx_lock(&hc->sndqmu);
+            queue_add(hc->sendq, mygr);
+            mtx_unlock(&hc->sndqmu);
+
+            noro_processor_yield(-1, YIELD_TYPE_CHAN_SEND);
+            return 1;
+        }
     }
 }
 
@@ -89,7 +121,7 @@ int hchan_recv(hchan* hc, void** pdata) {
             return 1;
         } else {
             goroutine* mygr = noro_goroutine_getcur();
-            // mygr->hcelem =
+            assert(mygr != nilptr);
             mtx_lock(&hc->rcvqmu);
             queue_add(hc->recvq, mygr);
             mtx_unlock(&hc->rcvqmu);
@@ -102,6 +134,30 @@ int hchan_recv(hchan* hc, void** pdata) {
         // if size > 0, recv right now
         // if empty then put self in recvq, then parking
         // else parking
+        int bufsz = chan_size(hc->c);
+        if (bufsz > 0) {
+            chan_recv(hc->c, pdata);
+            return 1;
+        }
+
+        mtx_lock(&hc->sndqmu);
+        goroutine* gr = queue_remove(hc->sendq);
+        mtx_unlock(&hc->sndqmu);
+        if (gr != nilptr) {
+            *pdata = gr->hcelem;
+            gr->hcelem = nilptr;
+            noro_processor_resume_some(gr);
+            return 1;
+        }
+
+        goroutine* mygr = noro_goroutine_getcur();
+        assert(mygr != nilptr);
+        mtx_lock(&hc->rcvqmu);
+        queue_add(hc->recvq, mygr);
+        mtx_unlock(&hc->rcvqmu);
+        noro_processor_yield(-1, YIELD_TYPE_CHAN_RECV);
+        *pdata = mygr->hcelem;
+        return 1;
     }
 }
 
