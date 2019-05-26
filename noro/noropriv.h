@@ -26,6 +26,8 @@
 #include "hookcb.h"
 #include "noro_util.h"
 #include "atomic.h"
+#include "queue.h"
+#include "chan.h"
 #include "norogc.h"
 
 
