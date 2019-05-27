@@ -34,7 +34,10 @@ int hchan_close(hchan* hc) {
         return true;
     }
     hc->closed = true;
+    int qsz = 0;
     mtx_lock(&hc->rcvqmu);
+    qsz = hc->recvq->size;
+    if (qsz > 0) { linfo("discard recvq %d\n", qsz); }
     while (true) {
         goroutine* gr = (goroutine*)queue_remove(hc->recvq);
         if (gr == nilptr) {
@@ -46,6 +49,8 @@ int hchan_close(hchan* hc) {
     mtx_unlock(&hc->rcvqmu);
 
     mtx_lock(&hc->sndqmu);
+    qsz = hc->sendq->size;
+    if (qsz > 0) { linfo("discard sendq %d\n", qsz); }
     while(true) {
         goroutine* gr = (goroutine*)queue_remove(hc->sendq);
         if (gr == nilptr) {
@@ -56,6 +61,8 @@ int hchan_close(hchan* hc) {
     queue_dispose(hc->sendq);
     mtx_unlock(&hc->sndqmu);
 
+    int bufsz = chan_size(hc->c);
+    if (bufsz > 0) { linfo("Warning, discard bufsz %d\n", bufsz); }
     chan_dispose(hc->c);
     hc->c = nilptr;
     bzero(hc, sizeof(hchan));

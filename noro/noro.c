@@ -186,8 +186,15 @@ void noro_goroutine_run(goroutine* gr) {
 }
 
 void noro_goroutine_resume_cross_thread(goroutine* gr) {
-    assert(gr->state != runnable);
-    assert(gr->state != executing);
+    // assert(gr->state != runnable);
+    // assert(gr->state != executing);
+    if (gr->state == executing) {
+        return;
+    }
+    if (gr->state == runnable) {
+        noro_machine_signal(noro_machine_get(gr->mcid));
+        return;
+    }
     gr->state = runnable;
     noro_machine_signal(noro_machine_get(gr->mcid));
 }
