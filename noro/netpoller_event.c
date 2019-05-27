@@ -157,9 +157,11 @@ void netpoller_yieldfd(int fd, int ytype, void* gr) {
         netpoller_timer(ns, gr);
         break;
     case YIELD_TYPE_CHAN_SEND:
+        assert(1==2);// cannot process this type
         netpoller_timer(1000, gr);
         break;
     case YIELD_TYPE_CHAN_RECV:
+        assert(1==2);// cannot process this type
         netpoller_timer(1000, gr);
         break;
     case YIELD_TYPE_CONNECT: case YIELD_TYPE_WRITE: case YIELD_TYPE_WRITEV:

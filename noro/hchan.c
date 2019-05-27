@@ -83,7 +83,7 @@ int hchan_send(hchan* hc, void* data) {
         if (gr != nilptr) {
             bool swaped = atomic_casptr(&gr->hcelem, invlidptr, data);
             if (swaped) {
-                // linfo("resume recver %d\n", gr->id);
+                linfo("resume recver %d\n", gr->id);
                 mtx_unlock(&hc->lock);
                 noro_processor_resume_some(gr);
                 return 1;
@@ -101,8 +101,8 @@ int hchan_send(hchan* hc, void* data) {
             assert(mygr != nilptr);
             atomic_setptr(&mygr->hcelem, data);
             queue_add(hc->sendq, mygr);
+            linfo("yield me sender %d\n", mygr->id);
             mtx_unlock(&hc->lock);
-            // linfo("yield me sender %d\n", mygr->id);
             noro_processor_yield(-1, YIELD_TYPE_CHAN_SEND);
             return 1;
         }
@@ -151,15 +151,15 @@ int hchan_recv(hchan* hc, void** pdata) {
         if (gr != nilptr) {
             void* oldptr = atomic_getptr(&gr->hcelem);
             bool swaped = atomic_casptr(&gr->hcelem, oldptr, invlidptr);
-            if (swaped) {
+            if (swaped && oldptr != invlidptr) {
                 *pdata = oldptr;
-                // linfo("resume sender %d\n", gr->id);
-                noro_processor_resume_some(gr);
+                linfo("resume sender %d\n", gr->id);
                 mtx_unlock(&hc->lock);
+                noro_processor_resume_some(gr);
                 return 1;
             } else {
                 linfo("wtf, cannot set sndg hcelem %d, swaped %d elem %p\n",
-                      gr->id, swaped, gr->hcelem);
+                      gr->id, swaped, oldptr);
                 // assert(swaped == true);
             }
         }
@@ -170,12 +170,16 @@ int hchan_recv(hchan* hc, void** pdata) {
             assert(mygr != nilptr);
             queue_add(hc->recvq, mygr);
             // linfo("chan recv %d\n", mygr->id);
-            // linfo("yield me recver %d\n", mygr->id);
+            linfo("yield me recver %d\n", mygr->id);
             mtx_unlock(&hc->lock);
             noro_processor_yield(-1, YIELD_TYPE_CHAN_RECV);
             mtx_lock(&hc->lock);
-            *pdata = mygr->hcelem;
-            mygr->hcelem = invlidptr;
+            void* oldptr = atomic_getptr(&mygr->hcelem);
+            // assert(oldptr != invlidptr);
+            bool swaped = atomic_casptr(&mygr->hcelem, oldptr, invlidptr);
+            assert(swaped == true);
+            *pdata = oldptr;
+            assert(*pdata != invlidptr);
             mtx_unlock(&hc->lock);
             return 1;
         }

@@ -186,13 +186,21 @@ void noro_goroutine_run(goroutine* gr) {
     }
 }
 
+// 只改状态，不切换
+void noro_goroutine_resume_same_thread(goroutine* gr) {
+    assert(gr->isresume == true);
+    assert(gr->state != executing);
+    atomic_setint(&gr->state, runnable);
+}
 void noro_goroutine_resume_cross_thread(goroutine* gr) {
     // assert(gr->state != runnable);
     // assert(gr->state != executing);
     if (atomic_getint(&gr->state) == executing) {
+        linfo("resume but executing %d\n", gr->id);
         return;
     }
     if (atomic_getint(&gr->state) == runnable) {
+        linfo("resume but runnable %d\n", gr->id);
         noro_machine_signal(noro_machine_get(gr->mcid));
         return;
     }
@@ -376,7 +384,7 @@ void* noro_processor0(void*arg) {
                 // 暂时先放在全局队列中吧
             }
             if (mct == 0) {
-                linfo("no enough mc? %d\n", 0);
+                linfo("no enough mc? %d\n", grid);
                 break;
             }
             if (mct != 0) {
@@ -393,6 +401,7 @@ void* noro_processor0(void*arg) {
 
 // schedue functions
 goroutine* noro_sched_get_glob_one(machine*mc) {
+    // linfo("try get glob %d\n", mc->id);
     Array* arr1 = 0;
     machine* mc1 = noro_machine_get(1);
     if (mc1 == 0) return 0;
@@ -402,12 +411,17 @@ goroutine* noro_sched_get_glob_one(machine*mc) {
         return 0;
     }
 
+    // linfo("try get glob %d\n", mc->id);
     void*key = nilptr;
     goroutine* gr = 0;
     array_get_at(arr1, 0, (void**)&key);
     array_destroy(arr1);
+    if (key != nilptr) {
+        hashtable_get(mc1->grs, key, (void**)&gr);
+    }
     if (gr != 0) {
         noro_machine_grdel(mc1, gr->id);
+        linfo("got 1 glob task, %d\n", gr->id);
     }
     return gr;
 }
@@ -471,7 +485,9 @@ void* noro_processor(void*arg) {
             noro_sched_run_one(mc, rungr);
             continue;
         }
-        rungr = noro_sched_get_glob_one(mc);
+        if (rand() % 3 == 0) {
+            rungr = noro_sched_get_glob_one(mc);
+        }
         if (rungr != 0) {
             noro_machine_gradd(mc, rungr);
         } else {
@@ -494,14 +510,22 @@ int noro_processor_yield(int fd, int ytype) {
     }
     // linfo("yield %d, mcid=%d, grid=%d\n", fd, gcurmc__, gcurgr__);
     goroutine* gr = noro_goroutine_getcur();
-    netpoller_yieldfd(fd, ytype, gr);
+    if (ytype == YIELD_TYPE_CHAN_RECV || ytype == YIELD_TYPE_CHAN_SEND) {
+    } else {
+        netpoller_yieldfd(fd, ytype, gr);
+    }
     noro_goroutine_suspend(gr);
     return 0;
 }
 void noro_processor_resume_some(void* gr_) {
     goroutine* gr = (goroutine*)gr_;
+    goroutine* mygr = noro_goroutine_getcur();
     // linfo("netpoller notify, %p, id=%d\n", gr, gr->id);
-    noro_goroutine_resume_cross_thread(gr);
+    if (mygr != nilptr && gr->mcid == mygr->mcid) {
+        noro_goroutine_resume_same_thread(gr);
+    }else {
+        noro_goroutine_resume_cross_thread(gr);
+    }
 }
 void noro_sched() {
     noro_processor_yield(1000, YIELD_TYPE_NANOSLEEP);
