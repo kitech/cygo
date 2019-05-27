@@ -14,10 +14,9 @@
 typedef struct hchan {
     chan_t* c;
     int cap;
+    mtx_t lock;
     queue_t* recvq; // goroutine*
     queue_t* sendq; // goroutine*
-    mtx_t rcvqmu;
-    mtx_t sndqmu;
     bool closed;
 } hchan;
 
@@ -25,41 +24,39 @@ hchan* hchan_new(int cap) {
     hchan* hc = (hchan*)calloc(1, sizeof(hchan));
     hc->c = chan_init(cap);
     hc->cap = cap;
-    hc->recvq = queue_init(900000);
-    hc->sendq = queue_init(900000);
+
+    hc->recvq = queue_init(999999);
+    hc->sendq = queue_init(999999);
 }
 
 int hchan_close(hchan* hc) {
     if (hc->closed) {
         return true;
     }
+    mtx_lock(&hc->lock);
     hc->closed = true;
     int qsz = 0;
-    mtx_lock(&hc->rcvqmu);
     qsz = hc->recvq->size;
     if (qsz > 0) { linfo("discard recvq %d\n", qsz); }
-    while (true) {
+    while (hc->recvq != nilptr) {
         goroutine* gr = (goroutine*)queue_remove(hc->recvq);
         if (gr == nilptr) {
             break;
         }
         noro_processor_resume_some(gr);
     }
-    queue_dispose(hc->recvq);
-    mtx_unlock(&hc->rcvqmu);
+    if (hc->recvq != nilptr) queue_dispose(hc->recvq);
 
-    mtx_lock(&hc->sndqmu);
     qsz = hc->sendq->size;
     if (qsz > 0) { linfo("discard sendq %d\n", qsz); }
-    while(true) {
+    while(hc->sendq != nilptr) {
         goroutine* gr = (goroutine*)queue_remove(hc->sendq);
         if (gr == nilptr) {
             break;
         }
         noro_processor_resume_some(gr);
     }
-    queue_dispose(hc->sendq);
-    mtx_unlock(&hc->sndqmu);
+    if (hc->sendq != nilptr) queue_dispose(hc->sendq);
 
     int bufsz = chan_size(hc->c);
     if (bufsz > 0) { linfo("Warning, discard bufsz %d\n", bufsz); }
@@ -67,6 +64,7 @@ int hchan_close(hchan* hc) {
     hc->c = nilptr;
     bzero(hc, sizeof(hchan));
     free(hc);
+    mtx_unlock(&hc->lock);
     return true;
 }
 int hchan_is_closed(hchan* hc) {
@@ -76,30 +74,35 @@ int hchan_cap(hchan* hc) { return hc->cap; }
 int hchan_len(hchan* hc) { return chan_size(hc->c); }
 
 int hchan_send(hchan* hc, void* data) {
+    mtx_lock(&hc->lock);
     if (hc->cap == 0) {
         // if any goroutine waiting, put data to it elem and then wakeup
         // else put self to sendq and then parking self
 
-        mtx_lock(&hc->rcvqmu);
         goroutine* gr = (goroutine*)queue_remove(hc->recvq);
-        mtx_unlock(&hc->rcvqmu);
         if (gr != nilptr) {
-            bool swaped = atomic_casptr(&gr->hcelem, nilptr, data);
+            bool swaped = atomic_casptr(&gr->hcelem, invlidptr, data);
             if (swaped) {
+                // linfo("resume recver %d\n", gr->id);
+                mtx_unlock(&hc->lock);
                 noro_processor_resume_some(gr);
                 return 1;
             } else {
-                linfo("wtf, cannot set rcvg hcelem %d\n", gr->id);
-                assert(1==2);
+                linfo("wtf, cannot set rcvg hcelem %d, swaped %d elem %p\n",
+                      gr->id, swaped, gr->hcelem);
+                // assert(swaped == true);
             }
-        } else {
+        }
+
+        // cannot send directly
+        {
             // put data to my hcelem, put self to sendq, then parking self
             goroutine* mygr = noro_goroutine_getcur();
             assert(mygr != nilptr);
             atomic_setptr(&mygr->hcelem, data);
-            mtx_lock(&hc->sndqmu);
             queue_add(hc->sendq, mygr);
-            mtx_unlock(&hc->sndqmu);
+            mtx_unlock(&hc->lock);
+            // linfo("yield me sender %d\n", mygr->id);
             noro_processor_yield(-1, YIELD_TYPE_CHAN_SEND);
             return 1;
         }
@@ -109,32 +112,29 @@ int hchan_send(hchan* hc, void* data) {
         int bufsz = chan_size(hc->c);
         if (bufsz < hc->cap) {
             chan_send(hc->c, data);
-            mtx_lock(&hc->rcvqmu);
             goroutine* gr = (goroutine*)queue_remove(hc->recvq);
-            mtx_unlock(&hc->rcvqmu);
             if (gr != nilptr) {
                 noro_processor_resume_some(gr);
             }
+            mtx_unlock(&hc->lock);
             return 1;
         }else{
             // if has recvq, put to peer hcelem, wakeup peer and return
             // put data to my hcelem, put self to sendq, then parking self
-            mtx_lock(&hc->rcvqmu);
             goroutine* gr = (goroutine*)queue_remove(hc->recvq);
-            mtx_unlock(&hc->rcvqmu);
             if (gr != nilptr) {
                 gr->hcelem = data;
                 noro_processor_resume_some(gr);
+                mtx_unlock(&hc->lock);
                 return 1;
             }
 
             goroutine* mygr = noro_goroutine_getcur();
             assert(mygr != nilptr);
             atomic_setptr(&mygr->hcelem, data);
-            mtx_lock(&hc->sndqmu);
             queue_add(hc->sendq, mygr);
-            mtx_unlock(&hc->sndqmu);
 
+            mtx_unlock(&hc->lock);
             noro_processor_yield(-1, YIELD_TYPE_CHAN_SEND);
             return 1;
         }
@@ -142,28 +142,41 @@ int hchan_send(hchan* hc, void* data) {
 }
 
 int hchan_recv(hchan* hc, void** pdata) {
+    mtx_lock(&hc->lock);
     if (hc->cap == 0) {
         // if have elem not nil, get it
         // else if any sendq, wakeup them,
         // else parking
-        mtx_lock(&hc->sndqmu);
         goroutine* gr = (goroutine*)queue_remove(hc->sendq);
-        mtx_unlock(&hc->sndqmu);
         if (gr != nilptr) {
-            *pdata = gr->hcelem;
-            gr->hcelem = nilptr;
-            noro_processor_resume_some(gr);
-            return 1;
-        } else {
+            void* oldptr = atomic_getptr(&gr->hcelem);
+            bool swaped = atomic_casptr(&gr->hcelem, oldptr, invlidptr);
+            if (swaped) {
+                *pdata = oldptr;
+                // linfo("resume sender %d\n", gr->id);
+                noro_processor_resume_some(gr);
+                mtx_unlock(&hc->lock);
+                return 1;
+            } else {
+                linfo("wtf, cannot set sndg hcelem %d, swaped %d elem %p\n",
+                      gr->id, swaped, gr->hcelem);
+                // assert(swaped == true);
+            }
+        }
+
+        // cannot recv directly
+        {
             goroutine* mygr = noro_goroutine_getcur();
             assert(mygr != nilptr);
-            mtx_lock(&hc->rcvqmu);
             queue_add(hc->recvq, mygr);
-            mtx_unlock(&hc->rcvqmu);
             // linfo("chan recv %d\n", mygr->id);
+            // linfo("yield me recver %d\n", mygr->id);
+            mtx_unlock(&hc->lock);
             noro_processor_yield(-1, YIELD_TYPE_CHAN_RECV);
+            mtx_lock(&hc->lock);
             *pdata = mygr->hcelem;
-            mygr->hcelem = nilptr;
+            mygr->hcelem = invlidptr;
+            mtx_unlock(&hc->lock);
             return 1;
         }
     }else{
@@ -173,24 +186,23 @@ int hchan_recv(hchan* hc, void** pdata) {
         int bufsz = chan_size(hc->c);
         if (bufsz > 0) {
             chan_recv(hc->c, pdata);
+            mtx_unlock(&hc->lock);
             return 1;
         }
 
-        mtx_lock(&hc->sndqmu);
         goroutine* gr = queue_remove(hc->sendq);
-        mtx_unlock(&hc->sndqmu);
         if (gr != nilptr) {
             *pdata = gr->hcelem;
             gr->hcelem = nilptr;
+            mtx_unlock(&hc->lock);
             noro_processor_resume_some(gr);
             return 1;
         }
 
         goroutine* mygr = noro_goroutine_getcur();
         assert(mygr != nilptr);
-        mtx_lock(&hc->rcvqmu);
         queue_add(hc->recvq, mygr);
-        mtx_unlock(&hc->rcvqmu);
+        mtx_unlock(&hc->lock);
         noro_processor_yield(-1, YIELD_TYPE_CHAN_RECV);
         *pdata = mygr->hcelem;
         return 1;

@@ -73,6 +73,7 @@ goroutine* noro_goroutine_new(int id, coro_func fn, void* arg) {
     gr->id = id;
     gr->fnproc = fn;
     gr->arg = arg;
+    gr->hcelem = invlidptr;
     return gr;
 }
 // alloc stack and context
@@ -82,7 +83,7 @@ void noro_goroutine_new2(goroutine*gr) {
     gr->stack.sptr = GC_malloc_uncollectable(dftstksz);
     gr->stack.ssze = dftstksz;
     gr->mystksb.mem_base = (void*)((uintptr_t)gr->stack.sptr + dftstksz);
-    gr->state = runnable;
+    atomic_setint(&gr->state, runnable);
     // GC_add_roots(gr->stack.sptr, gr->stack.sptr+(gr->stack.ssze));
     // 这一句会让fnproc直接执行，但是可能需要的是创建与执行分开。原来是针对-DCORO_PTHREAD
     // corowp_create(&gr->coctx, gr->fnproc, gr->arg, gr->stack.sptr, dftstksz);
@@ -93,7 +94,7 @@ void noro_goroutine_destroy(goroutine* gr) {
     int mcid = gr->mcid;
     size_t ssze = gr->stack.ssze; // save temp value
 
-    gr->state = nostack;
+    atomic_setint(&gr->state, nostack);
     if (gr->stack.sptr != 0) {
         GC_FREE(gr->stack.sptr);
     }
@@ -134,7 +135,7 @@ void noro_goroutine_forward(void* arg) {
     GC_call_with_alloc_lock(noro_gc_setbottom1, gr);
 
     gr->fnproc(gr->arg);
-    gr->state = finished;
+    atomic_setint(&gr->state, finished);
     // linfo("coro end??? %d\n", 1);
     // TODO coro 结束，回收coro栈
 
@@ -149,7 +150,7 @@ void noro_goroutine_forward(void* arg) {
 void noro_goroutine_resume(goroutine* gr) {
     assert(gr->isresume == true);
     assert(gr->state != executing);
-    gr->state = executing;
+    atomic_setint(&gr->state, executing);
 
     if (gr->myfrm != nilptr) noro_set_frame(gr->myfrm); // 恢复goroutine的frame
     GC_call_with_alloc_lock(noro_gc_setbottom1, gr);
@@ -166,7 +167,7 @@ void noro_goroutine_run_first(goroutine* gr) {
     // 对-DCORO_PTHREAD来说，这句是真正开始执行
     corowp_create(&gr->coctx, noro_goroutine_forward, gr, gr->stack.sptr, gr->stack.ssze);
 
-    gr->state = executing;
+    atomic_setint(&gr->state, executing);
     machine* mc = noro_machine_get(gr->mcid);
     goroutine* curgr = mc->curgr;
     mc->curgr = gr;
@@ -188,20 +189,20 @@ void noro_goroutine_run(goroutine* gr) {
 void noro_goroutine_resume_cross_thread(goroutine* gr) {
     // assert(gr->state != runnable);
     // assert(gr->state != executing);
-    if (gr->state == executing) {
+    if (atomic_getint(&gr->state) == executing) {
         return;
     }
-    if (gr->state == runnable) {
+    if (atomic_getint(&gr->state) == runnable) {
         noro_machine_signal(noro_machine_get(gr->mcid));
         return;
     }
-    gr->state = runnable;
+    atomic_setint(&gr->state, runnable);
     noro_machine_signal(noro_machine_get(gr->mcid));
 }
 void noro_goroutine_suspend(goroutine* gr) {
     gr->myfrm = noro_get_frame();
     noro_set_frame(gr->savefrm);
-    gr->state = waiting;
+    atomic_setint(&gr->state, waiting);
     GC_call_with_alloc_lock(noro_gc_setbottom0, gr);
     corowp_transfer(&gr->coctx, &gr->coctx0);
 }
@@ -216,6 +217,7 @@ machine* noro_machine_new(int id) {
     return mc;
 }
 machine* noro_machine_get(int id) {
+    assert(id > 0);
     machine* mc = 0;
     hashtable_get(gnr__->mcs, (void*)(uintptr_t)id, (void**)&mc);
     // linfo("get mc %d=%p\n", id, mc);
@@ -420,7 +422,7 @@ goroutine* noro_sched_get_ready_one(machine*mc) {
         void* key = 0;
         array_get_at(arr, i, &key); assert(key != 0);
         hashtable_get(mc->grs, key, (void**)&gr); assert(gr != 0);
-        if (gr->state == runnable) {
+        if (atomic_getint(&gr->state) == runnable) {
             // linfo("found a runnable job %d on %d\n", (uintptr_t)key, mc->id);
             rungr = gr;
             break;
@@ -440,7 +442,7 @@ void noro_sched_run_one(machine* mc, goroutine* rungr) {
     rungr->savefrm = mc->savefrm;
     noro_goroutine_run(rungr);
     gcurgrid__ = 0;
-    if (rungr->state == finished) {
+    if (atomic_getint(&rungr->state) == finished) {
         // linfo("finished gr %d\n", rungr->id);
         noro_machine_grfree(mc, rungr->id);
     }else{

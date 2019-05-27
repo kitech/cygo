@@ -108,8 +108,8 @@ uint64_t atomic_getu64(uint64_t* v) {
 uintptr_t atomic_getuptr(uintptr_t* v) {
     return atomic_load(v);
 }
-void atomic_getptr(void** v) {
-    atomic_load(v);
+void* atomic_getptr(void** v) {
+    return atomic_load(v);
 }
 int32_t atomic_geti32(int32_t* v) {
     return atomic_load(v);

@@ -23,6 +23,7 @@
 #include <collectc/array.h>
 
 #define nilptr ((void*)NULL)
+#define invlidptr ((void*)10052008)
 
 // project
 #include "rxilog.h"

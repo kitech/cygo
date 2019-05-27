@@ -42,7 +42,7 @@ int atomic_getint(int* v) ;
 uint32_t atomic_getu32(uint32_t* v);
 uint64_t atomic_getu64(uint64_t* v) ;
 uintptr_t atomic_getuptr(uintptr_t* v);
-void atomic_getptr(void** v) ;
+void* atomic_getptr(void** v) ;
 int32_t atomic_geti32(int32_t* v) ;
 int64_t atomic_geti64(int64_t* v) ;
 
