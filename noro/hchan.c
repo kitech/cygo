@@ -27,8 +27,10 @@ hchan* hchan_new(int cap) {
     hc->c = chan_init(cap);
     hc->cap = cap;
 
-    hc->recvq = queue_init(99999);
-    hc->sendq = queue_init(99999);
+    // only support max 32 concurrent goroutines on one hchan
+    // should enough
+    hc->recvq = queue_init(32);
+    hc->sendq = queue_init(32);
 }
 
 int hchan_close(hchan* hc) {
@@ -88,7 +90,7 @@ int hchan_send(hchan* hc, void* data) {
         if (gr != nilptr) {
             bool swaped = atomic_casptr(&gr->hcelem, invlidptr, data);
             if (swaped) {
-                linfo("resume recver %d on %d\n", gr->id, mygr->id);
+                linfo("resume recver %d on %d/%d\n", gr->id, mygr->id, mygr->mcid);
                 mtx_unlock(&hc->lock);
                 noro_processor_resume_some(gr);
                 return 1;
@@ -104,9 +106,9 @@ int hchan_send(hchan* hc, void* data) {
             // put data to my hcelem, put self to sendq, then parking self
             atomic_setptr(&mygr->hcelem, data);
             queue_add(hc->sendq, mygr);
-            linfo("yield me sender %d\n", mygr->id);
+            linfo("yield me sender %d/%d\n", mygr->id, mygr->mcid);
             mygr->hclock = &hc->lock;
-            mtx_unlock(&hc->lock);
+            // mtx_unlock(&hc->lock);
             noro_processor_yield(-1, YIELD_TYPE_CHAN_SEND);
             return 1;
         }
@@ -151,13 +153,17 @@ int hchan_recv(hchan* hc, void** pdata) {
         // if have elem not nil, get it
         // else if any sendq, wakeup them,
         // else parking
+
+        goroutine* mygr = noro_goroutine_getcur();
+        assert(mygr != nilptr);
+
         goroutine* gr = (goroutine*)queue_remove(hc->sendq);
         if (gr != nilptr) {
             void* oldptr = atomic_getptr(&gr->hcelem);
             bool swaped = atomic_casptr(&gr->hcelem, oldptr, invlidptr);
             if (swaped && oldptr != invlidptr) {
                 *pdata = oldptr;
-                linfo("resume sender %d\n", gr->id);
+                linfo("resume sender %d on %d/%d\n", gr->id, mygr->id, mygr->mcid);
                 mtx_unlock(&hc->lock);
                 noro_processor_resume_some(gr);
                 return 1;
@@ -170,13 +176,11 @@ int hchan_recv(hchan* hc, void** pdata) {
 
         // cannot recv directly
         {
-            goroutine* mygr = noro_goroutine_getcur();
-            assert(mygr != nilptr);
             queue_add(hc->recvq, mygr);
             // linfo("chan recv %d\n", mygr->id);
-            linfo("yield me recver %d, qc %d\n", mygr->id, hc->recvq->size);
+            linfo("yield me recver %d/%d, qc %d\n", mygr->id, mygr->mcid, hc->recvq->size);
             mygr->hclock = &hc->lock;
-            mtx_unlock(&hc->lock);
+            // mtx_unlock(&hc->lock);
             noro_processor_yield(-1, YIELD_TYPE_CHAN_RECV);
             mtx_lock(&hc->lock);
             void* oldptr = atomic_getptr(&mygr->hcelem);

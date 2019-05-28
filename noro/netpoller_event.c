@@ -148,6 +148,7 @@ void netpoller_yieldfd(int fd, int ytype, void* gr) {
     case YIELD_TYPE_SLEEP:
         ns = (long)fd*1000000000;
         netpoller_timer(ns, gr);
+        break;
     case YIELD_TYPE_USLEEP:
         ns = (long)fd*1000;
         netpoller_timer(ns, gr);
@@ -171,6 +172,7 @@ void netpoller_yieldfd(int fd, int ytype, void* gr) {
     default:
         assert(fd >= 0);
         netpoller_readfd(fd, gr);
+        break;
     }
 
 }

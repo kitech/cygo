@@ -274,6 +274,22 @@ void noro_machine_grfree(machine* mc, int id) {
     assert(gr->id == id);
     noro_goroutine_destroy(gr);
 }
+// for mc->id == 1
+goroutine* noro_machine_grtake(machine* mc) {
+    assert(mc->id == 1);
+    goroutine* gr = nilptr;
+    Array* arr = nilptr;
+    pthread_mutex_lock(&mc->grsmu);
+    hashtable_get_keys(mc->grs, (void**)&arr);
+    if (arr != nilptr) {
+        void* key = nilptr;
+        array_get_at(arr, 0, (void**)&key);
+        hashtable_remove(mc->grs, key, (void**)&gr);
+        array_destroy(arr);
+    }
+    pthread_mutex_unlock(&mc->grsmu);
+    return gr;
+}
 void noro_machine_signal(machine* mc) {
     pthread_cond_signal(&mc->pkcd);
 }
@@ -284,13 +300,16 @@ goroutine* noro_goroutine_getcur() {
     int grid = gcurgrid__;
     int mcid = gcurmcid__;
     if (mcid == 0) {
-        linfo("Seems not goroutine, main thread %d?", mcid);
+        // linfo("Not goroutine, main/poller thread %d?\n", mcid);
         return 0;
     }
-    machine* mc1 = noro_machine_get(mcid);
+    machine* mcx = noro_machine_get(mcid);
     goroutine* gr = 0;
-    gr = noro_machine_grget(mc1, grid);
-    assert(gr != 0);
+    gr = noro_machine_grget(mcx, grid);
+    if (gr == nilptr) {
+        linfo("wtf why gr nil, curmc %d, curgr %d\n", mcid, grid);
+    }
+    assert(gr != nilptr);
     return gr;
 }
 
@@ -355,18 +374,18 @@ void* noro_processor0(void*arg) {
         mtx_lock(&mc->ngrsmu);
         hashtable_get_keys(mc->ngrs, &arr1);
         mtx_unlock(&mc->ngrsmu);
+        if (arr1 == nilptr || array_size(arr1) == 0) {
+            continue;
+        }
 
         for (int i = 0; arr1 != 0 && i < array_size(arr1); i++) {
-            void*key = array_peek_at(arr1, i);
+            void* key = array_peek_at(arr1, i);
             goroutine* gr = 0;
             mtx_lock(&mc->ngrsmu);
-            hashtable_get(mc->ngrs, key, (void**)&gr); assert(gr != 0);
+            hashtable_remove(mc->ngrs, key, (void**)&gr); assert(gr != 0);
             mtx_unlock(&mc->ngrsmu);
             noro_goroutine_new2(gr);
             // linfo("process %d, %d\n", gr->id, dftstksz);
-            mtx_lock(&mc->ngrsmu);
-            hashtable_remove(mc->ngrs, key, 0);
-            mtx_unlock(&mc->ngrsmu);
             noro_machine_gradd(mc, gr);
         }
 
@@ -374,16 +393,11 @@ void* noro_processor0(void*arg) {
         // find free machine and runnable goroutine
         Array* arr2 = 0;
         hashtable_get_keys(gnr__->mcs, &arr2);
-        for (int i = 0; arr1 != 0 && i < array_size(arr1);) {
-            int grid = (int)(uintptr_t)array_peek_at(arr1, i);
-            goroutine* gr = noro_machine_grget(mc, grid);
-            if (gr == 0) {
-                linfo("why nil %d, %d\n", grid, hashtable_size(mc->grs));
-            }
-            // assert(gr != 0);
+        for (;;) {
+            goroutine* gr = noro_machine_grtake(mc);
             if (gr == nilptr) {
-                int rv = array_remove_at(arr1, i, 0);
-                continue;
+                linfo("why nil %d\n", hashtable_size(mc->grs));
+                break;
             }
 
             machine* mct = 0;
@@ -401,18 +415,17 @@ void* noro_processor0(void*arg) {
                 mct = 0;
             }
             if (mct == 0) {
-                // try select random one
-                // 暂时先放在全局队列中吧
-            }
-            if (mct == 0) {
-                linfo("no enough mc? %d\n", grid);
+                linfo("no enough mc? %d\n", gr->id);
+                // try select random one?
+                // 暂时先放回全局队列中吧
+                noro_machine_gradd(mc, gr);
                 break;
             }
             if (mct != 0) {
-                int rv = array_remove_at(arr1, i, 0);
-                noro_machine_grdel(mc, gr->id);
+                // linfo("move %d to %d\n", gr->id, mct->id);
                 noro_machine_gradd(mct, gr);
                 noro_machine_signal(mct);
+                break;
             }
         }
         if (arr1 != nilptr) array_destroy(arr1);
@@ -423,29 +436,12 @@ void* noro_processor0(void*arg) {
 // schedue functions
 goroutine* noro_sched_get_glob_one(machine*mc) {
     // linfo("try get glob %d\n", mc->id);
-    Array* arr1 = 0;
     machine* mc1 = noro_machine_get(1);
     if (mc1 == 0) return 0;
 
-    pthread_mutex_lock(&mc1->grsmu);
-    hashtable_get_keys(mc1->grs, &arr1);
-    if (arr1 == 0) {
-        pthread_mutex_unlock(&mc1->grsmu);
-        return 0;
-    }
-
-    // linfo("try get glob %d\n", mc->id);
-    void*key = nilptr;
-    goroutine* gr = 0;
-    array_get_at(arr1, 0, (void**)&key);
-    array_destroy(arr1);
-    if (key != nilptr) {
-        hashtable_get(mc1->grs, key, (void**)&gr);
-    }
-    pthread_mutex_unlock(&mc1->grsmu);
+    goroutine* gr = noro_machine_grtake(mc1);
     if (gr != 0) {
-        noro_machine_grdel(mc1, gr->id);
-        linfo("got 1 glob task, %d\n", gr->id);
+        linfo("got %d glob task on %d\n", gr->id, mc->id);
     }
     return gr;
 }
@@ -484,10 +480,11 @@ void noro_sched_run_one(machine* mc, goroutine* rungr) {
     gcurgrid__ = 0;
     int curst = atomic_getint(&rungr->state);
     if (curst == waiting) {
+        // 在这才解锁，用于确保rungr状态完全切换完成
         if (rungr->hclock != nilptr) {
             mtx_t* l = rungr->hclock;
             rungr->hclock = nilptr;
-            // mtx_unlock(l);
+            mtx_unlock(l);
             // linfo("unlocked chan lock %p on %d\n", l, rungr->id);
         }
     } else if (curst == finished) {
@@ -519,7 +516,7 @@ void* noro_processor(void*arg) {
             noro_sched_run_one(mc, rungr);
             continue;
         }
-        if (rand() % 3 == 0) {
+        if (rand() % 3 == 2) {
             rungr = noro_sched_get_glob_one(mc);
         }
         if (rungr != 0) {
@@ -557,6 +554,9 @@ void noro_processor_resume_some(void* gr_) {
     // linfo("netpoller notify, %p, id=%d\n", gr, gr->id);
     if (mygr != nilptr && gr->mcid == mygr->mcid) {
         noro_goroutine_resume_same_thread(gr);
+        // 相同machine线程的情况，要主动出让执行权。
+        // 另外考虑是否只针对chan send/recv。
+        noro_processor_yield(1001, YIELD_TYPE_NANOSLEEP);
     }else {
         noro_goroutine_resume_cross_thread(gr);
     }

@@ -95,6 +95,9 @@ proc test_chan7impl() =
         cnter += 1
     linfo("recv done", cnter, rcval)
     discard hchan_close(hc)
+    var valsum = 0
+    for v in rcval: valsum += v
+    assert(valsum == 3*(5+6+7+8+9) )
     return
 
 
