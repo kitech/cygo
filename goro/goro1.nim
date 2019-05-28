@@ -1,4 +1,4 @@
-{.passc:"-g -O0"}
+{.passc:"-g -O0"} #  -fsanitize=address
 
 import os
 import asyncdispatch

@@ -58,6 +58,7 @@ typedef struct goroutine {
     grstate state;
     bool isresume;
     void* hcelem;
+    mtx_t* hclock; // hchan.lock
     int pkstate;
     struct GC_stack_base* stksb; // machine's
     void* gchandle;
@@ -72,5 +73,7 @@ extern bool noro_in_processor();
 extern void noro_processor_resume_some(void* gr_);
 extern goroutine* noro_goroutine_getcur();
 
+extern void loglock();
+extern void logunlock();
 #endif
 

@@ -15,9 +15,11 @@
 
 #define HKDEBUG 1
 #define linfo(fmt, ...)                                                 \
+    do { loglock();                                                     \
     do { if (HKDEBUG) fprintf(stderr, "%s:%d:%s ", __FILE__, __LINE__, __FUNCTION__); } while (0); \
     do { if (HKDEBUG) fprintf(stderr, fmt, __VA_ARGS__); } while (0) ;  \
-    do { if (HKDEBUG) fflush(stderr); } while (0) ;
+    do { if (HKDEBUG) fflush(stderr); } while (0) ;                     \
+    logunlock(); } while (0); 
 
 const int dftstksz = 128*1024;
 const int dftstkusz = dftstksz/8; // unit size by sizeof(void*)
@@ -25,6 +27,7 @@ const int dftstkusz = dftstksz/8; // unit size by sizeof(void*)
 typedef struct machine {
     int id;
     HashTable* ngrs; // id => goroutine* 新任务，未分配栈
+    mtx_t ngrsmu;
     HashTable* grs;  // # grid => goroutine*
     pthread_mutex_t grsmu;
     goroutine* curgr;   // 当前在执行的, 这好像得用栈结构吗？(应该不需要，goroutines之间是并列关系)
@@ -66,6 +69,7 @@ int noro_nxtid(noro*nr);
 // 前置声明一些函数
 machine* noro_machine_get(int id);
 void noro_machine_grfree(machine* mc, int id);
+void noro_machine_signal(machine* mc);
 
 /////
 goroutine* noro_goroutine_new(int id, coro_func fn, void* arg) {
@@ -162,8 +166,8 @@ void noro_goroutine_resume(goroutine* gr) {
 // 一定是从ctx0跳过来的，因为所有的goroutines是由调度器发起 run/resume/suspend，而不是其中某一个goroutine发起
 void noro_goroutine_run_first(goroutine* gr) {
     // first run
-    assert(gr->isresume == false);
-    gr->isresume = true;
+    assert(atomic_getbool(&gr->isresume) == false);
+    atomic_setbool(&gr->isresume, true);
     // 对-DCORO_PTHREAD来说，这句是真正开始执行
     corowp_create(&gr->coctx, noro_goroutine_forward, gr, gr->stack.sptr, gr->stack.ssze);
 
@@ -179,7 +183,8 @@ void noro_goroutine_run_first(goroutine* gr) {
 }
 
 void noro_goroutine_run(goroutine* gr) {
-    if (gr->isresume) {
+    // linfo("rungr %d %d\n", gr->id, gr->isresume);
+    if (atomic_getbool(&gr->isresume) == true) {
         noro_goroutine_resume(gr);
     } else {
         noro_goroutine_run_first(gr);
@@ -260,11 +265,12 @@ goroutine* noro_machine_grdel(machine* mc, int id) {
     pthread_mutex_lock(&mc->grsmu);
     hashtable_remove(mc->grs, (void*)(uintptr_t)id, (void**)&gr);
     pthread_mutex_unlock(&mc->grsmu);
-    assert(gr != 0);
+    // assert(gr != 0);
     return gr;
 }
 void noro_machine_grfree(machine* mc, int id) {
     goroutine* gr = noro_machine_grdel(mc, id);
+    assert(gr != nilptr);
     assert(gr->id == id);
     noro_goroutine_destroy(gr);
 }
@@ -283,7 +289,7 @@ goroutine* noro_goroutine_getcur() {
     }
     machine* mc1 = noro_machine_get(mcid);
     goroutine* gr = 0;
-    hashtable_get(mc1->grs, (void*)(uintptr_t)grid, (void**)&gr);
+    gr = noro_machine_grget(mc1, grid);
     assert(gr != 0);
     return gr;
 }
@@ -298,7 +304,9 @@ void noro_post(coro_func fn, void*arg) {
         linfo("nothing mc=%p, %d %p, %d\n", mc, mc->id, mc->ngrs, hashtable_size(mc->ngrs));
         return;
     }
+    mtx_lock(&mc->ngrsmu);
     hashtable_add(mc->ngrs, (void*)(uintptr_t)id, gr);
+    mtx_unlock(&mc->ngrsmu);
     pthread_cond_signal(&mc->pkcd);
 }
 
@@ -330,25 +338,35 @@ void* noro_processor0(void*arg) {
     pthread_cond_signal(&gnr__->noroinitcd);
 
     for (;;) {
+        mtx_lock(&mc->ngrsmu);
         int newg = hashtable_size(mc->ngrs);
+        mtx_unlock(&mc->ngrsmu);
         if (newg == 0) {
             mc->parking = true;
             pthread_cond_wait(&mc->pkcd, &mc->pkmu);
             mc->parking = false;
+            mtx_lock(&mc->ngrsmu);
             newg = hashtable_size(mc->ngrs);
+            mtx_unlock(&mc->ngrsmu);
         }
 
         // linfo("newgr %d\n", newg);
         Array* arr1 = 0;
+        mtx_lock(&mc->ngrsmu);
         hashtable_get_keys(mc->ngrs, &arr1);
+        mtx_unlock(&mc->ngrsmu);
 
         for (int i = 0; arr1 != 0 && i < array_size(arr1); i++) {
             void*key = array_peek_at(arr1, i);
             goroutine* gr = 0;
+            mtx_lock(&mc->ngrsmu);
             hashtable_get(mc->ngrs, key, (void**)&gr); assert(gr != 0);
+            mtx_unlock(&mc->ngrsmu);
             noro_goroutine_new2(gr);
             // linfo("process %d, %d\n", gr->id, dftstksz);
+            mtx_lock(&mc->ngrsmu);
             hashtable_remove(mc->ngrs, key, 0);
+            mtx_unlock(&mc->ngrsmu);
             noro_machine_gradd(mc, gr);
         }
 
@@ -358,12 +376,15 @@ void* noro_processor0(void*arg) {
         hashtable_get_keys(gnr__->mcs, &arr2);
         for (int i = 0; arr1 != 0 && i < array_size(arr1);) {
             int grid = (int)(uintptr_t)array_peek_at(arr1, i);
-            goroutine* gr = 0;
-            hashtable_get(mc->grs, (void*)(uintptr_t)grid, (void**)&gr);
+            goroutine* gr = noro_machine_grget(mc, grid);
             if (gr == 0) {
                 linfo("why nil %d, %d\n", grid, hashtable_size(mc->grs));
             }
-            assert(gr != 0);
+            // assert(gr != 0);
+            if (gr == nilptr) {
+                int rv = array_remove_at(arr1, i, 0);
+                continue;
+            }
 
             machine* mct = 0;
             if (arr2 != nilptr) array_sort(arr2, array_randcmp);
@@ -372,7 +393,7 @@ void* noro_processor0(void*arg) {
                 if ((uintptr_t)key <= 2) continue;
 
                 // linfo("checking machine %d/%d %d\n", j, array_size(arr2), key);
-                hashtable_get(gnr__->mcs, key, (void**)&mct); assert(mct != 0);
+                mct = noro_machine_get((int)(uintptr_t)key);
                 if (mct->parking) {
                     // linfo("got a packing machine %d <- %d\n", mct->id, gr->id);
                     break;
@@ -406,8 +427,10 @@ goroutine* noro_sched_get_glob_one(machine*mc) {
     machine* mc1 = noro_machine_get(1);
     if (mc1 == 0) return 0;
 
+    pthread_mutex_lock(&mc1->grsmu);
     hashtable_get_keys(mc1->grs, &arr1);
     if (arr1 == 0) {
+        pthread_mutex_unlock(&mc1->grsmu);
         return 0;
     }
 
@@ -419,6 +442,7 @@ goroutine* noro_sched_get_glob_one(machine*mc) {
     if (key != nilptr) {
         hashtable_get(mc1->grs, key, (void**)&gr);
     }
+    pthread_mutex_unlock(&mc1->grsmu);
     if (gr != 0) {
         noro_machine_grdel(mc1, gr->id);
         linfo("got 1 glob task, %d\n", gr->id);
@@ -429,12 +453,13 @@ goroutine* noro_sched_get_glob_one(machine*mc) {
 static
 goroutine* noro_sched_get_ready_one(machine*mc) {
     Array* arr = 0;
+    pthread_mutex_lock(&mc->grsmu);
     hashtable_get_keys(mc->grs, &arr);
     goroutine* rungr = 0;
     for (int i = 0; arr != 0 && i < array_size(arr); i ++) {
         goroutine* gr = 0;
         void* key = 0;
-        array_get_at(arr, i, &key); assert(key != 0);
+        array_get_at(arr, i, &key);  assert(key != 0);
         hashtable_get(mc->grs, key, (void**)&gr); assert(gr != 0);
         if (atomic_getint(&gr->state) == runnable) {
             // linfo("found a runnable job %d on %d\n", (uintptr_t)key, mc->id);
@@ -445,6 +470,7 @@ goroutine* noro_sched_get_ready_one(machine*mc) {
     if (arr != 0) {
         array_destroy(arr);
     }
+    pthread_mutex_unlock(&mc->grsmu);
     return rungr;
 }
 static
@@ -456,11 +482,19 @@ void noro_sched_run_one(machine* mc, goroutine* rungr) {
     rungr->savefrm = mc->savefrm;
     noro_goroutine_run(rungr);
     gcurgrid__ = 0;
-    if (atomic_getint(&rungr->state) == finished) {
+    int curst = atomic_getint(&rungr->state);
+    if (curst == waiting) {
+        if (rungr->hclock != nilptr) {
+            mtx_t* l = rungr->hclock;
+            rungr->hclock = nilptr;
+            // mtx_unlock(l);
+            // linfo("unlocked chan lock %p on %d\n", l, rungr->id);
+        }
+    } else if (curst == finished) {
         // linfo("finished gr %d\n", rungr->id);
         noro_machine_grfree(mc, rungr->id);
     }else{
-        // linfo("break from gr %d, state=%d\n", rungr->id, rungr->state);
+        linfo("break from gr %d, state=%d\n", rungr->id, curst);
     }
 }
 
@@ -532,7 +566,10 @@ void noro_sched() {
 }
 
 HashTableConf* noro_dft_htconf() { return &gnr__->htconf; }
-int noro_nxtid(noro*nr) { return ++nr->gridno; }
+int noro_nxtid(noro*nr) {
+    int id = atomic_addint(&nr->gridno, 1);
+    return id;
+}
 
 int hashtable_cmp_int(const void *key1, const void *key2) {
     if (key1 == key2) return 0;
@@ -576,6 +613,7 @@ noro* noro_new() {
     hashtable_new_conf(&nr->htconf, &nr->mths);
     hashtable_new_conf(&nr->htconf, &nr->mcs);
 
+    nr->gridno = 1;
     nr->np = netpoller_new();
 
     gnr__ = nr;

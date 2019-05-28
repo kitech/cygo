@@ -88,9 +88,8 @@ proc test_chan7impl() =
     noro_post(test_chan6impl, hc)
     var dat0 : pointer
     var cnter = 0
-    var rcval = newseq[int]()
+    var rcval = newseq[int](0)
     for i in 0..14:
-        var dat0 : pointer
         var rv = hchan_recv(hc, dat0.addr)
         rcval.add(cast[int](dat0))
         cnter += 1

@@ -1,6 +1,7 @@
 #include <unistd.h>
 #include <sys/syscall.h>
 #include <stdlib.h>
+#include <threads.h>
 
 #include <noro_util.h>
 
@@ -17,4 +18,12 @@ pid_t gettid() {
 int (array_randcmp) (const void*a, const void*b) {
     int n = rand() % 3;
     return n-1;
+}
+
+static mtx_t loglk;
+void loglock() {
+    //    mtx_lock(&loglk);
+}
+void logunlock() {
+    // mtx_unlock(&loglk);
 }
