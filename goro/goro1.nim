@@ -85,6 +85,6 @@ if isMainModule:
             #runtest_tcpcon0()
             #runtest_usleep((cnter/6).int + 1)
             discard
-        if cnter > 2: break
+        # if cnter > 2: break
         poll(500)
 

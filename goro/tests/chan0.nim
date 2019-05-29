@@ -101,11 +101,44 @@ proc test_chan7impl() =
     return
 
 
+# test one sender, multiple recver
+var mulrcvcnt = 0
+var rcval = newseq[int](0)
+proc test_chan8impl(hc:pointer) =
+    assert(hc != nil)
+    var dat0 : pointer
+    var valcnt = 0
+    for i in 0..4:
+        var rv = hchan_recv(hc, dat0.addr)
+        atomicInc(mulrcvcnt)
+        valcnt += 1
+        # linfo("recved", cast[int](dat0), mulrcvcnt)
+    linfo("recv done", hc, valcnt)
+    assert(valcnt == 5)
+    return
+
+proc test_chan9impl() =
+    var hc = hchan_new(0)
+    noro_post(test_chan8impl, hc)
+    noro_post(test_chan8impl, hc)
+    noro_post(test_chan8impl, hc)
+    var dat0 : pointer
+    for i in 0..14:
+        dat0 = cast[pointer](i+1)
+        var rv = hchan_send(hc, dat0)
+    linfo("send done")
+    sleep(500)
+    discard hchan_close(hc)
+    assert(atomicInc(mulrcvcnt, 0) == 15)
+    return
+
+
 proc test_chan0() =
     #noro_post(test_chan0impl, nil)
     #noro_post(test_chan2impl, nil)
     #noro_post(test_chan3impl, nil)
     # noro_post(test_chan5impl, nil)
-    noro_post(test_chan7impl, nil)
+    # noro_post(test_chan7impl, nil)
+    noro_post(test_chan9impl, nil)
     return
 

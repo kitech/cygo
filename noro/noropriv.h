@@ -75,5 +75,10 @@ extern goroutine* noro_goroutine_getcur();
 
 extern void loglock();
 extern void logunlock();
+
+
+#define YIELD_NORM_NS 1000
+#define YIELD_CHAN_NS 1001
+
 #endif
 
