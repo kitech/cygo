@@ -8,11 +8,23 @@
 # {.compile:"../noro/hook.c".}
 # {.compile:"../noro/hookcb.c".}
 
+import os
+
+# absolute path in cflags and ldflags
+const abssrcdir = currentSourcePath().splitFile()[0]
+const abscflags = "-I " & abssrcdir & "/../noro " &
+    " -I " & abssrcdir & "/../noro/include" &
+    " -I " & abssrcdir & "/../noro/cltc/include"
+const absldflags = "-L " & abssrcdir & "/../bdwgc/.libs" &
+    " -L " & abssrcdir & "/../noro/cltc/lib"
+{.passc: abscflags .}
+{.passl: absldflags .}
+{.passc:"-DGC_THREADS".}
+{.passl:"-lgc -lpthread".}
+
 {.compile:"../noro/noro.c".}
 {.compile:"../noro/norogc.c".}
 {.compile:"../noro/noro_util.c".}
-{.passc:"-I . -I ../noro -I ../noro/include -DGC_THREADS".}
-{.passl:"-L ../bdwgc/.libs -lgc -lpthread".}
 
 {.compile:"../noro/rxilog.c".}
 {.compile:"../noro/atomic.c".}

@@ -1,4 +1,4 @@
-#include <norogc.h>
+#include "norogc.h"
 
 void* noro_malloc(size_t size) {
     return NORO_MALLOC(size);

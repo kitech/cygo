@@ -68,9 +68,9 @@ include "tests/tcpcon0.nim"
 include "tests/usleep0.nim"
 include "tests/chan0.nim"
 
-test_chan0()
-
-if isMainModule:
+# MainModule Loop
+proc mmloop() =
+    test_chan0()
     # umain()
     var cnter = 0
     while true:
@@ -83,3 +83,9 @@ if isMainModule:
         # if cnter > 2: break
         poll(500)
 
+proc corona_loop*() =
+    while true:
+        poll(5000)
+
+if isMainModule:
+    mmloop()

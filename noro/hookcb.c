@@ -6,8 +6,8 @@
 #include <sys/socket.h>
 
 // #include <gc/gc.h>
-#include <collectc/hashtable.h>
-#include <collectc/array.h>
+#include "collectc/hashtable.h"
+#include "collectc/array.h"
 
 #include "hookcb.h"
 

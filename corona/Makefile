@@ -5,7 +5,7 @@ gr0:
 
 gr1:
 	#-d:noSignalHandler
-	nim -d:noSignalHandler --stacktrace:on --threads:on --gc:boehm  --listcmd c goro1.nim
+	nim -d:noSignalHandler --stacktrace:on --threads:on --gc:boehm  --listcmd c corona.nim
 
 # some tricks
 # gdb: handle SIGXCPU SIG33 SIG35 SIGPWR nostop noprint

@@ -6,7 +6,7 @@ description   = "A new awesome nimble package"
 license       = "GPL-3.0"
 srcDir        = "src"
 installExt    = @["nim"]
-bin           = @["goro"]
+bin           = @["corona"]
 
 
 # Dependencies

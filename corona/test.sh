@@ -1,9 +1,9 @@
-# have .gdbinit, direct rand `gdb` or `gdb ./goro1`, both ok
+# have .gdbinit, direct rand `gdb` or `gdb ./corona`, both ok
 
 set -x
 while true; do
     # ./goro1
-    gdb ./goro1
+    gdb ./corona
     ret=$?
     echo "ret=$ret"
     if [[ "$ret" != "0" ]]; then
