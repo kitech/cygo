@@ -12,13 +12,8 @@ include "nimlog.nim"
 include "nimplus.nim"
 include "coro.nim"
 include "hook.nim"
-include "otherc.nim"
+include "ascproj.nim"
 
-{.compile:"../noro/noro.c".}
-{.compile:"../noro/norogc.c".}
-{.compile:"../noro/noro_util.c".}
-{.passc:"-I . -I ../noro -I ../noro/include -DGC_THREADS".}
-{.passl:"-L ../bdwgc/.libs -lgc -lpthread".}
 
 var noroh : pointer
 proc noro_set_thread_createcb(fnptr:pointer, args:pointer) {.importc.}

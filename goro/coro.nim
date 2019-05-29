@@ -1,5 +1,5 @@
-{.compile:"coro.c"}
-{.compile:"corowp.c"}
+{.compile:"../noro/coro.c"}
+{.compile:"../noro/corowp.c"}
 {.passc:"-D_GNU_SOURCE".}
 {.passc:"-DCORO_UCONTEXT".}
 {.passc:"-DHAVE_UCONTEXT_H".}

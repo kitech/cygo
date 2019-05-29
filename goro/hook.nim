@@ -1,5 +1,5 @@
-{.compile:"hook.c"}
-{.compile:"hookcb.c"}
+{.compile:"../noro/hook.c"}
+{.compile:"../noro/hookcb.c"}
 {.passc:"-D_GNU_SOURCE".}
 {.passc:"-I../noro/cltc/include".}
 {.passl:"-L../noro/cltc/lib -lcollectc"}
