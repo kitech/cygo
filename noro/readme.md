@@ -11,6 +11,12 @@ goroutines, schedulers, channels and garbage collect.
 * [x] syscall hook
 * [ ] explict syscall functions wrapper
 
+### Todos
+
+[ ] wait reason
+[ ] goroutines stats, count, memory
+[ ] goroutines stack info
+
 ### Thirdpartys
 
 Thanks all the contributors.

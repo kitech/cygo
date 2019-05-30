@@ -38,57 +38,13 @@ linfo "wait proc0 ..."
 noro_set_thread_createcb(noro_thread_createcbfn, nil)
 noro_set_frame_funcs(cast[pointer](getFrame), cast[pointer](setFrame))
 noroh = noro_init_and_wait_done()
-linfo "goro inited done"
+linfo "corona inited done"
 
-proc hellofn(args:pointer) =
-    linfo 123, args
-    var p : pointer
-    p = noro_malloc(1234)
-    p = noro_malloc(2345)
-    p = noro_malloc(3456)
-    p = noro_malloc(456)
-    p = noro_malloc(567)
-    return
-
-proc umain() =
-
-    noro_post(hellofn, nil)
-    linfo "posted"
-    return
-
-proc atrivaltofn(fd:AsyncFD):bool = return false
-addTimer(16000, false, atrivaltofn)
-
-proc timedoutfn0(fd:AsyncFD):bool =
-    #umain()
-    return false
-addTimer(21000, false, timedoutfn0)
-
-include "tests/common.nim"
-include "tests/tcpcon0.nim"
-include "tests/usleep0.nim"
-include "tests/chan0.nim"
-include "tests/manyroutines.nim"
-
-# MainModule Loop
-proc mmloop() =
-    test_chan0()
-    # umain()
-    var cnter = 0
-    while true:
-        cnter += 1
-        if cnter mod 12 == 1: linfo("tickout", cnter)
-        if cnter mod 6 == 1:
-            #runtest_tcpcon0()
-            #runtest_usleep((cnter/6).int + 1)
-            discard
-        # if cnter > 2: break
-        runtest_manyroutines_tick(cnter)
-        poll(500)
 
 proc corona_loop*() =
     while true:
         poll(5000)
 
+include "tests/common.nim"
 if isMainModule:
-    mmloop()
+    testloop()
