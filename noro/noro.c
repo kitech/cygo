@@ -312,6 +312,7 @@ goroutine* noro_goroutine_getcur() {
     assert(gr != nilptr);
     return gr;
 }
+// int noro_num_gorutines() { return atomic_getint(gnr__)}
 
 void noro_post(coro_func fn, void*arg) {
     int id = noro_nxtid(gnr__);

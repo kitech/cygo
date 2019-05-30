@@ -16,5 +16,6 @@ void* noro_set_thread_createcb(void(*fn)(void*arg), void* arg);
 
 void noro_post(void(*fn)(void*arg), void*arg);
 void noro_sched();
+int noro_num_gorutines();
 
 #endif

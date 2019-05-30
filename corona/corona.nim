@@ -64,9 +64,11 @@ proc timedoutfn0(fd:AsyncFD):bool =
     return false
 addTimer(21000, false, timedoutfn0)
 
+include "tests/common.nim"
 include "tests/tcpcon0.nim"
 include "tests/usleep0.nim"
 include "tests/chan0.nim"
+include "tests/manyroutines.nim"
 
 # MainModule Loop
 proc mmloop() =
@@ -81,6 +83,7 @@ proc mmloop() =
             #runtest_usleep((cnter/6).int + 1)
             discard
         # if cnter > 2: break
+        runtest_manyroutines_tick(cnter)
         poll(500)
 
 proc corona_loop*() =
