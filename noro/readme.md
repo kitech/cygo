@@ -13,6 +13,7 @@ goroutines, schedulers, channels and garbage collect.
 
 ### Todos
 
+[ ] channel select semantic
 [ ] wait reason
 [ ] goroutines stats, count, memory
 [ ] goroutines stack info

@@ -1,3 +1,6 @@
+# note: Must use switch: --gc:boehm --threads:on
+# Sometimes cannot automatically use corona.nim.cfg
+
 {.passc:"-g -O0"} #  -fsanitize=address
 
 import os
@@ -34,12 +37,18 @@ proc noro_thread_createcbfn(args:pointer) =
     #setupForeignThreadGc()
     return
 
-linfo "wait proc0 ..."
+linfo "corona initing ..."
 noro_set_thread_createcb(noro_thread_createcbfn, nil)
 noro_set_frame_funcs(cast[pointer](getFrame), cast[pointer](setFrame))
 noroh = noro_init_and_wait_done()
 linfo "corona inited done"
 
+include "./gogoapi.nim"
+
+# just like use spawn: gogo somefunc(a0, a1, a2)
+# simple wrap gogo2 implemention macro
+macro gogo*(stmt:typed) : untyped =
+    result = quote do: gogo2(stmt)
 
 proc corona_loop*() =
     while true:
@@ -48,3 +57,10 @@ proc corona_loop*() =
 include "tests/common.nim"
 if isMainModule:
     testloop()
+
+{.hint[XDeclaredButNotUsed]:off.}
+
+# usage:
+#    import corona/corona
+#    gogo somefunc(1, 2, "abc")
+
