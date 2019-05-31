@@ -34,6 +34,7 @@ include "./tcpcon0.nim"
 include "./usleep0.nim"
 include "./chan0.nim"
 include "./manyroutines.nim"
+include "./chan1.nim"
 
 # test Loop
 proc testtick(cnter:int) =
@@ -42,15 +43,16 @@ proc testtick(cnter:int) =
         #runtest_tcpcon0()
         #runtest_usleep((cnter/6).int + 1)
         discard
-        # if cnter > 2: break
-    runtest_manyroutines_tick(cnter)
+    # if cnter > 2: break
+    # runtest_manyroutines_tick(cnter)
+    if cnter == 0: runtest_chan1(cnter)
+    # test_chan0()
     return
 
 proc testloop() =
-    test_chan0()
     # umain()
     var cnter = 0
     while true:
-        cnter += 1
         testtick(cnter)
+        cnter += 1
         poll(500)

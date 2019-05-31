@@ -44,11 +44,25 @@ noroh = noro_init_and_wait_done()
 linfo "corona inited done"
 
 include "./gogoapi.nim"
+include "./gochanapi.nim"
 
 # just like use spawn: gogo somefunc(a0, a1, a2)
 # simple wrap gogo2 implemention macro
 macro gogo*(stmt:typed) : untyped =
     result = quote do: gogo2(stmt)
+
+# public channel apis
+# proc makechan*(T: typedesc, cap:int) : chan[T]
+# proc send*[T](c: chan[T], v : T) : bool {.discardable.}
+# proc recv*[T](c: chan[T]) : T {.discardable.}
+# proc cap*[T](c: chan[T]) : int
+# proc len*[T](c: chan[T]) : int
+# proc closed*[T](c: chan[T]) : bool
+# proc `$`*[T](c : chan[T]) : string
+# # alias of send: c <- v
+# proc `<-`*[T](c: chan[T], v: T)
+# # alias of recv: var v = <- c
+# proc `<-`*[T](c : chan[T]) : T {.discardable.}
 
 proc corona_loop*() =
     while true:

@@ -1,5 +1,5 @@
 A library that implemention golang's core features,
-goroutines, schedulers, channels and garbage collect.
+goroutines, schedulers, channels, goselect and garbage collect.
 
 ### Features
 
@@ -17,6 +17,11 @@ goroutines, schedulers, channels and garbage collect.
 [ ] wait reason
 [ ] goroutines stats, count, memory
 [ ] goroutines stack info
+
+
+### Difference with Go
+* Ours gosched is a sleep, Go's Gosched is long parking and wait resched
+* Go have Sudog, we haven't
 
 ### Thirdpartys
 
