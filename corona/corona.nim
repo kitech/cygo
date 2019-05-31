@@ -11,8 +11,9 @@ import tables
 import deques
 import locks
 
-include "nimlog.nim"
-include "nimplus.nim"
+import nimlog
+import nimplus
+
 include "coro.nim"
 include "hook.nim"
 include "ascproj.nim"

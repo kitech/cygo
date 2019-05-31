@@ -47,7 +47,8 @@ void netpoller_use_threads();
 typedef struct coro_stack coro_stack;
 typedef enum grstate {nostack=0, runnable, executing, waiting, finished, } grstate;
 // 每个goroutine同时只能属于某一个machine
-typedef struct goroutine {
+typedef struct goroutine goroutine;
+struct goroutine {
     int id;
     coro_func fnproc;
     void* arg;
@@ -59,13 +60,14 @@ typedef struct goroutine {
     bool isresume;
     void* hcelem;
     mtx_t* hclock; // hchan.lock
-    int pkstate;
+    int pkreason;
+    goroutine* wokeby; //
     struct GC_stack_base* stksb; // machine's
     void* gchandle;
     int  mcid;
     void* savefrm; // upper frame
     void* myfrm; // my frame when yield
-} goroutine;
+};
 
 // processor callbacks, impl in noro.c
 extern int noro_processor_yield(int fd, int ytype);

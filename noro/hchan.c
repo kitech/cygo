@@ -13,14 +13,6 @@
 
 // wrapper chan_t with goroutine integeration
 
-typedef struct hchan {
-    chan_t* c;
-    int cap;
-    mtx_t lock;
-    queue_t* recvq; // goroutine*
-    queue_t* sendq; // goroutine*
-    bool closed;
-} hchan;
 
 hchan* hchan_new(int cap) {
     hchan* hc = (hchan*)calloc(1, sizeof(hchan));

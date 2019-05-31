@@ -542,7 +542,9 @@ int noro_processor_yield(int fd, int ytype) {
     }
     // linfo("yield %d, mcid=%d, grid=%d\n", fd, gcurmc__, gcurgr__);
     goroutine* gr = noro_goroutine_getcur();
-    if (ytype == YIELD_TYPE_CHAN_RECV || ytype == YIELD_TYPE_CHAN_SEND) {
+    gr->pkreason = ytype;
+    if (ytype == YIELD_TYPE_CHAN_RECV || ytype == YIELD_TYPE_CHAN_SEND ||
+        ytype == YIELD_TYPE_CHAN_SELECT || ytype == YIELD_TYPE_CHAN_SELECT_NOCASE) {
     } else {
         netpoller_yieldfd(fd, ytype, gr);
     }

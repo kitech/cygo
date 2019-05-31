@@ -31,6 +31,7 @@ const absldflags = "-L " & abssrcdir & "/../bdwgc/.libs" &
 {.compile:"../noro/queue.c".}
 {.compile:"../noro/chan.c".}
 {.compile:"../noro/hchan.c".}
+{.compile:"../noro/hselect.c".}
 #{.compile:"../noro/netpoller_ev.c".}
 #{.passl:"-lev"}
 {.compile:"../noro/netpoller_event.c".}

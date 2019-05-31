@@ -1,3 +1,5 @@
+import times
+import strutils
 
 type
     chan*[T] = ref object
@@ -35,12 +37,12 @@ proc recv*[T](c: chan[T]) : T {.discardable.} =
     var rv = hchan_recv(c.hc, dat.addr)
     ret = cast[T](dat)
     return ret
-
+import typetraits
 proc cap*[T](c: chan[T]) : int = hchan_cap(c.hc)
 proc len*[T](c: chan[T]) : int = hchan_len(c.hc)
 proc closed*[T](c: chan[T]) : bool = hchan_is_closed(c.hc)
 proc `$`*[T](c : chan[T]) : string =
-    return "chan[$#; $#]@$#" % [T.name, $(c.cap()), c.hc.repr]
+    return "chan[$#; $#]@$#" % [T.name, $(c.cap()), $(c.hc)]
 
 type noimplerr = ref CatchableError
 
