@@ -71,18 +71,20 @@ int hchan_len(hchan* hc) { return chan_size(hc->c); }
 
 int hchan_send(hchan* hc, void* data) {
     mtx_lock(&hc->lock);
+
+    goroutine* mygr = noro_goroutine_getcur();
+    assert(mygr != nilptr);
+
     if (hc->cap == 0) {
         // if any goroutine waiting, put data to it elem and then wakeup
         // else put self to sendq and then parking self
-
-        goroutine* mygr = noro_goroutine_getcur();
-        assert(mygr != nilptr);
 
         goroutine* gr = (goroutine*)queue_remove(hc->recvq);
         if (gr != nilptr) {
             bool swaped = atomic_casptr(&gr->hcelem, invlidptr, data);
             if (swaped) {
                 linfo("resume recver %d on %d/%d\n", gr->id, mygr->id, mygr->mcid);
+                gr->wokeby = mygr;
                 mtx_unlock(&hc->lock);
                 noro_processor_resume_some(gr);
                 return 1;
@@ -112,6 +114,7 @@ int hchan_send(hchan* hc, void* data) {
             chan_send(hc->c, data);
             goroutine* gr = (goroutine*)queue_remove(hc->recvq);
             if (gr != nilptr) {
+                gr->wokeby = mygr;
                 noro_processor_resume_some(gr);
             }
             mtx_unlock(&hc->lock);
@@ -127,8 +130,6 @@ int hchan_send(hchan* hc, void* data) {
                 return 1;
             }
 
-            goroutine* mygr = noro_goroutine_getcur();
-            assert(mygr != nilptr);
             atomic_setptr(&mygr->hcelem, data);
             queue_add(hc->sendq, mygr);
 
@@ -141,13 +142,14 @@ int hchan_send(hchan* hc, void* data) {
 
 int hchan_recv(hchan* hc, void** pdata) {
     mtx_lock(&hc->lock);
+
+    goroutine* mygr = noro_goroutine_getcur();
+    assert(mygr != nilptr);
+
     if (hc->cap == 0) {
         // if have elem not nil, get it
         // else if any sendq, wakeup them,
         // else parking
-
-        goroutine* mygr = noro_goroutine_getcur();
-        assert(mygr != nilptr);
 
         goroutine* gr = (goroutine*)queue_remove(hc->sendq);
         if (gr != nilptr) {
@@ -156,6 +158,7 @@ int hchan_recv(hchan* hc, void** pdata) {
             if (swaped && oldptr != invlidptr) {
                 *pdata = oldptr;
                 linfo("resume sender %d on %d/%d\n", gr->id, mygr->id, mygr->mcid);
+                gr->wokeby = mygr;
                 mtx_unlock(&hc->lock);
                 noro_processor_resume_some(gr);
                 return 1;
@@ -199,13 +202,12 @@ int hchan_recv(hchan* hc, void** pdata) {
         if (gr != nilptr) {
             *pdata = gr->hcelem;
             gr->hcelem = nilptr;
+            gr->wokeby = mygr;
             mtx_unlock(&hc->lock);
             noro_processor_resume_some(gr);
             return 1;
         }
 
-        goroutine* mygr = noro_goroutine_getcur();
-        assert(mygr != nilptr);
         queue_add(hc->recvq, mygr);
         mtx_unlock(&hc->lock);
         noro_processor_yield(-1, YIELD_TYPE_CHAN_RECV);

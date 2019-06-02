@@ -2,6 +2,14 @@
 #include "noropriv.h"
 #include "hchan.h"
 
+#define HKDEBUG 1
+#define linfo(fmt, ...)                                                 \
+    do { loglock();    bool dodbg = HKDEBUG;                            \
+        do { if (dodbg) fprintf(stderr, "%s:%d:%s ", __FILE__, __LINE__, __FUNCTION__); } while (0); \
+        do { if (dodbg) fprintf(stderr, fmt, __VA_ARGS__); } while (0) ; \
+        do { if (dodbg) fflush(stderr); } while (0) ;                   \
+        logunlock(); } while (0); 
+
 enum {
       caseNil = 0,
       caseRecv,
@@ -47,12 +55,15 @@ bool selectgo(int* rcasi, scase** cas0, uint16_t* order0, int ncases) {
     hchan* hc;
     scase* sk;
     goroutine* gr;
+    goroutine* wkgr;
 
     int dfti;
     scase* dftv;
     int casi;
     scase* cas;
     bool recvok;
+
+    // TODO order and dedup
 
  loop:
     // pass 1 - look for something already waiting
@@ -123,11 +134,12 @@ bool selectgo(int* rcasi, scase** cas0, uint16_t* order0, int ncases) {
     casi = -1;
     cas = nilptr;
 
+    wkgr = mygr->wokeby;
     for (int i = 0; i < ncases; i ++) {
         sk = cas0[i];
         if (sk->kind == caseNil) continue;
 
-        if (sk == mygr->wokeby) {
+        if (sk == wkgr) { // FIXME
             casi = i;
             cas = sk;
         }else{
@@ -157,14 +169,42 @@ bool selectgo(int* rcasi, scase** cas0, uint16_t* order0, int ncases) {
     goto retc;
 
  bufrecv:
+    recvok = true;
+    chan_recv(hc->c, &cas->hcelem);
+    selunlock(cas0, order0, ncases);
+    goto retc;
+
  bufsend:
+    chan_send(hc->c, cas->hcelem);
+    selunlock(cas0, order0, ncases);
+    goto retc;
+
  recv:
- send:
+    cas->hcelem = gr->hcelem;
+    selunlock(cas0, order0, ncases);
+    noro_processor_resume_some(gr);
+    linfo("syncrecv: cas0=%p hc=%p val=%p\n", cas0, hc, cas->hcelem);
+    recvok = true;
+    goto retc;
+
  rclose:
+    selunlock(cas0, order0, ncases);
+    recvok = false;
+    goto retc;
+
+ send:
+    gr->hcelem = cas->hcelem;
+    selunlock(cas0, order0, ncases);
+    linfo("syncsend: cas0=%p hc=%p val=%p\n", cas0, hc, cas->hcelem);
+    goto retc;
+
  retc:
     rcasi = casi;
     return recvok;
+
  sclose:
+    linfo("send closed chan %d", 0);
+    assert(1==2);
     return false;
 }
 
@@ -181,3 +221,4 @@ bool goselect(int* rcasi, scase** cas0, int ncases) {
     return selectgo(rcasi, cas0, order0, ncases);
 }
 
+// go 1.12.5
