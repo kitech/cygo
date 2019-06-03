@@ -10,13 +10,6 @@
         do { if (dodbg) fflush(stderr); } while (0) ;                   \
         logunlock(); } while (0); 
 
-enum {
-      caseNil = 0,
-      caseRecv,
-      caseSend,
-      caseDefault,
-};
-
 typedef struct scase {
     hchan* hc;
     void* hcelem;
@@ -56,6 +49,8 @@ bool selectgo(int* rcasi, scase** cas0, uint16_t* order0, int ncases) {
     scase* sk;
     goroutine* gr;
     goroutine* wkgr;
+    int casewk;
+    hchan* wkhc;
 
     int dfti;
     scase* dftv;
@@ -135,14 +130,19 @@ bool selectgo(int* rcasi, scase** cas0, uint16_t* order0, int ncases) {
     cas = nilptr;
 
     wkgr = mygr->wokeby;
+    wkhc = mygr->wokehc;
+    casewk = mygr->wokecase;
     for (int i = 0; i < ncases; i ++) {
         sk = cas0[i];
         if (sk->kind == caseNil) continue;
 
-        if (sk == wkgr) { // FIXME
+        // try match which case woke
+        if (casewk == sk->kind && sk->hc == wkhc) {
             casi = i;
             cas = sk;
-        }else{
+            linfo("case woke %d %d\n", i, casewk);
+        }
+        else{
             hc = sk->hc;
             if (sk->kind == caseSend) {
                 gr = queue_remove(hc->sendq);

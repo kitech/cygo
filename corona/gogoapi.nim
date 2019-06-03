@@ -195,5 +195,5 @@ macro gogo2(stmt:typed) : untyped =
 
 # 这个pragma好友只在isMainModule生效
 # 而且还只能声明一次，pragma already present
-{.hint[XDeclaredButNotUsed]:off.}
+{.push hint[XDeclaredButNotUsed]:off.}
 

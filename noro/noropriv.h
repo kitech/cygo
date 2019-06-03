@@ -62,6 +62,8 @@ struct goroutine {
     mtx_t* hclock; // hchan.lock
     int pkreason;
     goroutine* wokeby; //
+    void* wokehc; // hchan*
+    int wokecase; // caseSend/caseRecv
     struct GC_stack_base* stksb; // machine's
     void* gchandle;
     int  mcid;
@@ -81,6 +83,15 @@ extern void logunlock();
 
 #define YIELD_NORM_NS 1000
 #define YIELD_CHAN_NS 1001
+
+// hselect cases
+enum {
+      caseNil = 0,
+      caseRecv,
+      caseSend,
+      caseDefault,
+      caseClose, // nothing but for special
+};
 
 #endif
 

@@ -29,6 +29,10 @@ int hchan_close(hchan* hc) {
     if (hc->closed) {
         return true;
     }
+
+    goroutine* mygr = noro_goroutine_getcur();
+    assert(mygr != nilptr);
+
     mtx_lock(&hc->lock);
     hc->closed = true;
     int qsz = 0;
@@ -39,6 +43,9 @@ int hchan_close(hchan* hc) {
         if (gr == nilptr) {
             break;
         }
+        gr->wokeby = mygr;
+        gr->wokehc = hc;
+        gr->wokecase = caseClose;
         noro_processor_resume_some(gr);
     }
     if (hc->recvq != nilptr) queue_dispose(hc->recvq);
@@ -50,6 +57,9 @@ int hchan_close(hchan* hc) {
         if (gr == nilptr) {
             break;
         }
+        gr->wokeby = mygr;
+        gr->wokehc = hc;
+        gr->wokecase = caseClose;
         noro_processor_resume_some(gr);
     }
     if (hc->sendq != nilptr) queue_dispose(hc->sendq);
@@ -69,6 +79,7 @@ int hchan_is_closed(hchan* hc) {
 int hchan_cap(hchan* hc) { return hc->cap; }
 int hchan_len(hchan* hc) { return chan_size(hc->c); }
 
+// TODO when sending/recving, hchan closed case
 int hchan_send(hchan* hc, void* data) {
     mtx_lock(&hc->lock);
 
@@ -85,6 +96,8 @@ int hchan_send(hchan* hc, void* data) {
             if (swaped) {
                 linfo("resume recver %d on %d/%d\n", gr->id, mygr->id, mygr->mcid);
                 gr->wokeby = mygr;
+                gr->wokehc = hc;
+                gr->wokecase = caseRecv;
                 mtx_unlock(&hc->lock);
                 noro_processor_resume_some(gr);
                 return 1;
@@ -159,6 +172,8 @@ int hchan_recv(hchan* hc, void** pdata) {
                 *pdata = oldptr;
                 linfo("resume sender %d on %d/%d\n", gr->id, mygr->id, mygr->mcid);
                 gr->wokeby = mygr;
+                gr->wokehc = hc;
+                gr->wokecase = caseSend;
                 mtx_unlock(&hc->lock);
                 noro_processor_resume_some(gr);
                 return 1;

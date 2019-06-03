@@ -57,5 +57,5 @@ proc `<-`*[T](c: chan[T], v: T) =
 proc `<-`*[T](c : chan[T]) : T {.discardable.} =
     return c.recv()
 
-{.push hint[XDeclaredButNotUsed]: off.}
+{.push hint[XDeclaredButNotUsed]:off.}
 

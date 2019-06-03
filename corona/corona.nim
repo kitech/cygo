@@ -73,7 +73,7 @@ include "tests/common.nim"
 if isMainModule:
     testloop()
 
-{.hint[XDeclaredButNotUsed]:off.}
+{.push hint[XDeclaredButNotUsed]:off.}
 
 # usage:
 #    import corona/corona
