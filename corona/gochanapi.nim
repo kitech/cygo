@@ -43,6 +43,9 @@ proc len*[T](c: chan[T]) : int = hchan_len(c.hc)
 proc closed*[T](c: chan[T]) : bool = hchan_is_closed(c.hc)
 proc `$`*[T](c : chan[T]) : string =
     return "chan[$#; $#]@$#" % [T.name, $(c.cap()), $(c.hc)]
+proc toelem[T](c: chan[T], v:pointer) : T =
+    var ret : T = cast[T](v)
+    return ret
 
 type noimplerr = ref CatchableError
 
@@ -56,6 +59,31 @@ proc `<-`*[T](c: chan[T], v: T) =
 # var v = <- c
 proc `<-`*[T](c : chan[T]) : T {.discardable.} =
     return c.recv()
+
+
+const caseNil : uint16 = 0
+const caseRecv : uint16 = 1
+const caseSend : uint16 = 2
+const caseDefault : uint16 = 3
+
+
+type scase = ref object
+    hc*: pointer # c hchan*
+    hcelem: pointer
+    kind*: uint16
+    pc: pointer
+    reltime: int64
+
+# return -1 on nothing
+proc select1(casvec: openArray[scase]) : int =
+    for idx, cas in casvec:
+        linfo(idx, cas.hc, cas.kind)
+
+    var casi : cint = -1
+    var sok = goselect(casi.addr, casvec.dtaddr, casvec.len().cint)
+    linfo sok, casi, casvec.len
+    if sok: linfo("val=", casvec[casi].hcelem)
+    return casi
 
 {.push hint[XDeclaredButNotUsed]:off.}
 

@@ -44,19 +44,20 @@ static
 bool selectgo(int* rcasi, scase** cas0, uint16_t* order0, int ncases) {
     goroutine* mygr = noro_goroutine_getcur();
     sellock(cas0, order0, ncases);
+    linfo("rcasi=%d cas0=%p order0=%p ncases=%d\n", *rcasi, cas0, order0, ncases);
+    hchan* hc = nilptr;
+    scase* sk = nilptr;
+    goroutine* gr = nilptr;
+    goroutine* wkgr = nilptr;
+    int casewk = 0;
+    hchan* wkhc = nilptr;
 
-    hchan* hc;
-    scase* sk;
-    goroutine* gr;
-    goroutine* wkgr;
-    int casewk;
-    hchan* wkhc;
-
-    int dfti;
-    scase* dftv;
-    int casi;
-    scase* cas;
-    bool recvok;
+    int dfti = 0;
+    scase* dftv = nilptr;
+    int casi = 0;
+    scase* cas = nilptr;
+    bool recvok = false;
+    int retline = 0;
 
     // TODO order and dedup
 
@@ -121,8 +122,9 @@ bool selectgo(int* rcasi, scase** cas0, uint16_t* order0, int ncases) {
 
     // wait for someone to wake us up
     selunlock(cas0, order0, ncases);
+    linfo("should here %d\n", 0);
     noro_processor_yield(-1, YIELD_TYPE_CHAN_SELECT);
-
+    linfo("should here %d\n", 0);
     sellock(cas0, order0, ncases);
 
     // pass 3  - dequeue from unsuccessful chans
@@ -140,7 +142,8 @@ bool selectgo(int* rcasi, scase** cas0, uint16_t* order0, int ncases) {
         if (casewk == sk->kind && sk->hc == wkhc) {
             casi = i;
             cas = sk;
-            linfo("case woke %d %d\n", i, casewk);
+            sk->hcelem = mygr->hcelem;
+            linfo("case woke i=%d direction=%d by=%p val=%p\n", i, casewk, wkgr, mygr->hcelem);
         }
         else{
             hc = sk->hc;
@@ -166,17 +169,20 @@ bool selectgo(int* rcasi, scase** cas0, uint16_t* order0, int ncases) {
     }
 
     selunlock(cas0, order0, ncases);
+    retline = __LINE__;
     goto retc;
 
  bufrecv:
     recvok = true;
     chan_recv(hc->c, &cas->hcelem);
     selunlock(cas0, order0, ncases);
+    retline = __LINE__;
     goto retc;
 
  bufsend:
     chan_send(hc->c, cas->hcelem);
     selunlock(cas0, order0, ncases);
+    retline = __LINE__;
     goto retc;
 
  recv:
@@ -185,21 +191,25 @@ bool selectgo(int* rcasi, scase** cas0, uint16_t* order0, int ncases) {
     noro_processor_resume_some(gr);
     linfo("syncrecv: cas0=%p hc=%p val=%p\n", cas0, hc, cas->hcelem);
     recvok = true;
+    retline = __LINE__;
     goto retc;
 
  rclose:
     selunlock(cas0, order0, ncases);
     recvok = false;
+    retline = __LINE__;
     goto retc;
 
  send:
     gr->hcelem = cas->hcelem;
     selunlock(cas0, order0, ncases);
     linfo("syncsend: cas0=%p hc=%p val=%p\n", cas0, hc, cas->hcelem);
+    retline = __LINE__;
     goto retc;
 
  retc:
-    rcasi = casi;
+    linfo("return casi=%d recvok=%d retline=%d\n", casi, recvok, retline);
+    *rcasi = casi;
     return recvok;
 
  sclose:

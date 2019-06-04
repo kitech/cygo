@@ -1,7 +1,7 @@
 import times
 
 # get a non-block, yieldable sleep proc
-proc usleepc(usec:int) : int {.importc:"usleep".}
+proc usleepc(usec:int) : int {.importc:"usleep", discardable.}
 
 proc nowt0() : DateTime = times.fromUnix(epochTime().int64).utc()
 proc nowt1() : int64 = epochTime().int64
@@ -32,8 +32,8 @@ addTimer(21000, false, timedoutfn0)
 
 include "./tcpcon0.nim"
 include "./usleep0.nim"
-include "./chan0.nim"
 include "./manyroutines.nim"
+include "./chan0.nim"
 include "./chan1.nim"
 
 # test Loop

@@ -32,6 +32,7 @@ proc hchan_send(hc:pointer, data:pointer) : bool {.importc.}
 proc hchan_recv(hc:pointer, data:ptr pointer) : bool {.importc.}
 proc hchan_len(hc:pointer) : int {.importc.}
 proc hchan_cap(hc:pointer) : int {.importc.}
+proc goselect(rcasi: ptr cint, cas0: pointer, ncases:cint) : bool {.importc.}
 
 proc noro_thread_createcbfn(args:pointer) =
     linfo("noro thread created", args)

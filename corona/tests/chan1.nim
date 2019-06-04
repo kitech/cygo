@@ -84,6 +84,34 @@ proc test_chan16() =
     assert(rv == 8, rv.repr)
     return
 
+# test select operator
+# all block recv
+proc test_chan_select_all_block_recv() =
+    var hlpunblock = proc(c1p: pointer) =
+        var c1 = cast[chan[pointer]](c1p)
+        usleepc(2000000)
+        linfo("send one to unblock select")
+        c1.send(cast[pointer](3))
+        return
+
+    var c0 = makechan(int, 0)
+    var c1 = makechan(pointer, 0)
+    var c2 = makechan(float, 0)
+
+    var hcs = newseq[scase](0)
+    hcs.add(scase(hc: c0.hc, kind: caseRecv))
+    hcs.add(scase(hc: c1.hc, kind: caseRecv))
+    hcs.add(scase(hc: c2.hc, kind: caseRecv))
+
+    noro_post(hlpunblock, cast[pointer](c1))
+    var casi = select1(hcs)
+    linfo(casi, c1.toelem(hcs[casi].hcelem))
+
+    return
+
+proc test_chan_select_nocase() =
+    return
+
 proc runtest_chan1(cnter:int) =
     test_chan10()
     # test_chan11()
@@ -91,6 +119,7 @@ proc runtest_chan1(cnter:int) =
     # test_chan13()
     # test_chan14()
     # test_chan15()
-    test_chan16()
+    # test_chan16()
+    noro_post(test_chan_select_all_block_recv, nil)
     return
 
