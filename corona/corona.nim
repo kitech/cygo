@@ -48,12 +48,12 @@ linfo "corona inited done"
 include "./gogoapi.nim"
 include "./gochanapi.nim"
 
-# just like use spawn: gogo somefunc(a0, a1, a2)
 # simple wrap gogo2 implemention macro
-macro gogo*(stmt:typed) : untyped =
-    result = quote do: gogo2(stmt)
+macro gogo*(funccallexpr: typed) : untyped =
+    ## Just like a spawn: gogo somefunc(a0, a1, a2)
+    result = quote do: gogo2(funccallexpr)
 
-# public channel apis
+# public channel apis. see gochanapi.nim
 # proc makechan*(T: typedesc, cap:int) : chan[T]
 # proc send*[T](c: chan[T], v : T) : bool {.discardable.}
 # proc recv*[T](c: chan[T]) : T {.discardable.}
@@ -66,7 +66,9 @@ macro gogo*(stmt:typed) : untyped =
 # # alias of recv: var v = <- c
 # proc `<-`*[T](c : chan[T]) : T {.discardable.}
 
-proc corona_loop*() =
+# usage: corona.loop
+proc loop*() =
+    ## If you haven't other loop, use this
     while true:
         poll(5000)
 

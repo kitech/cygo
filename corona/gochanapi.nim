@@ -4,7 +4,7 @@ import strutils
 type
     chan*[T] = ref object
         hc: pointer
-        val: T
+        val: T       ## send temp ref
         dir: int
         born: float
 
@@ -17,8 +17,8 @@ proc hchan_finalizer[T](x : T) =
     linfo("chan GCed", hc, dtime, br)
     return
 
-## public chan API
-proc makechan*(T: typedesc, cap:int) : chan[T] =
+# public chan API
+proc newchan*(T: typedesc, cap:int) : chan[T] =
     var c : chan[T]
     c.new(hchan_finalizer)
     c.hc = hchan_new(cap)
@@ -26,7 +26,9 @@ proc makechan*(T: typedesc, cap:int) : chan[T] =
     c.val = val
     c.born = epochTime()
     return c
-
+proc close*[T](c: chan[T]) =
+    ## TODO
+    discard
 proc send*[T](c: chan[T], v : T) : bool {.discardable.} =
     c.val = v  # ref it, but when unref?
     return hchan_send(c.hc, cast[pointer](v))
@@ -49,23 +51,19 @@ proc toelem[T](c: chan[T], v:pointer) : T =
 
 type noimplerr = ref CatchableError
 
-# alias of send
-# c <- v
 proc `<-`*[T](c: chan[T], v: T) =
+    ## Alias of send to chan: `c <- v`
     c.send(v)
     return
 
-# alias of recv
-# var v = <- c
 proc `<-`*[T](c : chan[T]) : T {.discardable.} =
+    ## Alias of recv from chan: `var v = <- c`
     return c.recv()
-
 
 const caseNil : uint16 = 0
 const caseRecv : uint16 = 1
 const caseSend : uint16 = 2
 const caseDefault : uint16 = 3
-
 
 type scase = ref object
     hc*: pointer # c hchan*
@@ -87,3 +85,4 @@ proc select1(casvec: openArray[scase]) : int =
 
 {.push hint[XDeclaredButNotUsed]:off.}
 
+{.pop.}

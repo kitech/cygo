@@ -5,7 +5,7 @@ import tables
 
 # test tostr
 proc test_chan10() =
-    var c = makechan(int, 5)
+    var c = newchan(int, 5)
     assert(($c).startsWith("chan[int; 5]@0x"))
     c = nil
     #c.send(8)
@@ -16,7 +16,7 @@ proc test_chan10() =
 
 # test int
 proc test_chan11() =
-    var c = makechan(int, 5)
+    var c = newchan(int, 5)
     var br = c.send(8)
     assert(br == true)
     var rv = c.recv()
@@ -25,7 +25,7 @@ proc test_chan11() =
 
 # test string
 proc test_chan12() =
-    var c = makechan(string, 5)
+    var c = newchan(string, 5)
     var br = c.send("abc")
     assert(br == true)
     var rv = c.recv()
@@ -40,7 +40,7 @@ type tstobj = ref object
 
 # test struct
 proc test_chan13() =
-    var c = makechan(tstobj, 5)
+    var c = newchan(tstobj, 5)
     var o = tstobj(a:567, b : "abc", c: 999.9)
     var br = c.send(o)
     assert(br == true)
@@ -50,7 +50,7 @@ proc test_chan13() =
 
 # test seq/table
 proc test_chan14() =
-    var c = makechan(seq[int], 5)
+    var c = newchan(seq[int], 5)
     var o = newseq[int](3)
     var br = c.send(o)
     assert(br == true)
@@ -60,7 +60,7 @@ proc test_chan14() =
 
 # test seq/TableRef
 proc test_chan15() =
-    var c = makechan(TableRef[int, int], 5)
+    var c = newchan(TableRef[int, int], 5)
     var o : TableRef[int,int]
     o = newTable[int,int]()
     o.add(1, 2)
@@ -74,7 +74,7 @@ proc test_chan15() =
 
 # test operator `send` and `recv`
 proc test_chan16() =
-    var c = makechan(int, 5)
+    var c = newchan(int, 5)
     c <- 9
     var rv = c.recv()
     assert(rv == 9, rv.repr)
@@ -94,9 +94,9 @@ proc test_chan_select_all_block_recv() =
         c1.send(cast[pointer](3))
         return
 
-    var c0 = makechan(int, 0)
-    var c1 = makechan(pointer, 0)
-    var c2 = makechan(float, 0)
+    var c0 = newchan(int, 0)
+    var c1 = newchan(pointer, 0)
+    var c2 = newchan(float, 0)
 
     var hcs = newseq[scase](0)
     hcs.add(scase(hc: c0.hc, kind: caseRecv))

@@ -8,5 +8,8 @@ gr1:
 	nim -d:noSignalHandler --stacktrace:on --threads:on --gc:boehm --listcmd \
 		-p:${HOME}/.nimble/mulib c corona.nim
 
+dc:
+	nim doc -p:~/.nimble/mulib/ corona.nim
+
 # some tricks
 # gdb: handle SIGXCPU SIG33 SIG35 SIGPWR nostop noprint

@@ -45,7 +45,7 @@ proc goroutine_post(fnptr: pointer; args: pointer) =
     noro_post(fnptr, args)
     return
 
-### begin gogo2
+# begin gogo2
 type
     # mirror of typeinfo.Any
     SysAny = object
@@ -191,9 +191,11 @@ macro gogo2(stmt:typed) : untyped =
     linfo repr(topstmt)
     result = topstmt
 
-### end gogo2
+# end gogo2
 
 # 这个pragma好友只在isMainModule生效
 # 而且还只能声明一次，pragma already present
 {.push hint[XDeclaredButNotUsed]:off.}
+
+{.pop.}
 
