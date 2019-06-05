@@ -50,7 +50,7 @@ include "./gochanapi.nim"
 
 # simple wrap gogo2 implemention macro
 macro gogo*(funccallexpr: typed) : untyped =
-    ## Just like a spawn: gogo somefunc(a0, a1, a2)
+    ## Just like a spawn: `gogo somefunc(a0, a1, a2)`
     result = quote do: gogo2(funccallexpr)
 
 # public channel apis. see gochanapi.nim
@@ -65,6 +65,23 @@ macro gogo*(funccallexpr: typed) : untyped =
 # proc `<-`*[T](c: chan[T], v: T)
 # # alias of recv: var v = <- c
 # proc `<-`*[T](c : chan[T]) : T {.discardable.}
+
+macro goselect*(select_case_expr: untyped) : untyped =
+    ## Just like go select:
+    ##
+    ## **Examples:**
+    ##
+    ## .. code-block::
+    ##   goselect:
+    ##     scase <- ch0: discard          # recv but nosave
+    ##     scase v0 = <- ch0: discard
+    ##     scase vec[0] = <- ch0: discard
+    ##     scase ch1 <- 42: discard
+    ##     scase ch2 <- "foo": discard
+    ##     scase ch3 <- cast[pointer](42): discard
+    ##     default: discard
+    ##
+    result = quote do: goselectv5(select_case_expr)
 
 # usage: corona.loop
 proc loop*() =

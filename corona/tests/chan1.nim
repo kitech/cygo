@@ -104,12 +104,85 @@ proc test_chan_select_all_block_recv() =
     hcs.add(scase(hc: c2.hc, kind: caseRecv))
 
     noro_post(hlpunblock, cast[pointer](c1))
-    var casi = select1(hcs)
+    var casi = goselect1(hcs)
     linfo(casi, c1.toelem(hcs[casi].hcelem))
 
     return
 
 proc test_chan_select_nocase() =
+    return
+
+proc test_chan_goselect_macrov2() =
+    var c0 = newchan(int, 1)
+    var c1 = newchan(int32, 1)
+    var c2 = newchan(float, 1)
+    var c3 = newchan(string, 1)
+    var c4 = newchan(pointer, 1)
+    var sc0 = newscase(c0, caseRecv)
+    var sc1 = newscase(c1, caseRecv)
+    var sc2 = newscase(c2, caseRecv)
+    var sc3 = newscase(c3, caseRecv)
+    var sc4 = newscase(c4, caseRecv)
+    var scases2 = @[sc0, sc1, sc2, sc3, sc4]
+
+    goselectv2(c0, caseRecv, c1, caseRecv, c2, caseRecv, c3, caseRecv, c4, caseRecv)
+    return
+
+# only expand, need to take look the result
+proc test_chan_goselect_macrov5() =
+    var c0 = newchan(int, 1)
+    var c1 = newchan(int32, 1)
+    var c2 = newchan(float, 1)
+    var c3 = newchan(string, 1)
+    var c4 = newchan(pointer, 1)
+    var sc0 = newscase(c0, caseRecv)
+    var sc1 = newscase(c1, caseRecv)
+    var sc2 = newscase(c2, caseRecv)
+    var sc3 = newscase(c3, caseRecv)
+    var sc4 = newscase(c4, caseRecv)
+
+    var valis = newseq[int](3)
+    var val0 : int
+    expandMacros: goselectv5:
+        scase c0 <- val0:
+            echo "000"
+            echo "aaa"
+            discard
+        scase val0 = <- c0:
+            echo "111"
+            echo "bbb"
+            discard
+        scase <- c0:
+            echo "222"
+            echo "ccc"
+            discard
+        scase valis[0] = <- c0:
+            echo "333"
+            echo "ddd"
+            discard
+        default:
+            echo "444"
+            echo "eee"
+            discard
+        scase c1 <- 32:
+            echo "555"
+            echo "fff"
+            discard
+        scase c3 <- "sss":
+            echo "666"
+            echo "ggg"
+            discard
+        scase c4 <- nil:
+            echo "777"
+            echo "hhh"
+            discard
+        scase c2 <- 5.678:
+            echo "888"
+            echo "jjj"
+            discard
+    return
+
+proc test_chan_goselect_macro() =
     return
 
 proc runtest_chan1(cnter:int) =
@@ -120,6 +193,7 @@ proc runtest_chan1(cnter:int) =
     # test_chan14()
     # test_chan15()
     # test_chan16()
-    noro_post(test_chan_select_all_block_recv, nil)
+    # noro_post(test_chan_select_all_block_recv, nil)
+    test_chan_goselect_macrov5()
     return
 

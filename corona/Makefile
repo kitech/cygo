@@ -5,7 +5,8 @@ gr0:
 
 gr1:
 	#-d:noSignalHandler
-	nim -d:noSignalHandler --stacktrace:on --threads:on --gc:boehm --listcmd \
+	#--listcmd
+	nim -d:noSignalHandler --stacktrace:on --threads:on --gc:boehm \
 		-p:${HOME}/.nimble/mulib c corona.nim
 
 dc:
