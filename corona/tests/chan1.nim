@@ -109,23 +109,15 @@ proc test_chan_select_all_block_recv() =
 
     return
 
-proc test_chan_select_nocase() =
+proc test_chan_select_nocase1() =
+    var arr : array[0,scase]
+    var rv = goselect1(arr)
+    doAssert(1==2)
     return
 
-proc test_chan_goselect_macrov2() =
-    var c0 = newchan(int, 1)
-    var c1 = newchan(int32, 1)
-    var c2 = newchan(float, 1)
-    var c3 = newchan(string, 1)
-    var c4 = newchan(pointer, 1)
-    var sc0 = newscase(c0, caseRecv)
-    var sc1 = newscase(c1, caseRecv)
-    var sc2 = newscase(c2, caseRecv)
-    var sc3 = newscase(c3, caseRecv)
-    var sc4 = newscase(c4, caseRecv)
-    var scases2 = @[sc0, sc1, sc2, sc3, sc4]
-
-    goselectv2(c0, caseRecv, c1, caseRecv, c2, caseRecv, c3, caseRecv, c4, caseRecv)
+# with macro goselect
+proc test_chan_select_nocase2() =
+    expandMacros: goselectv6: discard
     return
 
 # only expand, need to take look the result
@@ -195,5 +187,7 @@ proc runtest_chan1(cnter:int) =
     # test_chan16()
     # noro_post(test_chan_select_all_block_recv, nil)
     test_chan_goselect_macrov5()
+    # noro_post test_chan_select_nocase1, nil
+    # noro_post test_chan_select_nocase2, nil
     return
 

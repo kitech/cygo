@@ -6,18 +6,22 @@ goroutines, schedulers, channels, goselect and garbage collect.
 * [x] stackful coroutine
 * [x] multiple threads
 * [x] channels
-* [ ] golang select semantic
+* [x] golang select semantic
 * [x] garbage collect
 * [x] syscall hook
 * [ ] explict syscall functions wrapper
 
 ### Todos
 
-[ ] channel select semantic
-[ ] wait reason
+[x] channel select semantic
+[x] wait reason
 [ ] goroutines stats, count, memory
 [ ] goroutines stack info
-
+[ ] scheduler switch to goroutine
+[ ] native main function switch to goroutine
+[ ] improve send/recv bool flag
+[ ] mutex lock/unlock yield?
+[ ] dynamic increase/decrease processor(P)
 
 ### Difference with Go
 * Ours gosched is a sleep, Go's Gosched is long parking and wait resched

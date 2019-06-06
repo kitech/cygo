@@ -218,9 +218,15 @@ bool selectgo(int* rcasi, scase** cas0, uint16_t* order0, int ncases) {
     return false;
 }
 
+static void blocknocase() {
+    noro_processor_yield(-1, YIELD_TYPE_CHAN_SELECT_NOCASE);
+}
+
 bool goselect(int* rcasi, scase** cas0, int ncases) {
     if (ncases == 0) {
         // parking forever
+        blocknocase();
+        assert(1==2); // not reachable
     }
 
     assert(ncases <= 32);

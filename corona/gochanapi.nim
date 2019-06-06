@@ -13,8 +13,9 @@ proc hchan_finalizer[T](x : T) =
     var hc = x.hc
     var dtime = epochTime() - x.born
     x.hc = nil
-    var br = hchan_close(hc)
-    linfo("chan GCed", hc, dtime, br)
+    var br = false
+    if hc != nil: br = hchan_close(hc)
+    linfo("chan GCed", hc, dtime, br, epochTime() - x.born)
     return
 
 # public chan API
@@ -26,9 +27,14 @@ proc newchan*(T: typedesc, cap:int) : chan[T] =
     c.val = val
     c.born = epochTime()
     return c
-proc close*[T](c: chan[T]) =
-    ## TODO
-    discard
+proc close*[T](c: chan[T]) : bool {.discardable} =
+    ## Close channel
+    var hc = c.hc
+    var br = false
+    if hc != nil: br = hchan_close(hc)
+    return br
+
+# TODO thinking send val lifetime
 proc send*[T](c: chan[T], v : T) : bool {.discardable.} =
     c.val = v  # ref it, but when unref?
     return hchan_send(c.hc, cast[pointer](v))
@@ -42,7 +48,7 @@ proc recv*[T](c: chan[T]) : T {.discardable.} =
 import typetraits
 proc cap*[T](c: chan[T]) : int = hchan_cap(c.hc)
 proc len*[T](c: chan[T]) : int = hchan_len(c.hc)
-proc closed*[T](c: chan[T]) : bool = hchan_is_closed(c.hc)
+proc closed*[T](c: chan[T]) : bool = c.hc == nil or hchan_is_closed(c.hc)
 proc `$`*[T](c : chan[T]) : string =
     return "chan[$#; $#]@$#" % [T.name, $(c.cap()), $(c.hc)]
 proc toelem[T](c: chan[T], v:pointer) : T =
@@ -60,10 +66,10 @@ proc `<-`*[T](c : chan[T]) : T {.discardable.} =
     ## Alias of recv from chan: `var v = <- c`
     return c.recv()
 
-const caseNil : uint16 = 0
-const caseRecv : uint16 = 1
-const caseSend : uint16 = 2
-const caseDefault : uint16 = 3
+const caseNil* : uint16 = 0
+const caseRecv* : uint16 = 1
+const caseSend* : uint16 = 2
+const caseDefault* : uint16 = 3
 
 type scase = ref object
     hc*: pointer # c hchan*
@@ -73,6 +79,7 @@ type scase = ref object
     reltime: int64
 
 proc newscase*[T](c:chan[T], kind: uint16) : scase =
+    ## Used in macro public API. Don't use directly in user code.
     var sc = scase()
     case kind:
         of caseNil: pass
@@ -84,8 +91,9 @@ proc newscase*[T](c:chan[T], kind: uint16) : scase =
 # return -1 on nothing
 # if recv, value is chanvec[casi].toelem(casvec[casi].hcelem)
 proc goselect1*(casvec: openArray[scase]) : int =
-    for idx, cas in casvec:
-        linfo(idx, cas.hc, cas.kind)
+    ## Used in macro public API. Don't use directly in user code.
+    # for idx, cas in casvec:
+    #    linfo(idx, cas.hc, cas.kind)
 
     var casi : cint = -1
     var sok = goselect(casi.addr, casvec.dtaddr, casvec.len().cint)
@@ -95,11 +103,6 @@ proc goselect1*(casvec: openArray[scase]) : int =
 
 import strformat
 import macros
-# depcreated one
-macro goselectv2(chans: varargs[untyped]) : untyped =
-    echo "aaa",treeRepr(chans)
-    result = newStmtList()
-    echo treeRepr(result)
 
 # TODO golib-nim syntax
 macro goselectv3(select_case_expr: untyped) : untyped =
@@ -218,8 +221,11 @@ macro goselectv5(select_case_expr: untyped) : untyped =
                 else: # nnkIdent
                     echo $scaseno, " send ", "ch=", $(scase[1][1]), " val=", $(valexpr)
                 codetxt1 &= "scases.add newscase($#, caseSend)\n" % [$(scase[1][1])]
-                if valexpr.kind in {nnkIntLit, nnkStrLit, nnkNilLit, nnkFloatLit}:
+                if valexpr.kind in {nnkIntLit, nnkStrLit, nnkNilLit}:
                     codetxt1 &= "scases[scases.len-1].hcelem = cast[pointer]($#)\n" % [valexpr.repr]
+                elif valexpr.kind == nnkFloatLit:
+                    # TODO double/float convert faild by direct cast. or lost precision
+                    codetxt1 &= "scases[scases.len-1].hcelem = cast[pointer]($#.int)\n" % [valexpr.repr]
                 else: # nnkIdent
                     codetxt1 &= "scases[scases.len-1].hcelem = cast[pointer]($#)\n" % [$(valexpr)]
                 discard
@@ -281,6 +287,15 @@ macro goselectv5(select_case_expr: untyped) : untyped =
 
     # echo "result ststs pass 2 ====="
     # echo treeRepr(result)
+
+macro goselectv6(select_case_expr: untyped) : untyped =
+    var s = select_case_expr
+
+    # basic syntax check
+    if s.len() == 1 and s[0].kind == nnkDiscardStmt and s[0][0].kind == nnkEmpty:
+        result = quote do: discard goselect1([])
+    else:
+        result = quote do: goselectv5(select_case_expr)
 
 #[
 select:

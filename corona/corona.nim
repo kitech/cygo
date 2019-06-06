@@ -53,6 +53,11 @@ macro gogo*(funccallexpr: typed) : untyped =
     ## Just like a spawn: `gogo somefunc(a0, a1, a2)`
     result = quote do: gogo2(funccallexpr)
 
+# keep keywords
+macro go*(funccallexpr: typed) : untyped =
+    ## Just like a spawn: `gogo somefunc(a0, a1, a2)`
+    result = quote do: gogo2(funccallexpr)
+
 # public channel apis. see gochanapi.nim
 # proc makechan*(T: typedesc, cap:int) : chan[T]
 # proc send*[T](c: chan[T], v : T) : bool {.discardable.}
@@ -67,6 +72,10 @@ macro gogo*(funccallexpr: typed) : untyped =
 # proc `<-`*[T](c : chan[T]) : T {.discardable.}
 
 macro goselect*(select_case_expr: untyped) : untyped =
+    result = quote do: goselectv6(select_case_expr)
+
+# keep keywords
+macro select*(select_case_expr: untyped) : untyped =
     ## Just like go select:
     ##
     ## **Examples:**
@@ -81,7 +90,10 @@ macro goselect*(select_case_expr: untyped) : untyped =
     ##     scase ch3 <- cast[pointer](42): discard
     ##     default: discard
     ##
-    result = quote do: goselectv5(select_case_expr)
+    ## .. code-block::
+    ##   goselect: discard                # block current goroutine forever
+    ##
+    result = quote do: goselectv6(select_case_expr)
 
 # usage: corona.loop
 proc loop*() =
