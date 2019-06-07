@@ -73,6 +73,7 @@ struct goroutine {
 
 // processor callbacks, impl in noro.c
 extern int noro_processor_yield(int fd, int ytype);
+extern int noro_processor_yield_multi(int ytype, int nfds, int fds[], int ytypes[]);
 extern bool noro_in_processor();
 extern void noro_processor_resume_some(void* gr_, int ytype);
 extern goroutine* noro_goroutine_getcur();

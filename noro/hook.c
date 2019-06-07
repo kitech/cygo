@@ -64,11 +64,6 @@ epoll_wait_t epoll_wait_f = NULL;
 #elif defined(LIBGO_SYS_FreeBSD)
 #endif
 
-#define HKDEBUG 1
-#define linfo(fmt, ...)    do { struct timeval ltv = {0}; gettimeofday(&ltv, 0); \
-        do { if (HKDEBUG) fprintf(stderr, "%ld.%ld %s:%d %s: ", ltv.tv_sec, ltv.tv_usec, __FILE__, __LINE__, __FUNCTION__); } while (0); \
-    do { if (HKDEBUG) fprintf(stderr, fmt, __VA_ARGS__); } while (0) ; \
-    } while (0);
 
 // #include "hookcb.h"
 #include "noropriv.h"
@@ -149,7 +144,7 @@ int connect(int fd, const struct sockaddr *addr, socklen_t addrlen)
         // linfo("connect ok %d %d, %d, %d\n", fd, errno, time(0)-btime, i);
         return rv;
     }
-    return -1;
+    assert(1==2); // unreachable
 }
 
 int accept(int sockfd, struct sockaddr *addr, socklen_t *addrlen)
@@ -162,10 +157,14 @@ ssize_t read(int fd, void *buf, size_t count)
 {
     if (!read_f) initHook();
     linfo("%d fdnb=%d\n", fd, fd_is_nonblocking(fd));
-    {
-        return read_f(fd, buf, count);
+    while (1){
+        ssize_t rv = read_f(fd, buf, count);
+        if (rv >= 0) {
+            return rv;
+        }
+        noro_processor_yield(fd, YIELD_TYPE_READ);
     }
-    return 0;
+    assert(1==2); // unreachable
 }
 
 ssize_t readv(int fd, const struct iovec *iov, int iovcnt)
@@ -177,8 +176,8 @@ ssize_t readv(int fd, const struct iovec *iov, int iovcnt)
 ssize_t recv(int sockfd, void *buf, size_t len, int flags)
 {
     if (!recv_f) initHook();
-    linfo("%d %d %d\n", sockfd, len, flags);
-    while (true) {
+    // linfo("%d %d %d\n", sockfd, len, flags);
+    while (1) {
         ssize_t rv = recv_f(sockfd, buf, len, flags);
         if (rv == 0) {
             hookcb_onclose(sockfd);
@@ -186,9 +185,10 @@ ssize_t recv(int sockfd, void *buf, size_t len, int flags)
         if (rv >= 0) {
             return rv;
         }
-        linfo("recv err=%d %d %s\n", rv, errno, strerror(errno));
+        // linfo("recv err=%d %d %s\n", rv, errno, strerror(errno));
         noro_processor_yield(sockfd, YIELD_TYPE_RECV);
     }
+    assert(1==2); // unreachable
 }
 
 ssize_t recvfrom(int sockfd, void *buf, size_t len, int flags,
@@ -198,24 +198,31 @@ ssize_t recvfrom(int sockfd, void *buf, size_t len, int flags,
     struct timeval btv = {0};
     struct timeval etv = {0};
     gettimeofday(&btv, 0);
-    linfo("%d %ld.%ld\n", sockfd, btv.tv_sec, btv.tv_usec);
-    {
+    // linfo("%d %ld.%ld\n", sockfd, btv.tv_sec, btv.tv_usec);
+    while (1){
         ssize_t rv = recvfrom_f(sockfd, buf, len, flags, src_addr, addrlen);
         gettimeofday(&etv, 0);
-        linfo("%d %ld.%ld\n", sockfd, etv.tv_sec, etv.tv_usec);
-        return rv;
+        // linfo("%d %ld.%ld\n", sockfd, etv.tv_sec, etv.tv_usec);
+        if (rv >= 0) {
+            return rv;
+        }
+        noro_processor_yield(sockfd, YIELD_TYPE_RECVFROM);
     }
-    return -1;
+    assert(1==2); // unreachable
 }
 
 ssize_t recvmsg(int sockfd, struct msghdr *msg, int flags)
 {
     if (!recvmsg_f) initHook();
-    linfo("%d fdnb=%d\n", sockfd, fd_is_nonblocking(sockfd));
-    {
-        return recvmsg_f(sockfd, msg, flags);
+    // linfo("%d fdnb=%d\n", sockfd, fd_is_nonblocking(sockfd));
+    while (1){
+        ssize_t rv = recvmsg_f(sockfd, msg, flags);
+        if (rv >= 0) {
+            return rv;
+        }
+        noro_processor_yield(sockfd, YIELD_TYPE_RECVMSG);
     }
-    return -1;
+    assert(1==2); // unreachable
 }
 
 ssize_t write(int fd, const void *buf, size_t count)
@@ -223,10 +230,14 @@ ssize_t write(int fd, const void *buf, size_t count)
     if (!write_f) initHook();
     // linfo("%d %d\n", fd, count);
 
-    {
-        return write_f(fd, buf, count);
+    while(1){
+        ssize_t rv = write_f(fd, buf, count);
+        if (rv >= 0) {
+            return rv;
+        }
+        noro_processor_yield(fd, YIELD_TYPE_WRITE);
     }
-    return 0;
+    assert(1==2); // unreachable
 }
 
 ssize_t writev(int fd, const struct iovec *iov, int iovcnt)
@@ -238,10 +249,10 @@ ssize_t writev(int fd, const struct iovec *iov, int iovcnt)
 ssize_t send(int sockfd, const void *buf, size_t len, int flags)
 {
     if (!send_f) initHook();
-    linfo("%d %d %d fdnb=%d\n", sockfd, len, flags, fd_is_nonblocking(sockfd));
+    // linfo("%d %d %d fdnb=%d\n", sockfd, len, flags, fd_is_nonblocking(sockfd));
     while (true) {
         ssize_t rv = send_f(sockfd, buf, len, flags);
-        linfo("send rv=%d errno=%d\n", rv, errno)
+        // linfo("send rv=%d errno=%d\n", rv, errno)
         if (rv >= 0) {
             assert(rv == len);
             return rv;
@@ -249,8 +260,7 @@ ssize_t send(int sockfd, const void *buf, size_t len, int flags)
 
         noro_processor_yield(sockfd, YIELD_TYPE_SEND);
     }
-    linfo("send ret %d\n", 0);
-    return -1;
+    assert(1==2); // unreachable
 }
 
 ssize_t sendto(int sockfd, const void *buf, size_t len, int flags,
@@ -264,11 +274,15 @@ ssize_t sendto(int sockfd, const void *buf, size_t len, int flags,
 ssize_t sendmsg(int sockfd, const struct msghdr *msg, int flags)
 {
     if (!sendmsg_f) initHook();
-    linfo("%d fdnb=%d\n", sockfd, fd_is_nonblocking(sockfd));
-    {
-        return sendmsg_f(sockfd, msg, flags);
+    // linfo("%d fdnb=%d\n", sockfd, fd_is_nonblocking(sockfd));
+    while (1){
+        ssize_t rv = sendmsg_f(sockfd, msg, flags);
+        if (rv >= 0) {
+            return rv;
+        }
+        noro_processor_yield(sockfd, YIELD_TYPE_SENDMSG);
     }
-    return -1;
+    assert(1==2); // unreachable
 }
 
 int poll_wip(struct pollfd *fds, nfds_t nfds, int timeout)
@@ -609,7 +623,7 @@ static int doInitHook()
 {
     if (connect_f) return 0;
     connect_f = (connect_t)dlsym(RTLD_NEXT, "connect");
-    printf("%s:%d, doInitHook %p\n", __FILE__, __LINE__, connect_f);
+    linfo("%s:%d, doInitHook %p\n", __FILE__, __LINE__, connect_f);
 
     if (connect_f) {
         pipe_f = (pipe_t)dlsym(RTLD_NEXT, "pipe");

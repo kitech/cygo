@@ -11,7 +11,7 @@ proc connsock() =
     linfo("sock", repr(sock.getFd()), now(), ip, port)
     var btime = times.now()
     sock.connect(ip, port)
-    linfo("connect done", times.now()-btime, sock.getSocketError())
+    linfo("connect done", (times.now()-btime).hmstr, sock.getSocketError())
     sock.close()
     return
 
@@ -19,7 +19,7 @@ proc connsock() =
 proc connsock1() =
     var btime = times.now()
     var info = getAddrInfo("www.github.com", 443.Port)
-    linfo("done", times.now()-btime)
+    linfo("done", (times.now()-btime).hmstr)
     freeAddrInfo(info)
     return
 
@@ -29,7 +29,7 @@ proc connsock2() =
     linfo("sock", repr(sock.getFd()), now())
     var btime = times.now()
     sock.connect("www.github.com", port)
-    linfo("connect done", times.now()-btime, sock.getSocketError())
+    linfo("connect done", (times.now()-btime).hmstr, sock.getSocketError())
     sock.close()
     return
 
@@ -43,7 +43,7 @@ proc test_http_get1() =
     # need buffered=false, or have last several byte coming wait too long
     var sock = newSocket(buffered=false)
     sock.connect(ip, port)
-    linfo("connect done", times.now()-btime)
+    linfo("connect done", (times.now()-btime).hmstr)
     let reqtxt = "GET / HTTP/1.1\r\n\r\n"
     var rv = sock.send(reqtxt.cstring, reqtxt.len)
     linfo("rv=", rv, reqtxt.len, sock.getSocketError())

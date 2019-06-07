@@ -3,14 +3,14 @@
 # lin上能用的也UCONTEXT/SJLJ/ASM
 # win上能用的是啥
 # GC_THREADS not GC_PTHREADS
-CFLAGS=-g -O0 -std=c11 -D_GNU_SOURCE -DCORO_STACKALLOC -DCORO_UCONTEXT -DHAVE_UCONTEXT_H -DHAVE_SETJMP_H -DHAVE_SIGALTSTACK -I. -I../goro -I./cltc/include -I./include -DGC_THREADS
+CFLAGS=-g -O0 -std=c11 -D_GNU_SOURCE -DNRDEBUG -DCORO_STACKALLOC -DCORO_UCONTEXT -DHAVE_UCONTEXT_H -DHAVE_SETJMP_H -DHAVE_SIGALTSTACK -I. -I../goro -I./cltc/include -I./include -DGC_THREADS
 LDFLAGS=-L./cltc/lib -lcollectc -levent -levent_pthreads -L ../bdwgc/.libs -lgc -lpthread -ldl
 
 all:
-	gcc ${CFLAGS} -o coro.o -c ../goro/coro.c
-	gcc ${CFLAGS} -o corowp.o -c ../goro/corowp.c
-	gcc ${CFLAGS} -o hook.o -c ../goro/hook.c
-	gcc ${CFLAGS} -o hookcb.o -c ../goro/hookcb.c
+	gcc ${CFLAGS} -o coro.o -c ./coro.c
+	gcc ${CFLAGS} -o corowp.o -c ./corowp.c
+	gcc ${CFLAGS} -o hook.o -c ./hook.c
+	gcc ${CFLAGS} -o hookcb.o -c ./hookcb.c
 	gcc ${CFLAGS} -o noro_util.o -c noro_util.c
 	gcc ${CFLAGS} -o rxilog.o -c rxilog.c
 	gcc ${CFLAGS} -o atomic.o -c atomic.c

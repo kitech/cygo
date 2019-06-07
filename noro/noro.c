@@ -13,14 +13,6 @@
 #include <noro.h>
 #include <noropriv.h>
 
-#define HKDEBUG 1
-#define linfo(fmt, ...)                                                 \
-    do { loglock();                                                     \
-    do { if (HKDEBUG) fprintf(stderr, "%s:%d:%s ", __FILE__, __LINE__, __FUNCTION__); } while (0); \
-    do { if (HKDEBUG) fprintf(stderr, fmt, __VA_ARGS__); } while (0) ;  \
-    do { if (HKDEBUG) fflush(stderr); } while (0) ;                     \
-    logunlock(); } while (0); 
-
 const int dftstksz = 128*1024;
 const int dftstkusz = dftstksz/8; // unit size by sizeof(void*)
 

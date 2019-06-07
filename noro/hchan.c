@@ -3,14 +3,6 @@
 #include "hchan.h"
 #include "noropriv.h"
 
-#define HKDEBUG 1
-#define linfo(fmt, ...)                                                 \
-    do { loglock();    bool dodbg = HKDEBUG;                             \
-        do { if (dodbg) fprintf(stderr, "%s:%d:%s ", __FILE__, __LINE__, __FUNCTION__); } while (0); \
-        do { if (dodbg) fprintf(stderr, fmt, __VA_ARGS__); } while (0) ; \
-        do { if (dodbg) fflush(stderr); } while (0) ;                 \
-        logunlock(); } while (0); 
-
 // wrapper chan_t with goroutine integeration
 
 

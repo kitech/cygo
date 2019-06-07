@@ -9,12 +9,9 @@
 #include "collectc/hashtable.h"
 #include "collectc/array.h"
 
+#include "noropriv.h"
 #include "hookcb.h"
 
-#define HKDEBUG 1
-#define linfo(fmt, ...)                                                 \
-    do { if (HKDEBUG) fprintf(stderr, "%s:%d:%s ", __FILE__, __LINE__, __FUNCTION__); } while (0); \
-    do { if (HKDEBUG) fprintf(stderr, fmt, __VA_ARGS__); } while (0) ;
 
 typedef struct fdcontext {
     int fd;

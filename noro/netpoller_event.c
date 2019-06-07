@@ -7,12 +7,6 @@
 // 所以在这是可以使用libev/libuv。
 // 如果以后hook，则这的实现无效了。看似也不需要hook epoll
 
-#define HKDEBUG 1
-#define linfo(fmt, ...)                                                 \
-    do { if (HKDEBUG) fprintf(stderr, "%s:%d:%s ", __FILE__, __LINE__, __FUNCTION__); } while (0); \
-    do { if (HKDEBUG) fprintf(stderr, fmt, __VA_ARGS__); } while (0) ;  \
-    do { if (HKDEBUG) fflush(stderr); } while (0) ;
-
 // typedef struct ev_loop ev_loop;
 
 #define EV_IO EV_READ|EV_WRITE

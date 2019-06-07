@@ -11,12 +11,6 @@
 #include "norogc.h"
 #include "noro_util.h"
 
-#define HKDEBUG 1
-#define linfo(fmt, ...)                                                 \
-    do { if (HKDEBUG) fprintf(stderr, "%s:%d:%s ", __FILE__, __LINE__, __FUNCTION__); } while (0); \
-    do { if (HKDEBUG) fprintf(stderr, fmt, __VA_ARGS__); } while (0) ; \
-    do { if (HKDEBUG) fflush(stderr); } while (0) ;
-
 
 #include <sys/epoll.h>
 #include "hook.h"
