@@ -296,6 +296,7 @@ void noro_machine_signal(machine* mc) {
 
 static __thread int gcurmcid__ = 0; // thread local
 static __thread int gcurgrid__ = 0; // thread local
+int noro_get_goid() { return gcurgrid__; }
 goroutine* noro_goroutine_getcur() {
     int grid = gcurgrid__;
     int mcid = gcurmcid__;
@@ -540,7 +541,7 @@ int noro_processor_yield(int fd, int ytype) {
             // 应该不是 processor线程
             return -1;
     }
-    // linfo("yield %d, mcid=%d, grid=%d\n", fd, gcurmc__, gcurgr__);
+    // linfo("yield %d, mcid=%d, grid=%d\n", fd, gcurmcid__, gcurgrid__);
     goroutine* gr = noro_goroutine_getcur();
     gr->pkreason = ytype;
     if (ytype == YIELD_TYPE_CHAN_RECV || ytype == YIELD_TYPE_CHAN_SEND ||
@@ -551,10 +552,33 @@ int noro_processor_yield(int fd, int ytype) {
     noro_goroutine_suspend(gr);
     return 0;
 }
-void noro_processor_resume_some(void* gr_) {
+int noro_processor_yield_multi(int ytype, int nfds, int fds[], int ytypes[]) {
+    // check是否是processor线程
+    if (gcurmcid__ == 0) {
+        linfo("maybe not processor thread %d %d\n", nfds, ytype)
+            // 应该不是 processor线程
+            return -1;
+    }
+    // linfo("yield %d, mcid=%d, grid=%d\n", fd, gcurmcid__, gcurgrid__);
+    goroutine* gr = noro_goroutine_getcur();
+    gr->pkreason = ytype;
+    for (int i = 0; i < nfds; i ++) {
+        int fd = fds[i];
+        int ytype = ytypes[i];
+        if (ytype == YIELD_TYPE_CHAN_RECV || ytype == YIELD_TYPE_CHAN_SEND ||
+            ytype == YIELD_TYPE_CHAN_SELECT || ytype == YIELD_TYPE_CHAN_SELECT_NOCASE) {
+        } else {
+            netpoller_yieldfd(fd, ytype, gr);
+        }
+    }
+    noro_goroutine_suspend(gr);
+    return 0;
+}
+void noro_processor_resume_some(void* gr_, int ytype) {
     goroutine* gr = (goroutine*)gr_;
     goroutine* mygr = noro_goroutine_getcur();
-    // linfo("netpoller notify, %p, id=%d\n", gr, gr->id);
+    ytype = (ytype == 0 ? gr->pkreason : ytype);
+    // linfo("netpoller notify, ytype=%d %p, id=%d\n", ytype, gr, gr->id);
     if (mygr != nilptr && gr->mcid == mygr->mcid) {
         noro_goroutine_resume_same_thread(gr);
         // 相同machine线程的情况，要主动出让执行权。

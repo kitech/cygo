@@ -54,6 +54,7 @@ dup_t dup_f = NULL;
 dup2_t dup2_f = NULL;
 dup3_t dup3_f = NULL;
 fclose_t fclose_f = NULL;
+fopen_t fopen_f = NULL;
 #if defined(LIBGO_SYS_Linux)
 pipe2_t pipe2_f = NULL;
 gethostbyname_r_t gethostbyname_r_f = NULL;
@@ -64,9 +65,10 @@ epoll_wait_t epoll_wait_f = NULL;
 #endif
 
 #define HKDEBUG 1
-#define linfo(fmt, ...)                                                 \
-    do { if (HKDEBUG) fprintf(stderr, "%s:%d %s: ", __FILE__, __LINE__, __FUNCTION__); } while (0); \
-    do { if (HKDEBUG) fprintf(stderr, fmt, __VA_ARGS__); } while (0) ;
+#define linfo(fmt, ...)    do { struct timeval ltv = {0}; gettimeofday(&ltv, 0); \
+        do { if (HKDEBUG) fprintf(stderr, "%ld.%ld %s:%d %s: ", ltv.tv_sec, ltv.tv_usec, __FILE__, __LINE__, __FUNCTION__); } while (0); \
+    do { if (HKDEBUG) fprintf(stderr, fmt, __VA_ARGS__); } while (0) ; \
+    } while (0);
 
 // #include "hookcb.h"
 #include "noropriv.h"
@@ -140,14 +142,14 @@ int connect(int fd, const struct sockaddr *addr, socklen_t addrlen)
     for (int i = 0;; i++) {
         int rv = connect_f(fd, addr, addrlen);
         if (rv < 0 ) {
-            linfo("%d %d %d %d\n", fd, rv, errno, i);
+            linfo("%d %d %d %d %s\n", fd, rv, errno, i, strerror(errno));
             noro_processor_yield(fd, YIELD_TYPE_CONNECT);
             continue;
         }
         // linfo("connect ok %d %d, %d, %d\n", fd, errno, time(0)-btime, i);
         return rv;
     }
-    return 0;
+    return -1;
 }
 
 int accept(int sockfd, struct sockaddr *addr, socklen_t *addrlen)
@@ -159,7 +161,7 @@ int accept(int sockfd, struct sockaddr *addr, socklen_t *addrlen)
 ssize_t read(int fd, void *buf, size_t count)
 {
     if (!read_f) initHook();
-    linfo("%d\n", fd);
+    linfo("%d fdnb=%d\n", fd, fd_is_nonblocking(fd));
     {
         return read_f(fd, buf, count);
     }
@@ -175,20 +177,45 @@ ssize_t readv(int fd, const struct iovec *iov, int iovcnt)
 ssize_t recv(int sockfd, void *buf, size_t len, int flags)
 {
     if (!recv_f) initHook();
-    linfo("%d\n", sockfd);
+    linfo("%d %d %d\n", sockfd, len, flags);
+    while (true) {
+        ssize_t rv = recv_f(sockfd, buf, len, flags);
+        if (rv == 0) {
+            hookcb_onclose(sockfd);
+        }
+        if (rv >= 0) {
+            return rv;
+        }
+        linfo("recv err=%d %d %s\n", rv, errno, strerror(errno));
+        noro_processor_yield(sockfd, YIELD_TYPE_RECV);
+    }
 }
 
 ssize_t recvfrom(int sockfd, void *buf, size_t len, int flags,
         struct sockaddr *src_addr, socklen_t *addrlen)
 {
     if (!recvfrom_f) initHook();
-    linfo("%d\n", sockfd);
+    struct timeval btv = {0};
+    struct timeval etv = {0};
+    gettimeofday(&btv, 0);
+    linfo("%d %ld.%ld\n", sockfd, btv.tv_sec, btv.tv_usec);
+    {
+        ssize_t rv = recvfrom_f(sockfd, buf, len, flags, src_addr, addrlen);
+        gettimeofday(&etv, 0);
+        linfo("%d %ld.%ld\n", sockfd, etv.tv_sec, etv.tv_usec);
+        return rv;
+    }
+    return -1;
 }
 
 ssize_t recvmsg(int sockfd, struct msghdr *msg, int flags)
 {
     if (!recvmsg_f) initHook();
-    linfo("%d\n", sockfd);
+    linfo("%d fdnb=%d\n", sockfd, fd_is_nonblocking(sockfd));
+    {
+        return recvmsg_f(sockfd, msg, flags);
+    }
+    return -1;
 }
 
 ssize_t write(int fd, const void *buf, size_t count)
@@ -211,7 +238,19 @@ ssize_t writev(int fd, const struct iovec *iov, int iovcnt)
 ssize_t send(int sockfd, const void *buf, size_t len, int flags)
 {
     if (!send_f) initHook();
-    linfo("%d\n", sockfd);
+    linfo("%d %d %d fdnb=%d\n", sockfd, len, flags, fd_is_nonblocking(sockfd));
+    while (true) {
+        ssize_t rv = send_f(sockfd, buf, len, flags);
+        linfo("send rv=%d errno=%d\n", rv, errno)
+        if (rv >= 0) {
+            assert(rv == len);
+            return rv;
+        }
+
+        noro_processor_yield(sockfd, YIELD_TYPE_SEND);
+    }
+    linfo("send ret %d\n", 0);
+    return -1;
 }
 
 ssize_t sendto(int sockfd, const void *buf, size_t len, int flags,
@@ -219,12 +258,17 @@ ssize_t sendto(int sockfd, const void *buf, size_t len, int flags,
 {
     if (!sendto_f) initHook();
     linfo("%d\n", sockfd);
+    return -1;
 }
 
 ssize_t sendmsg(int sockfd, const struct msghdr *msg, int flags)
 {
     if (!sendmsg_f) initHook();
-    linfo("%d\n", sockfd);
+    linfo("%d fdnb=%d\n", sockfd, fd_is_nonblocking(sockfd));
+    {
+        return sendmsg_f(sockfd, msg, flags);
+    }
+    return -1;
 }
 
 int poll_wip(struct pollfd *fds, nfds_t nfds, int timeout)
@@ -238,9 +282,49 @@ int poll_wip(struct pollfd *fds, nfds_t nfds, int timeout)
 int __poll(struct pollfd *fds, nfds_t nfds, int timeout)
 {
     if (!poll_f) initHook();
-    linfo("%d\n", nfds);
-}
+    // linfo("%d fd0=%d timeo=%d\n", nfds, fds[0].fd, timeout);
+    if (timeout == 0) {  // non-block
+        int rv = poll_f(fds, nfds, timeout);
+        return rv;
+    }
+    int tfds[nfds+1];
+    int tytypes[nfds+1];
+    for (int i = 0; i < nfds; i ++) {
+        tfds[i] = fds[i].fd;
+        tytypes[i] = 0;
+        if (fds[i].events & POLLIN) {
+            tytypes[i] = YIELD_TYPE_READ;
+        }
+        if (fds[i].events & POLLOUT) {
+            if (tytypes[i] != 0) {
+                linfo("multi poll events on one fd, not supported %d\n", fds[i].fd);
+            }else{
+                tytypes[i] = YIELD_TYPE_WRITE;
+            }
+        }
+    }
+    int ynfds = nfds;
+    if (timeout > 0) {
+        ynfds += 1;
+        tfds[nfds] = timeout*1000; // ms => us
+        tytypes[nfds] = YIELD_TYPE_USLEEP;
+    }
 
+    for (int i = 0; ; i++) {
+        int rv = poll_f(fds, nfds, 0);
+        // linfo("i=%d %d fd0=%d timeo=%d rv=%d\n", i, nfds, fds[0].fd, timeout, rv);
+        if (rv > 0) {
+            return rv;
+        }
+        if (timeout > 0 && i > 0) {
+            break; // should be timeout
+        }
+
+        noro_processor_yield_multi(YIELD_TYPE_POLL, ynfds, tfds, tytypes);
+    }
+    // linfo("poll ret %d\n", 0);
+    return 0;
+}
 
 #if defined(LIBGO_SYS_Linux)
 struct hostent* gethostbyname(const char* name)
@@ -263,12 +347,13 @@ struct hostent* gethostbyname2(const char* name, int af)
     linfo("%d\n", af);
     return NULL;
 }
+// why this call cannot hooked?
 int gethostbyname2_r(const char *name, int af,
         struct hostent *ret, char *buf, size_t buflen,
         struct hostent **result, int *h_errnop)
 {
     if (!gethostbyname2_r_f) initHook();
-    linfo("%d\n", af);
+    linfo("%s %d\n", name, af);
 }
 
 struct hostent *gethostbyaddr(const void *addr, socklen_t len, int type)
@@ -388,12 +473,20 @@ int ioctl_wip(int fd, unsigned long int request, ...)
 int getsockopt(int sockfd, int level, int optname, void *optval, socklen_t *optlen)
 {
     if (!getsockopt_f) initHook();
-    linfo("%d\n", sockfd);
+    linfo("%d %d %d\n", sockfd, level, optname);
+    {
+        int rv = getsockopt_f(sockfd, level, optname, optval, optlen);
+        return rv;
+    }
 }
 int setsockopt(int sockfd, int level, int optname, const void *optval, socklen_t optlen)
 {
     if (!setsockopt_f) initHook();
-    linfo("%d\n", sockfd);
+    linfo("%d %d %d\n", sockfd, level, optname);
+    {
+        int rv = setsockopt_f(sockfd, level, optname, optval, optlen);
+        return rv;
+    }
 }
 
 int dup(int oldfd)
@@ -425,6 +518,18 @@ int fclose(FILE* fp)
         return fclose_f(fp);
     }
     return 0;
+}
+FILE* fopen(const char *pathname, const char *mode)
+{
+    if (!fopen_f) initHook();
+    linfo("%s %s\n", pathname, mode);
+
+    {
+        FILE* fp = fopen_f(pathname, mode);
+        int fd = fileno(fp);
+        linfo("fd=%d\n", fd);
+        return fp;
+    }
 }
 
 #if defined(LIBGO_SYS_Linux)
@@ -536,6 +641,7 @@ static int doInitHook()
         dup2_f = (dup2_t)dlsym(RTLD_NEXT, "dup2");
         dup3_f = (dup3_t)dlsym(RTLD_NEXT, "dup3");
         fclose_f = (fclose_t)dlsym(RTLD_NEXT, "fclose");
+        fopen_f = (fopen_t)dlsym(RTLD_NEXT, "fopen");
 #if defined(LIBGO_SYS_Linux)
         pipe2_f = (pipe2_t)dlsym(RTLD_NEXT, "pipe2");
         gethostbyname_r_f = (gethostbyname_r_t)dlsym(RTLD_NEXT, "gethostbyname_r");

@@ -71,7 +71,7 @@ evdata* evdata_new(int evtyp, void* data) {
 }
 void evdata_free(evdata* d) { noro_free(d); }
 
-extern void noro_processor_resume_some(void* cbdata);
+extern void noro_processor_resume_some(void* cbdata, int ytype);
 
 // common version callback, support ev_io, ev_timer
 static
@@ -94,32 +94,35 @@ void netpoller_evwatcher_cb(evutil_socket_t fd, short events, void* arg) {
     // if direct event_free, it ok.
     // because non-persist event already run event_del by loop itself
 
+    int ytype = d->ytype;
     void* dd = d->data;
     event_free(d->evt);
     evdata_free(d);
-    noro_processor_resume_some(dd);
+    noro_processor_resume_some(dd, ytype);
 }
 
 static
-void netpoller_readfd(int fd, void* gr) {
+void netpoller_readfd(int fd, int ytype, void* gr) {
     netpoller* np = gnpl__;
     evdata* d = evdata_new(EV_IO, gr);
     struct event* evt = event_new(np->loop, fd, EV_READ, netpoller_evwatcher_cb, d);
     d->evt = evt;
+    d->ytype = ytype;
     event_add(evt, 0);
 }
 
 static
-void netpoller_writefd(int fd, void* gr) {
+void netpoller_writefd(int fd, int ytype, void* gr) {
     netpoller* np = gnpl__;
     evdata* d = evdata_new(EV_IO, gr);
     struct event* evt = event_new(np->loop, fd, EV_WRITE, netpoller_evwatcher_cb, d);
     d->evt = evt;
+    d->ytype = ytype;
     event_add(evt, 0);
 }
 
 static
-void netpoller_timer(long ns, void* gr) {
+void netpoller_timer(long ns, int ytype, void* gr) {
     netpoller* np = gnpl__;
 
     evdata* d = evdata_new(EV_TIMER, gr);
@@ -127,6 +130,7 @@ void netpoller_timer(long ns, void* gr) {
     d->tv.tv_usec = ns/1000 % 1000000;
     struct event* tmer = evtimer_new(np->loop, netpoller_evwatcher_cb, d);
     d->evt = tmer;
+    d->ytype = ytype;
     evtimer_add(tmer, &d->tv);
 }
 
@@ -147,31 +151,33 @@ void netpoller_yieldfd(int fd, int ytype, void* gr) {
     switch (ytype) {
     case YIELD_TYPE_SLEEP:
         ns = (long)fd*1000000000;
-        netpoller_timer(ns, gr);
+        netpoller_timer(ns, ytype, gr);
         break;
     case YIELD_TYPE_USLEEP:
         ns = (long)fd*1000;
-        netpoller_timer(ns, gr);
+        netpoller_timer(ns, ytype, gr);
         break;
     case YIELD_TYPE_NANOSLEEP:
         ns = fd;
-        netpoller_timer(ns, gr);
+        netpoller_timer(ns, ytype, gr);
         break;
     case YIELD_TYPE_CHAN_SEND:
         assert(1==2);// cannot process this type
-        netpoller_timer(1000, gr);
+        netpoller_timer(1000, ytype, gr);
         break;
     case YIELD_TYPE_CHAN_RECV:
         assert(1==2);// cannot process this type
-        netpoller_timer(1000, gr);
+        netpoller_timer(1000, ytype, gr);
         break;
     case YIELD_TYPE_CONNECT: case YIELD_TYPE_WRITE: case YIELD_TYPE_WRITEV:
     case YIELD_TYPE_SEND: case YIELD_TYPE_SENDTO: case YIELD_TYPE_SENDMSG:
-        netpoller_writefd(fd, gr);
+        netpoller_writefd(fd, ytype, gr);
         break;
+    // case YIELD_TYPE_READ: case YIELD_TYPE_READV:
+    // case YIELD_TYPE_RECV: case YIELD_TYPE_RECVFROM: case YIELD_TYPE_RECVMSG:
     default:
         assert(fd >= 0);
-        netpoller_readfd(fd, gr);
+        netpoller_readfd(fd, ytype, gr);
         break;
     }
 

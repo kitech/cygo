@@ -42,7 +42,7 @@ fdcontext* fdcontext_new(int fd) {
 
 typedef int(*fcntl_t)(int __fd, int __cmd, ...);
 extern fcntl_t fcntl_f;
-static bool fd_is_nonblocking(int fd) {
+bool fd_is_nonblocking(int fd) {
     int flags = fcntl_f(fd, F_GETFL, 0);
     bool old = flags & O_NONBLOCK;
     return old;

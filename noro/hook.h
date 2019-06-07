@@ -118,6 +118,9 @@ extern dup3_t dup3_f;
 typedef int (*fclose_t)(FILE *fp);
 extern fclose_t fclose_f;
 
+typedef FILE*(*fopen_t)(const char *pathname, const char *mode);
+extern fopen_t fopen_f;
+
 #if defined(LIBGO_SYS_Linux)
 // DNS by libcares
 // gethostent

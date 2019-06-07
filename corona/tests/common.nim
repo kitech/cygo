@@ -45,7 +45,8 @@ proc testtick(cnter:int) =
         discard
     # if cnter > 2: break
     # runtest_manyroutines_tick(cnter)
-    if cnter == 0: runtest_chan1(cnter)
+    # if cnter == 0: runtest_chan1(cnter)
+    if cnter == 1: runtest_tcpcon0()
     # test_chan0()
     return
 

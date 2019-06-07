@@ -23,6 +23,7 @@ var noroh : pointer
 proc noro_set_thread_createcb(fnptr:pointer, args:pointer) {.importc.}
 proc noro_set_frame_funcs(getter, setter : pointer) {.importc.}
 proc noro_init_and_wait_done():pointer {.importc.}
+proc noro_get_goid():cint {.importc.}
 proc noro_post(fnptr:pointer, args:pointer) {.importc.}
 proc noro_malloc(size:csize) : pointer {.importc.}
 proc hchan_new(cap:int) : pointer {.importc.}
@@ -57,6 +58,10 @@ macro gogo*(funccallexpr: typed) : untyped =
 macro go*(funccallexpr: typed) : untyped =
     ## Just like a spawn: `gogo somefunc(a0, a1, a2)`
     result = quote do: gogo2(funccallexpr)
+
+proc goid*():int =
+    ## get current goroutine id
+    noro_get_goid()
 
 # public channel apis. see gochanapi.nim
 # proc makechan*(T: typedesc, cap:int) : chan[T]
