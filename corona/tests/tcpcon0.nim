@@ -54,6 +54,30 @@ proc test_http_get1() =
 
     linfo("done")
 
+proc test_accept1s() =
+    var sock = newSocket(buffered=false)
+    sock.setSockOpt(OptReusePort, true)
+    sock.bindAddr(5678.Port)
+    sock.listen()
+    while true:
+        linfo("accepting ...")
+        var sk : Socket
+        sock.accept(sk)
+        linfo("newconn fd=", sk.getFd().repr)
+        sk.close()
+        break
+    sock.close()
+    return
+proc test_accept1c() =
+    var sock = newSocket(buffered=false)
+    sock.connect("127.0.0.1", 5678.Port)
+    return
+proc test_accept1() =
+    noro_post(test_accept1s, nil)
+    sleep(100)
+    noro_post(test_accept1c, nil)
+    return
+
 proc runtest_tcpconm() =
     connsock()
     connsock1()
@@ -61,4 +85,5 @@ proc runtest_tcpconm() =
     test_http_get1()
 
 proc runtest_tcpcon0() =
-    noro_post(runtest_tcpconm, nil)
+    # noro_post(runtest_tcpconm, nil)
+    test_accept1()

@@ -136,13 +136,15 @@ int connect(int fd, const struct sockaddr *addr, socklen_t addrlen)
     time_t btime = time(0);
     for (int i = 0;; i++) {
         int rv = connect_f(fd, addr, addrlen);
-        if (rv < 0 ) {
-            linfo("%d %d %d %d %s\n", fd, rv, errno, i, strerror(errno));
-            noro_processor_yield(fd, YIELD_TYPE_CONNECT);
-            continue;
+        if (rv >= 0) {
+            // linfo("connect ok %d %d, %d, %d\n", fd, errno, time(0)-btime, i);
+            return rv;
         }
-        // linfo("connect ok %d %d, %d, %d\n", fd, errno, time(0)-btime, i);
-        return rv;
+        if (errno != EINPROGRESS) {
+            linfo("Unknown %d %d %d %d %s\n", fd, rv, errno, i, strerror(errno));
+            return rv;
+        }
+        noro_processor_yield(fd, YIELD_TYPE_CONNECT);
     }
     assert(1==2); // unreachable
 }
@@ -151,6 +153,15 @@ int accept(int sockfd, struct sockaddr *addr, socklen_t *addrlen)
 {
     if (!accept_f) initHook();
     linfo("%d\n", sockfd);
+    while(1){
+        int rv = accept_f(sockfd, addr, addrlen);
+        if (rv >= 0) {
+            hookcb_oncreate(rv, FDISSOCKET, false, AF_INET, SOCK_STREAM, 0);
+            return rv;
+        }
+        noro_processor_yield(sockfd, YIELD_TYPE_ACCEPT);
+    }
+    assert(1==2); // unreachable
 }
 
 ssize_t read(int fd, void *buf, size_t count)
@@ -171,6 +182,7 @@ ssize_t readv(int fd, const struct iovec *iov, int iovcnt)
 {
     if (!readv_f) initHook();
     linfo("%d\n", fd);
+    assert(1==2);
 }
 
 ssize_t recv(int sockfd, void *buf, size_t len, int flags)
@@ -244,6 +256,7 @@ ssize_t writev(int fd, const struct iovec *iov, int iovcnt)
 {
     if (!writev_f) initHook();
     linfo("%d\n", fd);
+    assert(1==2);
 }
 
 ssize_t send(int sockfd, const void *buf, size_t len, int flags)
@@ -268,6 +281,7 @@ ssize_t sendto(int sockfd, const void *buf, size_t len, int flags,
 {
     if (!sendto_f) initHook();
     linfo("%d\n", sockfd);
+    assert(1==2);
     return -1;
 }
 
@@ -285,7 +299,7 @@ ssize_t sendmsg(int sockfd, const struct msghdr *msg, int flags)
     assert(1==2); // unreachable
 }
 
-int poll_wip(struct pollfd *fds, nfds_t nfds, int timeout)
+int poll(struct pollfd *fds, nfds_t nfds, int timeout)
 {
     if (!poll_f) initHook();
     linfo("%d\n", nfds);
@@ -311,7 +325,7 @@ int __poll(struct pollfd *fds, nfds_t nfds, int timeout)
         }
         if (fds[i].events & POLLOUT) {
             if (tytypes[i] != 0) {
-                linfo("multi poll events on one fd, not supported %d\n", fds[i].fd);
+                linfo("multi poll events on one fd, not supported i=%d %d\n", i, fds[i].fd);
             }else{
                 tytypes[i] = YIELD_TYPE_WRITE;
             }
@@ -344,6 +358,7 @@ int __poll(struct pollfd *fds, nfds_t nfds, int timeout)
 struct hostent* gethostbyname(const char* name)
 {
     linfo("%d\n", 1);
+    assert(1==2);
     return NULL;
 }
 int gethostbyname_r(const char *__restrict name,
@@ -354,11 +369,13 @@ int gethostbyname_r(const char *__restrict name,
 {
     if (!gethostbyname_r_f) initHook();
     linfo("%d\n", __buflen);
+    assert(1==2);
 }
 
 struct hostent* gethostbyname2(const char* name, int af)
 {
     linfo("%d\n", af);
+    assert(1==2);
     return NULL;
 }
 // why this call cannot hooked?
@@ -368,11 +385,13 @@ int gethostbyname2_r(const char *name, int af,
 {
     if (!gethostbyname2_r_f) initHook();
     linfo("%s %d\n", name, af);
+    assert(1==2);
 }
 
 struct hostent *gethostbyaddr(const void *addr, socklen_t len, int type)
 {
     linfo("%d\n", type);
+    assert(1==2);
     return NULL;
 
 }
@@ -382,66 +401,55 @@ int gethostbyaddr_r(const void *addr, socklen_t len, int type,
 {
     if (!gethostbyaddr_r_f) initHook();
     linfo("%d\n", type);
+    assert(1==2);
 }
 #endif
 
 // ---------------------------------------------------------------------------
 
-int select_wip(int nfds, fd_set *readfds, fd_set *writefds,
+int select(int nfds, fd_set *readfds, fd_set *writefds,
         fd_set *exceptfds, struct timeval *timeout)
 {
     if (!select_f) initHook();
     linfo("%d\n", nfds);
+    assert(1==2);
 }
 
 unsigned int sleep(unsigned int seconds)
 {
+    if (!noro_in_processor()) return sleep_f(seconds);
     if (!sleep_f) initHook();
     // linfo("%d\n", seconds);
 
     {
         int rv = noro_processor_yield(seconds, YIELD_TYPE_SLEEP);
-        if (rv == 0) return 0;
-        // -1, goon
+        return 0;
     }
-    {
-        sleep_f(seconds);
-    }
-    return 0;
 }
 
 int usleep(useconds_t usec)
 {
+    if (!noro_in_processor()) return usleep_f(usec);
     if (!usleep_f) initHook();
     // linfo("%d\n", usec);
 
     time_t btime = time(0);
     {
         int rv = noro_processor_yield(usec, YIELD_TYPE_USLEEP);
-        if (rv == 0) return 0;
-        // -1, goon
+        return 0;
     }
-
-    {
-        usleep_f(usec);
-    }
-    return 0;
 }
 
 int nanosleep(const struct timespec *req, struct timespec *rem)
 {
+    if (!noro_in_processor()) return nanosleep_f(req, rem);
     if (!nanosleep_f) initHook();
     // linfo("%d, %d\n", req->tv_sec, req->tv_nsec);
     {
         int ns = req->tv_sec * 1000000000 + req->tv_nsec;
         int rv = noro_processor_yield(ns, YIELD_TYPE_NANOSLEEP);
-        if (rv == 0) return 0;
-        // -1, goon
+        return 0;
     }
-    {
-        return nanosleep_f(req, rem);
-    }
-    return 0;
 }
 
 int close(int fd)
@@ -507,18 +515,21 @@ int dup(int oldfd)
 {
     if (!dup_f) initHook();
     linfo("%d\n", oldfd);
+    assert(1==2);
 }
 // TODO: support FD_CLOEXEC
 int dup2(int oldfd, int newfd)
 {
     if (!dup2_f) initHook();
     linfo("%d\n", newfd);
+    assert(1==2);
 }
 // TODO: support FD_CLOEXEC
 int dup3(int oldfd, int newfd, int flags)
 {
     if (!dup3_f) initHook();
     linfo("%d\n", flags);
+    assert(1==2);
 }
 
 int fclose(FILE* fp)
