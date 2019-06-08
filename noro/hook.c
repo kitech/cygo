@@ -152,7 +152,7 @@ int connect(int fd, const struct sockaddr *addr, socklen_t addrlen)
 int accept(int sockfd, struct sockaddr *addr, socklen_t *addrlen)
 {
     if (!accept_f) initHook();
-    linfo("%d\n", sockfd);
+    linfo("%d fdnb=%d\n", sockfd, fd_is_nonblocking(sockfd));
     while(1){
         int rv = accept_f(sockfd, addr, addrlen);
         if (rv >= 0) {
@@ -166,6 +166,7 @@ int accept(int sockfd, struct sockaddr *addr, socklen_t *addrlen)
 
 ssize_t read(int fd, void *buf, size_t count)
 {
+    if (!noro_in_processor()) return read_f(fd, buf, count);
     if (!read_f) initHook();
     linfo("%d fdnb=%d\n", fd, fd_is_nonblocking(fd));
     while (1){

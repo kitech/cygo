@@ -9,12 +9,13 @@
 
 // typedef struct ev_loop ev_loop;
 
-#define EV_IO EV_READ|EV_WRITE
+#define EV_IO EV_READ|EV_WRITE|EV_CLOSED
 #define EV_TIMER EV_TIMEOUT
 
 typedef struct netpoller {
     struct event_base * loop;
     HashTable* watchers; // ev_watcher* => goroutine*
+    mtx_t evmu;
 } netpoller;
 
 static netpoller* gnpl__ = 0;
@@ -54,16 +55,25 @@ typedef struct evdata {
     int evtyp;
     void* data;
     int ytype;
+    int fd;
     struct timeval tv;
     struct event* evt;
 } evdata;
+// TODO seems norogc has some problem?
+// 难道说可能是libevent也开了自己的线程？
+// switch to manual calloc to fixed problem: GC_malloc return the same addr
 evdata* evdata_new(int evtyp, void* data) {
-    evdata* d = noro_malloc_st(evdata);
+    assert(evtyp >= 0);
+    // evdata* d = noro_malloc_st(evdata);
+    evdata* d = calloc(1, sizeof(evdata));
     d->evtyp = evtyp;
     d->data = data;
     return d;
 }
-void evdata_free(evdata* d) { noro_free(d); }
+void evdata_free(evdata* d) {
+    // noro_free(d);
+    free(d);
+}
 
 extern void noro_processor_resume_some(void* cbdata, int ytype);
 
@@ -81,6 +91,7 @@ void netpoller_evwatcher_cb(evutil_socket_t fd, short events, void* arg) {
         // event_del(d->evt);
         break;
     default:
+        linfo("wtf fd=%d %d %d\n", fd, d->evtyp, d->ytype);
         assert(1==2);
     }
 
@@ -90,6 +101,12 @@ void netpoller_evwatcher_cb(evutil_socket_t fd, short events, void* arg) {
 
     int ytype = d->ytype;
     void* dd = d->data;
+    goroutine *gr = dd;
+    if (d->evtyp == EV_TIMER && fd != -1) {
+        linfo("evwoke ev=%d fd=%d(%d) ytype=%d=%s %p grid=%d, mcid=%d d=%p\n",
+              events, fd, d->fd, ytype, yield_type_name(ytype), dd, gr->id, gr->mcid, d);
+        assert(fd == -1);
+    }
     event_free(d->evt);
     evdata_free(d);
     noro_processor_resume_some(dd, ytype);
@@ -99,20 +116,29 @@ static
 void netpoller_readfd(int fd, int ytype, void* gr) {
     netpoller* np = gnpl__;
     evdata* d = evdata_new(EV_IO, gr);
-    struct event* evt = event_new(np->loop, fd, EV_READ, netpoller_evwatcher_cb, d);
-    d->evt = evt;
     d->ytype = ytype;
+    d->fd = fd;
+    // mtx_lock(&np->evmu);
+    struct event* evt = event_new(np->loop, fd, EV_READ|EV_CLOSED, netpoller_evwatcher_cb, d);
+    d->evt = evt;
     event_add(evt, 0);
+    // mtx_unlock(&np->evmu);
+    if (d != nilptr) {
+        // linfo("event_add d=%p\n", d);
+    }
 }
 
 static
 void netpoller_writefd(int fd, int ytype, void* gr) {
     netpoller* np = gnpl__;
     evdata* d = evdata_new(EV_IO, gr);
-    struct event* evt = event_new(np->loop, fd, EV_WRITE, netpoller_evwatcher_cb, d);
-    d->evt = evt;
     d->ytype = ytype;
+    d->fd = fd;
+    // mtx_lock(&np->evmu);
+    struct event* evt = event_new(np->loop, fd, EV_WRITE|EV_CLOSED, netpoller_evwatcher_cb, d);
+    d->evt = evt;
     event_add(evt, 0);
+    // mtx_unlock(&np->evmu);
 }
 
 static
@@ -120,12 +146,16 @@ void netpoller_timer(long ns, int ytype, void* gr) {
     netpoller* np = gnpl__;
 
     evdata* d = evdata_new(EV_TIMER, gr);
+    d->ytype = ytype;
+    d->fd = ns;
     d->tv.tv_sec = ns/1000000000;
     d->tv.tv_usec = ns/1000 % 1000000;
-    struct event* tmer = evtimer_new(np->loop, netpoller_evwatcher_cb, d);
+    // mtx_lock(&np->evmu);
+    // struct event* tmer = evtimer_new(np->loop, netpoller_evwatcher_cb, d);
+    struct event* tmer = event_new(np->loop, -1, 0, netpoller_evwatcher_cb, d);
     d->evt = tmer;
-    d->ytype = ytype;
     evtimer_add(tmer, &d->tv);
+    // mtx_unlock(&np->evmu);
 }
 
 // when ytype is SLEEP/USLEEP/NANOSLEEP, fd is the nanoseconds
@@ -170,6 +200,7 @@ void netpoller_yieldfd(int fd, int ytype, void* gr) {
     // case YIELD_TYPE_READ: case YIELD_TYPE_READV:
     // case YIELD_TYPE_RECV: case YIELD_TYPE_RECVFROM: case YIELD_TYPE_RECVMSG:
     default:
+        // linfo("add reader fd=%d ytype=%d=%s\n", fd, ytype, yield_type_name(ytype));
         assert(fd >= 0);
         netpoller_readfd(fd, ytype, gr);
         break;

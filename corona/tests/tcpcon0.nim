@@ -1,6 +1,7 @@
 
 import net
 import times
+import random
 import nativesockets
 
 var ip = "192.30.253.112"
@@ -78,6 +79,65 @@ proc test_accept1() =
     noro_post(test_accept1c, nil)
     return
 
+# echo server/client test.
+# 32 个client 发起请求并接收
+var echo_srv_got0 = 0
+var echo_cli_got0 = 0
+proc test_echo_srv_handle0(conn:Socket) =
+    sleep(rand(123))
+    var buf = newStringOfCap(32)
+    var rn = conn.recv(buf, buf.cap)
+    sleep(123)
+    conn.send(buf)
+    # conn.close()
+    echo_srv_got0 += 1
+    return
+proc test_echo_srv0(cnt:int) =
+    var sock = newSocket(buffered=false)
+    sock.setSockOpt(OptReuseAddr, true)
+    sock.setSockOpt(OptReusePort, true)
+    sock.bindAddr(5678.Port)
+    sock.listen()
+    var i = 0
+    while true:
+        var sk : Socket
+        sock.accept(sk)
+        noro_post(test_echo_srv_handle0, cast[pointer](sk))
+        i += 1
+        if i == cnt: break
+    sock.close()
+    linfo("echo srv done")
+    return
+
+proc test_echo_cli_worker0(no:int) =
+    var sock = newSocket(buffered=false)
+    try:
+        sock.connect("127.0.0.1", 5678.Port)
+    except:
+        linfo("cli err", getCurrentExceptionMsg())
+    for i in 0..< 1:
+        sock.send("this is echo lelelele cli " & $no)
+        sleep(rand(300)+123)
+        var buf = newStringOfCap(64)
+        var rv = sock.recv(buf, buf.cap)
+        assert(rv == buf.len)
+    echo_cli_got0 += 1
+    sleep(1234)
+    sock.close()
+    return
+proc test_echo_cli0() =
+    for i in 0..< 32:
+        sleep(rand(500))
+        noro_post(test_echo_cli_worker0, cast[pointer](i))
+    var i = 0
+    while true:
+        i += 1
+        usleepc(100000) # 100ms
+        if echo_srv_got0 == echo_cli_got0 and echo_cli_got0 == 32: break
+        assert(i < 20, "wait cli done timedout" & $echo_srv_got0 & " " & $echo_cli_got0)
+    linfo("echo cli done",  echo_srv_got0, echo_cli_got0)
+    return
+
 proc runtest_tcpconm() =
     connsock()
     connsock1()
@@ -86,4 +146,9 @@ proc runtest_tcpconm() =
 
 proc runtest_tcpcon0() =
     # noro_post(runtest_tcpconm, nil)
-    test_accept1()
+    # test_accept1()
+    noro_post(test_echo_srv0, cast[pointer](32))
+    sleep(300)
+    noro_post(test_echo_cli0, nil)
+    return
+

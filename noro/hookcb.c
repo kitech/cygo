@@ -96,7 +96,7 @@ void hookcb_oncreate(int fd, int fdty, bool isNonBlocking, int domain, int sockt
     if (hkcb == 0) return ;
     if (!fd_is_nonblocking(fd)) {
         // set nonblocking???
-        linfo("fd is blocking %d, nb=%d\n", fd, fd_is_nonblocking(fd));
+        // linfo("fd is blocking %d, nb=%d\n", fd, fd_is_nonblocking(fd));
     }
 
     fdcontext* fdctx = fdcontext_new(fd);

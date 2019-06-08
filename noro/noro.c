@@ -193,7 +193,7 @@ void noro_goroutine_resume_cross_thread(goroutine* gr) {
     // assert(gr->state != runnable);
     // assert(gr->state != executing);
     if (atomic_getint(&gr->state) == executing) {
-        linfo("resume but executing %d\n", gr->id);
+        linfo("resume but executing grid=%d, mcid=%d\n", gr->id, gr->mcid);
         return;
     }
     if (atomic_getint(&gr->state) == runnable) {
@@ -330,7 +330,9 @@ void noro_processor_setname(int id) {
 }
 void* noro_processor_netpoller(void*arg) {
     machine* mc = (machine*)arg;
-
+    struct GC_stack_base stksb = {};
+    GC_get_stack_base(&stksb);
+    GC_register_my_thread(&stksb);
     linfo("%d, %d\n", mc->id, gettid());
     noro_processor_setname(mc->id);
 
@@ -341,6 +343,7 @@ void* noro_processor_netpoller(void*arg) {
     for (;;) {
         sleep(600);
     }
+    return nilptr;
 }
 
 void* noro_processor0(void*arg) {
@@ -456,6 +459,7 @@ goroutine* noro_sched_get_ready_one(machine*mc) {
             rungr = gr;
             break;
         }
+        // linfo("grid=%d mcid=%d, grstate=%d\n", gr->id, gr->mcid, atomic_getint(&gr->state));
     }
     if (arr != 0) {
         array_destroy(arr);
@@ -533,7 +537,7 @@ int noro_processor_yield(int fd, int ytype) {
             // 应该不是 processor线程
             return -1;
     }
-    // linfo("yield %d, mcid=%d, grid=%d\n", fd, gcurmcid__, gcurgrid__);
+    // linfo("yield fd=%d, ytype=%d, mcid=%d, grid=%d\n", fd, ytype, gcurmcid__, gcurgrid__);
     goroutine* gr = noro_goroutine_getcur();
     gr->pkreason = ytype;
     if (ytype == YIELD_TYPE_CHAN_RECV || ytype == YIELD_TYPE_CHAN_SEND ||

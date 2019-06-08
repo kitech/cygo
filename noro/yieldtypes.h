@@ -33,8 +33,9 @@ typedef enum yield_type
      YIELD_TYPE_GETHOSTBYADDR,
 
      YIELD_TYPE_MAX,
-    } yeield_type;
+    } yield_type;
 
+const char* yield_type_name(int ytype);
 
 #endif
 
