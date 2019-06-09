@@ -93,6 +93,8 @@ const char* yield_type_name(int ytype) {
 
     case YIELD_TYPE_SLEEP:
         return "sleep";
+    case YIELD_TYPE_MSLEEP:
+        return "msleep";
     case YIELD_TYPE_USLEEP:
         return "usleep";
     case YIELD_TYPE_NANOSLEEP:

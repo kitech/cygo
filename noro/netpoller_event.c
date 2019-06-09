@@ -55,7 +55,7 @@ typedef struct evdata {
     int evtyp;
     void* data;
     int ytype;
-    int fd;
+    long fd; // fd or ns
     struct timeval tv;
     struct event* evt;
 } evdata;
@@ -171,13 +171,14 @@ void netpoller_timer(long ns, int ytype, void* gr) {
 }
 
 // when ytype is SLEEP/USLEEP/NANOSLEEP, fd is the nanoseconds
-void netpoller_yieldfd(int fd, int ytype, void* gr) {
+void netpoller_yieldfd(long fd, int ytype, void* gr) {
     assert(ytype > YIELD_TYPE_NONE);
     assert(ytype < YIELD_TYPE_MAX);
 
     struct timeval tv = {0, 123};
     switch (ytype) {
-    case YIELD_TYPE_SLEEP: case YIELD_TYPE_USLEEP: case YIELD_TYPE_NANOSLEEP:
+    case YIELD_TYPE_SLEEP: case YIELD_TYPE_MSLEEP:
+    case YIELD_TYPE_USLEEP: case YIELD_TYPE_NANOSLEEP:
         // event_base_loopbreak(gnpl__->loop);
         // event_base_loopexit(gnpl__->loop, &tv);
         break;
@@ -186,11 +187,15 @@ void netpoller_yieldfd(int fd, int ytype, void* gr) {
     long ns = 0;
     switch (ytype) {
     case YIELD_TYPE_SLEEP:
-        ns = (long)fd*1000000000;
+        ns = fd*1000000000;
+        netpoller_timer(ns, ytype, gr);
+        break;
+    case YIELD_TYPE_MSLEEP:
+        ns = fd*1000000;
         netpoller_timer(ns, ytype, gr);
         break;
     case YIELD_TYPE_USLEEP:
-        ns = (long)fd*1000;
+        ns = fd*1000;
         netpoller_timer(ns, ytype, gr);
         break;
     case YIELD_TYPE_NANOSLEEP:

@@ -447,7 +447,7 @@ int nanosleep(const struct timespec *req, struct timespec *rem)
     if (!nanosleep_f) initHook();
     // linfo("%d, %d\n", req->tv_sec, req->tv_nsec);
     {
-        int ns = req->tv_sec * 1000000000 + req->tv_nsec;
+        long ns = req->tv_sec * 1000000000 + req->tv_nsec;
         int rv = noro_processor_yield(ns, YIELD_TYPE_NANOSLEEP);
         return 0;
     }

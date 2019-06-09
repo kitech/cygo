@@ -25,6 +25,7 @@ typedef enum yield_type
      YIELD_TYPE_ACCEPT,
 
      YIELD_TYPE_SLEEP,
+     YIELD_TYPE_MSLEEP,
      YIELD_TYPE_USLEEP,
      YIELD_TYPE_NANOSLEEP,
 

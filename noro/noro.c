@@ -530,14 +530,14 @@ void* noro_processor(void*arg) {
 }
 
 bool noro_in_processor() { return gcurmcid__ != 0; }
-int noro_processor_yield(int fd, int ytype) {
+int noro_processor_yield(long fd, int ytype) {
     // check是否是processor线程
     if (gcurmcid__ == 0) {
-        linfo("maybe not processor thread %d %d\n", fd, ytype)
+        linfo("maybe not processor thread %ld %d\n", fd, ytype)
             // 应该不是 processor线程
             return -1;
     }
-    // linfo("yield fd=%d, ytype=%d, mcid=%d, grid=%d\n", fd, ytype, gcurmcid__, gcurgrid__);
+    // linfo("yield fd=l%d, ytype=%d, mcid=%d, grid=%d\n", fd, ytype, gcurmcid__, gcurgrid__);
     goroutine* gr = noro_goroutine_getcur();
     gr->pkreason = ytype;
     if (ytype == YIELD_TYPE_CHAN_RECV || ytype == YIELD_TYPE_CHAN_SEND ||
@@ -548,7 +548,7 @@ int noro_processor_yield(int fd, int ytype) {
     noro_goroutine_suspend(gr);
     return 0;
 }
-int noro_processor_yield_multi(int ytype, int nfds, int fds[], int ytypes[]) {
+int noro_processor_yield_multi(int ytype, int nfds, long fds[], int ytypes[]) {
     // check是否是processor线程
     if (gcurmcid__ == 0) {
         linfo("maybe not processor thread %d %d\n", nfds, ytype)
@@ -559,7 +559,7 @@ int noro_processor_yield_multi(int ytype, int nfds, int fds[], int ytypes[]) {
     goroutine* gr = noro_goroutine_getcur();
     gr->pkreason = ytype;
     for (int i = 0; i < nfds; i ++) {
-        int fd = fds[i];
+        long fd = fds[i];
         int ytype = ytypes[i];
         if (ytype == YIELD_TYPE_CHAN_RECV || ytype == YIELD_TYPE_CHAN_SEND ||
             ytype == YIELD_TYPE_CHAN_SELECT || ytype == YIELD_TYPE_CHAN_SELECT_NOCASE) {

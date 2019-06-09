@@ -35,10 +35,11 @@ include "./usleep0.nim"
 include "./manyroutines.nim"
 include "./chan0.nim"
 include "./chan1.nim"
+include "./boehwgc0.nim"
 
 # test Loop
 proc testtick(cnter:int) =
-    if cnter mod 12 == 1: linfo("tickout", cnter)
+    if cnter mod 16 == 1: linfo("tickout", cnter)
     if cnter mod 6 == 1:
         #runtest_tcpcon0()
         #runtest_usleep((cnter/6).int + 1)
@@ -46,7 +47,8 @@ proc testtick(cnter:int) =
     # if cnter > 2: break
     # runtest_manyroutines_tick(cnter)
     # if cnter == 0: runtest_chan1(cnter)
-    if cnter == 1: runtest_tcpcon0()
+    # if cnter == 1: runtest_tcpcon0()
+    if cnter == 1: runtest_boehmgc0()
     # test_chan0()
     return
 
