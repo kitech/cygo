@@ -134,7 +134,7 @@ proc test_echo_cli0() =
         i += 1
         usleepc(100000) # 100ms
         if echo_srv_got0 == echo_cli_got0 and echo_cli_got0 == 32: break
-        assert(i < 20, "wait cli done timedout" & $echo_srv_got0 & " " & $echo_cli_got0)
+        assert(i < 30, "wait cli done timedout" & $echo_srv_got0 & " " & $echo_cli_got0)
     linfo("echo cli done",  echo_srv_got0, echo_cli_got0)
     return
 

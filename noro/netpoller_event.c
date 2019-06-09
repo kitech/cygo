@@ -59,15 +59,24 @@ typedef struct evdata {
     struct timeval tv;
     struct event* evt;
 } evdata;
+
+static void atstgc_finalizer_fn(evdata* obj, void* cbdata) {
+    linfo("finilize obj %p, %p\n", obj, cbdata);
+}
 // TODO seems norogc has some problem?
-// 难道说可能是libevent也开了自己的线程？
-// switch to manual calloc to fixed problem: GC_malloc return the same addr
+// 难道说可能是libevent也开了自己的线程？无
+// switch to manual calloc can fix the problem: because GC_malloc return the same addr
+// 发现 evdata 的finalize早于真正需要释放它的时间？而在 netpoller_readfd()中加一个log顺序就变了？
+// 难道是goroutine yield之后，被GC认为是没用了？应该怎么测试呢？
 evdata* evdata_new(int evtyp, void* data) {
     assert(evtyp >= 0);
+
+    netpoller* np = gnpl__;
     // evdata* d = noro_malloc_st(evdata);
     evdata* d = calloc(1, sizeof(evdata));
     d->evtyp = evtyp;
     d->data = data;
+    // GC_register_finalizer(d, atstgc_finalizer_fn, nilptr, nilptr, nilptr);
     return d;
 }
 void evdata_free(evdata* d) {
@@ -82,6 +91,9 @@ static
 void netpoller_evwatcher_cb(evutil_socket_t fd, short events, void* arg) {
     evdata* d = (evdata*)arg;
     assert(d != 0);
+    int ytype = d->ytype;
+    void* dd = d->data;
+    struct event* evt = d->evt;
 
     switch (d->evtyp) {
     case EV_TIMER:
@@ -99,15 +111,14 @@ void netpoller_evwatcher_cb(evutil_socket_t fd, short events, void* arg) {
     // if direct event_free, it ok.
     // because non-persist event already run event_del by loop itself
 
-    int ytype = d->ytype;
-    void* dd = d->data;
     goroutine *gr = dd;
+    // linfo("before release d=%p\n", d);
     if (d->evtyp == EV_TIMER && fd != -1) {
         linfo("evwoke ev=%d fd=%d(%d) ytype=%d=%s %p grid=%d, mcid=%d d=%p\n",
-              events, fd, d->fd, ytype, yield_type_name(ytype), dd, gr->id, gr->mcid, d);
+              events, fd, fd, ytype, yield_type_name(ytype), dd, gr->id, gr->mcid, d);
         assert(fd == -1);
     }
-    event_free(d->evt);
+    event_free(evt);
     evdata_free(d);
     noro_processor_resume_some(dd, ytype);
 }
@@ -151,11 +162,12 @@ void netpoller_timer(long ns, int ytype, void* gr) {
     d->tv.tv_sec = ns/1000000000;
     d->tv.tv_usec = ns/1000 % 1000000;
     // mtx_lock(&np->evmu);
-    // struct event* tmer = evtimer_new(np->loop, netpoller_evwatcher_cb, d);
-    struct event* tmer = event_new(np->loop, -1, 0, netpoller_evwatcher_cb, d);
+    struct event* tmer = evtimer_new(np->loop, netpoller_evwatcher_cb, d);
+    // struct event* tmer = event_new(np->loop, -1, 0, netpoller_evwatcher_cb, d);
     d->evt = tmer;
     evtimer_add(tmer, &d->tv);
     // mtx_unlock(&np->evmu);
+    // linfo("timer add d=%p\n", d);
 }
 
 // when ytype is SLEEP/USLEEP/NANOSLEEP, fd is the nanoseconds

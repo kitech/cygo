@@ -9,6 +9,8 @@
 #define NORO_MALLOC(size) GC_MALLOC(size)
 #define NORO_FREE(ptr) GC_FREE(ptr)
 #define NORO_REALLOC(obj, new_size) GC_REALLOC(obj, new_size)
+const char* noro_gc_event_name(GC_EventType evty);
+
 #else
 
 #include <stdlib.h>
@@ -24,4 +26,6 @@ void* noro_realloc(void* obj, size_t new_size);
 
 #define noro_malloc_st(/*typedesc*/st) (st*)noro_malloc(sizeof(st))
 #define convto(/*typedesc*/ st, /*var*/ var) (st*)(var)
+
 #endif
+

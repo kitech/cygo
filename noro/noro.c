@@ -600,15 +600,24 @@ int hashtable_cmp_int(const void *key1, const void *key2) {
     else return -1;
 }
 
-void noro_gc_push_other_roots() {
+static void noro_gc_push_other_roots() {
     linfo("push other roots %d\n", gettid());
+}
+static void noro_gc_on_collection_event(GC_EventType evty) {
+    linfo("%d=%s\n", evty, noro_gc_event_name(evty));
+}
+static void noro_gc_on_thread_event(GC_EventType evty, void* thid) {
+    linfo("%d=%s %p\n", evty, noro_gc_event_name(evty), thid);
 }
 static void noro_init_intern() {
     srand(time(0));
     // GC_enable_incremental();
     // GC_set_rate(5);
     // GC_set_all_interior_pointers(1);
+    // TODO
     // GC_set_push_other_roots(noro_gc_push_other_roots);
+    // GC_set_on_collection_event(noro_gc_on_collection_event);
+    // GC_set_on_thread_event(noro_gc_on_thread_event);
     GC_INIT();
     GC_allow_register_threads();
     // linfo("main thread registered: %d\n", GC_thread_is_registered()); // yes
