@@ -189,7 +189,7 @@ void noro_goroutine_resume_same_thread(goroutine* gr) {
     assert(gr->state != executing);
     atomic_setint(&gr->state, runnable);
 }
-void noro_goroutine_resume_cross_thread(goroutine* gr) {
+void noro_goroutine_resume_xthread(goroutine* gr) {
     // assert(gr->state != runnable);
     // assert(gr->state != executing);
     if (gr->id <= 0) {
@@ -482,6 +482,7 @@ void noro_sched_run_one(machine* mc, goroutine* rungr) {
     rungr->savefrm = mc->savefrm;
     noro_goroutine_run(rungr);
     gcurgrid__ = 0;
+
     int curst = atomic_getint(&rungr->state);
     if (curst == waiting) {
         // 在这才解锁，用于确保rungr状态完全切换完成
@@ -495,7 +496,7 @@ void noro_sched_run_one(machine* mc, goroutine* rungr) {
         // linfo("finished gr %d\n", rungr->id);
         noro_machine_grfree(mc, rungr->id);
     }else{
-        linfo("break from gr %d, state=%d\n", rungr->id, curst);
+        linfo("break from gr %d, state=%d pkreason=%d\n", rungr->id, curst, rungr->pkreason);
     }
 }
 
@@ -543,7 +544,7 @@ int noro_processor_yield(long fd, int ytype) {
             // 应该不是 processor线程
             return -1;
     }
-    // linfo("yield fd=l%d, ytype=%d, mcid=%d, grid=%d\n", fd, ytype, gcurmcid__, gcurgrid__);
+    // linfo("yield fd=%ld, ytype=%s(%d), mcid=%d, grid=%d\n", fd, yield_type_name(ytype), ytype, gcurmcid__, gcurgrid__);
     goroutine* gr = noro_goroutine_getcur();
     gr->pkreason = ytype;
     if (ytype == YIELD_TYPE_CHAN_RECV || ytype == YIELD_TYPE_CHAN_SEND ||
@@ -561,7 +562,7 @@ int noro_processor_yield_multi(int ytype, int nfds, long fds[], int ytypes[]) {
             // 应该不是 processor线程
             return -1;
     }
-    // linfo("yield %d, mcid=%d, grid=%d\n", fd, gcurmcid__, gcurgrid__);
+    // linfo("yield %d ytype=%s(%d), mcid=%d, grid=%d\n", nfds, yield_type_name(ytype), ytype, gcurmcid__, gcurgrid__);
     goroutine* gr = noro_goroutine_getcur();
     gr->pkreason = ytype;
     for (int i = 0; i < nfds; i ++) {
@@ -587,7 +588,7 @@ void noro_processor_resume_some(void* gr_, int ytype) {
         // 另外考虑是否只针对chan send/recv。
         noro_processor_yield(1001, YIELD_TYPE_NANOSLEEP);
     }else {
-        noro_goroutine_resume_cross_thread(gr);
+        noro_goroutine_resume_xthread(gr);
     }
 }
 void noro_sched() {

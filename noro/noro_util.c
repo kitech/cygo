@@ -74,6 +74,8 @@ const char* yield_type_name(int ytype) {
         return "recvfrom";
     case YIELD_TYPE_RECVMSG:
         return "recvmsg";
+    case YIELD_TYPE_RECVMSG_TIMEOUT:
+        return "recvmsgtimeo";
     case YIELD_TYPE_WRITE:
         return "write";
     case YIELD_TYPE_WRITEV:
@@ -87,6 +89,8 @@ const char* yield_type_name(int ytype) {
 
     case YIELD_TYPE_POLL:
         return "poll";
+    case YIELD_TYPE_UUPOLL:
+        return "uupoll";
     case YIELD_TYPE_SELECT:
         return "select";
     case YIELD_TYPE_ACCEPT:

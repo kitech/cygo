@@ -138,6 +138,8 @@ void netpoller_readfd(int fd, int ytype, void* gr) {
     }
 }
 
+// why hang forever when send?
+// yield fd=13, ytype=10, mcid=5, grid=5
 static
 void netpoller_writefd(int fd, int ytype, void* gr) {
     netpoller* np = gnpl__;
@@ -149,6 +151,7 @@ void netpoller_writefd(int fd, int ytype, void* gr) {
     d->evt = evt;
     event_add(evt, 0);
     // mtx_unlock(&np->evmu);
+    // linfo("evwrite add d=%p %ld\n", d, fd);
 }
 
 static
@@ -182,6 +185,7 @@ void netpoller_yieldfd(long fd, int ytype, void* gr) {
         // event_base_loopexit(gnpl__->loop, &tv);
         break;
     }
+    // linfo("fd=%ld, ytype=%d\n", fd, ytype);
 
     long ns = 0;
     switch (ytype) {

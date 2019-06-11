@@ -101,7 +101,7 @@ int pipe2(int pipefd[2], int flags)
 int socket(int domain, int type, int protocol)
 {
     if (!socket_f) initHook();
-    linfo("socket_f=%p\n", socket_f);
+    // linfo("socket_f=%p\n", socket_f);
 
     int sock = socket_f(domain, type, protocol);
     if (sock >= 0) {
@@ -109,6 +109,7 @@ int socket(int domain, int type, int protocol)
             hookcb_oncreate(sock, FDISSOCKET, false, domain, type, protocol);
             // linfo("task(%s) hook socket, returns %d.\n", "", sock);
         }
+        // linfo("domain=%d type=%s(%d) socket=%d\n", domain, type==SOCK_STREAM ? "tcp" : "what", type, sock);
     }
 
     return sock;
@@ -136,7 +137,7 @@ int connect(int fd, const struct sockaddr *addr, socklen_t addrlen)
     time_t btime = time(0);
     for (int i = 0;; i++) {
         int rv = connect_f(fd, addr, addrlen);
-        int eno = errno;
+        int eno = rv < 0 ? errno : 0;
         if (rv >= 0) {
             // linfo("connect ok %d %d, %d, %d\n", fd, errno, time(0)-btime, i);
             return rv;
@@ -156,8 +157,13 @@ int accept(int sockfd, struct sockaddr *addr, socklen_t *addrlen)
     linfo("%d fdnb=%d\n", sockfd, fd_is_nonblocking(sockfd));
     while(1){
         int rv = accept_f(sockfd, addr, addrlen);
+        int eno = rv < 0 ? errno : 0;
         if (rv >= 0) {
             hookcb_oncreate(rv, FDISSOCKET, false, AF_INET, SOCK_STREAM, 0);
+            return rv;
+        }
+        if (eno != EINPROGRESS) {
+            linfo("fd=%d err=%d eno=%d err=%s\n", sockfd, rv, errno, strerror(errno));
             return rv;
         }
         noro_processor_yield(sockfd, YIELD_TYPE_ACCEPT);
@@ -172,7 +178,12 @@ ssize_t read(int fd, void *buf, size_t count)
     // linfo("%d fdnb=%d bufsz=%d\n", fd, fd_is_nonblocking(fd), count);
     while (1){
         ssize_t rv = read_f(fd, buf, count);
+        int eno = rv < 0 ? errno : 0;
         if (rv >= 0) {
+            return rv;
+        }
+        if (eno != EINPROGRESS) {
+            linfo("fd=%d err=%d eno=%d err=%s\n", fd, rv, errno, strerror(errno));
             return rv;
         }
         noro_processor_yield(fd, YIELD_TYPE_READ);
@@ -193,13 +204,17 @@ ssize_t recv(int sockfd, void *buf, size_t len, int flags)
     // linfo("%d %d %d\n", sockfd, len, flags);
     while (1) {
         ssize_t rv = recv_f(sockfd, buf, len, flags);
+        int eno = rv < 0 ? errno : 0;
         if (rv == 0) {
             hookcb_onclose(sockfd);
         }
         if (rv >= 0) {
             return rv;
         }
-        // linfo("recv err=%d %d %s\n", rv, errno, strerror(errno));
+        if (eno != EINPROGRESS && eno != EAGAIN) {
+            linfo("fd=%d err=%d eno=%d err=%s\n", sockfd, rv, errno, strerror(errno));
+            return rv;
+        }
         noro_processor_yield(sockfd, YIELD_TYPE_RECV);
     }
     assert(1==2); // unreachable
@@ -215,9 +230,14 @@ ssize_t recvfrom(int sockfd, void *buf, size_t len, int flags,
     // linfo("%d %ld.%ld\n", sockfd, btv.tv_sec, btv.tv_usec);
     while (1){
         ssize_t rv = recvfrom_f(sockfd, buf, len, flags, src_addr, addrlen);
+        int eno = rv < 0 ? errno : 0;
         gettimeofday(&etv, 0);
         // linfo("%d %ld.%ld\n", sockfd, etv.tv_sec, etv.tv_usec);
         if (rv >= 0) {
+            return rv;
+        }
+        if (eno != EINPROGRESS && eno != EAGAIN) {
+            linfo("fd=%d rv=%d eno=%d err=%s\n", sockfd, rv, eno, strerror(eno));
             return rv;
         }
         noro_processor_yield(sockfd, YIELD_TYPE_RECVFROM);
@@ -229,12 +249,41 @@ ssize_t recvmsg(int sockfd, struct msghdr *msg, int flags)
 {
     if (!recvmsg_f) initHook();
     // linfo("%d fdnb=%d\n", sockfd, fd_is_nonblocking(sockfd));
-    while (1){
+    for (int i = 0; ; i ++){
         ssize_t rv = recvmsg_f(sockfd, msg, flags);
+        int eno = rv < 0 ? errno : 0;
         if (rv >= 0) {
             return rv;
         }
-        noro_processor_yield(sockfd, YIELD_TYPE_RECVMSG);
+
+        fdcontext* fdctx = hookcb_get_fdcontext(sockfd);
+        bool isudp = fdcontext_is_socket(fdctx) && !fdcontext_is_tcpsocket(fdctx);
+        // linfo("fd=%d isudp=%d\n", sockfd, isudp);
+
+        if (eno != EINPROGRESS && eno != EAGAIN && eno != EWOULDBLOCK) {
+            linfo("fd=%d fdnb=%d rv=%d eno=%d err=%s\n", sockfd, fd_is_nonblocking(sockfd), rv, eno, strerror(eno));
+            return rv;
+        }
+        if (isudp) {
+            int optval = 0;
+            int optlen = 0;
+            int rv2 = getsockopt(sockfd, SOL_SOCKET, SO_ERROR, &optval, &optlen);
+            // linfo("opt rv2=%d, len=%d val=%d\n", rv2, optlen, optval);
+            int rv3 = getsockopt(sockfd, SOL_SOCKET, SO_RCVTIMEO, &optval, &optlen);
+            // linfo("opt rv3=%d, len=%d val=%d\n", rv3, optlen, optval);
+
+            long timeoms = optval > 0 ? optval : 5678;
+            // default udp timeout 5s
+            long tfds[2] = {};
+            int ytypes[2] = {};
+            tfds[0] = sockfd;
+            ytypes[0] = YIELD_TYPE_RECVMSG;
+            tfds[1] = timeoms;
+            ytypes[1] = YIELD_TYPE_MSLEEP;
+            noro_processor_yield_multi(YIELD_TYPE_RECVMSG_TIMEOUT, 2, tfds, ytypes);
+        }else{
+            noro_processor_yield(sockfd, YIELD_TYPE_RECVMSG);
+        }
     }
     assert(1==2); // unreachable
 }
@@ -246,7 +295,12 @@ ssize_t write(int fd, const void *buf, size_t count)
 
     while(1){
         ssize_t rv = write_f(fd, buf, count);
+        int eno = rv < 0 ? errno : 0;
         if (rv >= 0) {
+            return rv;
+        }
+        if (eno != EINPROGRESS && eno != EAGAIN) {
+            linfo("fd=%d rv=%d eno=%d err=%s\n", fd, rv, eno, strerror(eno));
             return rv;
         }
         noro_processor_yield(fd, YIELD_TYPE_WRITE);
@@ -267,12 +321,16 @@ ssize_t send(int sockfd, const void *buf, size_t len, int flags)
     // linfo("%d %d %d fdnb=%d\n", sockfd, len, flags, fd_is_nonblocking(sockfd));
     while (true) {
         ssize_t rv = send_f(sockfd, buf, len, flags);
-        // linfo("send rv=%d errno=%d\n", rv, errno)
+        int eno = rv < 0 ? errno : 0;
         if (rv >= 0) {
             assert(rv == len);
             return rv;
         }
 
+        if (eno != EINPROGRESS && eno != EAGAIN) {
+            linfo("fd=%d rv=%d eno=%d err=%s\n", sockfd, rv, eno, strerror(eno));
+            return rv;
+        }
         noro_processor_yield(sockfd, YIELD_TYPE_SEND);
     }
     assert(1==2); // unreachable
@@ -293,7 +351,12 @@ ssize_t sendmsg(int sockfd, const struct msghdr *msg, int flags)
     // linfo("%d fdnb=%d\n", sockfd, fd_is_nonblocking(sockfd));
     while (1){
         ssize_t rv = sendmsg_f(sockfd, msg, flags);
+        int eno = rv < 0 ? errno : 0;
         if (rv >= 0) {
+            return rv;
+        }
+        if (eno != EINPROGRESS && eno != EAGAIN) {
+            linfo("fd=%d rv=%d eno=%d err=%s\n", sockfd, rv, eno, strerror(eno));
             return rv;
         }
         noro_processor_yield(sockfd, YIELD_TYPE_SENDMSG);
@@ -305,6 +368,7 @@ int poll(struct pollfd *fds, nfds_t nfds, int timeout)
 {
     if (!poll_f) initHook();
     linfo("%d\n", nfds);
+    assert(1==2);
 }
 
 // ---------------------------------------------------------------------------
@@ -346,14 +410,15 @@ int __poll(struct pollfd *fds, nfds_t nfds, int timeout)
     }
     int ynfds = nevts;
     if (timeout > 0) {
-        tfds[ynfds] = timeout*1000; // ms => us
-        tytypes[ynfds] = YIELD_TYPE_USLEEP;
+        tfds[ynfds] = timeout;
+        tytypes[ynfds] = YIELD_TYPE_MSLEEP;
         ynfds += 1;
-        linfo("timeout set %d nfds=%d nevts=%d ynfds=%d\n", timeout, nfds, nevts, ynfds);
+        // linfo("timeout set %d nfds=%d nevts=%d ynfds=%d\n", timeout, nfds, nevts, ynfds);
     }
 
     for (int i = 0; ; i++) {
         int rv = poll_f(fds, nfds, 0);
+        int eno = rv < 0 ? errno : 0;
         // linfo("i=%d %d fd0=%d timeo=%d rv=%d\n", i, nfds, fds[0].fd, timeout, rv);
         if (rv > 0) {
             return rv;
@@ -361,8 +426,13 @@ int __poll(struct pollfd *fds, nfds_t nfds, int timeout)
         if (timeout > 0 && i > 0) {
             return 0;
         }
-
-        noro_processor_yield_multi(YIELD_TYPE_POLL, ynfds, tfds, tytypes);
+        if (rv < 0) {
+            if (eno != EINPROGRESS) {
+                linfo("rv=%d eno=%d err=%s\n", rv, eno, strerror(eno));
+                return rv;
+            }
+        }
+        noro_processor_yield_multi(YIELD_TYPE_UUPOLL, ynfds, tfds, tytypes);
     }
     assert(1==2);
 }
@@ -421,7 +491,7 @@ int gethostbyaddr_r(const void *addr, socklen_t len, int type,
 // ---------------------------------------------------------------------------
 
 int select(int nfds, fd_set *readfds, fd_set *writefds,
-        fd_set *exceptfds, struct timeval *timeout)
+           fd_set *exceptfds, struct timeval *timeout)
 {
     if (!select_f) initHook();
     linfo("%d\n", nfds);
@@ -489,39 +559,148 @@ int __close(int fd)
     return 0;
 }
 
-int fcntl_wip(int __fd, int __cmd, ...)
+int fcntl(int __fd, int __cmd, ...)
 {
     if (!fcntl_f) initHook();
-    linfo("%d\n", __fd);
-    {
-        return fcntl_f(__fd, __cmd);
+    // linfo("%d\n", __fd);
+
+    va_list va;
+    va_start(va, __cmd);
+
+    switch (__cmd) {
+        // int
+        case F_DUPFD:
+        case F_DUPFD_CLOEXEC:
+            {
+                // TODO: support FD_CLOEXEC
+                int fd = va_arg(va, int);
+                va_end(va);
+                int newfd = fcntl_f(__fd, __cmd, fd);
+                if (newfd < 0) return newfd;
+
+                linfo("what can i do %d\n", __fd);
+                return newfd;
+            }
+
+        // int
+        case F_SETFD:
+        case F_SETOWN:
+
+#if defined(LIBGO_SYS_Linux)
+        case F_SETSIG:
+        case F_SETLEASE:
+        case F_NOTIFY:
+#endif
+
+#if defined(F_SETPIPE_SZ)
+        case F_SETPIPE_SZ:
+#endif
+            {
+                int arg = va_arg(va, int);
+                va_end(va);
+                return fcntl_f(__fd, __cmd, arg);
+            }
+
+        // int
+        case F_SETFL:
+            {
+                int flags = va_arg(va, int);
+                va_end(va);
+
+                linfo("what can i do %d\n", __fd);
+                return fcntl_f(__fd, __cmd, flags);
+            }
+
+        // struct flock*
+        case F_GETLK:
+        case F_SETLK:
+        case F_SETLKW:
+            {
+                struct flock* arg = va_arg(va, struct flock*);
+                va_end(va);
+                return fcntl_f(__fd, __cmd, arg);
+            }
+
+        // struct f_owner_ex*
+#if defined(LIBGO_SYS_Linux)
+        case F_GETOWN_EX:
+        case F_SETOWN_EX:
+            {
+                struct f_owner_exlock* arg = va_arg(va, struct f_owner_exlock*);
+                va_end(va);
+                return fcntl_f(__fd, __cmd, arg);
+            }
+#endif
+
+        // void
+        case F_GETFL:
+            {
+                va_end(va);
+                return fcntl_f(__fd, __cmd);
+            }
+
+        // void
+        case F_GETFD:
+        case F_GETOWN:
+
+#if defined(LIBGO_SYS_Linux)
+        case F_GETSIG:
+        case F_GETLEASE:
+#endif
+
+#if defined(F_GETPIPE_SZ)
+        case F_GETPIPE_SZ:
+#endif
+        default:
+            {
+                va_end(va);
+                return fcntl_f(__fd, __cmd);
+            }
     }
-    return 0;
+    assert(1==2);
 }
 
-int ioctl_wip(int fd, unsigned long int request, ...)
+int ioctl(int fd, unsigned long int request, ...)
 {
     if (!ioctl_f) initHook();
-    linfo("%d\n", fd);
+    // linfo("%d\n", fd);
+
+    va_list va;
+    va_start(va, request);
+    void* arg = va_arg(va, void*);
+    va_end(va);
+
+    if (FIONBIO == request) {
+        linfo("what can i do %d\n", fd);
+    }
+
+    return ioctl_f(fd, request, arg);
 }
 
 int getsockopt(int sockfd, int level, int optname, void *optval, socklen_t *optlen)
 {
     if (!getsockopt_f) initHook();
-    linfo("%d %d %d\n", sockfd, level, optname);
+    // linfo("%d %d %d\n", sockfd, level, optname);
     {
         int rv = getsockopt_f(sockfd, level, optname, optval, optlen);
+        // linfo("%d %d %d ret=%d optlen=%d\n", sockfd, level, optname, rv, *optlen);
         return rv;
     }
 }
 int setsockopt(int sockfd, int level, int optname, const void *optval, socklen_t optlen)
 {
     if (!setsockopt_f) initHook();
-    linfo("%d %d %d\n", sockfd, level, optname);
+    // linfo("%d %d %d\n", sockfd, level, optname);
     {
         int rv = setsockopt_f(sockfd, level, optname, optval, optlen);
+        if (rv == 0 && level == SOL_SOCKET) {
+            if (optname == SO_RCVTIMEO || optname == SO_SNDTIMEO) {
+                linfo("what can i do %d\n", sockfd);
+            }
+        }
         return rv;
     }
+    assert(1==2);
 }
 
 int dup(int oldfd)
@@ -571,13 +750,18 @@ FILE* fopen(const char *pathname, const char *mode)
 }
 
 #if defined(LIBGO_SYS_Linux)
-/*
-int epoll_wait(int epfd, struct epoll_event *events, int maxevents, int timeout)
+// TODO conflict with libevent epoll_wait
+int epoll_wait_wip(int epfd, struct epoll_event *events, int maxevents, int timeout)
 {
     if (!epoll_wait_f) initHook();
-    return libgo_epoll_wait(epfd, events, maxevents, timeout);
+    linfo("epfd=%d maxevents=%d timeout=%d\n", epfd, maxevents, timeout);
+    {
+        int rv = epoll_wait_f(epfd, events, maxevents, timeout);
+        return rv;
+    }
+    // return libgo_epoll_wait(epfd, events, maxevents, timeout);
 }
-*/
+
 #elif defined(LIBGO_SYS_FreeBSD)
 #endif
 

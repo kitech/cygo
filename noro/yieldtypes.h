@@ -14,6 +14,7 @@ typedef enum yield_type
      YIELD_TYPE_RECV,
      YIELD_TYPE_RECVFROM,
      YIELD_TYPE_RECVMSG,
+     YIELD_TYPE_RECVMSG_TIMEOUT,
      YIELD_TYPE_WRITE,
      YIELD_TYPE_WRITEV,
      YIELD_TYPE_SEND,
@@ -21,6 +22,7 @@ typedef enum yield_type
      YIELD_TYPE_SENDMSG,
 
      YIELD_TYPE_POLL,
+     YIELD_TYPE_UUPOLL, // __poll
      YIELD_TYPE_SELECT,
      YIELD_TYPE_ACCEPT,
 
