@@ -50,14 +50,14 @@ include "./gogoapi.nim"
 include "./gochanapi.nim"
 
 # simple wrap gogo2 implemention macro
-macro gogo*(funccallexpr: typed) : untyped =
+macro gogo*(funccallexpr: untyped) : untyped =
     ## Just like a spawn: `gogo somefunc(a0, a1, a2)`
-    result = quote do: gogo2(funccallexpr)
+    result = quote do: gogo2 `funccallexpr`
 
 # keep keywords
-macro go*(funccallexpr: typed) : untyped =
+macro go*(funccallexpr: untyped) : untyped =
     ## Just like a spawn: `gogo somefunc(a0, a1, a2)`
-    result = quote do: gogo2(funccallexpr)
+    result = quote do: gogo2 `funccallexpr`
 
 proc goid*():int =
     ## get current goroutine id
@@ -77,7 +77,7 @@ proc goid*():int =
 # proc `<-`*[T](c : chan[T]) : T {.discardable.}
 
 macro goselect*(select_case_expr: untyped) : untyped =
-    result = quote do: goselectv6(select_case_expr)
+    result = quote do: goselectv6 `select_case_expr`
 
 # keep keywords
 macro select*(select_case_expr: untyped) : untyped =
@@ -98,7 +98,7 @@ macro select*(select_case_expr: untyped) : untyped =
     ## .. code-block::
     ##   goselect: discard                # block current goroutine forever
     ##
-    result = quote do: goselectv6(select_case_expr)
+    result = quote do: goselectv6 `select_case_expr`
 
 # usage: corona.loop
 proc loop*() =

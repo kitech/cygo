@@ -7,7 +7,7 @@ gr1:
 	#-d:noSignalHandler
 	#--listcmd
 	nim -d:noSignalHandler --stacktrace:on --excessiveStackTrace:off --threads:on --gc:boehm \
-		-f -p:${HOME}/.nimble/mulib c corona.nim
+		-p:${HOME}/.nimble/mulib c corona.nim
 
 dc:
 	nim doc -p:~/.nimble/mulib/ corona.nim

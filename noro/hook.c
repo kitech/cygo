@@ -101,7 +101,7 @@ int pipe2(int pipefd[2], int flags)
 int socket(int domain, int type, int protocol)
 {
     if (!socket_f) initHook();
-    // printf("socket_f=%p\n",socket_f);
+    linfo("socket_f=%p\n", socket_f);
 
     int sock = socket_f(domain, type, protocol);
     if (sock >= 0) {
@@ -136,12 +136,13 @@ int connect(int fd, const struct sockaddr *addr, socklen_t addrlen)
     time_t btime = time(0);
     for (int i = 0;; i++) {
         int rv = connect_f(fd, addr, addrlen);
+        int eno = errno;
         if (rv >= 0) {
             // linfo("connect ok %d %d, %d, %d\n", fd, errno, time(0)-btime, i);
             return rv;
         }
-        if (errno != EINPROGRESS) {
-            linfo("Unknown %d %d %d %d %s\n", fd, rv, errno, i, strerror(errno));
+        if (eno != EINPROGRESS && eno != EALREADY) {
+            linfo("Unknown %d %d %d %d %s\n", fd, rv, eno, i, strerror(eno));
             return rv;
         }
         noro_processor_yield(fd, YIELD_TYPE_CONNECT);
@@ -168,7 +169,7 @@ ssize_t read(int fd, void *buf, size_t count)
 {
     if (!noro_in_processor()) return read_f(fd, buf, count);
     if (!read_f) initHook();
-    linfo("%d fdnb=%d\n", fd, fd_is_nonblocking(fd));
+    // linfo("%d fdnb=%d bufsz=%d\n", fd, fd_is_nonblocking(fd), count);
     while (1){
         ssize_t rv = read_f(fd, buf, count);
         if (rv >= 0) {
@@ -316,27 +317,39 @@ int __poll(struct pollfd *fds, nfds_t nfds, int timeout)
         int rv = poll_f(fds, nfds, timeout);
         return rv;
     }
-    int tfds[nfds+1];
-    int tytypes[nfds+1];
+    int nevts = 0;
     for (int i = 0; i < nfds; i ++) {
-        tfds[i] = fds[i].fd;
-        tytypes[i] = 0;
-        if (fds[i].events & POLLIN) {
-            tytypes[i] = YIELD_TYPE_READ;
+        if (fds[i].events & POLLIN) { nevts += 1; }
+        if (fds[i].events & POLLOUT) { nevts += 1; }
+        if (fds[i].events & POLLERR) {  }
+        if (POLLIN | POLLOUT == fds[i].events || POLLIN == fds[i].events || POLLOUT == fds[i].events) {
+        }else{
+            linfo("not supported poll event set %d %d\n", POLLIN | POLLOUT, fds[i].events);
         }
-        if (fds[i].events & POLLOUT) {
-            if (tytypes[i] != 0) {
-                linfo("multi poll events on one fd, not supported i=%d %d\n", i, fds[i].fd);
-            }else{
-                tytypes[i] = YIELD_TYPE_WRITE;
-            }
+        if (fd_is_nonblocking(fds[i].fd) == 0) {
+            linfo("blocking socket found %d %d\n", i, fds[i].fd);
         }
     }
-    int ynfds = nfds;
+    long tfds[nevts+1];
+    int tytypes[nevts+1];
+    for (int i = 0, j = 0; i < nfds; i ++) {
+        if (fds[i].events & POLLIN) {
+            tfds[j] = fds[i].fd;
+            tytypes[j] = YIELD_TYPE_READ;
+            j++;
+        }
+        if (fds[i].events & POLLOUT) {
+            tfds[j] = fds[i].fd;
+            tytypes[j] = YIELD_TYPE_WRITE;
+            j++;
+        }
+    }
+    int ynfds = nevts;
     if (timeout > 0) {
+        tfds[ynfds] = timeout*1000; // ms => us
+        tytypes[ynfds] = YIELD_TYPE_USLEEP;
         ynfds += 1;
-        tfds[nfds] = timeout*1000; // ms => us
-        tytypes[nfds] = YIELD_TYPE_USLEEP;
+        linfo("timeout set %d nfds=%d nevts=%d ynfds=%d\n", timeout, nfds, nevts, ynfds);
     }
 
     for (int i = 0; ; i++) {
@@ -346,13 +359,12 @@ int __poll(struct pollfd *fds, nfds_t nfds, int timeout)
             return rv;
         }
         if (timeout > 0 && i > 0) {
-            break; // should be timeout
+            return 0;
         }
 
         noro_processor_yield_multi(YIELD_TYPE_POLL, ynfds, tfds, tytypes);
     }
-    // linfo("poll ret %d\n", 0);
-    return 0;
+    assert(1==2);
 }
 
 #if defined(LIBGO_SYS_Linux)

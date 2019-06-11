@@ -67,7 +67,7 @@ static void atstgc_finalizer_fn(evdata* obj, void* cbdata) {
 // 难道说可能是libevent也开了自己的线程？无
 // switch to manual calloc can fix the problem: because GC_malloc return the same addr
 // 发现 evdata 的finalize早于真正需要释放它的时间？而在 netpoller_readfd()中加一个log顺序就变了？
-// 难道是goroutine yield之后，被GC认为是没用了？应该怎么测试呢？
+// 难道是goroutine yield之后，认为没用了被GC？应该怎么测试呢？
 evdata* evdata_new(int evtyp, void* data) {
     assert(evtyp >= 0);
 
@@ -107,10 +107,6 @@ void netpoller_evwatcher_cb(evutil_socket_t fd, short events, void* arg) {
         assert(1==2);
     }
 
-    // if event_del then event_free, it crash
-    // if direct event_free, it ok.
-    // because non-persist event already run event_del by loop itself
-
     goroutine *gr = dd;
     // linfo("before release d=%p\n", d);
     if (d->evtyp == EV_TIMER && fd != -1) {
@@ -118,6 +114,9 @@ void netpoller_evwatcher_cb(evutil_socket_t fd, short events, void* arg) {
               events, fd, fd, ytype, yield_type_name(ytype), dd, gr->id, gr->mcid, d);
         assert(fd == -1);
     }
+    // if event_del then event_free, it crash
+    // if direct event_free, it ok.
+    // because non-persist event already run event_del by loop itself
     event_free(evt);
     evdata_free(d);
     noro_processor_resume_some(dd, ytype);
@@ -167,7 +166,7 @@ void netpoller_timer(long ns, int ytype, void* gr) {
     d->evt = tmer;
     evtimer_add(tmer, &d->tv);
     // mtx_unlock(&np->evmu);
-    // linfo("timer add d=%p\n", d);
+    // linfo("timer add d=%p %ld\n", d, ns);
 }
 
 // when ytype is SLEEP/USLEEP/NANOSLEEP, fd is the nanoseconds

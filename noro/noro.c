@@ -192,6 +192,12 @@ void noro_goroutine_resume_same_thread(goroutine* gr) {
 void noro_goroutine_resume_cross_thread(goroutine* gr) {
     // assert(gr->state != runnable);
     // assert(gr->state != executing);
+    if (gr->id <= 0) {
+        linfo("some error occurs??? %d\n", gr->id);
+        return;
+        // maybe goroutine already finished and deleted
+        // TODO assert(gr != nilptr && gr->id > 0); // needed ???
+    }
     if (atomic_getint(&gr->state) == executing) {
         linfo("resume but executing grid=%d, mcid=%d\n", gr->id, gr->mcid);
         return;

@@ -37,7 +37,76 @@ proc test_boehmgc1() =
     linfo("done")
     return
 
+# 在goroutine中申请内存，然后yield 10秒，看其是否会被回收
+# 在 yield时间范围内并不会回收，在函数结束以后会回收。和预期行为一致。
+proc test_boehmgc2() =
+    var v : needgcty0
+    v.new(test_boehmgc_finalizer)
+
+    sleep(10000)
+    linfo("done")
+    return
+
+# 在 yield 之前被回收，和预期行为一致。
+proc test_boehmgc3() =
+    var v : needgcty0
+    v.new(test_boehmgc_finalizer)
+    v = nil
+
+    sleep(10000)
+    linfo("done")
+    return
+
+# 永远不会被回收，和预期行为一致。
+var gcv4 : pointer
+proc test_boehmgc4() =
+    var v : needgcty0
+    v.new(test_boehmgc_finalizer)
+    gcv4 = cast[pointer](v)
+
+    sleep(10000)
+    linfo("done")
+    return
+
+# test5/6, 预期5秒后会被回收
+# TODO 和预期不符合，还是在10秒后回收的???
+proc test_boehmgc5(vp:pointer) =
+    sleep(5000)
+    return
+proc test_boehmgc6() =
+    var v : needgcty0
+    v.new(test_boehmgc_finalizer)
+    var vp = cast[pointer](v)
+    linfo("newed", vp)
+    noro_post(test_boehmgc5, vp)
+    v = nil
+    vp = nil
+
+    sleep(10000)
+    linfo("done")
+    return
+
+# test7/8, 预期15秒后会被回收
+# 和预期行为一致
+proc test_boehmgc7(vp:pointer) =
+    sleep(15000)
+    return
+proc test_boehmgc8() =
+    var v : needgcty0
+    v.new(test_boehmgc_finalizer)
+    var vp = cast[pointer](v)
+    linfo("newed", vp)
+    noro_post(test_boehmgc7, vp)
+    v = nil
+    vp = nil
+
+    sleep(10000)
+    linfo("done")
+    return
+
 proc runtest_boehmgc0() =
-    noro_post(test_boehmgc1, nil)
+    #noro_post(test_boehmgc1, nil)
+    #noro_post(test_boehmgc6, nil)
+    noro_post(test_boehmgc8, nil)
     return
 

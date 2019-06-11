@@ -88,6 +88,7 @@ proc gogorunner_cleanup(arg :pointer) =
         elif akty == akInt:
             deallocShared(akval)
             discard
+        elif akty == akPointer: discard
         else: linfo "unknown", akty
     #deallocShared(arg)
     pointer_array_free(arg)
@@ -103,7 +104,8 @@ proc gogorunner(arg : pointer) =
     linfo "gogorunner", arg
     var fnptr = pointer_array_get(arg, 0)
     var argc = cast[int](pointer_array_get(arg, 1))
-    assert(argc == 3, $argc)
+    assert(fnptr != nil)
+    assert(argc >= 0, $argc)
 
     var atypes = newseq[pffi_type](argc+1)
     var avalues = newseq[pointer](argc+1)
@@ -126,6 +128,9 @@ proc gogorunner(arg : pointer) =
         elif akty == akInt:
             ptrtmps[idx] = akval
             avalues[idx] = ptrtmps[idx]
+        elif akty == akPointer:
+            ptrtmps[idx] = akval
+            avalues[idx] = ptrtmps[idx].addr
         else: linfo "unknown", akty, akval
         discard
 
@@ -141,7 +146,7 @@ proc gogorunner(arg : pointer) =
     return
 
 # packed to passby format
-proc packany(fn:proc, args:varargs[Any, toany]) =
+proc gopackany*(fn:proc, args:varargs[Any, toany]) =
     var ecnt = (2+args.len()*2+2)
     var pargs = pointer_array_new(ecnt.cint)
     pointer_array_set(pargs, 0, cast[pointer](fn))
@@ -168,6 +173,9 @@ proc packany(fn:proc, args:varargs[Any, toany]) =
             var v = allocShared0(cs.len()+1)
             copyMem(v, cs, cs.len())
             pointer_array_set(pargs, validx.cint, v)
+        elif arg.kind == akPointer:
+            var v = arg.getPointer()
+            pointer_array_set(pargs, validx.cint, v)
         else: linfo "unknown", arg.kind
 
     linfo "copy margs", 2+args.len*2, pargs # why refc=1
@@ -175,20 +183,22 @@ proc packany(fn:proc, args:varargs[Any, toany]) =
     return
 
 # just like a spawn: gogo2 somefunc(a0, a1, a2)
-macro gogo2(stmt:typed) : untyped =
+macro gogo2*(stmt:untyped) : untyped =
     var nstmt = newStmtList()
     for idx, s in stmt:
         if idx == 0: continue
-        linfo "aaa ", repr(s), " ", s.kind
-        nstmt.add(newVarStmt(ident("a" & $idx), s))
-    var packanycall = newCall(ident("packany"), stmt[0])
+        #linfo "aaa ", repr(s), " ", s.kind
+        #logecho2 "aaa ", repr(s), " ", s.kind
+        nstmt.add(newVarStmt(ident("locarg" & $idx), s))
+    var packanycall = newCall(ident("gopackany"), stmt[0])
     for idx, s in stmt:
         if idx == 0: continue
-        packanycall.add(ident("a" & $idx))
+        packanycall.add(ident("locarg" & $idx))
 
     nstmt.add(packanycall)
     var topstmt = newIfStmt((ident("true"), nstmt))
-    linfo repr(topstmt)
+    #linfo repr(topstmt)
+    #if true: logecho2("aaa", 123)
     result = topstmt
 
 # end gogo2

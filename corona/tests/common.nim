@@ -2,6 +2,7 @@ import times
 
 # get a non-block, yieldable sleep proc
 proc usleepc(usec:int) : int {.importc:"usleep", discardable.}
+proc sleepc(sec:int) : int {.importc:"sleep", discardable.}
 
 proc nowt0() : DateTime = times.fromUnix(epochTime().int64).utc()
 proc nowt1() : int64 = epochTime().int64
@@ -52,10 +53,26 @@ proc testtick(cnter:int) =
     # test_chan0()
     return
 
-proc testloop() =
+# gc:boehm, threads:on + GC_fullcollect pertick crash:
+# T4_ = ((*(*p).selector).count == ((NI) 0));
+# because *p.selector == nil, why ???
+proc testloop0() =
     # umain()
     var cnter = 0
     while true:
         testtick(cnter)
         cnter += 1
+        GC_fullcollect()
         poll(500)
+
+proc testloop1() =
+    # umain()
+    var cnter = 0
+    while true:
+        testtick(cnter)
+        cnter += 1
+        GC_fullcollect()
+        sleep(500)
+
+proc testloop() = testloop1()
+
