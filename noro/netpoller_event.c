@@ -54,6 +54,8 @@ void netpoller_loop() {
 typedef struct evdata {
     int evtyp;
     void* data;
+    int grid;
+    int mcid;
     int ytype;
     long fd; // fd or ns
     struct timeval tv;
@@ -123,9 +125,11 @@ void netpoller_evwatcher_cb(evutil_socket_t fd, short events, void* arg) {
 }
 
 static
-void netpoller_readfd(int fd, int ytype, void* gr) {
+void netpoller_readfd(int fd, int ytype, goroutine* gr) {
     netpoller* np = gnpl__;
     evdata* d = evdata_new(EV_IO, gr);
+    d->grid = gr->id;
+    d->mcid = gr->mcid;
     d->ytype = ytype;
     d->fd = fd;
     // mtx_lock(&np->evmu);
@@ -141,9 +145,11 @@ void netpoller_readfd(int fd, int ytype, void* gr) {
 // why hang forever when send?
 // yield fd=13, ytype=10, mcid=5, grid=5
 static
-void netpoller_writefd(int fd, int ytype, void* gr) {
+void netpoller_writefd(int fd, int ytype, goroutine* gr) {
     netpoller* np = gnpl__;
     evdata* d = evdata_new(EV_IO, gr);
+    d->grid = gr->id;
+    d->mcid = gr->mcid;
     d->ytype = ytype;
     d->fd = fd;
     // mtx_lock(&np->evmu);
@@ -155,10 +161,12 @@ void netpoller_writefd(int fd, int ytype, void* gr) {
 }
 
 static
-void netpoller_timer(long ns, int ytype, void* gr) {
+void netpoller_timer(long ns, int ytype, goroutine* gr) {
     netpoller* np = gnpl__;
 
     evdata* d = evdata_new(EV_TIMER, gr);
+    d->grid = gr->id;
+    d->mcid = gr->mcid;
     d->ytype = ytype;
     d->fd = ns;
     d->tv.tv_sec = ns/1000000000;
@@ -173,7 +181,7 @@ void netpoller_timer(long ns, int ytype, void* gr) {
 }
 
 // when ytype is SLEEP/USLEEP/NANOSLEEP, fd is the nanoseconds
-void netpoller_yieldfd(long fd, int ytype, void* gr) {
+void netpoller_yieldfd(long fd, int ytype, goroutine* gr) {
     assert(ytype > YIELD_TYPE_NONE);
     assert(ytype < YIELD_TYPE_MAX);
 

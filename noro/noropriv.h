@@ -36,18 +36,19 @@
 #include "norogc.h"
 
 
+typedef struct goroutine goroutine;
+
 // for netpoller.c
 typedef struct netpoller netpoller;
 netpoller* netpoller_new();
 void netpoller_loop();
-void netpoller_yieldfd(long fd, int ytype, void* gr);
+void netpoller_yieldfd(long fd, int ytype, goroutine* gr);
 void netpoller_use_threads();
 
 // for goroutine
 typedef struct coro_stack coro_stack;
 typedef enum grstate {nostack=0, runnable, executing, waiting, finished, } grstate;
 // 每个goroutine同时只能属于某一个machine
-typedef struct goroutine goroutine;
 struct goroutine {
     int id;
     coro_func fnproc;

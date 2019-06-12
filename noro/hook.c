@@ -182,7 +182,7 @@ ssize_t read(int fd, void *buf, size_t count)
         if (rv >= 0) {
             return rv;
         }
-        if (eno != EINPROGRESS) {
+        if (eno != EINPROGRESS && eno != EAGAIN) {
             linfo("fd=%d err=%d eno=%d err=%s\n", fd, rv, errno, strerror(errno));
             return rv;
         }
@@ -198,6 +198,10 @@ ssize_t readv(int fd, const struct iovec *iov, int iovcnt)
     assert(1==2);
 }
 
+int fd_is_valid(int fd)
+{
+    return fcntl_f(fd, F_GETFD) != -1 || errno != EBADF;
+}
 ssize_t recv(int sockfd, void *buf, size_t len, int flags)
 {
     if (!recv_f) initHook();
@@ -214,6 +218,11 @@ ssize_t recv(int sockfd, void *buf, size_t len, int flags)
         if (eno != EINPROGRESS && eno != EAGAIN) {
             linfo("fd=%d err=%d eno=%d err=%s\n", sockfd, rv, errno, strerror(errno));
             return rv;
+        }
+        int fdvalid = fd_is_valid(sockfd);
+        if (fdvalid != 1) {
+            linfo("invalid fd=%d val=%d\n", sockfd, fdvalid);
+            assert(fd_is_valid(sockfd) == 1);
         }
         noro_processor_yield(sockfd, YIELD_TYPE_RECV);
     }
@@ -249,6 +258,7 @@ ssize_t recvmsg(int sockfd, struct msghdr *msg, int flags)
 {
     if (!recvmsg_f) initHook();
     // linfo("%d fdnb=%d\n", sockfd, fd_is_nonblocking(sockfd));
+    time_t btime = time(0);
     for (int i = 0; ; i ++){
         ssize_t rv = recvmsg_f(sockfd, msg, flags);
         int eno = rv < 0 ? errno : 0;
@@ -265,6 +275,12 @@ ssize_t recvmsg(int sockfd, struct msghdr *msg, int flags)
             return rv;
         }
         if (isudp) {
+            time_t dtime = time(0) - btime;
+            if (i > 0 && dtime >= 5) {
+                linfo("timedout udpfd=%d, %ld\n", sockfd, dtime);
+                return 0; // timedout
+            }
+
             int optval = 0;
             int optlen = 0;
             int rv2 = getsockopt(sockfd, SOL_SOCKET, SO_ERROR, &optval, &optlen);
@@ -427,7 +443,7 @@ int __poll(struct pollfd *fds, nfds_t nfds, int timeout)
             return 0;
         }
         if (rv < 0) {
-            if (eno != EINPROGRESS) {
+            if (eno != EINPROGRESS && eno != EAGAIN) {
                 linfo("rv=%d eno=%d err=%s\n", rv, eno, strerror(eno));
                 return rv;
             }
@@ -538,7 +554,7 @@ int nanosleep(const struct timespec *req, struct timespec *rem)
 int close(int fd)
 {
     if (!close_f) initHook();
-    linfo("%d\n", fd);
+    // linfo("%d\n", fd);
 
     hookcb_onclose(fd);
     {
@@ -728,7 +744,7 @@ int fclose(FILE* fp)
 {
     if (!fclose_f) initHook();
     int fd = fileno(fp);
-    linfo("%p, %d\n", fp, fd);
+    // linfo("%p, %d\n", fp, fd);
 
     hookcb_onclose(fd);
     {
@@ -744,7 +760,7 @@ FILE* fopen(const char *pathname, const char *mode)
     {
         FILE* fp = fopen_f(pathname, mode);
         int fd = fileno(fp);
-        linfo("fd=%d\n", fd);
+        // hookcb_oncreate(fd, FDISPIPE, !!(flags&O_NONBLOCK), 0,0,0);
         return fp;
     }
 }

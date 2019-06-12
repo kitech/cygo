@@ -22,7 +22,7 @@ goroutines, schedulers, channels, goselect and garbage collect.
 [ ] improve send/recv bool flag
 [ ] mutex lock/unlock yield?
 [ ] dynamic increase/decrease processor(P)
-[ ] sockfd timeout support
+[x] sockfd timeout support
 
 ### Difference with Go
 * Ours gosched is a sleep, Go's Gosched is long parking and wait resched

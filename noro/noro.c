@@ -16,6 +16,16 @@
 const int dftstksz = 128*1024;
 const int dftstkusz = dftstksz/8; // unit size by sizeof(void*)
 
+typedef struct yieldinfo {
+    bool seted;
+    bool ismulti;
+    int ytype;
+    long fd;
+    int nfds;
+    long fds[9];
+    int ytypes[9];
+    // goroutine* curgr;
+} yieldinfo;
 typedef struct machine {
     int id;
     HashTable* ngrs; // id => goroutine* 新任务，未分配栈
@@ -26,6 +36,7 @@ typedef struct machine {
     pthread_mutex_t pkmu; // pack lock
     pthread_cond_t pkcd;
     bool parking;
+    yieldinfo yinfo;
     struct GC_stack_base stksb;
     void* gchandle;
     void* savefrm;
@@ -500,6 +511,23 @@ void noro_sched_run_one(machine* mc, goroutine* rungr) {
     }
 }
 
+// make sure goroutine suspended then push to netpoller
+static
+void noro_processor_yield_commit(machine* mc, goroutine* gr) {
+    yieldinfo* yinfo = &mc->yinfo;
+    if (yinfo->seted == false) {
+        return;
+    }
+
+    if (yinfo->ismulti == true) {
+        for (int i = 0; i < yinfo->nfds; i++) {
+            netpoller_yieldfd(yinfo->fds[i], yinfo->ytypes[i], gr);
+        }
+    }else{
+        netpoller_yieldfd(yinfo->fd, yinfo->ytype, gr);
+    }
+    memset(yinfo, 0, sizeof(yieldinfo));
+}
 void* noro_processor(void*arg) {
     machine* mc = (machine*)arg;
     GC_get_stack_base(&mc->stksb);
@@ -519,6 +547,7 @@ void* noro_processor(void*arg) {
         goroutine* rungr = noro_sched_get_ready_one(mc);
         if (rungr != 0) {
             noro_sched_run_one(mc, rungr);
+            noro_processor_yield_commit(mc, rungr);
             continue;
         }
         if (rand() % 3 == 2) {
@@ -545,12 +574,17 @@ int noro_processor_yield(long fd, int ytype) {
             return -1;
     }
     // linfo("yield fd=%ld, ytype=%s(%d), mcid=%d, grid=%d\n", fd, yield_type_name(ytype), ytype, gcurmcid__, gcurgrid__);
+    machine* mc = noro_machine_get(gcurmcid__);
     goroutine* gr = noro_goroutine_getcur();
     gr->pkreason = ytype;
     if (ytype == YIELD_TYPE_CHAN_RECV || ytype == YIELD_TYPE_CHAN_SEND ||
         ytype == YIELD_TYPE_CHAN_SELECT || ytype == YIELD_TYPE_CHAN_SELECT_NOCASE) {
     } else {
-        netpoller_yieldfd(fd, ytype, gr);
+        mc->yinfo.seted = true;
+        mc->yinfo.ismulti = false;
+        mc->yinfo.ytype = ytype;
+        mc->yinfo.fd = fd;
+        // netpoller_yieldfd(fd, ytype, gr);
     }
     noro_goroutine_suspend(gr);
     return 0;
@@ -563,15 +597,25 @@ int noro_processor_yield_multi(int ytype, int nfds, long fds[], int ytypes[]) {
             return -1;
     }
     // linfo("yield %d ytype=%s(%d), mcid=%d, grid=%d\n", nfds, yield_type_name(ytype), ytype, gcurmcid__, gcurgrid__);
+    machine* mc = noro_machine_get(gcurmcid__);
     goroutine* gr = noro_goroutine_getcur();
     gr->pkreason = ytype;
+
+    mc->yinfo.seted = true;
+    mc->yinfo.ismulti = true;
+    mc->yinfo.ytype = ytype;
+    mc->yinfo.nfds = nfds;
+
     for (int i = 0; i < nfds; i ++) {
         long fd = fds[i];
         int ytype = ytypes[i];
         if (ytype == YIELD_TYPE_CHAN_RECV || ytype == YIELD_TYPE_CHAN_SEND ||
             ytype == YIELD_TYPE_CHAN_SELECT || ytype == YIELD_TYPE_CHAN_SELECT_NOCASE) {
+            assert(1==2);
         } else {
-            netpoller_yieldfd(fd, ytype, gr);
+            mc->yinfo.fds[i] = fds[i];
+            mc->yinfo.ytypes[i] = ytypes[i];
+            // netpoller_yieldfd(fd, ytype, gr);
         }
     }
     noro_goroutine_suspend(gr);
