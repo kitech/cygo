@@ -106,6 +106,7 @@ void hookcb_oncreate(int fd, int fdty, bool isNonBlocking, int domain, int sockt
     fdctx->sockty = sockty;
     fdctx->protocol = protocol;
 
+    if (noro_in_processor() && fdty == FDISSOCKET)
     if (!fd_is_nonblocking(fd)) {
         int rv = fdcontext_set_nonblocking(fdctx, true);
         assert(fd_is_nonblocking(fd) == true);
@@ -116,7 +117,7 @@ void hookcb_oncreate(int fd, int fdty, bool isNonBlocking, int domain, int sockt
 void hookcb_onclose(int fd) {
     hookcb* hkcb = hookcb_get();
     if (hkcb == 0) return ;
-    linfo("fd closed %d\n", fd);
+    // linfo("fd closed %d\n", fd);
 
     fdcontext* fdctx = 0;
     hashtable_remove(hkcb->fdctxs, (void*)(uintptr_t)fd, (void**)&fdctx);

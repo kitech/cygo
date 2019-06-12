@@ -85,30 +85,28 @@ int pipe(int pipefd[2])
 #if defined(LIBGO_SYS_Linux)
 int pipe2(int pipefd[2], int flags)
 {
+    // if (noro_in_processor())
     if (!socket_f) initHook();
     linfo("%d\n", flags);
 
     int rv = pipe2_f(pipefd, flags);
     if (rv == 0) {
-        if (noro_in_processor()) {
-            hookcb_oncreate(pipefd[0], FDISPIPE, !!(flags&O_NONBLOCK), 0,0,0);
-            hookcb_oncreate(pipefd[1], FDISPIPE, !!(flags&O_NONBLOCK), 0,0,0);
-        }
+        hookcb_oncreate(pipefd[0], FDISPIPE, !!(flags&O_NONBLOCK), 0,0,0);
+        hookcb_oncreate(pipefd[1], FDISPIPE, !!(flags&O_NONBLOCK), 0,0,0);
     }
     return rv;
 }
 #endif
 int socket(int domain, int type, int protocol)
 {
+    // if (noro_in_processor())
     if (!socket_f) initHook();
     // linfo("socket_f=%p\n", socket_f);
 
     int sock = socket_f(domain, type, protocol);
     if (sock >= 0) {
-        if (noro_in_processor()) {
-            hookcb_oncreate(sock, FDISSOCKET, false, domain, type, protocol);
-            // linfo("task(%s) hook socket, returns %d.\n", "", sock);
-        }
+        hookcb_oncreate(sock, FDISSOCKET, false, domain, type, protocol);
+        // linfo("task(%s) hook socket, returns %d.\n", "", sock);
         // linfo("domain=%d type=%s(%d) socket=%d\n", domain, type==SOCK_STREAM ? "tcp" : "what", type, sock);
     }
 
@@ -117,15 +115,14 @@ int socket(int domain, int type, int protocol)
 
 int socketpair(int domain, int type, int protocol, int sv[2])
 {
+    // if (noro_in_processor())
     if (!socketpair_f) initHook();
     linfo("%d\n", type);
 
     int rv = socketpair_f(domain, type, protocol, sv);
     if (rv == 0) {
-        if (noro_in_processor()) {
-            hookcb_oncreate(sv[0], FDISSOCKET, false, domain, type, protocol);
-            hookcb_oncreate(sv[1], FDISSOCKET, false, domain, type, protocol);
-        }
+        hookcb_oncreate(sv[0], FDISSOCKET, false, domain, type, protocol);
+        hookcb_oncreate(sv[1], FDISSOCKET, false, domain, type, protocol);
     }
     return rv;
 }
@@ -256,6 +253,7 @@ ssize_t recvfrom(int sockfd, void *buf, size_t len, int flags,
 
 ssize_t recvmsg(int sockfd, struct msghdr *msg, int flags)
 {
+    if (!noro_in_processor()) return recvmsg_f(sockfd, msg, flags);
     if (!recvmsg_f) initHook();
     // linfo("%d fdnb=%d\n", sockfd, fd_is_nonblocking(sockfd));
     time_t btime = time(0);
@@ -363,6 +361,7 @@ ssize_t sendto(int sockfd, const void *buf, size_t len, int flags,
 
 ssize_t sendmsg(int sockfd, const struct msghdr *msg, int flags)
 {
+    if (!noro_in_processor()) return sendmsg_f(sockfd, msg, flags);
     if (!sendmsg_f) initHook();
     // linfo("%d fdnb=%d\n", sockfd, fd_is_nonblocking(sockfd));
     while (1){
@@ -380,17 +379,11 @@ ssize_t sendmsg(int sockfd, const struct msghdr *msg, int flags)
     assert(1==2); // unreachable
 }
 
-int poll(struct pollfd *fds, nfds_t nfds, int timeout)
-{
-    if (!poll_f) initHook();
-    linfo("%d\n", nfds);
-    assert(1==2);
-}
-
 // ---------------------------------------------------------------------------
 // ------ for dns syscall
 int __poll(struct pollfd *fds, nfds_t nfds, int timeout)
 {
+    if (!noro_in_processor()) return poll_f(fds, nfds, timeout);
     if (!poll_f) initHook();
     // linfo("%d fd0=%d timeo=%d\n", nfds, fds[0].fd, timeout);
     if (timeout == 0) {  // non-block
@@ -451,6 +444,10 @@ int __poll(struct pollfd *fds, nfds_t nfds, int timeout)
         noro_processor_yield_multi(YIELD_TYPE_UUPOLL, ynfds, tfds, tytypes);
     }
     assert(1==2);
+}
+int poll(struct pollfd *fds, nfds_t nfds, int timeout)
+{
+    return __poll(fds, nfds, timeout);
 }
 
 #if defined(LIBGO_SYS_Linux)
@@ -745,24 +742,18 @@ int fclose(FILE* fp)
     if (!fclose_f) initHook();
     int fd = fileno(fp);
     // linfo("%p, %d\n", fp, fd);
-
-    hookcb_onclose(fd);
-    {
-        return fclose_f(fp);
-    }
-    return 0;
+    return fclose_f(fp);
 }
 FILE* fopen(const char *pathname, const char *mode)
 {
     if (!fopen_f) initHook();
-    linfo("%s %s\n", pathname, mode);
+    // linfo("%s %s\n", pathname, mode);
 
-    {
-        FILE* fp = fopen_f(pathname, mode);
-        int fd = fileno(fp);
-        // hookcb_oncreate(fd, FDISPIPE, !!(flags&O_NONBLOCK), 0,0,0);
-        return fp;
-    }
+    FILE* fp = fopen_f(pathname, mode);
+    int fd = fileno(fp);
+    hookcb_oncreate(fd, FDISFILE, 0, 0,0,0);
+    // linfo("%s %s %d fdnb=%d\n", pathname, mode, fd, fd_is_nonblocking(fd));
+    return fp;
 }
 
 #if defined(LIBGO_SYS_Linux)

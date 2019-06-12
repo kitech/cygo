@@ -5,6 +5,7 @@
 
 #define FDISSOCKET  1
 #define FDISPIPE  2
+#define FDISFILE  3
 
 typedef struct fdcontext fdcontext;
 typedef struct hookcb hookcb;

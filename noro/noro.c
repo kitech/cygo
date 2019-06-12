@@ -47,6 +47,7 @@ typedef struct noro {
     HashTableConf htconf;
     HashTable* mths; // thno => pthread_t*
     HashTable* mcs; // thno => machine*
+    mtx_t mcsmu;
     bool noroinited;
     pthread_mutex_t noroinitmu;
     pthread_cond_t noroinitcd;
@@ -243,6 +244,10 @@ machine* noro_machine_get(int id) {
     machine* mc = 0;
     hashtable_get(gnr__->mcs, (void*)(uintptr_t)id, (void**)&mc);
     // linfo("get mc %d=%p\n", id, mc);
+    if (mc == 0) {
+        linfo("cannot get mc %d\n", id);
+        assert(mc != 0);
+    }
     if (mc != 0) {
         // FIXME
         if (mc->id != id) {
@@ -300,6 +305,7 @@ goroutine* noro_machine_grtake(machine* mc) {
     return gr;
 }
 void noro_machine_signal(machine* mc) {
+    assert(mc != nilptr);
     pthread_cond_signal(&mc->pkcd);
 }
 
