@@ -180,7 +180,7 @@ bool selectgo(int* rcasi, scase** cas0, uint16_t* order0, int ncases) {
  recv:
     cas->hcelem = gr->hcelem;
     selunlock(cas0, order0, ncases);
-    noro_processor_resume_some(gr, 0);
+    noro_processor_resume_one(gr, 0, gr->id, gr->mcid);
     linfo("syncrecv: cas0=%p hc=%p val=%p\n", cas0, hc, cas->hcelem);
     recvok = true;
     retline = __LINE__;

@@ -38,7 +38,7 @@ int hchan_close(hchan* hc) {
         gr->wokeby = mygr;
         gr->wokehc = hc;
         gr->wokecase = caseClose;
-        noro_processor_resume_some(gr, 0);
+        noro_processor_resume_one(gr, 0, gr->id, gr->mcid);
     }
     if (hc->recvq != nilptr) queue_dispose(hc->recvq);
 
@@ -52,7 +52,7 @@ int hchan_close(hchan* hc) {
         gr->wokeby = mygr;
         gr->wokehc = hc;
         gr->wokecase = caseClose;
-        noro_processor_resume_some(gr, 0);
+        noro_processor_resume_one(gr, 0, gr->id, gr->mcid);
     }
     if (hc->sendq != nilptr) queue_dispose(hc->sendq);
 
@@ -91,7 +91,7 @@ int hchan_send(hchan* hc, void* data) {
                 gr->wokehc = hc;
                 gr->wokecase = caseRecv;
                 mtx_unlock(&hc->lock);
-                noro_processor_resume_some(gr, 0);
+                noro_processor_resume_one(gr, 0, gr->id, gr->mcid);
                 return 1;
             } else {
                 linfo("wtf, cannot set rcvg hcelem %d, swaped %d elem %p\n",
@@ -120,7 +120,7 @@ int hchan_send(hchan* hc, void* data) {
             goroutine* gr = (goroutine*)queue_remove(hc->recvq);
             if (gr != nilptr) {
                 gr->wokeby = mygr;
-                noro_processor_resume_some(gr, 0);
+                noro_processor_resume_one(gr, 0, gr->id, gr->mcid);
             }
             mtx_unlock(&hc->lock);
             return 1;
@@ -130,7 +130,7 @@ int hchan_send(hchan* hc, void* data) {
             goroutine* gr = (goroutine*)queue_remove(hc->recvq);
             if (gr != nilptr) {
                 gr->hcelem = data;
-                noro_processor_resume_some(gr, 0);
+                noro_processor_resume_one(gr, 0, gr->id, gr->mcid);
                 mtx_unlock(&hc->lock);
                 return 1;
             }
@@ -167,7 +167,7 @@ int hchan_recv(hchan* hc, void** pdata) {
                 gr->wokehc = hc;
                 gr->wokecase = caseSend;
                 mtx_unlock(&hc->lock);
-                noro_processor_resume_some(gr, 0);
+                noro_processor_resume_one(gr, 0, gr->id, gr->mcid);
                 return 1;
             } else {
                 linfo("wtf, cannot set sndg hcelem %d, swaped %d elem %p\n",
@@ -211,7 +211,7 @@ int hchan_recv(hchan* hc, void** pdata) {
             gr->hcelem = nilptr;
             gr->wokeby = mygr;
             mtx_unlock(&hc->lock);
-            noro_processor_resume_some(gr, 0);
+            noro_processor_resume_one(gr, 0, gr->id, gr->mcid);
             return 1;
         }
 

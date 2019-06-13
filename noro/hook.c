@@ -451,14 +451,29 @@ int poll(struct pollfd *fds, nfds_t nfds, int timeout)
 }
 
 #if defined(LIBGO_SYS_Linux)
-static __thread struct hostent ghn_host = {0}; // thread local
-static __thread int ghn_errno = 0;  // thread local
-static __thread int ghn_bufsz = 0;  // thread local
-static __thread char* ghn_buf = 0;  // thread local
 struct hostent* gethostbyname(const char* name)
 {
     if (!gethostbyname_r_f) initHook();
     // linfo("%s\n", name);
+    if (!noro_in_processor()) {
+        static __thread struct hostent host_ = {0};
+        static __thread char buf[4096] = {0};
+        struct hostent* host = &host_;
+        struct hostent* result = 0;
+        int herror = 0;
+        int rv = gethostbyname_r(name, host, buf, sizeof(buf), &result, &herror);
+        if (rv == 0 && result == host) {
+            return host;
+        }
+        return 0;
+    }
+
+    // below should be fiber vars, not thread vars
+    static __thread struct hostent ghn_host = {0}; // thread local
+    static __thread int ghn_errno = 0;  // thread local
+    static __thread int ghn_bufsz = 0;  // thread local
+    static __thread char* ghn_buf = 0;  // thread local
+
     memset(&ghn_host, 0, sizeof(struct hostent));
     ghn_errno = 0;
     if (ghn_bufsz == 0) {
@@ -485,10 +500,10 @@ struct hostent* gethostbyname(const char* name)
         }
     }
 
-    linfo("rv=%d eno=%d err=%s\n", rv, ghn_errno, strerror(ghn_errno));
     if (rv == 0 && host == result) {
         return host;
     }
+    linfo("rv=%d eno=%d err=%s\n", rv, ghn_errno, strerror(ghn_errno));
     linfo("rv=%d eno=%d err=%s\n", rv, errno, strerror(errno));
     return 0;
 }
@@ -500,7 +515,10 @@ int gethostbyname_r(const char *__restrict name,
 {
     if (!gethostbyname_r_f) initHook();
     linfo("%d\n", __buflen);
-    return gethostbyname_r_f(name, __result_buf, __buf, __buflen, __result, __h_errnop);
+    int rv = gethostbyname_r_f(name, __result_buf, __buf, __buflen, __result, __h_errnop);
+    int eno = rv == 0 ? 0 : errno;
+    linfo("%s rv=%d eno=%d, err=%d\n", name, rv, eno, strerror(eno));
+    return rv;
 }
 
 struct hostent* gethostbyname2(const char* name, int af)

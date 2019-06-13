@@ -51,6 +51,8 @@ typedef struct noro {
     bool noroinited;
     pthread_mutex_t noroinitmu;
     pthread_cond_t noroinitcd;
+    mtx_t noroinitmu2; // TODO
+    cnd_t noroinitcd2; // TODO
 
     int eph; // epoll handler
     netpoller* np;
@@ -640,11 +642,16 @@ int noro_processor_yield_multi(int ytype, int nfds, long fds[], int ytypes[]) {
     noro_goroutine_suspend(gr);
     return 0;
 }
-void noro_processor_resume_some(void* gr_, int ytype) {
+void noro_processor_resume_one(void* gr_, int ytype, int grid, int mcid) {
     goroutine* gr = (goroutine*)gr_;
     goroutine* mygr = noro_goroutine_getcur();
     ytype = (ytype == 0 ? gr->pkreason : ytype);
     // linfo("netpoller notify, ytype=%d %p, id=%d\n", ytype, gr, gr->id);
+    if (grid != gr->id || mcid != gr->mcid) {
+        // sometimes resume from netpoller is too late, gr already gone
+        linfo("Invalid gr %p curid=%d %d\n", gr, gr->id, grid);
+        return;
+    }
     if (mygr != nilptr && gr->mcid == mygr->mcid) {
         noro_goroutine_resume_same_thread(gr);
         // 相同machine线程的情况，要主动出让执行权。

@@ -86,15 +86,17 @@ void evdata_free(evdata* d) {
     free(d);
 }
 
-extern void noro_processor_resume_some(void* cbdata, int ytype);
+extern void noro_processor_resume_one(void* cbdata, int ytype, int grid, int mcid);
 
 // common version callback, support ev_io, ev_timer
 static
 void netpoller_evwatcher_cb(evutil_socket_t fd, short events, void* arg) {
     evdata* d = (evdata*)arg;
     assert(d != 0);
-    int ytype = d->ytype;
     void* dd = d->data;
+    int ytype = d->ytype;
+    int grid = d->grid;
+    int mcid = d->mcid;
     struct event* evt = d->evt;
 
     switch (d->evtyp) {
@@ -121,7 +123,7 @@ void netpoller_evwatcher_cb(evutil_socket_t fd, short events, void* arg) {
     // because non-persist event already run event_del by loop itself
     event_free(evt);
     evdata_free(d);
-    noro_processor_resume_some(dd, ytype);
+    noro_processor_resume_one(dd, ytype, grid, mcid);
 }
 
 static
