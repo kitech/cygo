@@ -38,3 +38,13 @@ Thanks all the contributors.
 * rixlog
 * libgc >= 8.2.0
 * libevent >= 2.1
+
+### BUGS
+
+[ ] SIGABRT: coro\_init () at /noro/coro.c:104
+[ ] SIGSEGV: bdwgc: mark.c:1581 GC\_push\_all\_eager
+[ ] ASSERT: bdwgc: misc.c: 1986 GC\_disable
+[ ] gopackany:goroutine\_post, seems many times just after this: Assertion failure: extra/../misc.c:1986
+
+### Note
+* A program entering an infinite recursion or running out of space in the stack memory is known as a stack overflow

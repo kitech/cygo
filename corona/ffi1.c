@@ -10,7 +10,7 @@ void dump_pointer_array(int n, void** ptr) {
     }
 }
 
-void**pointer_array_new(int n) { return (void**)malloc(sizeof(void*)*n); }
+void**pointer_array_new(int n) { return (void**)calloc(1, sizeof(void*)*n); }
 void pointer_array_set(void**ptr, int idx, void*val) { ptr[idx] = val;}
 void* pointer_array_get(void**ptr, int idx) { return ptr[idx]; }
 void pointer_array_free(void*ptr) {free(ptr);}

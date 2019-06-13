@@ -84,6 +84,7 @@ goroutine* noro_goroutine_new(int id, coro_func fn, void* arg) {
     gr->fnproc = fn;
     gr->arg = arg;
     gr->hcelem = invlidptr;
+    hashtable_new_conf(&gnr__->htconf, &gr->specifics);
     return gr;
 }
 // alloc stack and context
@@ -108,6 +109,17 @@ void noro_goroutine_destroy(goroutine* gr) {
     if (gr->stack.sptr != 0) {
         GC_FREE(gr->stack.sptr);
     }
+    Array* specs = nilptr;
+    hashtable_get_values(gr->specifics, &specs);
+    if (specs != nilptr) {
+        for (int i = 0; i < array_size(specs); i ++) {
+            void* v = nilptr;
+            array_get_at(specs, i, &v);
+            if (v != nilptr) free(v);
+        }
+        array_destroy(specs);
+    }
+    hashtable_destroy(gr->specifics);
     free(gr); // malloc/calloc分配的不能用GC_FREE()释放
     ssze += sizeof(goroutine);
 
@@ -343,6 +355,27 @@ goroutine* noro_goroutine_getcur() {
     assert(gr != nilptr);
     return gr;
 }
+void* noro_goroutine_getspec(void* spec) {
+    goroutine* gr = noro_goroutine_getcur();
+    if (gr == 0) {
+        linfo("Not goroutine, main/poller thread %d?\n", gettid());
+        return 0;
+    }
+    void* v = nilptr;
+    hashtable_get(gr->specifics, spec, &v);
+    return v;
+}
+void noro_goroutine_setspec(void* spec, void* val) {
+    goroutine* gr = noro_goroutine_getcur();
+    if (gr == 0) {
+        linfo("Not goroutine, main/poller thread %d?\n", gettid());
+        return 0;
+    }
+    void* oldv = nilptr;
+    hashtable_remove(gr->specifics, spec, &oldv);
+    if (oldv != nilptr) { free(oldv);  }
+    hashtable_add(gr->specifics, spec, val);
+}
 // int noro_num_gorutines() { return atomic_getint(gnr__)}
 
 void noro_post(coro_func fn, void*arg) {
@@ -371,6 +404,7 @@ void* noro_processor_netpoller(void*arg) {
     struct GC_stack_base stksb = {};
     GC_get_stack_base(&stksb);
     GC_register_my_thread(&stksb);
+    mc->gchandle = GC_get_my_stackbottom(&mc->stksb);
     linfo("%d, %d\n", mc->id, gettid());
     noro_processor_setname(mc->id);
 
@@ -386,6 +420,10 @@ void* noro_processor_netpoller(void*arg) {
 
 void* noro_processor0(void*arg) {
     machine* mc = (machine*)arg;
+    struct GC_stack_base stksb = {};
+    GC_get_stack_base(&stksb);
+    GC_register_my_thread(&stksb);
+    mc->gchandle = GC_get_my_stackbottom(&mc->stksb);
     // linfo("%d %d\n", mc->id, gettid());
     noro_processor_setname(mc->id);
     gnr__->noroinited = true;
@@ -414,10 +452,10 @@ void* noro_processor0(void*arg) {
         }
 
         for (int i = 0; arr1 != 0 && i < array_size(arr1); i++) {
-            void* key = array_peek_at(arr1, i);
+            void* key = array_peek_at(arr1, i); assert(key != nilptr);
             goroutine* gr = 0;
             mtx_lock(&mc->ngrsmu);
-            hashtable_remove(mc->ngrs, key, (void**)&gr); assert(gr != 0);
+            hashtable_remove(mc->ngrs, key, (void**)&gr); assert(gr != nilptr);
             mtx_unlock(&mc->ngrsmu);
             noro_goroutine_new2(gr);
             // linfo("process %d, %d\n", gr->id, dftstksz);
@@ -426,7 +464,7 @@ void* noro_processor0(void*arg) {
 
         // TODO 应该放到schedule中
         // find free machine and runnable goroutine
-        Array* arr2 = 0;
+        Array* arr2 = nilptr;
         hashtable_get_keys(gnr__->mcs, &arr2);
         for (;;) {
             goroutine* gr = noro_machine_grtake(mc);
@@ -447,16 +485,16 @@ void* noro_processor0(void*arg) {
                     // linfo("got a packing machine %d <- %d\n", mct->id, gr->id);
                     break;
                 }
-                mct = 0;
+                mct = nilptr;
             }
-            if (mct == 0) {
+            if (mct == nilptr) {
                 linfo("no enough mc? %d\n", gr->id);
                 // try select random one?
                 // 暂时先放回全局队列中吧
                 noro_machine_gradd(mc, gr);
                 break;
             }
-            if (mct != 0) {
+            if (mct != nilptr) {
                 // linfo("move %d to %d\n", gr->id, mct->id);
                 noro_machine_gradd(mct, gr);
                 noro_machine_signal(mct);
@@ -732,7 +770,7 @@ noro* noro_new() {
 
 // 开启的总线程数除了以下，还有libgc的线程（3个？）
 void noro_init(noro* nr) {
-    GC_disable();
+    // GC_disable();
     for (int i = 5; i > 0; i --) {
         pthread_t* t = (pthread_t*)calloc(1, sizeof(pthread_t));
         hashtable_add(nr->mths, (void*)(uintptr_t)i, t);
@@ -746,7 +784,7 @@ void noro_init(noro* nr) {
             pthread_create(t, 0, noro_processor, (void*)mc);
         }
     }
-    GC_enable();
+    // GC_enable();
 }
 void noro_destroy(noro* lnr) {
     lnr = 0;

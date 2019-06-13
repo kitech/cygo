@@ -70,7 +70,7 @@ struct goroutine {
     int  mcid;
     void* savefrm; // upper frame
     void* myfrm; // my frame when yield
-    HashTable* specifics; // like thread specific // int => void*, value can pass to free()
+    HashTable* specifics; // like thread specific // int* => void*, value can pass to free()
 };
 
 // processor callbacks, impl in noro.c
@@ -79,6 +79,8 @@ extern int noro_processor_yield_multi(int ytype, int nfds, long fds[], int ytype
 extern bool noro_in_processor();
 extern void noro_processor_resume_one(void* gr_, int ytype, int grid, int mcid);
 extern goroutine* noro_goroutine_getcur();
+extern void* noro_goroutine_getspec(void* spec);
+extern void noro_goroutine_setspec(void* spec, void* val);
 
 extern void loglock();
 extern void logunlock();

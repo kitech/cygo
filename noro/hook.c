@@ -460,8 +460,8 @@ struct hostent* gethostbyname(const char* name)
         static __thread char buf[4096] = {0};
         struct hostent* host = &host_;
         struct hostent* result = 0;
-        int herror = 0;
-        int rv = gethostbyname_r(name, host, buf, sizeof(buf), &result, &herror);
+        int herrno = 0;
+        int rv = gethostbyname_r(name, host, buf, sizeof(buf), &result, &herrno);
         if (rv == 0 && result == host) {
             return host;
         }
@@ -469,41 +469,41 @@ struct hostent* gethostbyname(const char* name)
     }
 
     // below should be fiber vars, not thread vars
-    static __thread struct hostent ghn_host = {0}; // thread local
-    static __thread int ghn_errno = 0;  // thread local
-    static __thread int ghn_bufsz = 0;  // thread local
-    static __thread char* ghn_buf = 0;  // thread local
+    static __thread int bufkey;
+    static __thread int reskey;
+    struct hostent* result = nilptr;
+    struct hostent *host;
+    char *buf;
+    int herrno = 0;
 
-    memset(&ghn_host, 0, sizeof(struct hostent));
-    ghn_errno = 0;
-    if (ghn_bufsz == 0) {
-        ghn_bufsz = 128;
-        ghn_buf = calloc(1, ghn_bufsz);
+    buf = noro_goroutine_getspec(&bufkey);
+    if (buf == nilptr) {
+        buf = calloc(1, 4096);
+        noro_goroutine_setspec(&bufkey, buf);
     }
-    struct hostent* host = &ghn_host;
-    struct hostent* result = 0;
+    host = noro_goroutine_getspec(&reskey);
+    if (host == nilptr) {
+        host = calloc(1, sizeof(struct hostent));
+        noro_goroutine_setspec(&reskey, host);
+    }
+    assert(buf != nilptr); assert(host != nilptr);
 
     int rv = -1;
-    while (1) {
-        rv = gethostbyname_r(name, host, &ghn_buf[0], ghn_bufsz, &result, &ghn_errno);
-        int eno = rv;
-        if (rv == ERANGE && ghn_errno == NETDB_INTERNAL) {
-            ghn_bufsz *= 2;
-            ghn_buf = realloc(ghn_buf, ghn_bufsz);
-            continue;
-        }
-        if (eno != EINPROGRESS && eno != EAGAIN) {
-            linfo("rv=%d eno=%d err=%s\n", rv, eno, strerror(eno));
-        }
-        if (rv == 0) {
-            break;
-        }
-    }
-
+    rv = gethostbyname_r(name, host, &buf[0], 4096, &result, &herrno);
+    int eno = rv;
     if (rv == 0 && host == result) {
         return host;
     }
-    linfo("rv=%d eno=%d err=%s\n", rv, ghn_errno, strerror(ghn_errno));
+    if (rv == ERANGE && herrno == NETDB_INTERNAL) {
+        linfo("bufsz too small %s\n", name);
+        assert(1==2);
+    }
+    linfo("host=%p, result=%p\n", host, result);
+    if (eno != EINPROGRESS && eno != EAGAIN) {
+        linfo("rv=%d eno=%d err=%s\n", rv, eno, strerror(eno));
+    }
+
+    linfo("rv=%d eno=%d err=%s\n", rv, herrno, strerror(herrno));
     linfo("rv=%d eno=%d err=%s\n", rv, errno, strerror(errno));
     return 0;
 }
@@ -515,9 +515,11 @@ int gethostbyname_r(const char *__restrict name,
 {
     if (!gethostbyname_r_f) initHook();
     linfo("%d\n", __buflen);
+
     int rv = gethostbyname_r_f(name, __result_buf, __buf, __buflen, __result, __h_errnop);
     int eno = rv == 0 ? 0 : errno;
     linfo("%s rv=%d eno=%d, err=%d\n", name, rv, eno, strerror(eno));
+    linfo("%s rv=%d eno=%d, err=%d\n", name, rv, *__h_errnop, strerror(*__h_errnop));
     return rv;
 }
 
