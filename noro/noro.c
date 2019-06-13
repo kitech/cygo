@@ -220,7 +220,12 @@ void noro_goroutine_resume_xthread(goroutine* gr) {
         return;
     }
     atomic_setint(&gr->state, runnable);
-    noro_machine_signal(noro_machine_get(gr->mcid));
+    if (gr->mcid > 100) {
+        linfo("mcid error %d\n", gr->mcid);
+        return;
+    }
+    machine* mc = noro_machine_get(gr->mcid);
+    noro_machine_signal(mc);
 }
 void noro_goroutine_suspend(goroutine* gr) {
     gr->myfrm = noro_get_frame();
@@ -240,13 +245,17 @@ machine* noro_machine_new(int id) {
     return mc;
 }
 machine* noro_machine_get(int id) {
-    assert(id > 0);
+    if (id <= 0) {
+        linfo("Invalid mcid %d\n", id);
+        return nilptr;
+        assert(id > 0);
+    }
     machine* mc = 0;
     hashtable_get(gnr__->mcs, (void*)(uintptr_t)id, (void**)&mc);
     // linfo("get mc %d=%p\n", id, mc);
-    if (mc == 0) {
+    if (mc == 0 && id != 1) {
         linfo("cannot get mc %d\n", id);
-        assert(mc != 0);
+        // assert(mc != 0);
     }
     if (mc != 0) {
         // FIXME
@@ -305,7 +314,11 @@ goroutine* noro_machine_grtake(machine* mc) {
     return gr;
 }
 void noro_machine_signal(machine* mc) {
-    assert(mc != nilptr);
+    if (mc == nilptr) {
+        linfo("Invalid mc %p\n", mc);
+        return;
+        assert(mc != nilptr);
+    }
     pthread_cond_signal(&mc->pkcd);
 }
 

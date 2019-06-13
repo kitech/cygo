@@ -451,11 +451,46 @@ int poll(struct pollfd *fds, nfds_t nfds, int timeout)
 }
 
 #if defined(LIBGO_SYS_Linux)
+static __thread struct hostent ghn_host = {0}; // thread local
+static __thread int ghn_errno = 0;  // thread local
+static __thread int ghn_bufsz = 0;  // thread local
+static __thread char* ghn_buf = 0;  // thread local
 struct hostent* gethostbyname(const char* name)
 {
-    linfo("%d\n", 1);
-    assert(1==2);
-    return NULL;
+    if (!gethostbyname_r_f) initHook();
+    // linfo("%s\n", name);
+    memset(&ghn_host, 0, sizeof(struct hostent));
+    ghn_errno = 0;
+    if (ghn_bufsz == 0) {
+        ghn_bufsz = 128;
+        ghn_buf = calloc(1, ghn_bufsz);
+    }
+    struct hostent* host = &ghn_host;
+    struct hostent* result = 0;
+
+    int rv = -1;
+    while (1) {
+        rv = gethostbyname_r(name, host, &ghn_buf[0], ghn_bufsz, &result, &ghn_errno);
+        int eno = rv;
+        if (rv == ERANGE && ghn_errno == NETDB_INTERNAL) {
+            ghn_bufsz *= 2;
+            ghn_buf = realloc(ghn_buf, ghn_bufsz);
+            continue;
+        }
+        if (eno != EINPROGRESS && eno != EAGAIN) {
+            linfo("rv=%d eno=%d err=%s\n", rv, eno, strerror(eno));
+        }
+        if (rv == 0) {
+            break;
+        }
+    }
+
+    linfo("rv=%d eno=%d err=%s\n", rv, ghn_errno, strerror(ghn_errno));
+    if (rv == 0 && host == result) {
+        return host;
+    }
+    linfo("rv=%d eno=%d err=%s\n", rv, errno, strerror(errno));
+    return 0;
 }
 int gethostbyname_r(const char *__restrict name,
 			    struct hostent *__restrict __result_buf,
@@ -465,7 +500,7 @@ int gethostbyname_r(const char *__restrict name,
 {
     if (!gethostbyname_r_f) initHook();
     linfo("%d\n", __buflen);
-    assert(1==2);
+    return gethostbyname_r_f(name, __result_buf, __buf, __buflen, __result, __h_errnop);
 }
 
 struct hostent* gethostbyname2(const char* name, int af)

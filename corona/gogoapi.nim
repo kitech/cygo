@@ -138,6 +138,7 @@ proc gogorunner(arg : pointer) =
     var rvalue : uint64
     # dump_pointer_array(argc.cint, atypes.todptr())
     var ret = ffi_prep_cif(cif.addr, FFI_DEFAULT_ABI, argc.cuint, ffi_type_pointer.addr, atypes.todptr)
+    assert(ret == 0)
 
     # dump_pointer_array(argc.cint, avalues.todptr())
     ffi_call(cif.addr, fnptr, rvalue.addr, avalues.todptr)
