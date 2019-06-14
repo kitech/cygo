@@ -19,6 +19,7 @@ proc test_boehmgc0() : needgcty0 =
     return v
 
 #var onegcv : needgcty0
+# 与预期相符。虽然最后一个变量在返回之后才回收的
 proc test_boehmgc1() =
     var gcveq = newseq[needgcty0]()
     for i in 0..3:
@@ -26,14 +27,8 @@ proc test_boehmgc1() =
         # gcveq.add v
         linfo(i, cast[pointer](v))
         #if i == 0: onegcv = v
-        GC_fullcollect()
-        v = nil # not set nil, not gced the last one!!!
         sleep(3000)
     while gcveq.len > 0: gcveq.delete(0)
-    GC_fullcollect()
-    for i in 0..5:
-        GC_fullcollect()
-        sleep(3000)
     linfo("done")
     return
 
@@ -105,8 +100,8 @@ proc test_boehmgc8() =
     return
 
 proc runtest_boehmgc0() =
-    #noro_post(test_boehmgc1, nil)
+    noro_post(test_boehmgc1, nil)
     #noro_post(test_boehmgc6, nil)
-    noro_post(test_boehmgc8, nil)
+    #noro_post(test_boehmgc8, nil)
     return
 

@@ -104,7 +104,8 @@ macro select*(select_case_expr: untyped) : untyped =
 proc loop*() =
     ## If you haven't other loop, use this
     while true:
-        poll(5000)
+        if false: poll(5000)
+        else: sleep(5000)
 
 include "tests/common.nim"
 if isMainModule:

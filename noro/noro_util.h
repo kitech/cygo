@@ -12,6 +12,7 @@ void loglock();
 void logunlock();
 
 void noro_simlog(int level, const char *filename, int line, const char* funcname, const char *fmt, ...);
+void noro_simlog2(int level, const char *filename, int line, const char* funcname, const char *fmt, ...);
 
 #ifdef NRDEBUG
 #define SHOWLOG 1
@@ -32,6 +33,9 @@ void noro_simlog(int level, const char *filename, int line, const char* funcname
 
 #define linfo(fmt, ...)                                                 \
     if (SHOWLOG) { noro_simlog(0, __FILE__, __LINE__, __FUNCTION__, fmt, __VA_ARGS__); }
+
+#define linfo2(fmt, ...)                                                 \
+    if (SHOWLOG) { noro_simlog2(0, __FILE__, __LINE__, __FUNCTION__, fmt, __VA_ARGS__); }
 
 #endif
 

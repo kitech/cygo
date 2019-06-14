@@ -478,12 +478,12 @@ struct hostent* gethostbyname(const char* name)
 
     buf = noro_goroutine_getspec(&bufkey);
     if (buf == nilptr) {
-        buf = calloc(1, 4096);
+        buf = noro_raw_malloc(4096);
         noro_goroutine_setspec(&bufkey, buf);
     }
     host = noro_goroutine_getspec(&reskey);
     if (host == nilptr) {
-        host = calloc(1, sizeof(struct hostent));
+        host = noro_raw_malloc(sizeof(struct hostent));
         noro_goroutine_setspec(&reskey, host);
     }
     assert(buf != nilptr); assert(host != nilptr);
@@ -514,7 +514,7 @@ int gethostbyname_r(const char *__restrict name,
 			    int *__restrict __h_errnop)
 {
     if (!gethostbyname_r_f) initHook();
-    linfo("%d\n", __buflen);
+    linfo("%ld\n", __buflen);
 
     int rv = gethostbyname_r_f(name, __result_buf, __buf, __buflen, __result, __h_errnop);
     int eno = rv == 0 ? 0 : errno;

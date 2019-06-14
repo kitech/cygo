@@ -1,17 +1,28 @@
 #include <assert.h>
 #include "norogc.h"
 
-void* noro_malloc(size_t size) {
-    return NORO_MALLOC(size);
+void* noro_raw_malloc(size_t size) {
+    return calloc(1, size);
 }
-void noro_free(void* ptr){
-    NORO_FREE(ptr);
+void* noro_raw_realloc(void* ptr, size_t size) {
+    return realloc(ptr, size);
 }
-void* noro_realloc(void* obj, size_t new_size){
-    return NORO_REALLOC(obj, new_size);
+void noro_raw_free(void* ptr) {
+    return free(ptr);
 }
 
 #ifdef USE_BDWGC
+
+void* noro_gc_malloc(size_t size) {
+    return GC_MALLOC(size);
+}
+void* noro_gc_realloc(void* ptr, size_t size) {
+    return GC_REALLOC(ptr, size);
+}
+void noro_gc_free(void* ptr) {
+    return GC_FREE(ptr);
+}
+
 const char* noro_gc_event_name(GC_EventType evty) {
     switch (evty) {
     case GC_EVENT_START: /* COLLECTION */

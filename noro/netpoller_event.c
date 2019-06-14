@@ -27,7 +27,7 @@ void netpoller_use_threads() {
 
 netpoller* netpoller_new() {
     assert(gnpl__ == 0);
-    netpoller* np = (netpoller*)calloc(1, sizeof(netpoller));
+    netpoller* np = (netpoller*)noro_raw_malloc(sizeof(netpoller));
     np->loop = event_base_new();
     assert(np->loop != 0);
 
@@ -74,16 +74,16 @@ evdata* evdata_new(int evtyp, void* data) {
     assert(evtyp >= 0);
 
     netpoller* np = gnpl__;
-    // evdata* d = noro_malloc_st(evdata);
-    evdata* d = calloc(1, sizeof(evdata));
+    // evdata* d = noro_gc_malloc(sizeof(evdata));
+    evdata* d = noro_raw_malloc(sizeof(evdata));
     d->evtyp = evtyp;
     d->data = data;
     // GC_register_finalizer(d, atstgc_finalizer_fn, nilptr, nilptr, nilptr);
     return d;
 }
 void evdata_free(evdata* d) {
-    // noro_free(d);
-    free(d);
+    // noro_gc_free(d);
+    noro_raw_free(d);
 }
 
 extern void noro_processor_resume_one(void* cbdata, int ytype, int grid, int mcid);

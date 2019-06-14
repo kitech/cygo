@@ -2,6 +2,7 @@
 #include <stdio.h>
 #include <stdarg.h>
 #include <string.h>
+#include <assert.h>
 
 #include <unistd.h>
 #include <sys/syscall.h>
@@ -27,18 +28,41 @@ int (array_randcmp) (const void*a, const void*b) {
 
 static mtx_t loglk;
 void loglock() {
-        mtx_lock(&loglk);
+    // mtx_lock(&loglk);
 }
 void logunlock() {
-     mtx_unlock(&loglk);
+    // mtx_unlock(&loglk);
+    // mtx_trylock(&loglk);
 }
 
 void noro_simlog(int level, const char *filename, int line, const char* funcname, const char *fmt, ...) {
+    static __thread char buf[512] = {0};
     char* fbname = strrchr(filename, '/');
     if (fbname != NULL) fbname ++;
     struct timeval ltv = {0};
     gettimeofday(&ltv, 0);
     loglock();
+    int len = snprintf(buf, sizeof(buf)-1, "%ld.%ld %s:%d %s: ", ltv.tv_sec, ltv.tv_usec, fbname, line, funcname);
+    // fprintf(stderr, "%ld.%ld %s:%d %s: ", ltv.tv_sec, ltv.tv_usec, fbname, line, funcname);
+
+    va_list args;
+    va_start(args, fmt);
+    len += vsnprintf(buf+len, sizeof(buf)-len-1, fmt, args);
+    // vfprintf(stderr, fmt, args);
+    va_end(args);
+    buf[len] = '\0';
+    fprintf(stderr, "%s", buf);
+    fflush(stderr);
+    logunlock();
+}
+
+// nolock version, used when stopped the world
+void noro_simlog2(int level, const char *filename, int line, const char* funcname, const char *fmt, ...) {
+    char* fbname = strrchr(filename, '/');
+    if (fbname != NULL) fbname ++;
+    struct timeval ltv = {0};
+    gettimeofday(&ltv, 0);
+    // loglock();
     fprintf(stderr, "%ld.%ld %s:%d %s: ", ltv.tv_sec, ltv.tv_usec, fbname, line, funcname);
 
     va_list args;
@@ -46,7 +70,7 @@ void noro_simlog(int level, const char *filename, int line, const char* funcname
     vfprintf(stderr, fmt, args);
     va_end(args);
     fflush(stderr);
-    logunlock();
+    // logunlock();
 }
 
 
@@ -115,5 +139,18 @@ const char* yield_type_name(int ytype) {
         return "max";
     default:
         return "unknown";
+    }
+}
+
+typedef enum grstate {nostack=0, runnable, executing, waiting, finished, } grstate;
+const char* grstate2str(grstate s) {
+    switch (s) {
+    case nostack: return "nostack";
+    case runnable: return "runnable";
+    case executing: return "executing";
+    case waiting: return "waiting";
+    case finished: return "finished";
+    default:
+        assert(s >= nostack && s <= finished);
     }
 }

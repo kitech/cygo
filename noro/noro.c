@@ -40,6 +40,7 @@ typedef struct machine {
     struct GC_stack_base stksb;
     void* gchandle;
     void* savefrm;
+    pthread_t th;
 } machine;
 
 typedef struct noro {
@@ -79,7 +80,7 @@ void noro_machine_signal(machine* mc);
 
 /////
 goroutine* noro_goroutine_new(int id, coro_func fn, void* arg) {
-    goroutine* gr = (goroutine*)calloc(1, sizeof(goroutine));
+    goroutine* gr = (goroutine*)noro_raw_malloc(sizeof(goroutine));
     gr->id = id;
     gr->fnproc = fn;
     gr->arg = arg;
@@ -107,7 +108,7 @@ void noro_goroutine_destroy(goroutine* gr) {
 
     atomic_setint(&gr->state, nostack);
     if (gr->stack.sptr != 0) {
-        GC_FREE(gr->stack.sptr);
+        noro_gc_free(gr->stack.sptr);
     }
     Array* specs = nilptr;
     hashtable_get_values(gr->specifics, &specs);
@@ -115,12 +116,12 @@ void noro_goroutine_destroy(goroutine* gr) {
         for (int i = 0; i < array_size(specs); i ++) {
             void* v = nilptr;
             array_get_at(specs, i, &v);
-            if (v != nilptr) free(v);
+            if (v != nilptr) noro_raw_free(v);
         }
         array_destroy(specs);
     }
     hashtable_destroy(gr->specifics);
-    free(gr); // malloc/calloc分配的不能用GC_FREE()释放
+    noro_raw_free(gr); // malloc/calloc分配的不能用GC_FREE()释放
     ssze += sizeof(goroutine);
 
     // linfo("gr %d on %d, freed %d, %d\n", grid, mcid, ssze, sizeof(goroutine));
@@ -251,7 +252,7 @@ void noro_goroutine_suspend(goroutine* gr) {
 
 
 machine* noro_machine_new(int id) {
-    machine* mc = (machine*)calloc(1, sizeof(machine));
+    machine* mc = (machine*)noro_raw_malloc(sizeof(machine));
     mc->id = id;
     linfo("htconf=%o\n", noro_dft_htconf());
     hashtable_new_conf(noro_dft_htconf(), &mc->ngrs);
@@ -373,7 +374,7 @@ void noro_goroutine_setspec(void* spec, void* val) {
     }
     void* oldv = nilptr;
     hashtable_remove(gr->specifics, spec, &oldv);
-    if (oldv != nilptr) { free(oldv);  }
+    if (oldv != nilptr) { noro_raw_free(oldv);  }
     hashtable_add(gr->specifics, spec, val);
 }
 // int noro_num_gorutines() { return atomic_getint(gnr__)}
@@ -715,23 +716,69 @@ int hashtable_cmp_int(const void *key1, const void *key2) {
     else return -1;
 }
 
-static void noro_gc_push_other_roots() {
-    linfo("push other roots %d\n", gettid());
+noro* noro_get() { return gnr__;}
+
+static void noro_gc_push_other_roots1() {
+    if (noro_get()->noroinited == false) return;
+    if (gcurmcid__ != 0) return;
+
+    // linfo2("push other roots tid=%d mcid=%d\n", gettid(), gcurmcid__);
+}
+static void noro_gc_push_other_roots2() {
+    if (noro_get()->noroinited == false) return;
+    // if (gcurmcid__ != 0) return;
+
+    linfo2("push other roots tid=%d mcid=%d\n", gettid(), gcurmcid__);
+    int grcnt = 0;
+    int executing_cnt = 0;
+    for (int i = 3; i <= 5; i++ ) {
+        machine* mc = noro_machine_get(i);
+        // linfo2("%d %p\n", i, mc);
+        Array* arr = nilptr;
+        hashtable_get_values(mc->grs, &arr);
+        if (arr == nilptr) continue;
+        grcnt += array_size(arr);
+        for (int j = 0; j < array_size(arr); j++) {
+            goroutine* gr = nilptr;
+            array_get_at(arr, j, &gr);
+            linfo2("i/j=%d/%d id=%d state=%d(%s) pkrs=%d(%s) gr=%p\n",
+                   i, j, gr->id, (int)gr->state, grstate2str(gr->state),
+                   gr->pkreason, yield_type_name(gr->pkreason), gr);
+            if (gr->state == executing) {
+                executing_cnt += 1;
+            }
+            GC_remove_roots(gr->stack.sptr, gr->stack.sptr + 1);
+            // GC_add_roots(gr->stack.sptr, ((void*)((uintptr_t)gr->stack.sptr) + 130000));
+            if (gr->state != executing) {
+                void* stktop = gr->stack.sptr;
+                void* stkbtm = ((void*)((uintptr_t)gr->stack.sptr) + gr->stack.ssze);
+                GC_push_all_eager(stktop, stkbtm);
+            }
+        }
+        array_destroy(arr);
+    }
+    linfo2("push other roots tid=%d mcs=%d grs=%d runcnt=%d\n", gettid(), 3, grcnt, executing_cnt);
 }
 static void noro_gc_on_collection_event(GC_EventType evty) {
-    linfo("%d=%s\n", evty, noro_gc_event_name(evty));
+    // linfo2("%d=%s mcid=%d\n", evty, noro_gc_event_name(evty), gcurmcid__);
+    if (evty == GC_EVENT_POST_STOP_WORLD) {
+        if (gcurmcid__ == 0) {
+            // noro_gc_push_other_roots2();
+        }
+    }
 }
 static void noro_gc_on_thread_event(GC_EventType evty, void* thid) {
-    linfo("%d=%s %p\n", evty, noro_gc_event_name(evty), thid);
+    linfo2("%d=%s %p\n", evty, noro_gc_event_name(evty), thid);
 }
 static void noro_init_intern() {
     srand(time(0));
+    // GC_set_free_space_divisor(50); // default 3
     // GC_enable_incremental();
     // GC_set_rate(5);
     // GC_set_all_interior_pointers(1);
     // TODO
-    // GC_set_push_other_roots(noro_gc_push_other_roots);
-    // GC_set_on_collection_event(noro_gc_on_collection_event);
+    GC_set_push_other_roots(noro_gc_push_other_roots1); // run in which threads?
+    GC_set_on_collection_event(noro_gc_on_collection_event);
     // GC_set_on_thread_event(noro_gc_on_thread_event);
     GC_INIT();
     GC_allow_register_threads();
@@ -743,7 +790,6 @@ static void noro_init_intern() {
     netpoller_use_threads();
 }
 
-noro* noro_get() { return gnr__;}
 noro* noro_new() {
     if (gnr__) {
         linfo("wtf...%d\n",1);
@@ -751,7 +797,7 @@ noro* noro_new() {
     }
     noro_init_intern();
 
-    noro* nr = (noro*)calloc(1, sizeof(noro));
+    noro* nr = (noro*)noro_raw_malloc(sizeof(noro));
     hashtable_conf_init(&nr->htconf);
     nr->htconf.key_length = sizeof(void*);
     nr->htconf.hash = hashtable_hash_ptr;
@@ -772,9 +818,9 @@ noro* noro_new() {
 void noro_init(noro* nr) {
     // GC_disable();
     for (int i = 5; i > 0; i --) {
-        pthread_t* t = (pthread_t*)calloc(1, sizeof(pthread_t));
-        hashtable_add(nr->mths, (void*)(uintptr_t)i, t);
         machine* mc = noro_machine_new(i);
+        pthread_t* t = &mc->th;
+        hashtable_add(nr->mths, (void*)(uintptr_t)i, t);
         hashtable_add(nr->mcs, (void*)(uintptr_t)i, mc);
         if (i == 1) {
             pthread_create(t, 0, noro_processor0, (void*)mc);

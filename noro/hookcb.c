@@ -33,7 +33,7 @@ typedef struct hookcb {
 } hookcb;
 
 fdcontext* fdcontext_new(int fd) {
-    fdcontext* fdctx = (fdcontext*)malloc(sizeof(fdcontext));
+    fdcontext* fdctx = (fdcontext*)noro_raw_malloc(sizeof(fdcontext));
     fdctx->fd = fd;
     return fdctx;
 }
@@ -72,7 +72,7 @@ static int hashtable_cmp_int(const void *key1, const void *key2) {
 
 hookcb* hookcb_new() {
     // so, this is live forever, not use GC_malloc
-    hookcb* hkcb = (hookcb*)calloc(1, sizeof(hookcb));
+    hookcb* hkcb = (hookcb*)noro_raw_malloc(sizeof(hookcb));
     HashTableConf htconf;
     hashtable_conf_init(&htconf);
     htconf.hash = hashtable_hash_ptr;

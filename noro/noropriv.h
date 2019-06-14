@@ -48,6 +48,7 @@ void netpoller_use_threads();
 // for goroutine
 typedef struct coro_stack coro_stack;
 typedef enum grstate {nostack=0, runnable, executing, waiting, finished, } grstate;
+extern const char* grstate2str(grstate s);
 // 每个goroutine同时只能属于某一个machine
 struct goroutine {
     int id;

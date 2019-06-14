@@ -23,7 +23,7 @@ static netpoller* gnpl__ = 0;
 
 netpoller* netpoller_new() {
     assert(gnpl__ == 0);
-    netpoller* np = (netpoller*)calloc(1, sizeof(netpoller));
+    netpoller* np = (netpoller*)noro_raw_malloc(sizeof(netpoller));
     np->loop = ev_loop_new(ev_recommended_backends ());
     assert(np->loop != 0);
     ev_set_io_collect_interval(np->loop, 0.1);
@@ -72,7 +72,7 @@ evdata* evdata_new(int evtyp, void* data) {
     d->data = data;
     return d;
 }
-void evdata_free(evdata* d) { noro_free(d); }
+void evdata_free(evdata* d) { noro_raw_free(d); }
 
 extern void noro_processor_resume_some(void* cbdata);
 

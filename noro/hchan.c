@@ -7,7 +7,7 @@
 
 
 hchan* hchan_new(int cap) {
-    hchan* hc = (hchan*)calloc(1, sizeof(hchan));
+    hchan* hc = (hchan*)noro_raw_malloc(sizeof(hchan));
     hc->c = chan_init(cap);
     hc->cap = cap;
 

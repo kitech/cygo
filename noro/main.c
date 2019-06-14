@@ -33,12 +33,12 @@ void hello(void*arg) {
     linfo("called %p %d, %ld\n", arg, tid, time(0));
     // assert(1==2);
     for (int i = 0; i < 9; i++) {
-        NORO_MALLOC(15550);
+        noro_gc_malloc(15550);
     }
     for (int i = 0; i < 1; i ++) {
         linfo("hello step. %d %d\n", i, tid);
         sleep(1);
-        NORO_MALLOC(25550);
+        noro_gc_malloc(25550);
     }
     sleep(2);
     linfo("hello end %d %ld\n", tid, time(0)); // this tid not begin tid???
@@ -60,7 +60,7 @@ int main() {
     GC_gcollect();
     for (;;) {
         for (int i = 0; i < 9; i ++) {
-            NORO_MALLOC(35679);
+            noro_gc_malloc(35679);
         }
         noro_post(hello, (void*)(uintptr_t)5);
         socket(PF_INET, SOCK_STREAM, 0);
