@@ -137,7 +137,8 @@ void netpoller_readfd(int fd, int ytype, goroutine* gr) {
     // mtx_lock(&np->evmu);
     struct event* evt = event_new(np->loop, fd, EV_READ|EV_CLOSED, netpoller_evwatcher_cb, d);
     d->evt = evt;
-    event_add(evt, 0);
+    int rv = event_add(evt, 0);
+    assert(rv == 0);
     // mtx_unlock(&np->evmu);
     if (d != nilptr) {
         // linfo("event_add d=%p\n", d);
@@ -157,7 +158,8 @@ void netpoller_writefd(int fd, int ytype, goroutine* gr) {
     // mtx_lock(&np->evmu);
     struct event* evt = event_new(np->loop, fd, EV_WRITE|EV_CLOSED, netpoller_evwatcher_cb, d);
     d->evt = evt;
-    event_add(evt, 0);
+    int rv = event_add(evt, 0);
+    assert(rv == 0);
     // mtx_unlock(&np->evmu);
     // linfo("evwrite add d=%p %ld\n", d, fd);
 }
@@ -177,7 +179,8 @@ void netpoller_timer(long ns, int ytype, goroutine* gr) {
     struct event* tmer = evtimer_new(np->loop, netpoller_evwatcher_cb, d);
     // struct event* tmer = event_new(np->loop, -1, 0, netpoller_evwatcher_cb, d);
     d->evt = tmer;
-    evtimer_add(tmer, &d->tv);
+    int rv = evtimer_add(tmer, &d->tv);
+    assert(rv == 0);
     // mtx_unlock(&np->evmu);
     // linfo("timer add d=%p %ld\n", d, ns);
 }

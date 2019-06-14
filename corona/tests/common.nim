@@ -37,6 +37,7 @@ include "./manyroutines.nim"
 include "./chan0.nim"
 include "./chan1.nim"
 include "./boehwgc0.nim"
+include "./fiber0.nim"
 
 # test Loop
 proc testtick(cnter:int) =
@@ -49,7 +50,8 @@ proc testtick(cnter:int) =
     # runtest_manyroutines_tick(cnter)
     # if cnter == 0: runtest_chan1(cnter)
     # if cnter == 1: runtest_tcpcon0()
-    if cnter == 1: runtest_boehmgc0()
+    #if cnter == 1: runtest_boehmgc0()
+    if cnter == 1: runtest_fiber0(cnter)
     # test_chan0()
     return
 

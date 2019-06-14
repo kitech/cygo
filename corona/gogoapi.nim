@@ -68,7 +68,9 @@ proc nak2ffipty(ak: AnyKind) : pffi_type =
         return ffi_type_pointer.addr
     elif ak == akSequence:
         return ffi_type_pointer.addr
-    else: echo "unknown", ak
+    elif ak == akFloat or ak == akFloat64:
+        return ffi_type_double.addr
+    else: linfo "unknown", ak
     return nil
 
 proc gogorunner_cleanup(arg :pointer) =
@@ -89,6 +91,9 @@ proc gogorunner_cleanup(arg :pointer) =
             deallocShared(akval)
             discard
         elif akty == akPointer: discard
+        elif akty == akFloat or akty == akFloat64:
+            deallocShared(akval)
+            discard
         else: linfo "unknown", akty
     #deallocShared(arg)
     pointer_array_free(arg)
@@ -131,6 +136,9 @@ proc gogorunner(arg : pointer) =
         elif akty == akPointer:
             ptrtmps[idx] = akval
             avalues[idx] = ptrtmps[idx].addr
+        elif akty == akFloat or akty == akFloat64:
+            ptrtmps[idx] = akval
+            avalues[idx] = ptrtmps[idx]
         else: linfo "unknown", akty, akval
         discard
 
@@ -176,6 +184,11 @@ proc gopackany*(fn:proc, args:varargs[Any, toany]) =
             pointer_array_set(pargs, validx.cint, v)
         elif arg.kind == akPointer:
             var v = arg.getPointer()
+            pointer_array_set(pargs, validx.cint, v)
+        elif arg.kind == akFloat or arg.kind == akFloat64:
+            var tv = arg.getFloat()
+            var v = allocShared0(sizeof(float))
+            copyMem(v, tv.addr, sizeof(float))
             pointer_array_set(pargs, validx.cint, v)
         else: linfo "unknown", arg.kind
 

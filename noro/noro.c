@@ -772,7 +772,7 @@ static void noro_gc_on_thread_event(GC_EventType evty, void* thid) {
 }
 static void noro_init_intern() {
     srand(time(0));
-    // GC_set_free_space_divisor(50); // default 3
+    GC_set_free_space_divisor(50); // default 3
     // GC_enable_incremental();
     // GC_set_rate(5);
     // GC_set_all_interior_pointers(1);

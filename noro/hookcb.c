@@ -86,6 +86,7 @@ hookcb* hookcb_new() {
 hookcb* hookcb_get() {
     if (ghkcb__ == 0) {
         hookcb* hkcb = hookcb_new();
+        assert(ghkcb__ == 0);
         ghkcb__ = hkcb;
     }
     assert (ghkcb__ != 0);
@@ -112,9 +113,15 @@ void hookcb_oncreate(int fd, int fdty, bool isNonBlocking, int domain, int sockt
         int rv = fdcontext_set_nonblocking(fdctx, true);
         assert(fd_is_nonblocking(fd) == true);
     }
+
+    fdcontext* oldfdctx = 0;
     mtx_lock(&hkcb->mu);
+    hashtable_remove(hkcb->fdctxs, (void*)(uintptr_t)fd, (void**)&oldfdctx);
     hashtable_add(hkcb->fdctxs, (void*)(uintptr_t)fd, (void*)fdctx);
     mtx_unlock(&hkcb->mu);
+    if (oldfdctx != nilptr) {
+        noro_raw_free(oldfdctx);
+    }
 }
 
 void hookcb_onclose(int fd) {
@@ -129,6 +136,8 @@ void hookcb_onclose(int fd) {
     // maybe not found when just startup
     if (fdctx == 0) {
         linfo("fd not found in context %d\n", fd);
+    }else{
+        noro_raw_free(fdctx);
     }
 }
 
