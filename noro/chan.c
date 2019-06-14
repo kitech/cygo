@@ -23,7 +23,7 @@
 #endif
 
 #include "chan.h"
-#include "queue.h"
+#include "szqueue.h"
 
 #ifdef _WIN32
 #include <windows.h>
@@ -100,7 +100,7 @@ chan_t* chan_init(size_t capacity)
 
 static int buffered_chan_init(chan_t* chan, size_t capacity)
 {
-    queue_t* queue = queue_init(capacity);
+    szqueue_t* queue = szqueue_init(capacity);
     if (!queue)
     {
         return -1;
@@ -108,10 +108,10 @@ static int buffered_chan_init(chan_t* chan, size_t capacity)
 
     if (unbuffered_chan_init(chan) != 0)
     {
-        queue_dispose(queue);
+        szqueue_dispose(queue);
         return -1;
     }
-    
+
     chan->queue = queue;
     return 0;
 }
@@ -166,7 +166,7 @@ void chan_dispose(chan_t* chan)
 {
     if (chan_is_buffered(chan))
     {
-        queue_dispose(chan->queue);
+        szqueue_dispose(chan->queue);
     }
 
     pthread_mutex_destroy(&chan->w_mu);
@@ -253,7 +253,7 @@ static int buffered_chan_send(chan_t* chan, void* data)
         chan->w_waiting--;
     }
 
-    int success = queue_add(chan->queue, data);
+    int success = szqueue_add(chan->queue, data);
 
     if (chan->r_waiting > 0)
     {
@@ -283,7 +283,7 @@ static int buffered_chan_recv(chan_t* chan, void** data)
         chan->r_waiting--;
     }
 
-    void* msg = queue_remove(chan->queue);
+    void* msg = szqueue_remove(chan->queue);
     if (data)
     {
         *data = msg;

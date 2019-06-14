@@ -370,7 +370,7 @@ void noro_goroutine_setspec(void* spec, void* val) {
     goroutine* gr = noro_goroutine_getcur();
     if (gr == 0) {
         linfo("Not goroutine, main/poller thread %d?\n", gettid());
-        return 0;
+        return;
     }
     void* oldv = nilptr;
     hashtable_remove(gr->specifics, spec, &oldv);

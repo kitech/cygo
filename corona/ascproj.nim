@@ -28,7 +28,7 @@ const absldflags = "-L " & abssrcdir & "/../bdwgc/.libs" &
 
 {.compile:"../noro/rxilog.c".}
 {.compile:"../noro/atomic.c".}
-{.compile:"../noro/queue.c".}
+{.compile:"../noro/szqueue.c".}
 {.compile:"../noro/chan.c".}
 {.compile:"../noro/hchan.c".}
 {.compile:"../noro/hselect.c".}

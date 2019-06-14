@@ -4,7 +4,7 @@
 #include <pthread.h>
 #include <stdint.h>
 
-#include "queue.h"
+#include "szqueue.h"
 
 
 // Defines a thread-safe communication pipe. Channels are either buffered or
@@ -16,8 +16,8 @@
 typedef struct chan_t
 {
     // Buffered channel properties
-    queue_t*         queue;
-    
+    szqueue_t*         queue;
+
     // Unbuffered channel properties
     pthread_mutex_t  r_mu;
     pthread_mutex_t  w_mu;

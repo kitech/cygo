@@ -12,7 +12,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-#include "queue.h"
+#include "szqueue.h"
 
 #if defined(_WIN32) && !defined(ENOBUFS)
 #include <winsock.h>
@@ -20,7 +20,7 @@
 #endif
 
 // Returns 0 if the queue is not at capacity. Returns 1 otherwise.
-static inline int queue_at_capacity(queue_t* queue)
+static inline int szqueue_at_capacity(szqueue_t* queue)
 {
     return queue->size >= queue->capacity;
 }
@@ -29,7 +29,7 @@ static inline int queue_at_capacity(queue_t* queue)
 // number of items that can be in the queue at one time. A capacity greater
 // than INT_MAX / sizeof(void*) is considered an error. Returns NULL if
 // initialization failed.
-queue_t* queue_init(size_t capacity)
+szqueue_t* szqueue_init(size_t capacity)
 {
     if (capacity > INT_MAX / sizeof(void*))
     {
@@ -37,13 +37,13 @@ queue_t* queue_init(size_t capacity)
         return NULL;
     }
 
-    queue_t* queue = (queue_t*) malloc(sizeof(queue_t));
+    szqueue_t* queue = (szqueue_t*) malloc(sizeof(szqueue_t));
     void**   data  = (void**) malloc(capacity * sizeof(void*));
     if (!queue || !data)
     {
         // In case of free(NULL), no operation is performed.
         free(queue);
-        free(data);   
+        free(data);
         errno = ENOMEM;
         return NULL;
     }
@@ -56,7 +56,7 @@ queue_t* queue_init(size_t capacity)
 }
 
 // Releases the queue resources.
-void queue_dispose(queue_t* queue)
+void szqueue_dispose(szqueue_t* queue)
 {
     free(queue->data);
     free(queue);
@@ -64,9 +64,9 @@ void queue_dispose(queue_t* queue)
 
 // Enqueues an item in the queue. Returns 0 is the add succeeded or -1 if it
 // failed. If -1 is returned, errno will be set.
-int queue_add(queue_t* queue, void* value)
+int szqueue_add(szqueue_t* queue, void* value)
 {
-    if (queue_at_capacity(queue))
+    if (szqueue_at_capacity(queue))
     {
         errno = ENOBUFS;
         return -1;
@@ -86,7 +86,7 @@ int queue_add(queue_t* queue, void* value)
 
 // Dequeues an item from the head of the queue. Returns NULL if the queue is
 // empty.
-void* queue_remove(queue_t* queue)
+void* szqueue_remove(szqueue_t* queue)
 {
     void* value = NULL;
 
@@ -106,7 +106,7 @@ void* queue_remove(queue_t* queue)
 
 // Returns, but does not remove, the head of the queue. Returns NULL if the
 // queue is empty.
-void* queue_peek(queue_t* queue)
+void* szqueue_peek(szqueue_t* queue)
 {
     return queue->size ? queue->data[queue->next] : NULL;
 }

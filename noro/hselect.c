@@ -64,7 +64,7 @@ bool selectgo(int* rcasi, scase** cas0, uint16_t* order0, int ncases) {
         case caseNil:
             assert(1==2); break;
         case caseRecv:
-            gr = queue_remove(hc->sendq);
+            gr = szqueue_remove(hc->sendq);
             if (gr != nilptr) goto recv;
             if (hchan_len(hc)>0) goto bufrecv;
             if (hchan_is_closed(hc)) goto rclose;
@@ -72,7 +72,7 @@ bool selectgo(int* rcasi, scase** cas0, uint16_t* order0, int ncases) {
 
         case caseSend:
             if (hchan_is_closed(hc)) goto sclose;
-            gr = queue_remove(hc->recvq);
+            gr = szqueue_remove(hc->recvq);
             if (gr != nilptr) goto send;
             if (hchan_len(hc) < hchan_cap(hc)) goto bufsend;
             break;
@@ -102,10 +102,10 @@ bool selectgo(int* rcasi, scase** cas0, uint16_t* order0, int ncases) {
 
         switch (cas->kind) {
         case caseRecv:
-            queue_add(hc->recvq, mygr);
+            szqueue_add(hc->recvq, mygr);
             break;
         case caseSend:
-            queue_add(hc->sendq, mygr);
+            szqueue_add(hc->sendq, mygr);
             break;
         default:
             assert(1==2); break;
@@ -140,9 +140,9 @@ bool selectgo(int* rcasi, scase** cas0, uint16_t* order0, int ncases) {
         else{
             hc = sk->hc;
             if (sk->kind == caseSend) {
-                gr = queue_remove(hc->sendq);
+                gr = szqueue_remove(hc->sendq);
             }else{
-                gr = queue_remove(hc->recvq);
+                gr = szqueue_remove(hc->recvq);
             }
             assert(gr == mygr);
             gr = nilptr;
