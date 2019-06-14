@@ -15,6 +15,9 @@ typedef struct hchan {
     bool closed;
 } hchan;
 
+int hchan_is_closed(hchan* hc);
+int hchan_cap(hchan* hc);
+int hchan_len(hchan* hc);
 
 #endif
 

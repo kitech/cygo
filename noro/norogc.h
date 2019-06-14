@@ -6,6 +6,9 @@
 #ifdef USE_BDWGC
 
 #include <gc/gc.h>
+extern void GC_push_all_eager(void*, void*);
+extern void GC_set_push_other_roots(void*);
+
 const char* noro_gc_event_name(GC_EventType evty);
 
 void* noro_gc_malloc(size_t size);

@@ -28,7 +28,7 @@ typedef struct yieldinfo {
 } yieldinfo;
 typedef struct machine {
     int id;
-    HashTable* ngrs; // id => goroutine* 新任务，未分配栈
+    Queue* ngrs; // goroutine*  新任务，未分配栈
     mtx_t ngrsmu;
     HashTable* grs;  // # grid => goroutine*
     pthread_mutex_t grsmu;
@@ -255,8 +255,8 @@ machine* noro_machine_new(int id) {
     machine* mc = (machine*)noro_raw_malloc(sizeof(machine));
     mc->id = id;
     linfo("htconf=%o\n", noro_dft_htconf());
-    hashtable_new_conf(noro_dft_htconf(), &mc->ngrs);
     hashtable_new_conf(noro_dft_htconf(), &mc->grs);
+    queue_new(&mc->ngrs);
     return mc;
 }
 machine* noro_machine_get(int id) {
@@ -318,7 +318,7 @@ goroutine* noro_machine_grtake(machine* mc) {
     goroutine* gr = nilptr;
     Array* arr = nilptr;
     pthread_mutex_lock(&mc->grsmu);
-    hashtable_get_keys(mc->grs, (void**)&arr);
+    hashtable_get_keys(mc->grs, &arr);
     if (arr != nilptr) {
         void* key = nilptr;
         array_get_at(arr, 0, (void**)&key);
@@ -380,17 +380,19 @@ void noro_goroutine_setspec(void* spec, void* val) {
 // int noro_num_gorutines() { return atomic_getint(gnr__)}
 
 void noro_post(coro_func fn, void*arg) {
-    int id = noro_nxtid(gnr__);
-    goroutine* gr = noro_goroutine_new(id, fn, arg);
     machine* mc = noro_machine_get(1);
-    // linfo("mc=%p, %d %p, %d\n", mc, mc->id, mc->ngrs, hashtable_size(mc->ngrs));
+    // linfo("mc=%p, %d %p, %d\n", mc, mc->id, mc->ngrs, queue_size(mc->ngrs));
     if (mc != 0 && mc->id != 1) {
         // FIXME
-        linfo("nothing mc=%p, %d %p, %d\n", mc, mc->id, mc->ngrs, hashtable_size(mc->ngrs));
+        linfo("nothing mc=%p, %d %p, %d\n", mc, mc->id, mc->ngrs, queue_size(mc->ngrs));
         return;
     }
+
+    int id = noro_nxtid(gnr__);
+    goroutine* gr = noro_goroutine_new(id, fn, arg);
+    noro_goroutine_new2(gr);
     mtx_lock(&mc->ngrsmu);
-    hashtable_add(mc->ngrs, (void*)(uintptr_t)id, gr);
+    queue_enqueue(mc->ngrs, gr);
     mtx_unlock(&mc->ngrsmu);
     pthread_cond_signal(&mc->pkcd);
 }
@@ -432,42 +434,32 @@ void* noro_processor0(void*arg) {
 
     for (;;) {
         mtx_lock(&mc->ngrsmu);
-        int newg = hashtable_size(mc->ngrs);
+        int newgn = queue_size(mc->ngrs);
         mtx_unlock(&mc->ngrsmu);
-        if (newg == 0) {
+        if (newgn == 0) {
             mc->parking = true;
             pthread_cond_wait(&mc->pkcd, &mc->pkmu);
             mc->parking = false;
-            mtx_lock(&mc->ngrsmu);
-            newg = hashtable_size(mc->ngrs);
-            mtx_unlock(&mc->ngrsmu);
         }
 
-        // linfo("newgr %d\n", newg);
-        Array* arr1 = 0;
-        mtx_lock(&mc->ngrsmu);
-        hashtable_get_keys(mc->ngrs, &arr1);
-        mtx_unlock(&mc->ngrsmu);
-        if (arr1 == nilptr || array_size(arr1) == 0) {
-            continue;
-        }
-
-        for (int i = 0; arr1 != 0 && i < array_size(arr1); i++) {
-            void* key = array_peek_at(arr1, i); assert(key != nilptr);
-            goroutine* gr = 0;
+        // linfo("newgr %d\n", newgn);
+        for (newgn = 0;; newgn ++) {
+            goroutine* newgr = nilptr;
             mtx_lock(&mc->ngrsmu);
-            hashtable_remove(mc->ngrs, key, (void**)&gr); assert(gr != nilptr);
+            queue_poll(mc->ngrs, (void**)&newgr);
             mtx_unlock(&mc->ngrsmu);
-            noro_goroutine_new2(gr);
-            // linfo("process %d, %d\n", gr->id, dftstksz);
-            noro_machine_gradd(mc, gr);
+            if (newgr == nilptr) {
+                break;
+            }
+            noro_machine_gradd(mc, newgr);
         }
+        if (newgn == 0) continue;
 
         // TODO 应该放到schedule中
         // find free machine and runnable goroutine
         Array* arr2 = nilptr;
         hashtable_get_keys(gnr__->mcs, &arr2);
-        for (;;) {
+        for (;arr2 != nilptr;) {
             goroutine* gr = noro_machine_grtake(mc);
             if (gr == nilptr) {
                 linfo("why nil %d\n", hashtable_size(mc->grs));
@@ -475,15 +467,15 @@ void* noro_processor0(void*arg) {
             }
 
             machine* mct = 0;
-            if (arr2 != nilptr) array_sort(arr2, array_randcmp);
-            for (int j = 0; arr2!=0 && j < array_size(arr2); j++) {
-                void* key = array_peek_at(arr2, j);
+            for (int j = 0; j < array_size(arr2); j++) {
+                int rdidx = abs(rand()) % array_size(arr2);
+                void* key = array_peek_at(arr2, rdidx);
                 if ((uintptr_t)key <= 2) continue;
 
                 // linfo("checking machine %d/%d %d\n", j, array_size(arr2), key);
                 mct = noro_machine_get((int)(uintptr_t)key);
                 if (mct->parking) {
-                    // linfo("got a packing machine %d <- %d\n", mct->id, gr->id);
+                    // linfo("got a packing machine %d <- gr %d\n", mct->id, gr->id);
                     break;
                 }
                 mct = nilptr;
@@ -502,7 +494,6 @@ void* noro_processor0(void*arg) {
                 break;
             }
         }
-        if (arr1 != nilptr) array_destroy(arr1);
         if (arr2 != nilptr) array_destroy(arr2);
     }
 }
@@ -740,7 +731,7 @@ static void noro_gc_push_other_roots2() {
         grcnt += array_size(arr);
         for (int j = 0; j < array_size(arr); j++) {
             goroutine* gr = nilptr;
-            array_get_at(arr, j, &gr);
+            array_get_at(arr, j, (void**)&gr);
             linfo2("i/j=%d/%d id=%d state=%d(%s) pkrs=%d(%s) gr=%p\n",
                    i, j, gr->id, (int)gr->state, grstate2str(gr->state),
                    gr->pkreason, yield_type_name(gr->pkreason), gr);
@@ -763,7 +754,7 @@ static void noro_gc_on_collection_event(GC_EventType evty) {
     // linfo2("%d=%s mcid=%d\n", evty, noro_gc_event_name(evty), gcurmcid__);
     if (evty == GC_EVENT_POST_STOP_WORLD) {
         if (gcurmcid__ == 0) {
-            // noro_gc_push_other_roots2();
+            noro_gc_push_other_roots2();
         }
     }
 }

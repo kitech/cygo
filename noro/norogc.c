@@ -1,4 +1,5 @@
 #include <assert.h>
+#include <stdlib.h>
 #include "norogc.h"
 
 void* noro_raw_malloc(size_t size) {
