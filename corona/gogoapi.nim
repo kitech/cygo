@@ -41,8 +41,8 @@ proc gogorunnerleave(arg:pointer) =
     # GC_call_with_alloc_lock(gcsetbottom0.toaddr, sbp.sb0.addr)
     discard
 
-proc goroutine_post(fnptr: pointer; args: pointer) =
-    noro_post(fnptr, args)
+proc fiber_post(fnptr: pointer; args: pointer) =
+    crn_post(fnptr, args)
     return
 
 # begin gogo2
@@ -193,7 +193,7 @@ proc gopackany*(fn:proc, args:varargs[Any, toany]) =
         else: linfo "unknown", arg.kind
 
     linfo "copy margs", 2+args.len*2, pargs # why refc=1
-    goroutine_post(gogorunner.toaddr(), pargs)
+    fiber_post(gogorunner.toaddr(), pargs)
     return
 
 # just like a spawn: gogo2 somefunc(a0, a1, a2)

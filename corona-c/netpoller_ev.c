@@ -1,6 +1,7 @@
-#include "noropriv.h"
 
 #include <ev.h>
+
+#include "coronapriv.h"
 
 // 由于 hook中没有hook epoll_wait, epoll_create,
 // 所以在这是可以使用libev/libuv。
@@ -16,14 +17,14 @@
 
 typedef struct netpoller {
     struct ev_loop* loop;
-    HashTable* watchers; // ev_watcher* => goroutine*
+    HashTable* watchers; // ev_watcher* => fiber*
 } netpoller;
 
 static netpoller* gnpl__ = 0;
 
 netpoller* netpoller_new() {
     assert(gnpl__ == 0);
-    netpoller* np = (netpoller*)noro_raw_malloc(sizeof(netpoller));
+    netpoller* np = (netpoller*)crn_raw_malloc(sizeof(netpoller));
     np->loop = ev_loop_new(ev_recommended_backends ());
     assert(np->loop != 0);
     ev_set_io_collect_interval(np->loop, 0.1);
@@ -67,14 +68,14 @@ typedef struct evdata {
     int ytype;
 } evdata;
 evdata* evdata_new(int evtyp, void* data) {
-    evdata* d = noro_malloc_st(evdata);
+    evdata* d = crn_malloc_st(evdata);
     d->evtyp = evtyp;
     d->data = data;
     return d;
 }
-void evdata_free(evdata* d) { noro_raw_free(d); }
+void evdata_free(evdata* d) { crn_raw_free(d); }
 
-extern void noro_processor_resume_some(void* cbdata);
+extern void crn_procer_resume_some(void* cbdata);
 
 // common version callback, support ev_io, ev_timer
 static
@@ -97,15 +98,15 @@ void netpoller_evwatcher_cb(struct ev_loop* loop, ev_watcher* evw, int revents) 
         assert(1==2);
     }
 
-    noro_processor_resume_some(d->data);
+    crn_procer_resume_some(d->data);
     evdata_free(d);
-    noro_free(evw);
+    crn_free(evw);
 }
 
 static
 void netpoller_readfd(int fd, void* gr) {
     netpoller* np = gnpl__;
-    ev_io* iow = noro_malloc_st(ev_io);
+    ev_io* iow = crn_malloc_st(ev_io);
     iow->data = evdata_new(EV_IO, gr);
     ev_io_init(iow, (void(*)(struct ev_loop*, ev_io*, int))netpoller_evwatcher_cb, fd, EV_READ|EV__IOFDSET);
     ev_io_start(np->loop, iow);
@@ -114,7 +115,7 @@ void netpoller_readfd(int fd, void* gr) {
 static
 void netpoller_writefd(int fd, void* gr) {
     netpoller* np = gnpl__;
-    ev_io* iow = noro_malloc_st(ev_io);
+    ev_io* iow = crn_malloc_st(ev_io);
     iow->data = evdata_new(EV_IO, gr);
     ev_io_init(iow, (void(*)(struct ev_loop*, ev_io*, int))netpoller_evwatcher_cb, fd, EV_WRITE|EV__IOFDSET);
     ev_io_start(np->loop, iow);
@@ -131,7 +132,7 @@ void netpoller_timer(long ns, void* gr) {
     double after = ((double)ns)/1000000000.0;
     after = evtmerval(np->loop, after);
 
-    ev_timer* tmer = noro_malloc_st(ev_timer);
+    ev_timer* tmer = crn_malloc_st(ev_timer);
     tmer->data = evdata_new(EV_TIMER, gr);
     ev_timer_init(tmer, (void(*)(struct ev_loop*, ev_timer*, int))netpoller_evwatcher_cb, after, 0);
     ev_timer_start(np->loop, tmer);

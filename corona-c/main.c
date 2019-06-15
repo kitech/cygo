@@ -7,9 +7,9 @@
 #include <coro.h>
 #include <collectc/hashtable.h>
 #include <collectc/array.h>
-#include "noro.h"
-#include "norogc.h"
-#include "noro_util.h"
+#include "corona.h"
+#include "coronagc.h"
+#include "corona_util.h"
 
 
 #include <sys/epoll.h>
@@ -19,11 +19,11 @@ extern getsockopt_t getsockopt_f;
 extern setsockopt_t setsockopt_f;
 extern epoll_wait_t epoll_wait_f;
 
-int noro_epoll_create() {
+int crn_epoll_create() {
     int fd = epoll_create1(EPOLL_CLOEXEC);
     return fd;
 }
-int noro_epoll_wait(int epfd, struct epoll_event *events,
+int crn_epoll_wait(int epfd, struct epoll_event *events,
                      int maxevents, int timeout) {
     return epoll_wait_f(epfd, events, maxevents, timeout);
 }
@@ -33,36 +33,36 @@ void hello(void*arg) {
     linfo("called %p %d, %ld\n", arg, tid, time(0));
     // assert(1==2);
     for (int i = 0; i < 9; i++) {
-        noro_gc_malloc(15550);
+        crn_gc_malloc(15550);
     }
     for (int i = 0; i < 1; i ++) {
         linfo("hello step. %d %d\n", i, tid);
         sleep(1);
-        noro_gc_malloc(25550);
+        crn_gc_malloc(25550);
     }
     sleep(2);
     linfo("hello end %d %ld\n", tid, time(0)); // this tid not begin tid???
     assert(gettid() == tid);
 }
 
-static noro* nr;
+static corona* nr;
 int main() {
-    nr = noro_new();
-    noro_init(nr);
-    noro_wait_init_done(nr);
-    linfo("noro init done %d, %d\n", 12345, gettid());
+    nr = crn_new();
+    crn_init(nr);
+    crn_wait_init_done(nr);
+    linfo("corona init done %d, %d\n", 12345, gettid());
     sleep(1);
     for (int i = 0; i < 3; i ++) {
-        noro_post(hello, (void*)(uintptr_t)i);
+        crn_post(hello, (void*)(uintptr_t)i);
     }
     // seems there is race condition when strart up, and malloc big size object below.
     // so collectc once with lucky
     GC_gcollect();
     for (;;) {
         for (int i = 0; i < 9; i ++) {
-            noro_gc_malloc(35679);
+            crn_gc_malloc(35679);
         }
-        noro_post(hello, (void*)(uintptr_t)5);
+        crn_post(hello, (void*)(uintptr_t)5);
         socket(PF_INET, SOCK_STREAM, 0);
         sleep(1);
     }

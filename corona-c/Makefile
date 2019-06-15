@@ -11,7 +11,7 @@ all:
 	gcc ${CFLAGS} -o corowp.o -c ./corowp.c
 	gcc ${CFLAGS} -o hook.o -c ./hook.c
 	gcc ${CFLAGS} -o hookcb.o -c ./hookcb.c
-	gcc ${CFLAGS} -o noro_util.o -c noro_util.c
+	gcc ${CFLAGS} -o corona_util.o -c corona_util.c
 	gcc ${CFLAGS} -o rxilog.o -c rxilog.c
 	gcc ${CFLAGS} -o atomic.o -c atomic.c
 	gcc ${CFLAGS} -o szqueue.o -c szqueue.c
@@ -20,13 +20,13 @@ all:
 	gcc ${CFLAGS} -o hselect.o -c hselect.c
 	#gcc ${CFLAGS} -o netpoller_ev.o -c netpoller_ev.c
 	gcc ${CFLAGS} -o netpoller_event.o -c netpoller_event.c
-	gcc ${CFLAGS} -o norogc.o -c norogc.c
-	gcc ${CFLAGS} -o noro.o -c noro.c
+	gcc ${CFLAGS} -o coronagc.o -c coronagc.c
+	gcc ${CFLAGS} -o corona.o -c corona.c
 	gcc ${CFLAGS} -o main.o -c main.c
-	gcc -o noro main.o noro.o norogc.o netpoller_event.o hselect.o hchan.o chan.o szqueue.o atomic.o rxilog.o noro_util.o hookcb.o hook.o corowp.o coro.o ${LDFLAGS}
+	gcc -o corona main.o corona.o coronagc.o netpoller_event.o hselect.o hchan.o chan.o szqueue.o atomic.o rxilog.o corona_util.o hookcb.o hook.o corowp.o coro.o ${LDFLAGS}
 
 clean:
-	rm -f noro *.o
+	rm -f corona *.o
 
 # some tricks
 # gdb: handle SIGXCPU SIG33 SIG35 SIGPWR nostop noprint

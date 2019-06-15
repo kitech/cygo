@@ -1,5 +1,5 @@
 
-#include "noropriv.h"
+#include "coronapriv.h"
 #include "hchan.h"
 
 typedef struct scase {
@@ -34,13 +34,13 @@ void selblock() {
 
 static
 bool selectgo(int* rcasi, scase** cas0, uint16_t* order0, int ncases) {
-    goroutine* mygr = noro_goroutine_getcur();
+    fiber* mygr = crn_fiber_getcur();
     sellock(cas0, order0, ncases);
     linfo("rcasi=%d cas0=%p order0=%p ncases=%d\n", *rcasi, cas0, order0, ncases);
     hchan* hc = nilptr;
     scase* sk = nilptr;
-    goroutine* gr = nilptr;
-    goroutine* wkgr = nilptr;
+    fiber* gr = nilptr;
+    fiber* wkgr = nilptr;
     int casewk = 0;
     hchan* wkhc = nilptr;
 
@@ -115,7 +115,7 @@ bool selectgo(int* rcasi, scase** cas0, uint16_t* order0, int ncases) {
     // wait for someone to wake us up
     selunlock(cas0, order0, ncases);
     linfo("should here %d\n", 0);
-    noro_processor_yield(-1, YIELD_TYPE_CHAN_SELECT);
+    crn_procer_yield(-1, YIELD_TYPE_CHAN_SELECT);
     linfo("should here %d\n", 0);
     sellock(cas0, order0, ncases);
 
@@ -180,7 +180,7 @@ bool selectgo(int* rcasi, scase** cas0, uint16_t* order0, int ncases) {
  recv:
     cas->hcelem = gr->hcelem;
     selunlock(cas0, order0, ncases);
-    noro_processor_resume_one(gr, 0, gr->id, gr->mcid);
+    crn_procer_resume_one(gr, 0, gr->id, gr->mcid);
     linfo("syncrecv: cas0=%p hc=%p val=%p\n", cas0, hc, cas->hcelem);
     recvok = true;
     retline = __LINE__;
@@ -211,7 +211,7 @@ bool selectgo(int* rcasi, scase** cas0, uint16_t* order0, int ncases) {
 }
 
 static void blocknocase() {
-    noro_processor_yield(-1, YIELD_TYPE_CHAN_SELECT_NOCASE);
+    crn_procer_yield(-1, YIELD_TYPE_CHAN_SELECT_NOCASE);
 }
 
 bool goselect(int* rcasi, scase** cas0, int ncases) {

@@ -1,9 +1,9 @@
-{.compile:"../noro/hook.c"}
-{.compile:"../noro/hookcb.c"}
+{.compile:"../corona-c/hook.c"}
+{.compile:"../corona-c/hookcb.c"}
 {.passc:"-D_GNU_SOURCE".}
 #{.passc:"-DLIBGO_SYS_Linux".}
-{.passc:"-I../noro/cltc/include".}
-{.passl:"-L../noro/cltc/lib -lcollectc"}
+{.passc:"-I../corona-c/cltc/include".}
+{.passl:"-L../corona-c/cltc/lib -lcollectc"}
 
 proc initHook() {.importc.}
 initHook()

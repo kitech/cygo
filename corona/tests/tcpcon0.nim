@@ -74,9 +74,9 @@ proc test_accept1c() =
     sock.connect("127.0.0.1", 5678.Port)
     return
 proc test_accept1() =
-    noro_post(test_accept1s, nil)
+    crn_post(test_accept1s, nil)
     sleep(100)
-    noro_post(test_accept1c, nil)
+    crn_post(test_accept1c, nil)
     return
 
 # echo server/client test.
@@ -102,7 +102,7 @@ proc test_echo_srv0(cnt:int) =
     while true:
         var sk : Socket
         sock.accept(sk)
-        noro_post(test_echo_srv_handle0, cast[pointer](sk))
+        crn_post(test_echo_srv_handle0, cast[pointer](sk))
         i += 1
         if i == cnt: break
     sock.close()
@@ -128,7 +128,7 @@ proc test_echo_cli_worker0(no:int) =
 proc test_echo_cli0() =
     for i in 0..< 32:
         sleep(rand(500))
-        noro_post(test_echo_cli_worker0, cast[pointer](i))
+        crn_post(test_echo_cli_worker0, cast[pointer](i))
     var i = 0
     while true:
         i += 1
@@ -145,10 +145,10 @@ proc runtest_tcpconm() =
     test_http_get1()
 
 proc runtest_tcpcon0() =
-    # noro_post(runtest_tcpconm, nil)
+    # crn_post(runtest_tcpconm, nil)
     # test_accept1()
-    noro_post(test_echo_srv0, cast[pointer](32))
+    crn_post(test_echo_srv0, cast[pointer](32))
     sleep(300)
-    noro_post(test_echo_cli0, nil)
+    crn_post(test_echo_cli0, nil)
     return
 

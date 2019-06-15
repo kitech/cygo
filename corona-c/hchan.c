@@ -1,17 +1,17 @@
 
 #include "chan.h"
 #include "hchan.h"
-#include "noropriv.h"
+#include "coronapriv.h"
 
-// wrapper chan_t with goroutine integeration
+// wrapper chan_t with fiber integeration
 
 
 hchan* hchan_new(int cap) {
-    hchan* hc = (hchan*)noro_raw_malloc(sizeof(hchan));
+    hchan* hc = (hchan*)crn_raw_malloc(sizeof(hchan));
     hc->c = chan_init(cap);
     hc->cap = cap;
 
-    // only support max 32 concurrent goroutines on one hchan
+    // only support max 32 concurrent fibers on one hchan
     // should enough
     hc->recvq = szqueue_init(32);
     hc->sendq = szqueue_init(32);
@@ -22,7 +22,7 @@ int hchan_close(hchan* hc) {
         return true;
     }
 
-    goroutine* mygr = noro_goroutine_getcur();
+    fiber* mygr = crn_fiber_getcur();
     assert(mygr != nilptr);
 
     mtx_lock(&hc->lock);
@@ -31,28 +31,28 @@ int hchan_close(hchan* hc) {
     qsz = hc->recvq->size;
     if (qsz > 0) { linfo("discard recvq %d\n", qsz); }
     while (hc->recvq != nilptr) {
-        goroutine* gr = (goroutine*)szqueue_remove(hc->recvq);
+        fiber* gr = (fiber*)szqueue_remove(hc->recvq);
         if (gr == nilptr) {
             break;
         }
         gr->wokeby = mygr;
         gr->wokehc = hc;
         gr->wokecase = caseClose;
-        noro_processor_resume_one(gr, 0, gr->id, gr->mcid);
+        crn_procer_resume_one(gr, 0, gr->id, gr->mcid);
     }
     if (hc->recvq != nilptr) szqueue_dispose(hc->recvq);
 
     qsz = hc->sendq->size;
     if (qsz > 0) { linfo("discard sendq %d\n", qsz); }
     while(hc->sendq != nilptr) {
-        goroutine* gr = (goroutine*)szqueue_remove(hc->sendq);
+        fiber* gr = (fiber*)szqueue_remove(hc->sendq);
         if (gr == nilptr) {
             break;
         }
         gr->wokeby = mygr;
         gr->wokehc = hc;
         gr->wokecase = caseClose;
-        noro_processor_resume_one(gr, 0, gr->id, gr->mcid);
+        crn_procer_resume_one(gr, 0, gr->id, gr->mcid);
     }
     if (hc->sendq != nilptr) szqueue_dispose(hc->sendq);
 
@@ -75,14 +75,14 @@ int hchan_len(hchan* hc) { return chan_size(hc->c); }
 int hchan_send(hchan* hc, void* data) {
     mtx_lock(&hc->lock);
 
-    goroutine* mygr = noro_goroutine_getcur();
+    fiber* mygr = crn_fiber_getcur();
     assert(mygr != nilptr);
 
     if (hc->cap == 0) {
-        // if any goroutine waiting, put data to it elem and then wakeup
+        // if any fiber waiting, put data to it elem and then wakeup
         // else put self to sendq and then parking self
 
-        goroutine* gr = (goroutine*)szqueue_remove(hc->recvq);
+        fiber* gr = (fiber*)szqueue_remove(hc->recvq);
         if (gr != nilptr) {
             bool swaped = atomic_casptr(&gr->hcelem, invlidptr, data);
             if (swaped) {
@@ -91,7 +91,7 @@ int hchan_send(hchan* hc, void* data) {
                 gr->wokehc = hc;
                 gr->wokecase = caseRecv;
                 mtx_unlock(&hc->lock);
-                noro_processor_resume_one(gr, 0, gr->id, gr->mcid);
+                crn_procer_resume_one(gr, 0, gr->id, gr->mcid);
                 return 1;
             } else {
                 linfo("wtf, cannot set rcvg hcelem %d, swaped %d elem %p\n",
@@ -108,7 +108,7 @@ int hchan_send(hchan* hc, void* data) {
             linfo("yield me sender %d/%d\n", mygr->id, mygr->mcid);
             mygr->hclock = &hc->lock;
             // mtx_unlock(&hc->lock);
-            noro_processor_yield(-1, YIELD_TYPE_CHAN_SEND);
+            crn_procer_yield(-1, YIELD_TYPE_CHAN_SEND);
             return 1;
         }
     } else {
@@ -117,20 +117,20 @@ int hchan_send(hchan* hc, void* data) {
         int bufsz = chan_size(hc->c);
         if (bufsz < hc->cap) {
             chan_send(hc->c, data);
-            goroutine* gr = (goroutine*)szqueue_remove(hc->recvq);
+            fiber* gr = (fiber*)szqueue_remove(hc->recvq);
             if (gr != nilptr) {
                 gr->wokeby = mygr;
-                noro_processor_resume_one(gr, 0, gr->id, gr->mcid);
+                crn_procer_resume_one(gr, 0, gr->id, gr->mcid);
             }
             mtx_unlock(&hc->lock);
             return 1;
         }else{
             // if has recvq, put to peer hcelem, wakeup peer and return
             // put data to my hcelem, put self to sendq, then parking self
-            goroutine* gr = (goroutine*)szqueue_remove(hc->recvq);
+            fiber* gr = (fiber*)szqueue_remove(hc->recvq);
             if (gr != nilptr) {
                 gr->hcelem = data;
-                noro_processor_resume_one(gr, 0, gr->id, gr->mcid);
+                crn_procer_resume_one(gr, 0, gr->id, gr->mcid);
                 mtx_unlock(&hc->lock);
                 return 1;
             }
@@ -139,7 +139,7 @@ int hchan_send(hchan* hc, void* data) {
             szqueue_add(hc->sendq, mygr);
 
             mtx_unlock(&hc->lock);
-            noro_processor_yield(-1, YIELD_TYPE_CHAN_SEND);
+            crn_procer_yield(-1, YIELD_TYPE_CHAN_SEND);
             return 1;
         }
     }
@@ -148,7 +148,7 @@ int hchan_send(hchan* hc, void* data) {
 int hchan_recv(hchan* hc, void** pdata) {
     mtx_lock(&hc->lock);
 
-    goroutine* mygr = noro_goroutine_getcur();
+    fiber* mygr = crn_fiber_getcur();
     assert(mygr != nilptr);
 
     if (hc->cap == 0) {
@@ -156,7 +156,7 @@ int hchan_recv(hchan* hc, void** pdata) {
         // else if any sendq, wakeup them,
         // else parking
 
-        goroutine* gr = (goroutine*)szqueue_remove(hc->sendq);
+        fiber* gr = (fiber*)szqueue_remove(hc->sendq);
         if (gr != nilptr) {
             void* oldptr = atomic_getptr(&gr->hcelem);
             bool swaped = atomic_casptr(&gr->hcelem, oldptr, invlidptr);
@@ -167,7 +167,7 @@ int hchan_recv(hchan* hc, void** pdata) {
                 gr->wokehc = hc;
                 gr->wokecase = caseSend;
                 mtx_unlock(&hc->lock);
-                noro_processor_resume_one(gr, 0, gr->id, gr->mcid);
+                crn_procer_resume_one(gr, 0, gr->id, gr->mcid);
                 return 1;
             } else {
                 linfo("wtf, cannot set sndg hcelem %d, swaped %d elem %p\n",
@@ -183,7 +183,7 @@ int hchan_recv(hchan* hc, void** pdata) {
             linfo("yield me recver %d/%d, qc %d\n", mygr->id, mygr->mcid, hc->recvq->size);
             mygr->hclock = &hc->lock;
             // mtx_unlock(&hc->lock);
-            noro_processor_yield(-1, YIELD_TYPE_CHAN_RECV);
+            crn_procer_yield(-1, YIELD_TYPE_CHAN_RECV);
             mtx_lock(&hc->lock);
             void* oldptr = atomic_getptr(&mygr->hcelem);
             // assert(oldptr != invlidptr);
@@ -205,19 +205,19 @@ int hchan_recv(hchan* hc, void** pdata) {
             return 1;
         }
 
-        goroutine* gr = szqueue_remove(hc->sendq);
+        fiber* gr = szqueue_remove(hc->sendq);
         if (gr != nilptr) {
             *pdata = gr->hcelem;
             gr->hcelem = nilptr;
             gr->wokeby = mygr;
             mtx_unlock(&hc->lock);
-            noro_processor_resume_one(gr, 0, gr->id, gr->mcid);
+            crn_procer_resume_one(gr, 0, gr->id, gr->mcid);
             return 1;
         }
 
         szqueue_add(hc->recvq, mygr);
         mtx_unlock(&hc->lock);
-        noro_processor_yield(-1, YIELD_TYPE_CHAN_RECV);
+        crn_procer_yield(-1, YIELD_TYPE_CHAN_RECV);
         *pdata = mygr->hcelem;
         return 1;
     }

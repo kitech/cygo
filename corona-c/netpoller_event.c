@@ -1,7 +1,8 @@
-#include "noropriv.h"
 
 #include <event2/event.h>
 #include <event2/thread.h>
+
+#include "coronapriv.h"
 
 // 由于 hook中没有hook epoll_wait, epoll_create,
 // 所以在这是可以使用libev/libuv。
@@ -14,7 +15,7 @@
 
 typedef struct netpoller {
     struct event_base * loop;
-    HashTable* watchers; // ev_watcher* => goroutine*
+    HashTable* watchers; // ev_watcher* => fiber*
     mtx_t evmu;
 } netpoller;
 
@@ -27,7 +28,7 @@ void netpoller_use_threads() {
 
 netpoller* netpoller_new() {
     assert(gnpl__ == 0);
-    netpoller* np = (netpoller*)noro_raw_malloc(sizeof(netpoller));
+    netpoller* np = (netpoller*)crn_raw_malloc(sizeof(netpoller));
     np->loop = event_base_new();
     assert(np->loop != 0);
 
@@ -65,28 +66,28 @@ typedef struct evdata {
 static void atstgc_finalizer_fn(evdata* obj, void* cbdata) {
     linfo("finilize obj %p, %p\n", obj, cbdata);
 }
-// TODO seems norogc has some problem?
+// TODO seems coronagc has some problem?
 // 难道说可能是libevent也开了自己的线程？无
 // switch to manual calloc can fix the problem: because GC_malloc return the same addr
 // 发现 evdata 的finalize早于真正需要释放它的时间？而在 netpoller_readfd()中加一个log顺序就变了？
-// 难道是goroutine yield之后，认为没用了被GC？应该怎么测试呢？
+// 难道是fiber yield之后，认为没用了被GC？应该怎么测试呢？
 evdata* evdata_new(int evtyp, void* data) {
     assert(evtyp >= 0);
 
     netpoller* np = gnpl__;
-    // evdata* d = noro_gc_malloc(sizeof(evdata));
-    evdata* d = noro_raw_malloc(sizeof(evdata));
+    // evdata* d = crn_gc_malloc(sizeof(evdata));
+    evdata* d = crn_raw_malloc(sizeof(evdata));
     d->evtyp = evtyp;
     d->data = data;
     // GC_register_finalizer(d, atstgc_finalizer_fn, nilptr, nilptr, nilptr);
     return d;
 }
 void evdata_free(evdata* d) {
-    // noro_gc_free(d);
-    noro_raw_free(d);
+    // crn_gc_free(d);
+    crn_raw_free(d);
 }
 
-extern void noro_processor_resume_one(void* cbdata, int ytype, int grid, int mcid);
+extern void crn_procer_resume_one(void* cbdata, int ytype, int grid, int mcid);
 
 // common version callback, support ev_io, ev_timer
 static
@@ -111,7 +112,7 @@ void netpoller_evwatcher_cb(evutil_socket_t fd, short events, void* arg) {
         assert(1==2);
     }
 
-    goroutine *gr = dd;
+    fiber *gr = dd;
     // linfo("before release d=%p\n", d);
     if (d->evtyp == EV_TIMER && fd != -1) {
         linfo("evwoke ev=%d fd=%d(%d) ytype=%d=%s %p grid=%d, mcid=%d d=%p\n",
@@ -123,11 +124,11 @@ void netpoller_evwatcher_cb(evutil_socket_t fd, short events, void* arg) {
     // because non-persist event already run event_del by loop itself
     event_free(evt);
     evdata_free(d);
-    noro_processor_resume_one(dd, ytype, grid, mcid);
+    crn_procer_resume_one(dd, ytype, grid, mcid);
 }
 
 static
-void netpoller_readfd(int fd, int ytype, goroutine* gr) {
+void netpoller_readfd(int fd, int ytype, fiber* gr) {
     netpoller* np = gnpl__;
     evdata* d = evdata_new(EV_IO, gr);
     d->grid = gr->id;
@@ -148,7 +149,7 @@ void netpoller_readfd(int fd, int ytype, goroutine* gr) {
 // why hang forever when send?
 // yield fd=13, ytype=10, mcid=5, grid=5
 static
-void netpoller_writefd(int fd, int ytype, goroutine* gr) {
+void netpoller_writefd(int fd, int ytype, fiber* gr) {
     netpoller* np = gnpl__;
     evdata* d = evdata_new(EV_IO, gr);
     d->grid = gr->id;
@@ -165,7 +166,7 @@ void netpoller_writefd(int fd, int ytype, goroutine* gr) {
 }
 
 static
-void netpoller_timer(long ns, int ytype, goroutine* gr) {
+void netpoller_timer(long ns, int ytype, fiber* gr) {
     netpoller* np = gnpl__;
 
     evdata* d = evdata_new(EV_TIMER, gr);
@@ -186,7 +187,7 @@ void netpoller_timer(long ns, int ytype, goroutine* gr) {
 }
 
 // when ytype is SLEEP/USLEEP/NANOSLEEP, fd is the nanoseconds
-void netpoller_yieldfd(long fd, int ytype, goroutine* gr) {
+void netpoller_yieldfd(long fd, int ytype, fiber* gr) {
     assert(ytype > YIELD_TYPE_NONE);
     assert(ytype < YIELD_TYPE_MAX);
 

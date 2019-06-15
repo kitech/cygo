@@ -9,7 +9,7 @@
 #include <threads.h>
 
 #include <yieldtypes.h>
-#include <noro_util.h>
+#include <corona_util.h>
 
 pid_t gettid() {
 #ifdef SYS_gettid
@@ -35,7 +35,7 @@ void logunlock() {
     // mtx_trylock(&loglk);
 }
 
-void noro_simlog(int level, const char *filename, int line, const char* funcname, const char *fmt, ...) {
+void crn_simlog(int level, const char *filename, int line, const char* funcname, const char *fmt, ...) {
     static __thread char buf[512] = {0};
     char* fbname = strrchr(filename, '/');
     if (fbname != NULL) fbname ++;
@@ -57,7 +57,7 @@ void noro_simlog(int level, const char *filename, int line, const char* funcname
 }
 
 // nolock version, used when stopped the world
-void noro_simlog2(int level, const char *filename, int line, const char* funcname, const char *fmt, ...) {
+void crn_simlog2(int level, const char *filename, int line, const char* funcname, const char *fmt, ...) {
     char* fbname = strrchr(filename, '/');
     if (fbname != NULL) fbname ++;
     struct timeval ltv = {0};

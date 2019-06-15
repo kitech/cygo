@@ -27,7 +27,7 @@ proc test_chan1impl(hc:pointer) =
 
 proc test_chan2impl() =
     var hc = hchan_new(0)
-    noro_post(test_chan1impl, hc)
+    crn_post(test_chan1impl, hc)
     var dat0 : pointer
     for i in 0..5:
         sleep(500)
@@ -67,7 +67,7 @@ proc test_chan5impl() =
     for i in 0..4:
         var dat0 = cast[pointer](5+i)
         var rv = hchan_send(hc, dat0)
-    noro_post(test_chan4impl, hc)
+    crn_post(test_chan4impl, hc)
     sleep(2000)
     discard hchan_close(hc)
     return
@@ -83,9 +83,9 @@ proc test_chan6impl(hc:pointer) =
 
 proc test_chan7impl() =
     var hc = hchan_new(0)
-    noro_post(test_chan6impl, hc)
-    noro_post(test_chan6impl, hc)
-    noro_post(test_chan6impl, hc)
+    crn_post(test_chan6impl, hc)
+    crn_post(test_chan6impl, hc)
+    crn_post(test_chan6impl, hc)
     var dat0 : pointer
     var cnter = 0
     var rcval = newseq[int](0)
@@ -119,9 +119,9 @@ proc test_chan8impl(hc:pointer) =
 
 proc test_chan9impl() =
     var hc = hchan_new(0)
-    noro_post(test_chan8impl, hc)
-    noro_post(test_chan8impl, hc)
-    noro_post(test_chan8impl, hc)
+    crn_post(test_chan8impl, hc)
+    crn_post(test_chan8impl, hc)
+    crn_post(test_chan8impl, hc)
     var dat0 : pointer
     for i in 0..14:
         dat0 = cast[pointer](i+1)
@@ -134,11 +134,11 @@ proc test_chan9impl() =
 
 
 proc test_chan0() =
-    #noro_post(test_chan0impl, nil)
-    #noro_post(test_chan2impl, nil)
-    #noro_post(test_chan3impl, nil)
-    # noro_post(test_chan5impl, nil)
-    # noro_post(test_chan7impl, nil)
-    noro_post(test_chan9impl, nil)
+    #crn_post(test_chan0impl, nil)
+    #crn_post(test_chan2impl, nil)
+    #crn_post(test_chan3impl, nil)
+    # crn_post(test_chan5impl, nil)
+    # crn_post(test_chan7impl, nil)
+    crn_post(test_chan9impl, nil)
     return
 

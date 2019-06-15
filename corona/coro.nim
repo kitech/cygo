@@ -1,5 +1,5 @@
-{.compile:"../noro/coro.c"}
-{.compile:"../noro/corowp.c"}
+{.compile:"../corona-c/coro.c"}
+{.compile:"../corona-c/corowp.c"}
 {.passc:"-D_GNU_SOURCE".}
 {.passc:"-DNRDEBUG".} # NORO DEBUG
 {.passc:"-DCORO_UCONTEXT".}

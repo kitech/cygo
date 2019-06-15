@@ -103,7 +103,7 @@ proc test_chan_select_all_block_recv() =
     hcs.add(scase(hc: c1.hc, kind: caseRecv))
     hcs.add(scase(hc: c2.hc, kind: caseRecv))
 
-    noro_post(hlpunblock, cast[pointer](c1))
+    crn_post(hlpunblock, cast[pointer](c1))
     var casi = goselect1(hcs)
     linfo(casi, c1.toelem(hcs[casi].hcelem))
 
@@ -185,9 +185,9 @@ proc runtest_chan1(cnter:int) =
     # test_chan14()
     # test_chan15()
     # test_chan16()
-    # noro_post(test_chan_select_all_block_recv, nil)
+    # crn_post(test_chan_select_all_block_recv, nil)
     test_chan_goselect_macrov5()
-    # noro_post test_chan_select_nocase1, nil
-    # noro_post test_chan_select_nocase2, nil
+    # crn_post test_chan_select_nocase1, nil
+    # crn_post test_chan_select_nocase2, nil
     return
 

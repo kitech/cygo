@@ -19,13 +19,13 @@ include "hook.nim"
 include "ascproj.nim"
 
 
-var noroh : pointer
-proc noro_set_thread_createcb(fnptr:pointer, args:pointer) {.importc.}
-proc noro_set_frame_funcs(getter, setter : pointer) {.importc.}
-proc noro_init_and_wait_done():pointer {.importc.}
-proc noro_get_goid():cint {.importc.}
-proc noro_post(fnptr:pointer, args:pointer) {.importc.}
-proc noro_malloc(size:csize) : pointer {.importc.}
+var coronah : pointer
+proc crn_set_thread_createcb(fnptr:pointer, args:pointer) {.importc.}
+proc crn_set_frame_funcs(getter, setter : pointer) {.importc.}
+proc crn_init_and_wait_done():pointer {.importc.}
+proc crn_get_goid():cint {.importc.}
+proc crn_post(fnptr:pointer, args:pointer) {.importc.}
+proc crn_malloc(size:csize) : pointer {.importc.}
 proc hchan_new(cap:int) : pointer {.importc.}
 proc hchan_close(hc:pointer) : bool {.importc.}
 proc hchan_is_closed(hc:pointer) : bool {.importc.}
@@ -35,15 +35,15 @@ proc hchan_len(hc:pointer) : int {.importc.}
 proc hchan_cap(hc:pointer) : int {.importc.}
 proc goselect(rcasi: ptr cint, cas0: pointer, ncases:cint) : bool {.importc.}
 
-proc noro_thread_createcbfn(args:pointer) =
-    linfo("noro thread created", args)
+proc crn_thread_createcbfn(args:pointer) =
+    linfo("corona thread created", args)
     #setupForeignThreadGc()
     return
 
 linfo "corona initing ..."
-noro_set_thread_createcb(noro_thread_createcbfn, nil)
-noro_set_frame_funcs(cast[pointer](getFrame), cast[pointer](setFrame))
-noroh = noro_init_and_wait_done()
+crn_set_thread_createcb(crn_thread_createcbfn, nil)
+crn_set_frame_funcs(cast[pointer](getFrame), cast[pointer](setFrame))
+coronah = crn_init_and_wait_done()
 linfo "corona inited done"
 
 include "./gogoapi.nim"
@@ -60,8 +60,8 @@ macro go*(funccallexpr: untyped) : untyped =
     result = quote do: gogo2 `funccallexpr`
 
 proc goid*():int =
-    ## get current goroutine id
-    noro_get_goid()
+    ## get current fiber id
+    crn_get_goid()
 
 # public channel apis. see gochanapi.nim
 # proc makechan*(T: typedesc, cap:int) : chan[T]
@@ -96,7 +96,7 @@ macro select*(select_case_expr: untyped) : untyped =
     ##     default: discard
     ##
     ## .. code-block::
-    ##   goselect: discard                # block current goroutine forever
+    ##   goselect: discard                # block current fiber forever
     ##
     result = quote do: goselectv6 `select_case_expr`
 

@@ -73,7 +73,7 @@ proc test_boehmgc6() =
     v.new(test_boehmgc_finalizer)
     var vp = cast[pointer](v)
     linfo("newed", vp)
-    noro_post(test_boehmgc5, vp)
+    crn_post(test_boehmgc5, vp)
     v = nil
     vp = nil
 
@@ -91,7 +91,7 @@ proc test_boehmgc8() =
     v.new(test_boehmgc_finalizer)
     var vp = cast[pointer](v)
     linfo("newed", vp)
-    noro_post(test_boehmgc7, vp)
+    crn_post(test_boehmgc7, vp)
     v = nil
     vp = nil
 
@@ -100,8 +100,8 @@ proc test_boehmgc8() =
     return
 
 proc runtest_boehmgc0() =
-    noro_post(test_boehmgc1, nil)
-    #noro_post(test_boehmgc6, nil)
-    #noro_post(test_boehmgc8, nil)
+    crn_post(test_boehmgc1, nil)
+    #crn_post(test_boehmgc6, nil)
+    #crn_post(test_boehmgc8, nil)
     return
 

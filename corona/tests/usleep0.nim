@@ -18,8 +18,8 @@ proc test_usleep1(arg:pointer) =
     linfo("after usleep", nowt0()-btime, tno, getFrame()==nil)
     return
 
-#noro_post(test_usleep0, nil)
-#noro_post(test_usleep1, cast[pointer](5))
+#crn_post(test_usleep0, nil)
+#crn_post(test_usleep1, cast[pointer](5))
 proc runtest_usleep(cnt:int) =
-    noro_post(test_usleep1, cast[pointer](cnt))
+    crn_post(test_usleep1, cast[pointer](cnt))
 

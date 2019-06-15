@@ -9,7 +9,7 @@
 #include "collectc/hashtable.h"
 #include "collectc/array.h"
 
-#include "noropriv.h"
+#include "coronapriv.h"
 #include "hookcb.h"
 
 
@@ -33,7 +33,7 @@ typedef struct hookcb {
 } hookcb;
 
 fdcontext* fdcontext_new(int fd) {
-    fdcontext* fdctx = (fdcontext*)noro_raw_malloc(sizeof(fdcontext));
+    fdcontext* fdctx = (fdcontext*)crn_raw_malloc(sizeof(fdcontext));
     fdctx->fd = fd;
     return fdctx;
 }
@@ -72,7 +72,7 @@ static int hashtable_cmp_int(const void *key1, const void *key2) {
 
 hookcb* hookcb_new() {
     // so, this is live forever, not use GC_malloc
-    hookcb* hkcb = (hookcb*)noro_raw_malloc(sizeof(hookcb));
+    hookcb* hkcb = (hookcb*)crn_raw_malloc(sizeof(hookcb));
     HashTableConf htconf;
     hashtable_conf_init(&htconf);
     htconf.hash = hashtable_hash_ptr;
@@ -108,7 +108,7 @@ void hookcb_oncreate(int fd, int fdty, bool isNonBlocking, int domain, int sockt
     fdctx->sockty = sockty;
     fdctx->protocol = protocol;
 
-    if (noro_in_processor() && fdty == FDISSOCKET)
+    if (crn_in_procer() && fdty == FDISSOCKET)
     if (!fd_is_nonblocking(fd)) {
         int rv = fdcontext_set_nonblocking(fdctx, true);
         assert(fd_is_nonblocking(fd) == true);
@@ -120,7 +120,7 @@ void hookcb_oncreate(int fd, int fdty, bool isNonBlocking, int domain, int sockt
     hashtable_add(hkcb->fdctxs, (void*)(uintptr_t)fd, (void*)fdctx);
     mtx_unlock(&hkcb->mu);
     if (oldfdctx != nilptr) {
-        noro_raw_free(oldfdctx);
+        crn_raw_free(oldfdctx);
     }
 }
 
@@ -137,7 +137,7 @@ void hookcb_onclose(int fd) {
     if (fdctx == 0) {
         linfo("fd not found in context %d\n", fd);
     }else{
-        noro_raw_free(fdctx);
+        crn_raw_free(fdctx);
     }
 }
 

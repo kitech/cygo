@@ -15,8 +15,8 @@ proc test_manyroutines1(arg:pointer) =
 # 每tick启动1个，大概应该能够保持120个
 proc runtest_manyroutines_tick(cnt:int) =
     if cnt < 120:
-        noro_post(test_manyroutines1, cast[pointer](cnt))
+        crn_post(test_manyroutines1, cast[pointer](cnt))
     else:
         if cnt mod 2 == 1:
-            noro_post(test_manyroutines1, cast[pointer](cnt))
+            crn_post(test_manyroutines1, cast[pointer](cnt))
 

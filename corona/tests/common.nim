@@ -11,15 +11,15 @@ proc nowt1() : int64 = epochTime().int64
 proc hellofn(args:pointer) =
     linfo 123, args
     var p : pointer
-    p = noro_malloc(1234)
-    p = noro_malloc(2345)
-    p = noro_malloc(3456)
-    p = noro_malloc(456)
-    p = noro_malloc(567)
+    p = crn_malloc(1234)
+    p = crn_malloc(2345)
+    p = crn_malloc(3456)
+    p = crn_malloc(456)
+    p = crn_malloc(567)
     return
 
 proc umain() =
-    noro_post(hellofn, nil)
+    crn_post(hellofn, nil)
     linfo "posted"
     return
 

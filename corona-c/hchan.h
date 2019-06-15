@@ -10,8 +10,8 @@ typedef struct hchan {
     chan_t* c;
     int cap;
     mtx_t lock;
-    szqueue_t* recvq; // goroutine*
-    szqueue_t* sendq; // goroutine*
+    szqueue_t* recvq; // fiber*
+    szqueue_t* sendq; // fiber*
     bool closed;
 } hchan;
 

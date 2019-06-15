@@ -66,7 +66,7 @@ epoll_wait_t epoll_wait_f = NULL;
 
 
 // #include "hookcb.h"
-#include "noropriv.h"
+#include "coronapriv.h"
 
 int pipe(int pipefd[2])
 {
@@ -75,7 +75,7 @@ int pipe(int pipefd[2])
 
     int rv = pipe_f(pipefd);
     if (rv == 0) {
-        if (noro_in_processor()) {
+        if (crn_in_procer()) {
             hookcb_oncreate(pipefd[0], FDISPIPE, false, 0,0,0);
             hookcb_oncreate(pipefd[1], FDISPIPE, false, 0,0,0);
         }
@@ -85,7 +85,7 @@ int pipe(int pipefd[2])
 #if defined(LIBGO_SYS_Linux)
 int pipe2(int pipefd[2], int flags)
 {
-    // if (noro_in_processor())
+    // if (crn_in_procer())
     if (!socket_f) initHook();
     linfo("%d\n", flags);
 
@@ -99,7 +99,7 @@ int pipe2(int pipefd[2], int flags)
 #endif
 int socket(int domain, int type, int protocol)
 {
-    // if (noro_in_processor())
+    // if (crn_in_procer())
     if (!socket_f) initHook();
     // linfo("socket_f=%p\n", socket_f);
 
@@ -115,7 +115,7 @@ int socket(int domain, int type, int protocol)
 
 int socketpair(int domain, int type, int protocol, int sv[2])
 {
-    // if (noro_in_processor())
+    // if (crn_in_procer())
     if (!socketpair_f) initHook();
     linfo("%d\n", type);
 
@@ -143,7 +143,7 @@ int connect(int fd, const struct sockaddr *addr, socklen_t addrlen)
             linfo("Unknown %d %d %d %d %s\n", fd, rv, eno, i, strerror(eno));
             return rv;
         }
-        noro_processor_yield(fd, YIELD_TYPE_CONNECT);
+        crn_procer_yield(fd, YIELD_TYPE_CONNECT);
     }
     assert(1==2); // unreachable
 }
@@ -163,14 +163,14 @@ int accept(int sockfd, struct sockaddr *addr, socklen_t *addrlen)
             linfo("fd=%d err=%d eno=%d err=%s\n", sockfd, rv, errno, strerror(errno));
             return rv;
         }
-        noro_processor_yield(sockfd, YIELD_TYPE_ACCEPT);
+        crn_procer_yield(sockfd, YIELD_TYPE_ACCEPT);
     }
     assert(1==2); // unreachable
 }
 
 ssize_t read(int fd, void *buf, size_t count)
 {
-    if (!noro_in_processor()) return read_f(fd, buf, count);
+    if (!crn_in_procer()) return read_f(fd, buf, count);
     if (!read_f) initHook();
     // linfo("%d fdnb=%d bufsz=%d\n", fd, fd_is_nonblocking(fd), count);
     while (1){
@@ -183,7 +183,7 @@ ssize_t read(int fd, void *buf, size_t count)
             linfo("fd=%d err=%d eno=%d err=%s\n", fd, rv, errno, strerror(errno));
             return rv;
         }
-        noro_processor_yield(fd, YIELD_TYPE_READ);
+        crn_procer_yield(fd, YIELD_TYPE_READ);
     }
     assert(1==2); // unreachable
 }
@@ -221,7 +221,7 @@ ssize_t recv(int sockfd, void *buf, size_t len, int flags)
             linfo("invalid fd=%d val=%d\n", sockfd, fdvalid);
             assert(fd_is_valid(sockfd) == 1);
         }
-        noro_processor_yield(sockfd, YIELD_TYPE_RECV);
+        crn_procer_yield(sockfd, YIELD_TYPE_RECV);
     }
     assert(1==2); // unreachable
 }
@@ -246,14 +246,14 @@ ssize_t recvfrom(int sockfd, void *buf, size_t len, int flags,
             linfo("fd=%d rv=%d eno=%d err=%s\n", sockfd, rv, eno, strerror(eno));
             return rv;
         }
-        noro_processor_yield(sockfd, YIELD_TYPE_RECVFROM);
+        crn_procer_yield(sockfd, YIELD_TYPE_RECVFROM);
     }
     assert(1==2); // unreachable
 }
 
 ssize_t recvmsg(int sockfd, struct msghdr *msg, int flags)
 {
-    if (!noro_in_processor()) return recvmsg_f(sockfd, msg, flags);
+    if (!crn_in_procer()) return recvmsg_f(sockfd, msg, flags);
     if (!recvmsg_f) initHook();
     // linfo("%d fdnb=%d\n", sockfd, fd_is_nonblocking(sockfd));
     time_t btime = time(0);
@@ -294,9 +294,9 @@ ssize_t recvmsg(int sockfd, struct msghdr *msg, int flags)
             ytypes[0] = YIELD_TYPE_RECVMSG;
             tfds[1] = timeoms;
             ytypes[1] = YIELD_TYPE_MSLEEP;
-            noro_processor_yield_multi(YIELD_TYPE_RECVMSG_TIMEOUT, 2, tfds, ytypes);
+            crn_procer_yield_multi(YIELD_TYPE_RECVMSG_TIMEOUT, 2, tfds, ytypes);
         }else{
-            noro_processor_yield(sockfd, YIELD_TYPE_RECVMSG);
+            crn_procer_yield(sockfd, YIELD_TYPE_RECVMSG);
         }
     }
     assert(1==2); // unreachable
@@ -317,7 +317,7 @@ ssize_t write(int fd, const void *buf, size_t count)
             linfo("fd=%d rv=%d eno=%d err=%s\n", fd, rv, eno, strerror(eno));
             return rv;
         }
-        noro_processor_yield(fd, YIELD_TYPE_WRITE);
+        crn_procer_yield(fd, YIELD_TYPE_WRITE);
     }
     assert(1==2); // unreachable
 }
@@ -345,7 +345,7 @@ ssize_t send(int sockfd, const void *buf, size_t len, int flags)
             linfo("fd=%d rv=%d eno=%d err=%s\n", sockfd, rv, eno, strerror(eno));
             return rv;
         }
-        noro_processor_yield(sockfd, YIELD_TYPE_SEND);
+        crn_procer_yield(sockfd, YIELD_TYPE_SEND);
     }
     assert(1==2); // unreachable
 }
@@ -361,7 +361,7 @@ ssize_t sendto(int sockfd, const void *buf, size_t len, int flags,
 
 ssize_t sendmsg(int sockfd, const struct msghdr *msg, int flags)
 {
-    if (!noro_in_processor()) return sendmsg_f(sockfd, msg, flags);
+    if (!crn_in_procer()) return sendmsg_f(sockfd, msg, flags);
     if (!sendmsg_f) initHook();
     // linfo("%d fdnb=%d\n", sockfd, fd_is_nonblocking(sockfd));
     while (1){
@@ -374,7 +374,7 @@ ssize_t sendmsg(int sockfd, const struct msghdr *msg, int flags)
             linfo("fd=%d rv=%d eno=%d err=%s\n", sockfd, rv, eno, strerror(eno));
             return rv;
         }
-        noro_processor_yield(sockfd, YIELD_TYPE_SENDMSG);
+        crn_procer_yield(sockfd, YIELD_TYPE_SENDMSG);
     }
     assert(1==2); // unreachable
 }
@@ -383,7 +383,7 @@ ssize_t sendmsg(int sockfd, const struct msghdr *msg, int flags)
 // ------ for dns syscall
 int __poll(struct pollfd *fds, nfds_t nfds, int timeout)
 {
-    if (!noro_in_processor()) return poll_f(fds, nfds, timeout);
+    if (!crn_in_procer()) return poll_f(fds, nfds, timeout);
     if (!poll_f) initHook();
     // linfo("%d fd0=%d timeo=%d\n", nfds, fds[0].fd, timeout);
     if (timeout == 0) {  // non-block
@@ -441,7 +441,7 @@ int __poll(struct pollfd *fds, nfds_t nfds, int timeout)
                 return rv;
             }
         }
-        noro_processor_yield_multi(YIELD_TYPE_UUPOLL, ynfds, tfds, tytypes);
+        crn_procer_yield_multi(YIELD_TYPE_UUPOLL, ynfds, tfds, tytypes);
     }
     assert(1==2);
 }
@@ -455,7 +455,7 @@ struct hostent* gethostbyname(const char* name)
 {
     if (!gethostbyname_r_f) initHook();
     // linfo("%s\n", name);
-    if (!noro_in_processor()) {
+    if (!crn_in_procer()) {
         static __thread struct hostent host_ = {0};
         static __thread char buf[4096] = {0};
         struct hostent* host = &host_;
@@ -476,15 +476,15 @@ struct hostent* gethostbyname(const char* name)
     char *buf;
     int herrno = 0;
 
-    buf = noro_goroutine_getspec(&bufkey);
+    buf = crn_fiber_getspec(&bufkey);
     if (buf == nilptr) {
-        buf = noro_raw_malloc(4096);
-        noro_goroutine_setspec(&bufkey, buf);
+        buf = crn_raw_malloc(4096);
+        crn_fiber_setspec(&bufkey, buf);
     }
-    host = noro_goroutine_getspec(&reskey);
+    host = crn_fiber_getspec(&reskey);
     if (host == nilptr) {
-        host = noro_raw_malloc(sizeof(struct hostent));
-        noro_goroutine_setspec(&reskey, host);
+        host = crn_raw_malloc(sizeof(struct hostent));
+        crn_fiber_setspec(&reskey, host);
     }
     assert(buf != nilptr); assert(host != nilptr);
 
@@ -568,37 +568,37 @@ int select(int nfds, fd_set *readfds, fd_set *writefds,
 
 unsigned int sleep(unsigned int seconds)
 {
-    if (!noro_in_processor()) return sleep_f(seconds);
+    if (!crn_in_procer()) return sleep_f(seconds);
     if (!sleep_f) initHook();
     // linfo("%d\n", seconds);
 
     {
-        int rv = noro_processor_yield(seconds, YIELD_TYPE_SLEEP);
+        int rv = crn_procer_yield(seconds, YIELD_TYPE_SLEEP);
         return 0;
     }
 }
 
 int usleep(useconds_t usec)
 {
-    if (!noro_in_processor()) return usleep_f(usec);
+    if (!crn_in_procer()) return usleep_f(usec);
     if (!usleep_f) initHook();
     // linfo("%d\n", usec);
 
     time_t btime = time(0);
     {
-        int rv = noro_processor_yield(usec, YIELD_TYPE_USLEEP);
+        int rv = crn_procer_yield(usec, YIELD_TYPE_USLEEP);
         return 0;
     }
 }
 
 int nanosleep(const struct timespec *req, struct timespec *rem)
 {
-    if (!noro_in_processor()) return nanosleep_f(req, rem);
+    if (!crn_in_procer()) return nanosleep_f(req, rem);
     if (!nanosleep_f) initHook();
     // linfo("%d, %d\n", req->tv_sec, req->tv_nsec);
     {
         long ns = req->tv_sec * 1000000000 + req->tv_nsec;
-        int rv = noro_processor_yield(ns, YIELD_TYPE_NANOSLEEP);
+        int rv = crn_procer_yield(ns, YIELD_TYPE_NANOSLEEP);
         return 0;
     }
 }

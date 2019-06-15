@@ -1,30 +1,30 @@
 #include <assert.h>
 #include <stdlib.h>
-#include "norogc.h"
+#include "coronagc.h"
 
-void* noro_raw_malloc(size_t size) {
+void* crn_raw_malloc(size_t size) {
     return calloc(1, size);
 }
-void* noro_raw_realloc(void* ptr, size_t size) {
+void* crn_raw_realloc(void* ptr, size_t size) {
     return realloc(ptr, size);
 }
-void noro_raw_free(void* ptr) {
+void crn_raw_free(void* ptr) {
     return free(ptr);
 }
 
 #ifdef USE_BDWGC
 
-void* noro_gc_malloc(size_t size) {
+void* crn_gc_malloc(size_t size) {
     return GC_MALLOC(size);
 }
-void* noro_gc_realloc(void* ptr, size_t size) {
+void* crn_gc_realloc(void* ptr, size_t size) {
     return GC_REALLOC(ptr, size);
 }
-void noro_gc_free(void* ptr) {
+void crn_gc_free(void* ptr) {
     return GC_FREE(ptr);
 }
 
-const char* noro_gc_event_name(GC_EventType evty) {
+const char* crn_gc_event_name(GC_EventType evty) {
     switch (evty) {
     case GC_EVENT_START: /* COLLECTION */
         return "clctstart";
