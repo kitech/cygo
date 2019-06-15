@@ -58,7 +58,7 @@ struct fiber {
     coro_stack stack;
     struct GC_stack_base mystksb; // mine for GC
     coro_context coctx;
-    coro_context coctx0;
+    coro_context *coctx0;
     grstate state;
     bool isresume;
     void* hcelem;

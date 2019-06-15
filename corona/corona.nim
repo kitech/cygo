@@ -46,6 +46,10 @@ crn_set_frame_funcs(cast[pointer](getFrame), cast[pointer](setFrame))
 coronah = crn_init_and_wait_done()
 linfo "corona inited done"
 
+proc goid*():int =
+    ## get current fiber id
+    crn_get_goid()
+
 include "./gogoapi.nim"
 include "./gochanapi.nim"
 
@@ -58,10 +62,6 @@ macro gogo*(funccallexpr: untyped) : untyped =
 macro go*(funccallexpr: untyped) : untyped =
     ## Just like a spawn: `gogo somefunc(a0, a1, a2)`
     result = quote do: gogo2 `funccallexpr`
-
-proc goid*():int =
-    ## get current fiber id
-    crn_get_goid()
 
 # public channel apis. see gochanapi.nim
 # proc makechan*(T: typedesc, cap:int) : chan[T]

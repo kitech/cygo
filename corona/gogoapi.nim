@@ -74,7 +74,7 @@ proc nak2ffipty(ak: AnyKind) : pffi_type =
     return nil
 
 proc gogorunner_cleanup(arg :pointer) =
-    linfo "gogorunner_cleanup", repr(arg)
+    linfo "gogorunner_cleanup", arg, goid()
     var argc = cast[int](pointer_array_get(arg, 1))
     for idx in 0..argc-1:
         let tyidx = 2 + idx*2

@@ -41,7 +41,8 @@ Thanks all the contributors.
 
 ### BUGS
 
-[ ] SIGABRT: coro\_init () at /noro/coro.c:104
+[x] SIGABRT: coro\_init () at /noro/coro.c:104
+    when resume a finished fiber, this crash occurs
 [ ] SIGSEGV: bdwgc: mark.c:1581 GC\_push\_all\_eager
 [ ] ASSERT: bdwgc: misc.c: 1986 GC\_disable
 [ ] gopackany:goroutine\_post, seems many times just after this: Assertion failure: extra/../misc.c:1986

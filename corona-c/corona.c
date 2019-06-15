@@ -41,6 +41,7 @@ typedef struct machine {
     void* gchandle;
     void* savefrm;
     pthread_t th;
+    coro_context coctx0;
 } machine;
 
 typedef struct corona {
@@ -54,6 +55,8 @@ typedef struct corona {
     pthread_cond_t crninitcd;
     mtx_t crninitmu2; // TODO
     cnd_t crninitcd2; // TODO
+    coro_context coctx0;
+    coro_context maincoctx;
 
     int eph; // epoll handler
     netpoller* np;
@@ -78,7 +81,7 @@ machine* crn_machine_get(int id);
 void crn_machine_grfree(machine* mc, int id);
 void crn_machine_signal(machine* mc);
 
-/////
+// fiber internal API
 fiber* crn_fiber_new(int id, coro_func fn, void* arg) {
     fiber* gr = (fiber*)crn_raw_malloc(sizeof(fiber));
     gr->id = id;
@@ -90,7 +93,6 @@ fiber* crn_fiber_new(int id, coro_func fn, void* arg) {
 }
 // alloc stack and context
 void crn_fiber_new2(fiber*gr) {
-    corowp_create(&gr->coctx0, 0, 0, 0, 0);
     // corowp_stack_alloc(&gr->stack, dftstkusz);
     gr->stack.sptr = GC_malloc_uncollectable(dftstksz);
     gr->stack.ssze = dftstksz;
@@ -123,8 +125,8 @@ void crn_fiber_destroy(fiber* gr) {
     hashtable_destroy(gr->specifics);
     crn_raw_free(gr); // malloc/calloc分配的不能用GC_FREE()释放
     ssze += sizeof(fiber);
-
     // linfo("gr %d on %d, freed %d, %d\n", grid, mcid, ssze, sizeof(fiber));
+    corowp_destroy(&gr->coctx);
 }
 
 // frame related for some frame based integeration
@@ -166,19 +168,21 @@ void crn_fiber_forward(void* arg) {
     GC_call_with_alloc_lock(crn_gc_setbottom0, gr);
 
     // 这个跳回ctx应该是不对的，有可能要跳到其他的gr而不是默认gr？
-    corowp_transfer(&gr->coctx, &gr->coctx0); // 这句要写在函数fnproc退出之前？
+    corowp_transfer(&gr->coctx, gr->coctx0); // 这句要写在函数fnproc退出之前？
 }
 
 // 由于需要考虑线程的问题，不能直接在netpoller线程调用
 void crn_fiber_resume(fiber* gr) {
     assert(gr->isresume == true);
-    assert(gr->state != executing);
+    grstate oldst = atomic_getint(&gr->state);
+    assert(oldst != executing);
+    assert(oldst != finished);
     atomic_setint(&gr->state, executing);
 
     if (gr->myfrm != nilptr) crn_set_frame(gr->myfrm); // 恢复fiber的frame
     GC_call_with_alloc_lock(crn_gc_setbottom1, gr);
     // 对-DCORO_UCONTEXT/-DCORO_ASM等来说，这句是真正开始执行
-    corowp_transfer(&gr->coctx0, &gr->coctx);
+    corowp_transfer(gr->coctx0, &gr->coctx);
 }
 
 // TODO 有时候它不一定是从ctx0跳转，或者是跳转到ctx0。这几个函数都是 crn_fiber_run/resume,suspend
@@ -194,11 +198,11 @@ void crn_fiber_run_first(fiber* gr) {
     machine* mc = crn_machine_get(gr->mcid);
     fiber* curgr = mc->curgr;
     mc->curgr = gr;
-    coro_context* curcoctx = curgr == 0? &gr->coctx0 : &curgr->coctx; // 暂时无用
+    coro_context* curcoctx = curgr == 0? gr->coctx0 : &curgr->coctx; // 暂时无用
 
     // 对-DCORO_UCONTEXT/-DCORO_ASM等来说，这句是真正开始执行
-    corowp_transfer(&gr->coctx0, &gr->coctx);
-    // corowp_transfer(&gr->coctx, &gr->coctx0); // 这句要写在函数fnproc退出之前？
+    corowp_transfer(gr->coctx0, &gr->coctx);
+    // corowp_transfer(&gr->coctx, gr->coctx0); // 这句要写在函数fnproc退出之前？
 }
 
 void crn_fiber_run(fiber* gr) {
@@ -214,28 +218,35 @@ void crn_fiber_run(fiber* gr) {
 void crn_fiber_resume_same_thread(fiber* gr) {
     assert(gr->isresume == true);
     assert(gr->state != executing);
+    assert(gr->state != finished);
+
+    // atomic_casint(&gr->state, waiting, runnable);
     atomic_setint(&gr->state, runnable);
 }
 void crn_fiber_resume_xthread(fiber* gr) {
-    // assert(gr->state != runnable);
-    // assert(gr->state != executing);
     if (gr->id <= 0) {
         linfo("some error occurs??? %d\n", gr->id);
         return;
         // maybe fiber already finished and deleted
         // TODO assert(gr != nilptr && gr->id > 0); // needed ???
     }
-    if (atomic_getint(&gr->state) == executing) {
-        linfo("resume but executing grid=%d, mcid=%d\n", gr->id, gr->mcid);
-        return;
-    }
     if (atomic_getint(&gr->state) == runnable) {
         linfo("resume but runnable %d\n", gr->id);
         crn_machine_signal(crn_machine_get(gr->mcid));
         return;
     }
+    if (atomic_getint(&gr->state) == executing) {
+        linfo("resume but executing grid=%d, mcid=%d\n", gr->id, gr->mcid);
+        return;
+    }
+    if (atomic_getint(&gr->state) == finished) {
+        linfo("resume but finished grid=%d, mcid=%d\n", gr->id, gr->mcid);
+        return;
+    }
+
+    // atomic_casint(&gr->state, waiting, runnable);
     atomic_setint(&gr->state, runnable);
-    if (gr->mcid > 100) {
+    if (gr->mcid > 100) { // TODO improve this hotfix
         linfo("mcid error %d\n", gr->mcid);
         return;
     }
@@ -247,16 +258,17 @@ void crn_fiber_suspend(fiber* gr) {
     crn_set_frame(gr->savefrm);
     atomic_setint(&gr->state, waiting);
     GC_call_with_alloc_lock(crn_gc_setbottom0, gr);
-    corowp_transfer(&gr->coctx, &gr->coctx0);
+    corowp_transfer(&gr->coctx, gr->coctx0);
 }
 
-
+// machine internal API
 machine* crn_machine_new(int id) {
     machine* mc = (machine*)crn_raw_malloc(sizeof(machine));
     mc->id = id;
     linfo("htconf=%o\n", crn_dft_htconf());
     hashtable_new_conf(crn_dft_htconf(), &mc->grs);
     queue_new(&mc->ngrs);
+    corowp_create(&mc->coctx0, 0, 0, 0, 0);
     return mc;
 }
 machine* crn_machine_get(int id) {
@@ -377,8 +389,8 @@ void crn_fiber_setspec(void* spec, void* val) {
     if (oldv != nilptr) { crn_raw_free(oldv);  }
     hashtable_add(gr->specifics, spec, val);
 }
-// int crn_num_gorutines() { return atomic_getint(gnr__)}
-
+// int crn_num_fibers() { return atomic_getint(gnr__)}
+// procer internal API
 void crn_post(coro_func fn, void*arg) {
     machine* mc = crn_machine_get(1);
     // linfo("mc=%p, %d %p, %d\n", mc, mc->id, mc->ngrs, queue_size(mc->ngrs));
@@ -397,11 +409,13 @@ void crn_post(coro_func fn, void*arg) {
     pthread_cond_signal(&mc->pkcd);
 }
 
+static
 void crn_procer_setname(int id) {
     char buf[32] = {0};
     snprintf(buf, sizeof(buf), "crn_procer_%d", id);
     pthread_setname_np(pthread_self(), buf);
 }
+static
 void* crn_procer_netpoller(void*arg) {
     machine* mc = (machine*)arg;
     struct GC_stack_base stksb = {};
@@ -421,6 +435,7 @@ void* crn_procer_netpoller(void*arg) {
     return nilptr;
 }
 
+static
 void* crn_procer0(void*arg) {
     machine* mc = (machine*)arg;
     struct GC_stack_base stksb = {};
@@ -499,6 +514,7 @@ void* crn_procer0(void*arg) {
 }
 
 // schedue functions
+static
 fiber* crn_sched_get_glob_one(machine*mc) {
     // linfo("try get glob %d\n", mc->id);
     machine* mc1 = crn_machine_get(1);
@@ -538,6 +554,7 @@ fiber* crn_sched_get_ready_one(machine*mc) {
 static
 void crn_sched_run_one(machine* mc, fiber* rungr) {
     gcurgrid__ = rungr->id;
+    rungr->coctx0 = &mc->coctx0;
     rungr->stksb = &mc->stksb;
     rungr->gchandle = mc->gchandle;
     rungr->mcid = mc->id;
@@ -558,7 +575,8 @@ void crn_sched_run_one(machine* mc, fiber* rungr) {
         // linfo("finished gr %d\n", rungr->id);
         crn_machine_grfree(mc, rungr->id);
     }else{
-        linfo("break from gr %d, state=%d pkreason=%d\n", rungr->id, curst, rungr->pkreason);
+        linfo("break from gr %d, state=%d pkreason=%d(%s)\n",
+              rungr->id, curst, rungr->pkreason, yield_type_name(rungr->pkreason));
     }
 }
 
@@ -579,6 +597,7 @@ void crn_procer_yield_commit(machine* mc, fiber* gr) {
     }
     memset(yinfo, 0, sizeof(yieldinfo));
 }
+static
 void* crn_procer(void*arg) {
     machine* mc = (machine*)arg;
     GC_get_stack_base(&mc->stksb);
@@ -709,13 +728,15 @@ int hashtable_cmp_int(const void *key1, const void *key2) {
 
 corona* crn_get() { return gnr__;}
 
-static void crn_gc_push_other_roots1() {
+static
+void crn_gc_push_other_roots1() {
     if (crn_get()->crninited == false) return;
     if (gcurmcid__ != 0) return;
 
     // linfo2("push other roots tid=%d mcid=%d\n", gettid(), gcurmcid__);
 }
-static void crn_gc_push_other_roots2() {
+static
+void crn_gc_push_other_roots2() {
     if (crn_get()->crninited == false) return;
     // if (gcurmcid__ != 0) return;
 
@@ -750,18 +771,21 @@ static void crn_gc_push_other_roots2() {
     }
     linfo2("push other roots tid=%d mcs=%d grs=%d runcnt=%d\n", gettid(), 3, grcnt, executing_cnt);
 }
-static void crn_gc_on_collection_event(GC_EventType evty) {
+static
+void crn_gc_on_collection_event(GC_EventType evty) {
     // linfo2("%d=%s mcid=%d\n", evty, crn_gc_event_name(evty), gcurmcid__);
     if (evty == GC_EVENT_POST_STOP_WORLD) {
         if (gcurmcid__ == 0) {
-            crn_gc_push_other_roots2();
+            // crn_gc_push_other_roots2();
         }
     }
 }
-static void crn_gc_on_thread_event(GC_EventType evty, void* thid) {
+static
+void crn_gc_on_thread_event(GC_EventType evty, void* thid) {
     linfo2("%d=%s %p\n", evty, crn_gc_event_name(evty), thid);
 }
-static void crn_init_intern() {
+static
+void crn_init_intern() {
     srand(time(0));
     GC_set_free_space_divisor(50); // default 3
     // GC_enable_incremental();
