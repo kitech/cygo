@@ -271,7 +271,9 @@ machine* crn_machine_new(int id) {
     corowp_create(&mc->coctx0, 0, 0, 0, 0);
     return mc;
 }
-machine* crn_machine_get(int id) {
+machine*
+__attribute__((no_instrument_function))
+crn_machine_get(int id) {
     if (id <= 0) {
         linfo("Invalid mcid %d\n", id);
         return nilptr;
@@ -303,7 +305,9 @@ void crn_machine_gradd(machine* mc, fiber* gr) {
     hashtable_add(mc->grs, (void*)(uintptr_t)gr->id, gr);
     pthread_mutex_unlock(&mc->grsmu);
 }
-fiber* crn_machine_grget(machine* mc, int id) {
+fiber*
+__attribute__((no_instrument_function))
+crn_machine_grget(machine* mc, int id) {
     fiber* gr = 0;
     pthread_mutex_lock(&mc->grsmu);
     hashtable_get(mc->grs, (void*)(uintptr_t)id, (void**)&gr);
@@ -351,8 +355,12 @@ void crn_machine_signal(machine* mc) {
 
 static __thread int gcurmcid__ = 0; // thread local
 static __thread int gcurgrid__ = 0; // thread local
-int crn_get_goid() { return gcurgrid__; }
-fiber* crn_fiber_getcur() {
+int
+__attribute__((no_instrument_function))
+crn_get_goid() { return gcurgrid__; }
+fiber*
+__attribute__((no_instrument_function))
+crn_fiber_getcur() {
     int grid = gcurgrid__;
     int mcid = gcurmcid__;
     if (mcid == 0) {
@@ -365,7 +373,7 @@ fiber* crn_fiber_getcur() {
     if (gr == nilptr) {
         linfo("wtf why gr nil, curmc %d, curgr %d\n", mcid, grid);
     }
-    assert(gr != nilptr);
+    // assert(gr != nilptr);
     return gr;
 }
 void* crn_fiber_getspec(void* spec) {
@@ -635,7 +643,9 @@ void* crn_procer(void*arg) {
     }
 }
 
-bool crn_in_procer() { return gcurmcid__ != 0; }
+bool
+__attribute__((no_instrument_function))
+crn_in_procer() { return gcurmcid__ != 0; }
 int crn_procer_yield(long fd, int ytype) {
     // check是否是procer线程
     if (gcurmcid__ == 0) {
@@ -720,7 +730,9 @@ int crn_nxtid(corona* nr) {
     return id;
 }
 
-int hashtable_cmp_int(const void *key1, const void *key2) {
+int
+__attribute__((no_instrument_function))
+hashtable_cmp_int(const void *key1, const void *key2) {
     if (key1 == key2) return 0;
     else if((uintptr_t)(key1) > (uintptr_t)(key2)) return 1;
     else return -1;

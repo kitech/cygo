@@ -22,6 +22,10 @@ const absldflags = "-L " & abssrcdir & "/../bdwgc/.libs" &
 {.passc:"-DGC_THREADS".}
 {.passl:"-lgc -lpthread".}
 
+#{.passc:"-fstack-usage -finstrument-functions".}
+#{.passl:"-Wl,--export-dynamic".}
+
+{.compile:"../corona-c/functrace.c".}
 {.compile:"../corona-c/corona.c".}
 {.compile:"../corona-c/coronagc.c".}
 {.compile:"../corona-c/corona_util.c".}

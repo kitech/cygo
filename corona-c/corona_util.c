@@ -27,15 +27,21 @@ int (array_randcmp) (const void*a, const void*b) {
 }
 
 static mtx_t loglk;
-void loglock() {
+void
+__attribute__((no_instrument_function))
+loglock() {
     // mtx_lock(&loglk);
 }
-void logunlock() {
+void
+__attribute__((no_instrument_function))
+logunlock() {
     // mtx_unlock(&loglk);
     // mtx_trylock(&loglk);
 }
 
-void crn_simlog(int level, const char *filename, int line, const char* funcname, const char *fmt, ...) {
+void
+__attribute__((no_instrument_function))
+crn_simlog(int level, const char *filename, int line, const char* funcname, const char *fmt, ...) {
     static __thread char buf[512] = {0};
     char* fbname = strrchr(filename, '/');
     if (fbname != NULL) fbname ++;

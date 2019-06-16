@@ -44,11 +44,13 @@ Thanks all the contributors.
 [x] SIGABRT: coro\_init () at /noro/coro.c:104
     when resume a finished fiber, this crash occurs
 [ ] SIGSEGV: bdwgc: mark.c:1581 GC\_push\_all\_eager
+    https://www.mail-archive.com/ecls-list@lists.sourceforge.net/msg00161.html
 [ ] ASSERT: bdwgc: misc.c: 1986 GC\_disable
 [ ] gopackany:goroutine\_post, seems many times just after this: Assertion failure: extra/../misc.c:1986
 [ ] ==17317==  Access not within mapped region at address 0x0
     ==17317==    at 0x168C14: kind\_j8p3h8iojolY0RbF1nkaZgxmltree (stdlib\_xmltree.nim.c:310)
 [ ] hang forever on ppoll ()
+[ ] sometimes GC will stop work
 
 ### Note
 * A program entering an infinite recursion or running out of space in the stack memory is known as a stack overflow

@@ -11,11 +11,15 @@ proc test_fiber2(s:cstring) =
     return
 
 proc test_fiber3(v: float) =
-    linfo(v)
-    sleep(5000)
+    linfo("whttt")
+    for i in 0..5:
+        linfo(v, i)
+        sleep(1000)
+    sleep(2000)
     return
 
 proc runtest_fiber0(cnt:int) =
+    linfo "hehehe"
     #gogo2 test_fiber()
     #gogo2 test_fiber1("abc")
     var cs : cstring = "abc"
