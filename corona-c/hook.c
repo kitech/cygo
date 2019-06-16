@@ -40,6 +40,7 @@ send_t send_f = NULL;
 sendto_t sendto_f = NULL;
 sendmsg_t sendmsg_f = NULL;
 poll_t poll_f = NULL;
+ppoll_t ppoll_f = NULL;
 select_t select_f = NULL;
 accept_t accept_f = NULL;
 sleep_t sleep_f = NULL;
@@ -450,6 +451,17 @@ int poll(struct pollfd *fds, nfds_t nfds, int timeout)
     return __poll(fds, nfds, timeout);
 }
 
+int ppoll_wip(struct pollfd *fds, nfds_t nfds,
+          const struct timespec *tmo_p, const sigset_t *sigmask)
+{
+    linfo("%d fd0=%d timeo=%d\n", nfds, fds[0].fd, tmo_p);
+    assert(1==2);
+    if (!crn_in_procer()) return ppoll_f(fds, nfds, tmo_p, sigmask);
+    if (!ppoll_f) initHook();
+    linfo("%d fd0=%d timeo=%d\n", nfds, fds[0].fd, tmo_p);
+    assert(1==2);
+}
+
 #if defined(LIBGO_SYS_Linux)
 struct hostent* gethostbyname(const char* name)
 {
@@ -498,13 +510,13 @@ struct hostent* gethostbyname(const char* name)
         linfo("bufsz too small %s\n", name);
         assert(1==2);
     }
-    linfo("host=%p, result=%p\n", host, result);
+    // linfo("host=%p, result=%p\n", host, result);
     if (eno != EINPROGRESS && eno != EAGAIN) {
         linfo("rv=%d eno=%d err=%s\n", rv, eno, strerror(eno));
     }
 
-    linfo("rv=%d eno=%d err=%s\n", rv, herrno, strerror(herrno));
-    linfo("rv=%d eno=%d err=%s\n", rv, errno, strerror(errno));
+    // linfo("rv=%d eno=%d err=%s\n", rv, herrno, strerror(herrno));
+    // linfo("rv=%d eno=%d err=%s\n", rv, errno, strerror(errno));
     return 0;
 }
 int gethostbyname_r(const char *__restrict name,
@@ -514,12 +526,12 @@ int gethostbyname_r(const char *__restrict name,
 			    int *__restrict __h_errnop)
 {
     if (!gethostbyname_r_f) initHook();
-    linfo("%ld\n", __buflen);
+    // linfo("%ld\n", __buflen);
 
     int rv = gethostbyname_r_f(name, __result_buf, __buf, __buflen, __result, __h_errnop);
     int eno = rv == 0 ? 0 : errno;
-    linfo("%s rv=%d eno=%d, err=%d\n", name, rv, eno, strerror(eno));
-    linfo("%s rv=%d eno=%d, err=%d\n", name, rv, *__h_errnop, strerror(*__h_errnop));
+    // linfo("%s rv=%d eno=%d, err=%d\n", name, rv, eno, strerror(eno));
+    // linfo("%s rv=%d eno=%d, err=%d\n", name, rv, *__h_errnop, strerror(*__h_errnop));
     return rv;
 }
 
@@ -646,7 +658,7 @@ int fcntl(int __fd, int __cmd, ...)
                 int newfd = fcntl_f(__fd, __cmd, fd);
                 if (newfd < 0) return newfd;
 
-                linfo("what can i do %d\n", __fd);
+                hookcb_ondup(__fd, newfd);
                 return newfd;
             }
 
@@ -675,7 +687,8 @@ int fcntl(int __fd, int __cmd, ...)
                 int flags = va_arg(va, int);
                 va_end(va);
 
-                linfo("what can i do %d\n", __fd);
+                bool isNonBlocking = !!(flags & O_NONBLOCK);
+                hookcb_fd_set_nonblocking(__fd, isNonBlocking);
                 return fcntl_f(__fd, __cmd, flags);
             }
 
@@ -739,7 +752,8 @@ int ioctl(int fd, unsigned long int request, ...)
     va_end(va);
 
     if (FIONBIO == request) {
-        linfo("what can i do %d\n", fd);
+        bool isNonBlocking = !!*(int*)arg;
+        hookcb_fd_set_nonblocking(fd, isNonBlocking);
     }
 
     return ioctl_f(fd, request, arg);
@@ -847,6 +861,8 @@ ATTRIBUTE_WEAK extern ssize_t __sendto(int sockfd, const void *buf, size_t len, 
 ATTRIBUTE_WEAK extern ssize_t __sendmsg(int sockfd, const struct msghdr *msg, int flags);
 ATTRIBUTE_WEAK extern int __libc_accept(int sockfd, struct sockaddr *addr, socklen_t *addrlen);
 ATTRIBUTE_WEAK extern int __libc_poll(struct pollfd *fds, nfds_t nfds, int timeout);
+ATTRIBUTE_WEAK extern int __libc_ppoll(struct pollfd *fds, nfds_t nfds,
+                          const struct timespec *tmo_p, const sigset_t *sigmask);
 ATTRIBUTE_WEAK extern int __select(int nfds, fd_set *readfds, fd_set *writefds,
                           fd_set *exceptfds, struct timeval *timeout);
 ATTRIBUTE_WEAK extern unsigned int __sleep(unsigned int seconds);
@@ -912,6 +928,7 @@ static int doInitHook()
         sendmsg_f = (sendmsg_t)dlsym(RTLD_NEXT, "sendmsg");
         accept_f = (accept_t)dlsym(RTLD_NEXT, "accept");
         poll_f = (poll_t)dlsym(RTLD_NEXT, "poll");
+        ppoll_f = (ppoll_t)dlsym(RTLD_NEXT, "ppoll");
         select_f = (select_t)dlsym(RTLD_NEXT, "select");
         sleep_f = (sleep_t)dlsym(RTLD_NEXT, "sleep");
         usleep_f = (usleep_t)dlsym(RTLD_NEXT, "usleep");
@@ -953,6 +970,7 @@ static int doInitHook()
         sendmsg_f = &__sendmsg;
         accept_f = &__libc_accept;
         poll_f = &__libc_poll;
+        ppoll_f = &__libc_ppoll;
         select_f = &__select;
         sleep_f = &__sleep;
         usleep_f = &__usleep;

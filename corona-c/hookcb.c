@@ -40,12 +40,17 @@ fdcontext* fdcontext_new(int fd) {
 
 typedef int(*fcntl_t)(int __fd, int __cmd, ...);
 extern fcntl_t fcntl_f;
+
 bool fd_is_nonblocking(int fd) {
     int flags = fcntl_f(fd, F_GETFL, 0);
     bool old = flags & O_NONBLOCK;
     return old;
 }
 int fdcontext_set_nonblocking(fdcontext*fdctx, bool isNonBlocking) {
+    if (fdctx == 0) {
+        return 0;
+    }
+
     int fd = fdctx->fd;
     int flags = fcntl_f(fd, F_GETFL, 0);
     bool old = flags & O_NONBLOCK;
@@ -54,6 +59,14 @@ int fdcontext_set_nonblocking(fdcontext*fdctx, bool isNonBlocking) {
     int rv = fcntl_f(fd, F_SETFL,
             isNonBlocking ? (flags | O_NONBLOCK) : (flags & ~O_NONBLOCK));
     return rv;
+}
+int hookcb_fd_set_nonblocking(int fd, bool isNonBlocking) {
+    fdcontext* fdctx = hookcb_get_fdcontext(fd);
+    if (fdctx == 0) {
+        linfo("fdctx nil %d, %d\n", fd, isNonBlocking);
+        return 0;
+    }
+    return fdcontext_set_nonblocking(fdctx, isNonBlocking);
 }
 bool fdcontext_is_socket(fdcontext*fdctx) {return fdctx->fdty == FDISSOCKET; }
 bool fdcontext_is_tcpsocket(fdcontext*fdctx) {
@@ -163,6 +176,8 @@ fdcontext* hookcb_get_fdcontext(int fd) {
     mtx_lock(&hkcb->mu);
     hashtable_get(hkcb->fdctxs, (void*)(uintptr_t)fd, (void**)&fdctx);
     mtx_unlock(&hkcb->mu);
-    assert(fdctx != 0);
+    if (fdctx == 0) {
+        // assert(fdctx != 0);
+    }
     return fdctx;
 }

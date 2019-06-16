@@ -65,6 +65,10 @@ extern sendmsg_t sendmsg_f;
 typedef int(*poll_t)(struct pollfd *fds, nfds_t nfds, int timeout);
 extern poll_t poll_f;
 
+typedef int (*ppoll_t)(struct pollfd *fds, nfds_t nfds,
+                       const struct timespec *tmo_p, const sigset_t *sigmask);
+extern ppoll_t ppoll_f;
+
 #if defined(LIBGO_SYS_Linux)
 typedef int (*epoll_wait_t)(int epfd, struct epoll_event *events,
         int maxevents, int timeout);

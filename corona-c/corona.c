@@ -397,7 +397,7 @@ void crn_fiber_setspec(void* spec, void* val) {
     if (oldv != nilptr) { crn_raw_free(oldv);  }
     hashtable_add(gr->specifics, spec, val);
 }
-// int crn_num_fibers() { return atomic_getint(gnr__)}
+// int crn_num_fibers() { return atomic_getint(gnr__); }
 // procer internal API
 void crn_post(coro_func fn, void*arg) {
     machine* mc = crn_machine_get(1);
@@ -413,8 +413,12 @@ void crn_post(coro_func fn, void*arg) {
     crn_fiber_new2(gr);
     mtx_lock(&mc->ngrsmu);
     queue_enqueue(mc->ngrs, gr);
+    int qsz = queue_size(mc->ngrs);
     mtx_unlock(&mc->ngrsmu);
     pthread_cond_signal(&mc->pkcd);
+    if (qsz > 128) {
+        linfo("wow so many ngrs %d\n", qsz);
+    }
 }
 
 static
@@ -501,6 +505,7 @@ void* crn_procer1(void*arg) {
                     // linfo("got a packing machine %d <- gr %d\n", mct->id, gr->id);
                     break;
                 }
+                if (gr->id == 1) { break; }
                 mct = nilptr;
             }
             if (mct == nilptr) {
@@ -530,7 +535,7 @@ fiber* crn_sched_get_glob_one(machine*mc) {
 
     fiber* gr = crn_machine_grtake(mc1);
     if (gr != 0) {
-        linfo("got %d glob task on %d\n", gr->id, mc->id);
+        // linfo("got %d glob task on %d\n", gr->id, mc->id);
     }
     return gr;
 }
