@@ -22,10 +22,6 @@ const absldflags = "-L " & abssrcdir & "/../bdwgc/.libs" &
 {.passc:"-DGC_THREADS".}
 {.passl:"-lgc -lpthread".}
 
-#{.passc:"-fstack-usage -finstrument-functions".}
-#{.passl:"-Wl,--export-dynamic".}
-
-{.compile:"../corona-c/functrace.c".}
 {.compile:"../corona-c/corona.c".}
 {.compile:"../corona-c/coronagc.c".}
 {.compile:"../corona-c/corona_util.c".}
@@ -42,3 +38,7 @@ const absldflags = "-L " & abssrcdir & "/../bdwgc/.libs" &
 {.passl:"-levent -levent_pthreads"}
 {.passc:"-Wall -std=c11"} # 不管用啊
 
+#{.passc:"-fstack-usage -finstrument-functions".}
+#{.passl:"-Wl,--export-dynamic".}
+
+{.compile:"../corona-c/functrace.c".}

@@ -444,7 +444,7 @@ void* crn_procer_netpoller(void*arg) {
 }
 
 static
-void* crn_procer0(void*arg) {
+void* crn_procer1(void*arg) {
     machine* mc = (machine*)arg;
     struct GC_stack_base stksb = {};
     GC_get_stack_base(&stksb);
@@ -606,7 +606,7 @@ void crn_procer_yield_commit(machine* mc, fiber* gr) {
     memset(yinfo, 0, sizeof(yieldinfo));
 }
 static
-void* crn_procer(void*arg) {
+void* crn_procerx(void*arg) {
     machine* mc = (machine*)arg;
     GC_get_stack_base(&mc->stksb);
     GC_register_my_thread(&mc->stksb);
@@ -730,6 +730,7 @@ int crn_nxtid(corona* nr) {
     return id;
 }
 
+static
 int
 __attribute__((no_instrument_function))
 hashtable_cmp_int(const void *key1, const void *key2) {
@@ -742,17 +743,11 @@ corona* crn_get() { return gnr__;}
 
 static
 void crn_gc_push_other_roots1() {
-    if (crn_get()->crninited == false) return;
-    if (gcurmcid__ != 0) return;
-
-    // linfo2("push other roots tid=%d mcid=%d\n", gettid(), gcurmcid__);
-}
-static
-void crn_gc_push_other_roots2() {
-    if (crn_get()->crninited == false) return;
+    corona* nr = crn_get();
+    if (nr != nilptr && nr->crninited == false) return;
     // if (gcurmcid__ != 0) return;
 
-    linfo2("push other roots tid=%d mcid=%d\n", gettid(), gcurmcid__);
+    // linfo2("tid=%d mcid=%d\n", gettid(), gcurmcid__);
     int grcnt = 0;
     int executing_cnt = 0;
     for (int i = 3; i <= 5; i++ ) {
@@ -765,31 +760,43 @@ void crn_gc_push_other_roots2() {
         for (int j = 0; j < array_size(arr); j++) {
             fiber* gr = nilptr;
             array_get_at(arr, j, (void**)&gr);
-            linfo2("i/j=%d/%d id=%d state=%d(%s) pkrs=%d(%s) gr=%p\n",
-                   i, j, gr->id, (int)gr->state, grstate2str(gr->state),
-                   gr->pkreason, yield_type_name(gr->pkreason), gr);
-            if (gr->state == executing) {
-                executing_cnt += 1;
-            }
-            GC_remove_roots(gr->stack.sptr, gr->stack.sptr + 1);
+            executing_cnt += gr->state == executing ? 1 : 0;
+
+            void* stktop = gr->stack.sptr;
+            void* stkbtm = ((void*)((uintptr_t)gr->stack.sptr) + gr->stack.ssze);
+            ssize_t stksz = (ssize_t)stkbtm - (ssize_t)stktop;
+
+            // linfo2("i/j=%d/%d id=%d state=%d(%s) pkrs=%d(%s) gr=%p\n",
+            //       i, j, gr->id, (int)gr->state, grstate2str(gr->state),
+            //       gr->pkreason, yield_type_name(gr->pkreason), gr);
+            // linfo2("stkinfo top=%p btm=%p szo=%ld szr=%ld\n", stktop, stkbtm, gr->stack.ssze, stksz);
+            // GC_remove_roots(gr->stack.sptr, gr->stack.sptr + 1);
             // GC_add_roots(gr->stack.sptr, ((void*)((uintptr_t)gr->stack.sptr) + 130000));
             if (gr->state != executing) {
-                void* stktop = gr->stack.sptr;
-                void* stkbtm = ((void*)((uintptr_t)gr->stack.sptr) + gr->stack.ssze);
                 GC_push_all_eager(stktop, stkbtm);
+            }else
+            if (gr->state == executing) {
+                // GC_remove_roots(stktop, (void*)((uintptr_t)stkbtm + 1)); // assert crash
             }
         }
         array_destroy(arr);
     }
-    linfo2("push other roots tid=%d mcs=%d grs=%d runcnt=%d\n", gettid(), 3, grcnt, executing_cnt);
+    // linfo2("tid=%d mcs=%d grs=%d runcnt=%d\n", gettid(), 3, grcnt, executing_cnt);
+}
+static
+void crn_gc_push_other_roots2() {
+    corona* nr = crn_get();
+    if (nr != nilptr && nr->crninited == false) return;
+    // if (gcurmcid__ != 0) return;
+
+    linfo2("tid=%d mcid=%d\n", gettid(), gcurmcid__);
 }
 static
 void crn_gc_on_collection_event(GC_EventType evty) {
     // linfo2("%d=%s mcid=%d\n", evty, crn_gc_event_name(evty), gcurmcid__);
     if (evty == GC_EVENT_POST_STOP_WORLD) {
-        if (gcurmcid__ == 0) {
-            // crn_gc_push_other_roots2();
-        }
+        // here call is equal to GC_set_push_other_roots() callback call
+        // crn_gc_push_other_roots2();
     }
 }
 static
@@ -850,11 +857,11 @@ void crn_init(corona* nr) {
         hashtable_add(nr->mths, (void*)(uintptr_t)i, t);
         hashtable_add(nr->mcs, (void*)(uintptr_t)i, mc);
         if (i == 1) {
-            pthread_create(t, 0, crn_procer0, (void*)mc);
+            pthread_create(t, 0, crn_procer1, (void*)mc);
         } else if (i == 2) {
             pthread_create(t, 0, crn_procer_netpoller, (void*)mc);
         } else {
-            pthread_create(t, 0, crn_procer, (void*)mc);
+            pthread_create(t, 0, crn_procerx, (void*)mc);
         }
     }
     // GC_enable();
