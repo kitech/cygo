@@ -39,9 +39,76 @@ logunlock() {
     // mtx_trylock(&loglk);
 }
 
+#define lograw(fmt, ...)                                                \
+    if (SHOWLOG) {                                                      \
+        const char* filename = __FILE__; char* fbname = strrchr(filename, '/'); \
+        if (fbname != NULL) fbname ++;                                  \
+        loglock();                                                      \
+        fprintf(stderr, "%s:%d %s: ", fbname, __LINE__, __FUNCTION__);  \
+        fprintf(stderr, fmt, __VA_ARGS__);                              \
+        fflush(stderr); logunlock();                                    \
+    }
+
+static int loglvl = LOGLVL_ERROR;
+// or CRNDEBUG="loglvl=3..."
+void crn_loglvl_forenv() {
+    char sep = ',';
+    char* CRNDEBUG = getenv("CRNDEBUG");
+    if (CRNDEBUG == 0 || strlen(CRNDEBUG) == 0) return;
+
+    int keybpos = 0; // begin pos
+    int keyepos = -1; // end pos
+    int valbpos = -1;
+    int valepos = -1;
+
+    char* ptr = strdup(CRNDEBUG);
+    int pos2 = 0;
+    for (int pos = 0; pos <= strlen(CRNDEBUG) ; pos++) {
+        char ch = CRNDEBUG[pos];
+        if (pos2 == 0 && (ch == ' ' || ch == ',')) continue;
+        if (ch == ' ') continue;
+        ptr[pos2++] = ch;
+    }
+    for (int pos = 0; pos <= strlen(ptr) ; pos++) {
+        if (ptr[pos] == '=') {
+            keyepos = pos;
+            valbpos = pos+1;
+        }
+        if (ptr[pos] == ',' || ptr[pos] == '\0') {
+            valepos = pos;
+            if (keybpos == -1 || keyepos == -1 || valbpos == -1 || valepos == -1) {
+                break;
+            }
+            char* key = strndup(&ptr[keybpos], keyepos-keybpos);
+            char* val = strndup(&ptr[valbpos], valepos-valbpos);
+            if (strcmp(key, "loglvl") == 0) {
+                int lvl = atoi(val);
+                if (lvl >= LOGLVL_FATAL && lvl <= LOGLVL_TRACE) {
+                    loglvl = lvl;
+                }else{
+                    lograw("Invalid setting log level %s\n", val);
+                }
+            }else if (strcmp(key, "gctrace") == 0) {
+            }else if (strcmp(key, "gcrate") == 0) {
+            }else{
+                lograw("Invalid setting key %s\n", key);
+            }
+            free(key); free(val);
+
+            if (ptr[pos] == '\0') {
+                break;
+            }
+            keybpos = pos+1;
+            keyepos = valbpos = valepos = -1;
+        }
+    }
+    free(ptr);
+}
+
 void
 __attribute__((no_instrument_function))
 crn_simlog(int level, const char *filename, int line, const char* funcname, const char *fmt, ...) {
+    if (level > loglvl) return;
     static __thread char buf[512] = {0};
     char* fbname = strrchr(filename, '/');
     if (fbname != NULL) fbname ++;
@@ -49,12 +116,10 @@ crn_simlog(int level, const char *filename, int line, const char* funcname, cons
     gettimeofday(&ltv, 0);
     loglock();
     int len = snprintf(buf, sizeof(buf)-1, "%ld.%ld %s:%d %s: ", ltv.tv_sec, ltv.tv_usec, fbname, line, funcname);
-    // fprintf(stderr, "%ld.%ld %s:%d %s: ", ltv.tv_sec, ltv.tv_usec, fbname, line, funcname);
 
     va_list args;
     va_start(args, fmt);
     len += vsnprintf(buf+len, sizeof(buf)-len-1, fmt, args);
-    // vfprintf(stderr, fmt, args);
     va_end(args);
     buf[len] = '\0';
     fprintf(stderr, "%s", buf);

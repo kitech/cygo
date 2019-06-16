@@ -231,12 +231,12 @@ void crn_fiber_resume_xthread(fiber* gr) {
         // TODO assert(gr != nilptr && gr->id > 0); // needed ???
     }
     if (atomic_getint(&gr->state) == runnable) {
-        linfo("resume but runnable %d\n", gr->id);
+        lverb("resume but runnable %d\n", gr->id);
         crn_machine_signal(crn_machine_get(gr->mcid));
         return;
     }
     if (atomic_getint(&gr->state) == executing) {
-        linfo("resume but executing grid=%d, mcid=%d\n", gr->id, gr->mcid);
+        ldebug("resume but executing grid=%d, mcid=%d\n", gr->id, gr->mcid);
         return;
     }
     if (atomic_getint(&gr->state) == finished) {
@@ -265,7 +265,7 @@ void crn_fiber_suspend(fiber* gr) {
 machine* crn_machine_new(int id) {
     machine* mc = (machine*)crn_raw_malloc(sizeof(machine));
     mc->id = id;
-    linfo("htconf=%o\n", crn_dft_htconf());
+    ltrace("htconf=%o\n", crn_dft_htconf());
     hashtable_new_conf(crn_dft_htconf(), &mc->grs);
     queue_new(&mc->ngrs);
     corowp_create(&mc->coctx0, 0, 0, 0, 0);
@@ -434,7 +434,7 @@ void* crn_procer_netpoller(void*arg) {
     GC_get_stack_base(&stksb);
     GC_register_my_thread(&stksb);
     mc->gchandle = GC_get_my_stackbottom(&mc->stksb);
-    linfo("%d, %d\n", mc->id, gettid());
+    ltrace("%d, %d\n", mc->id, gettid());
     crn_procer_setname(mc->id);
 
     netpoller_loop();
@@ -509,7 +509,7 @@ void* crn_procer1(void*arg) {
                 mct = nilptr;
             }
             if (mct == nilptr) {
-                linfo("no enough mc? %d\n", gr->id);
+                ldebug("no enough mc? %d\n", gr->id);
                 // try select random one?
                 // 暂时先放回全局队列中吧
                 crn_machine_gradd(mc, gr);
@@ -535,7 +535,7 @@ fiber* crn_sched_get_glob_one(machine*mc) {
 
     fiber* gr = crn_machine_grtake(mc1);
     if (gr != 0) {
-        // linfo("got %d glob task on %d\n", gr->id, mc->id);
+        ldebug("got %d glob task on %d\n", gr->id, mc->id);
     }
     return gr;
 }
@@ -811,6 +811,8 @@ void crn_gc_on_thread_event(GC_EventType evty, void* thid) {
 static
 void crn_init_intern() {
     srand(time(0));
+    crn_loglvl_forenv();
+
     GC_set_free_space_divisor(50); // default 3
     // GC_enable_incremental();
     // GC_set_rate(5);
@@ -876,7 +878,7 @@ void crn_destroy(corona* lnr) {
     gnr__ = 0;
 }
 void crn_wait_init_done(corona* nr) {
-    linfo("crninited? %d\n", nr->crninited);
+    ltrace("crninited? %d\n", nr->crninited);
     if (nr->crninited) {
         return;
     }
@@ -886,9 +888,9 @@ void crn_wait_init_done(corona* nr) {
 corona* crn_init_and_wait_done() {
     corona* nr = crn_new();
     crn_init(nr);
-    linfo("wait signal...%d\n", 0);
+    ltrace("wait signal...%d\n", 0);
     crn_wait_init_done(nr);
-    linfo("wait signal done %d\n", 0);
+    ltrace("wait signal done %d\n", 0);
     return nr;
 }
 

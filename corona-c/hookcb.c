@@ -63,7 +63,7 @@ int fdcontext_set_nonblocking(fdcontext*fdctx, bool isNonBlocking) {
 int hookcb_fd_set_nonblocking(int fd, bool isNonBlocking) {
     fdcontext* fdctx = hookcb_get_fdcontext(fd);
     if (fdctx == 0) {
-        linfo("fdctx nil %d, %d\n", fd, isNonBlocking);
+        ldebug("fdctx nil %d, %d\n", fd, isNonBlocking);
         return 0;
     }
     return fdcontext_set_nonblocking(fdctx, isNonBlocking);

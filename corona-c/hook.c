@@ -88,7 +88,7 @@ int pipe2(int pipefd[2], int flags)
 {
     // if (crn_in_procer())
     if (!socket_f) initHook();
-    linfo("%d\n", flags);
+    ldebug("%d\n", flags);
 
     int rv = pipe2_f(pipefd, flags);
     if (rv == 0) {
@@ -909,7 +909,7 @@ static int doInitHook()
 {
     if (connect_f) return 0;
     connect_f = (connect_t)dlsym(RTLD_NEXT, "connect");
-    linfo("%s:%d, doInitHook %p\n", __FILE__, __LINE__, connect_f);
+    // linfo("%s:%d, doInitHook %p\n", __FILE__, __LINE__, connect_f);
 
     if (connect_f) {
         pipe_f = (pipe_t)dlsym(RTLD_NEXT, "pipe");

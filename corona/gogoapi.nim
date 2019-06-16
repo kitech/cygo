@@ -74,7 +74,7 @@ proc nak2ffipty(ak: AnyKind) : pffi_type =
     return nil
 
 proc gogorunner_cleanup(arg :pointer) =
-    linfo "gogorunner_cleanup", arg, goid()
+    #linfo "gogorunner_cleanup", arg, goid()
     var argc = cast[int](pointer_array_get(arg, 1))
     for idx in 0..argc-1:
         let tyidx = 2 + idx*2
@@ -106,7 +106,7 @@ proc gogorunner(arg : pointer) =
     setupForeignThreadGc2()
     gogorunnerenter(arg)
 
-    linfo "gogorunner", arg
+    #linfo "gogorunner", arg
     var fnptr = pointer_array_get(arg, 0)
     var argc = cast[int](pointer_array_get(arg, 1))
     assert(fnptr != nil)
@@ -192,7 +192,7 @@ proc gopackany*(fn:proc, args:varargs[Any, toany]) =
             pointer_array_set(pargs, validx.cint, v)
         else: linfo "unknown", arg.kind
 
-    linfo "copy margs", 2+args.len*2, pargs # why refc=1
+    #linfo "copy margs", 2+args.len*2, pargs # why refc=1
     fiber_post(gogorunner.toaddr(), pargs)
     return
 
