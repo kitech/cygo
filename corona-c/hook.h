@@ -125,6 +125,24 @@ extern fclose_t fclose_f;
 typedef FILE*(*fopen_t)(const char *pathname, const char *mode);
 extern fopen_t fopen_f;
 
+typedef int (*pmutex_lock_t)(pthread_mutex_t *mutex);
+extern pmutex_lock_t pmutex_lock_f;
+typedef int (*pmutex_trylock_t)(pthread_mutex_t *mutex);
+extern pmutex_trylock_t pmutex_trylock_f;
+typedef int (*pmutex_unlock_t)(pthread_mutex_t *mutex);
+extern pmutex_unlock_t pmutex_unlock_f;
+typedef int (*pcond_timedwait_t)(pthread_cond_t *restrict cond,
+                           pthread_mutex_t *restrict mutex,
+                           const struct timespec *restrict abstime);
+extern pcond_timedwait_t pcond_timedwait_f;
+typedef int (*pcond_wait_t)(pthread_cond_t *restrict cond,
+                      pthread_mutex_t *restrict mutex);
+extern pcond_wait_t pcond_wait_f;
+typedef int (*pcond_signal_t)(pthread_cond_t *cond);
+extern pcond_signal_t pcond_signal_f;
+typedef int (*pcond_broadcast_t)(pthread_cond_t *cond);
+extern pcond_broadcast_t pcond_broadcast_f;
+
 #if defined(LIBGO_SYS_Linux)
 // DNS by libcares
 // gethostent

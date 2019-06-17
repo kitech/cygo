@@ -36,7 +36,7 @@ proc hchan_cap(hc:pointer) : int {.importc.}
 proc goselect(rcasi: ptr cint, cas0: pointer, ncases:cint) : bool {.importc.}
 
 proc crn_thread_createcbfn(args:pointer) =
-    linfo("corona thread created", args)
+    #linfo("corona thread created", args)
     #setupForeignThreadGc()
     return
 

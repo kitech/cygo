@@ -38,6 +38,7 @@ include "./chan0.nim"
 include "./chan1.nim"
 include "./boehwgc0.nim"
 include "./fiber0.nim"
+include "./except0.nim"
 
 # test Loop
 proc testtick(cnter:int) =
@@ -52,6 +53,7 @@ proc testtick(cnter:int) =
     # if cnter == 1: runtest_tcpcon0()
     #if cnter == 1: runtest_boehmgc0()
     if cnter == 1: runtest_fiber0(cnter)
+    #if cnter == 1: runtest_exc0(cnter)
     # test_chan0()
     return
 

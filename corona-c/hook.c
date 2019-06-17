@@ -56,6 +56,14 @@ dup2_t dup2_f = NULL;
 dup3_t dup3_f = NULL;
 fclose_t fclose_f = NULL;
 fopen_t fopen_f = NULL;
+pmutex_lock_t pmutex_lock_f = NULL;
+pmutex_trylock_t pmutex_trylock_f = NULL;
+pmutex_unlock_t pmutex_unlock_f = NULL;
+pcond_timedwait_t pcond_timedwait_f = NULL;
+pcond_wait_t pcond_wait_f = NULL;
+pcond_signal_t pcond_signal_f = NULL;
+pcond_broadcast_t pcond_broadcast_f = NULL;
+
 #if defined(LIBGO_SYS_Linux)
 pipe2_t pipe2_f = NULL;
 gethostbyname_r_t gethostbyname_r_f = NULL;
@@ -825,6 +833,53 @@ FILE* fopen(const char *pathname, const char *mode)
     return fp;
 }
 
+int pthread_mutex_lock_wip(pthread_mutex_t *mutex)
+{
+    if (!pmutex_lock_f) initHook();
+    ldebug("mtx=%p\n", mutex);
+    assert(1==2);
+}
+int pthread_mutex_trylock_wip(pthread_mutex_t *mutex)
+{
+    if (!pmutex_trylock_f) initHook();
+    ldebug("mtx=%p\n", mutex);
+    assert(1==2);
+}
+int pthread_mutex_unlock_wip(pthread_mutex_t *mutex)
+{
+    if (!pmutex_unlock_f) initHook();
+    ldebug("mtx=%p\n", mutex);
+    assert(1==2);
+}
+int pthread_cond_timedwait_wip(pthread_cond_t *restrict cond,
+                           pthread_mutex_t *restrict mutex,
+                           const struct timespec *restrict abstime)
+{
+    if (!pcond_timedwait_f) initHook();
+    ldebug("mtx=%p\n", mutex);
+    assert(1==2);
+}
+int pthread_cond_wait_wip(pthread_cond_t *restrict cond,
+                      pthread_mutex_t *restrict mutex)
+{
+    if (!pcond_wait_f) initHook();
+    ldebug("mtx=%p\n", mutex);
+    assert(1==2);
+}
+int pthread_cond_broadcast_wip(pthread_cond_t *cond)
+{
+    if (!pcond_broadcast_f) initHook();
+    ldebug("mtx=%p\n", cond);
+    assert(1==2);
+}
+int pthread_cond_signal_wip(pthread_cond_t *cond)
+{
+    if (!pcond_signal_f) initHook();
+    ldebug("mtx=%p\n", cond);
+    assert(1==2);
+}
+
+
 #if defined(LIBGO_SYS_Linux)
 // TODO conflict with libevent epoll_wait
 int epoll_wait_wip(int epfd, struct epoll_event *events, int maxevents, int timeout)
@@ -943,6 +998,14 @@ static int doInitHook()
         dup3_f = (dup3_t)dlsym(RTLD_NEXT, "dup3");
         fclose_f = (fclose_t)dlsym(RTLD_NEXT, "fclose");
         fopen_f = (fopen_t)dlsym(RTLD_NEXT, "fopen");
+        pmutex_lock_f = (pmutex_lock_t)dlsym(RTLD_NEXT, "pthread_mutex_lock");
+        pmutex_trylock_f = (pmutex_trylock_t)dlsym(RTLD_NEXT, "pthread_mutex_trylock");
+        pmutex_unlock_f = (pmutex_unlock_t)dlsym(RTLD_NEXT, "pthread_mutex_unlock");
+        pcond_timedwait_f = (pcond_timedwait_t)dlsym(RTLD_NEXT, "pthread_cond_timedwait");
+        pcond_wait_f = (pcond_wait_t)dlsym(RTLD_NEXT, "pthread_cond_wait");
+        pcond_signal_f = (pcond_signal_t)dlsym(RTLD_NEXT, "pthread_cond_signal");
+        pcond_broadcast_f = (pcond_broadcast_t)dlsym(RTLD_NEXT, "pthread_cond_broadcast");
+
 #if defined(LIBGO_SYS_Linux)
         pipe2_f = (pipe2_t)dlsym(RTLD_NEXT, "pipe2");
         gethostbyname_r_f = (gethostbyname_r_t)dlsym(RTLD_NEXT, "gethostbyname_r");
@@ -984,6 +1047,7 @@ static int doInitHook()
         dup2_f = &__dup2;
         dup3_f = &__dup3;
         fclose_f = &__new_fclose;
+
 #if defined(LIBGO_SYS_Linux)
         pipe2_f = &__pipe2;
         gethostbyname_r_f = &__gethostbyname_r;

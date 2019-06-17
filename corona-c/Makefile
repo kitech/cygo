@@ -12,6 +12,7 @@ all:
 	gcc ${CFLAGS} -o corowp.o -c ./corowp.c
 	gcc ${CFLAGS} -o hook.o -c ./hook.c
 	gcc ${CFLAGS} -o hookcb.o -c ./hookcb.c
+	gcc ${CFLAGS} -o futex.o -c ./futex.c
 	gcc ${CFLAGS} -o corona_util.o -c corona_util.c
 	gcc ${CFLAGS} -o rxilog.o -c rxilog.c
 	gcc ${CFLAGS} -o atomic.o -c atomic.c

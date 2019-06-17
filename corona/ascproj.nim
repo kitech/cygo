@@ -27,6 +27,7 @@ const absldflags = "-L " & abssrcdir & "/../bdwgc/.libs" &
 {.compile:"../corona-c/corona_util.c".}
 
 {.compile:"../corona-c/rxilog.c".}
+{.compile:"../corona-c/futex.c".}
 {.compile:"../corona-c/atomic.c".}
 {.compile:"../corona-c/szqueue.c".}
 {.compile:"../corona-c/chan.c".}
