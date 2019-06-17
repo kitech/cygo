@@ -51,9 +51,10 @@ Thanks all the contributors.
     ==17317==    at 0x168C14: kind\_j8p3h8iojolY0RbF1nkaZgxmltree (stdlib\_xmltree.nim.c:310)
 [ ] hang forever on ppoll ()
 [ ] sometimes GC will stop work
-[ ] hang forever on __lll_lock_wait_private () from /usr/lib/libc.so.6
+[x] hang forever on __lll_lock_wait_private () from /usr/lib/libc.so.6
     occurs when call linfo/log write in push_other_roots callback
     says that linfo/log has some where not safe point
+    related with signal handler
     
 ### Note
 * A program entering an infinite recursion or running out of space in the stack memory is known as a stack overflow

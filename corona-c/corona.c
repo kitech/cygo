@@ -746,6 +746,7 @@ hashtable_cmp_int(const void *key1, const void *key2) {
 
 corona* crn_get() { return gnr__;}
 
+// dont alloc memory on heap in this function, or maybe hang for malloc related deadlock
 static
 void crn_gc_push_other_roots1() {
     corona* nr = crn_get();
@@ -758,13 +759,11 @@ void crn_gc_push_other_roots1() {
     for (int i = 3; i <= 5; i++ ) {
         machine* mc = crn_machine_get(i);
         // linfo2("%d %p\n", i, mc);
-        Array* arr = nilptr;
-        hashtable_get_values(mc->grs, &arr);
-        if (arr == nilptr) continue;
-        grcnt += array_size(arr);
-        for (int j = 0; j < array_size(arr); j++) {
-            fiber* gr = nilptr;
-            array_get_at(arr, j, (void**)&gr);
+        HashTableIter htiter;
+        hashtable_iter_init(&htiter, mc->grs);
+        TableEntry *entry = nilptr;
+        while (hashtable_iter_next(&htiter, &entry) != CC_ITER_END) {
+            fiber* gr = entry->value;
             executing_cnt += gr->state == executing ? 1 : 0;
 
             void* stktop = gr->stack.sptr;
@@ -784,7 +783,6 @@ void crn_gc_push_other_roots1() {
                 // GC_remove_roots(stktop, (void*)((uintptr_t)stkbtm + 1)); // assert crash
             }
         }
-        array_destroy(arr);
     }
     // linfo2("tid=%d mcs=%d grs=%d runcnt=%d\n", gettid(), 3, grcnt, executing_cnt);
 }
