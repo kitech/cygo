@@ -746,6 +746,7 @@ hashtable_cmp_int(const void *key1, const void *key2) {
 
 corona* crn_get() { return gnr__;}
 
+// this callback function run on stoped world
 // dont alloc memory on heap in this function, or maybe hang for malloc related deadlock
 static
 void crn_gc_push_other_roots1() {

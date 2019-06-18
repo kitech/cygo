@@ -139,7 +139,14 @@ void netpoller_readfd(int fd, int ytype, fiber* gr) {
     struct event* evt = event_new(np->loop, fd, EV_READ|EV_CLOSED, netpoller_evwatcher_cb, d);
     d->evt = evt;
     int rv = event_add(evt, 0);
-    assert(rv == 0);
+    if (rv != 0) {
+        // [warn] Epoll ADD(8193) on fd 18 failed. Old events were 0; read change was 1 (add); write change was 0 (none); close change was 1 (add): Bad file descriptor
+        lwarn("add error %d %d %d\n", rv, fd, gr->id);
+        event_free(evt);
+        evdata_free(d);
+        // assert(rv == 0);
+        return;
+    }
     // mtx_unlock(&np->evmu);
     if (d != nilptr) {
         // linfo("event_add d=%p\n", d);
@@ -160,7 +167,13 @@ void netpoller_writefd(int fd, int ytype, fiber* gr) {
     struct event* evt = event_new(np->loop, fd, EV_WRITE|EV_CLOSED, netpoller_evwatcher_cb, d);
     d->evt = evt;
     int rv = event_add(evt, 0);
-    assert(rv == 0);
+    if (rv != 0) {
+        lwarn("add error %d %d %d\n", rv, fd, gr->id);
+        event_free(evt);
+        evdata_free(d);
+        // assert(rv == 0);
+        return;
+    }
     // mtx_unlock(&np->evmu);
     // linfo("evwrite add d=%p %ld\n", d, fd);
 }
@@ -181,7 +194,13 @@ void netpoller_timer(long ns, int ytype, fiber* gr) {
     // struct event* tmer = event_new(np->loop, -1, 0, netpoller_evwatcher_cb, d);
     d->evt = tmer;
     int rv = evtimer_add(tmer, &d->tv);
-    assert(rv == 0);
+    if (rv != 0) {
+        lwarn("add error %d %ld %d\n", rv, ns, gr->id);
+        event_free(tmer);
+        evdata_free(d);
+        // assert(rv == 0);
+        return;
+    }
     // mtx_unlock(&np->evmu);
     // linfo("timer add d=%p %ld\n", d, ns);
 }
