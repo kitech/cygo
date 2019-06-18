@@ -25,7 +25,7 @@ int hchan_close(hchan* hc) {
     fiber* mygr = crn_fiber_getcur();
     assert(mygr != nilptr);
 
-    mtx_lock(&hc->lock);
+    pmutex_lock(&hc->lock);
     hc->closed = true;
     int qsz = 0;
     qsz = hc->recvq->size;
@@ -62,7 +62,7 @@ int hchan_close(hchan* hc) {
     hc->c = nilptr;
     bzero(hc, sizeof(hchan));
     free(hc);
-    mtx_unlock(&hc->lock);
+    pmutex_unlock(&hc->lock);
     return true;
 }
 int hchan_is_closed(hchan* hc) {
@@ -73,7 +73,7 @@ int hchan_len(hchan* hc) { return chan_size(hc->c); }
 
 // TODO when sending/recving, hchan closed case
 int hchan_send(hchan* hc, void* data) {
-    mtx_lock(&hc->lock);
+    pmutex_lock(&hc->lock);
 
     fiber* mygr = crn_fiber_getcur();
     assert(mygr != nilptr);
@@ -90,7 +90,7 @@ int hchan_send(hchan* hc, void* data) {
                 gr->wokeby = mygr;
                 gr->wokehc = hc;
                 gr->wokecase = caseRecv;
-                mtx_unlock(&hc->lock);
+                pmutex_unlock(&hc->lock);
                 crn_procer_resume_one(gr, 0, gr->id, gr->mcid);
                 return 1;
             } else {
@@ -107,7 +107,7 @@ int hchan_send(hchan* hc, void* data) {
             szqueue_add(hc->sendq, mygr);
             linfo("yield me sender %d/%d\n", mygr->id, mygr->mcid);
             mygr->hclock = &hc->lock;
-            // mtx_unlock(&hc->lock);
+            // pmutex_unlock(&hc->lock);
             crn_procer_yield(-1, YIELD_TYPE_CHAN_SEND);
             return 1;
         }
@@ -122,7 +122,7 @@ int hchan_send(hchan* hc, void* data) {
                 gr->wokeby = mygr;
                 crn_procer_resume_one(gr, 0, gr->id, gr->mcid);
             }
-            mtx_unlock(&hc->lock);
+            pmutex_unlock(&hc->lock);
             return 1;
         }else{
             // if has recvq, put to peer hcelem, wakeup peer and return
@@ -131,14 +131,14 @@ int hchan_send(hchan* hc, void* data) {
             if (gr != nilptr) {
                 gr->hcelem = data;
                 crn_procer_resume_one(gr, 0, gr->id, gr->mcid);
-                mtx_unlock(&hc->lock);
+                pmutex_unlock(&hc->lock);
                 return 1;
             }
 
             atomic_setptr(&mygr->hcelem, data);
             szqueue_add(hc->sendq, mygr);
 
-            mtx_unlock(&hc->lock);
+            pmutex_unlock(&hc->lock);
             crn_procer_yield(-1, YIELD_TYPE_CHAN_SEND);
             return 1;
         }
@@ -146,7 +146,7 @@ int hchan_send(hchan* hc, void* data) {
 }
 
 int hchan_recv(hchan* hc, void** pdata) {
-    mtx_lock(&hc->lock);
+    pmutex_lock(&hc->lock);
 
     fiber* mygr = crn_fiber_getcur();
     assert(mygr != nilptr);
@@ -166,7 +166,7 @@ int hchan_recv(hchan* hc, void** pdata) {
                 gr->wokeby = mygr;
                 gr->wokehc = hc;
                 gr->wokecase = caseSend;
-                mtx_unlock(&hc->lock);
+                pmutex_unlock(&hc->lock);
                 crn_procer_resume_one(gr, 0, gr->id, gr->mcid);
                 return 1;
             } else {
@@ -182,16 +182,16 @@ int hchan_recv(hchan* hc, void** pdata) {
             // linfo("chan recv %d\n", mygr->id);
             linfo("yield me recver %d/%d, qc %d\n", mygr->id, mygr->mcid, hc->recvq->size);
             mygr->hclock = &hc->lock;
-            // mtx_unlock(&hc->lock);
+            // pmutex_unlock(&hc->lock);
             crn_procer_yield(-1, YIELD_TYPE_CHAN_RECV);
-            mtx_lock(&hc->lock);
+            pmutex_lock(&hc->lock);
             void* oldptr = atomic_getptr(&mygr->hcelem);
             // assert(oldptr != invlidptr);
             bool swaped = atomic_casptr(&mygr->hcelem, oldptr, invlidptr);
             assert(swaped == true);
             *pdata = oldptr;
             assert(*pdata != invlidptr);
-            mtx_unlock(&hc->lock);
+            pmutex_unlock(&hc->lock);
             return 1;
         }
     }else{
@@ -201,7 +201,7 @@ int hchan_recv(hchan* hc, void** pdata) {
         int bufsz = chan_size(hc->c);
         if (bufsz > 0) {
             chan_recv(hc->c, pdata);
-            mtx_unlock(&hc->lock);
+            pmutex_unlock(&hc->lock);
             return 1;
         }
 
@@ -210,13 +210,13 @@ int hchan_recv(hchan* hc, void** pdata) {
             *pdata = gr->hcelem;
             gr->hcelem = nilptr;
             gr->wokeby = mygr;
-            mtx_unlock(&hc->lock);
+            pmutex_unlock(&hc->lock);
             crn_procer_resume_one(gr, 0, gr->id, gr->mcid);
             return 1;
         }
 
         szqueue_add(hc->recvq, mygr);
-        mtx_unlock(&hc->lock);
+        pmutex_unlock(&hc->lock);
         crn_procer_yield(-1, YIELD_TYPE_CHAN_RECV);
         *pdata = mygr->hcelem;
         return 1;

@@ -8,7 +8,6 @@
 #endif
 
 #include <errno.h>
-#include <pthread.h>
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
@@ -22,6 +21,7 @@
 #include <mach/mach.h>
 #endif
 
+#include "futex.h"
 #include "chan.h"
 #include "szqueue.h"
 
@@ -118,38 +118,38 @@ static int buffered_chan_init(chan_t* chan, size_t capacity)
 
 static int unbuffered_chan_init(chan_t* chan)
 {
-    if (pthread_mutex_init(&chan->w_mu, NULL) != 0)
+    if (pmutex_init(&chan->w_mu, NULL) != 0)
     {
         return -1;
     }
 
-    if (pthread_mutex_init(&chan->r_mu, NULL) != 0)
+    if (pmutex_init(&chan->r_mu, NULL) != 0)
     {
-        pthread_mutex_destroy(&chan->w_mu);
+        pmutex_destroy(&chan->w_mu);
         return -1;
     }
 
-    if (pthread_mutex_init(&chan->m_mu, NULL) != 0)
+    if (pmutex_init(&chan->m_mu, NULL) != 0)
     {
-        pthread_mutex_destroy(&chan->w_mu);
-        pthread_mutex_destroy(&chan->r_mu);
+        pmutex_destroy(&chan->w_mu);
+        pmutex_destroy(&chan->r_mu);
         return -1;
     }
 
-    if (pthread_cond_init(&chan->r_cond, NULL) != 0)
+    if (pcond_init(&chan->r_cond, NULL) != 0)
     {
-        pthread_mutex_destroy(&chan->m_mu);
-        pthread_mutex_destroy(&chan->w_mu);
-        pthread_mutex_destroy(&chan->r_mu);
+        pmutex_destroy(&chan->m_mu);
+        pmutex_destroy(&chan->w_mu);
+        pmutex_destroy(&chan->r_mu);
         return -1;
     }
 
-    if (pthread_cond_init(&chan->w_cond, NULL) != 0)
+    if (pcond_init(&chan->w_cond, NULL) != 0)
     {
-        pthread_mutex_destroy(&chan->m_mu);
-        pthread_mutex_destroy(&chan->w_mu);
-        pthread_mutex_destroy(&chan->r_mu);
-        pthread_cond_destroy(&chan->r_cond);
+        pmutex_destroy(&chan->m_mu);
+        pmutex_destroy(&chan->w_mu);
+        pmutex_destroy(&chan->r_mu);
+        pcond_destroy(&chan->r_cond);
         return -1;
     }
 
@@ -169,12 +169,12 @@ void chan_dispose(chan_t* chan)
         szqueue_dispose(chan->queue);
     }
 
-    pthread_mutex_destroy(&chan->w_mu);
-    pthread_mutex_destroy(&chan->r_mu);
+    pmutex_destroy(&chan->w_mu);
+    pmutex_destroy(&chan->r_mu);
 
-    pthread_mutex_destroy(&chan->m_mu);
-    pthread_cond_destroy(&chan->r_cond);
-    pthread_cond_destroy(&chan->w_cond);
+    pmutex_destroy(&chan->m_mu);
+    pcond_destroy(&chan->r_cond);
+    pcond_destroy(&chan->w_cond);
     free(chan);
 }
 
@@ -187,7 +187,7 @@ void chan_dispose(chan_t* chan)
 int chan_close(chan_t* chan)
 {
     int success = 0;
-    pthread_mutex_lock(&chan->m_mu);
+    pmutex_lock(&chan->m_mu);
     if (chan->closed)
     {
         // Channel already closed.
@@ -198,19 +198,19 @@ int chan_close(chan_t* chan)
     {
         // Otherwise close it.
         chan->closed = 1;
-        pthread_cond_broadcast(&chan->r_cond);
-        pthread_cond_broadcast(&chan->w_cond);
+        pcond_broadcast(&chan->r_cond);
+        pcond_broadcast(&chan->w_cond);
     }
-    pthread_mutex_unlock(&chan->m_mu);
+    pmutex_unlock(&chan->m_mu);
     return success;
 }
 
 // Returns 0 if the channel is open and 1 if it is closed.
 int chan_is_closed(chan_t* chan)
 {
-    pthread_mutex_lock(&chan->m_mu);
+    pmutex_lock(&chan->m_mu);
     int closed = chan->closed;
-    pthread_mutex_unlock(&chan->m_mu);
+    pmutex_unlock(&chan->m_mu);
     return closed;
 }
 
@@ -244,12 +244,12 @@ int chan_recv(chan_t* chan, void** data)
 
 static int buffered_chan_send(chan_t* chan, void* data)
 {
-    pthread_mutex_lock(&chan->m_mu);
+    pmutex_lock(&chan->m_mu);
     while (chan->queue->size == chan->queue->capacity)
     {
         // Block until something is removed.
         chan->w_waiting++;
-        pthread_cond_wait(&chan->w_cond, &chan->m_mu);
+        pcond_wait(&chan->w_cond, &chan->m_mu);
         chan->w_waiting--;
     }
 
@@ -258,28 +258,28 @@ static int buffered_chan_send(chan_t* chan, void* data)
     if (chan->r_waiting > 0)
     {
         // Signal waiting reader.
-        pthread_cond_signal(&chan->r_cond);
+        pcond_signal(&chan->r_cond);
     }
 
-    pthread_mutex_unlock(&chan->m_mu);
+    pmutex_unlock(&chan->m_mu);
     return success;
 }
 
 static int buffered_chan_recv(chan_t* chan, void** data)
 {
-    pthread_mutex_lock(&chan->m_mu);
+    pmutex_lock(&chan->m_mu);
     while (chan->queue->size == 0)
     {
         if (chan->closed)
         {
-            pthread_mutex_unlock(&chan->m_mu);
+            pmutex_unlock(&chan->m_mu);
             errno = EPIPE;
             return -1;
         }
 
         // Block until something is added.
         chan->r_waiting++;
-        pthread_cond_wait(&chan->r_cond, &chan->m_mu);
+        pcond_wait(&chan->r_cond, &chan->m_mu);
         chan->r_waiting--;
     }
 
@@ -292,22 +292,22 @@ static int buffered_chan_recv(chan_t* chan, void** data)
     if (chan->w_waiting > 0)
     {
         // Signal waiting writer.
-        pthread_cond_signal(&chan->w_cond);
+        pcond_signal(&chan->w_cond);
     }
 
-    pthread_mutex_unlock(&chan->m_mu);
+    pmutex_unlock(&chan->m_mu);
     return 0;
 }
 
 static int unbuffered_chan_send(chan_t* chan, void* data)
 {
-    pthread_mutex_lock(&chan->w_mu);
-    pthread_mutex_lock(&chan->m_mu);
+    pmutex_lock(&chan->w_mu);
+    pmutex_lock(&chan->m_mu);
 
     if (chan->closed)
     {
-        pthread_mutex_unlock(&chan->m_mu);
-        pthread_mutex_unlock(&chan->w_mu);
+        pmutex_unlock(&chan->m_mu);
+        pmutex_unlock(&chan->w_mu);
         errno = EPIPE;
         return -1;
     }
@@ -318,34 +318,34 @@ static int unbuffered_chan_send(chan_t* chan, void* data)
     if (chan->r_waiting > 0)
     {
         // Signal waiting reader.
-        pthread_cond_signal(&chan->r_cond);
+        pcond_signal(&chan->r_cond);
     }
 
     // Block until reader consumed chan->data.
-    pthread_cond_wait(&chan->w_cond, &chan->m_mu);
+    pcond_wait(&chan->w_cond, &chan->m_mu);
 
-    pthread_mutex_unlock(&chan->m_mu);
-    pthread_mutex_unlock(&chan->w_mu);
+    pmutex_unlock(&chan->m_mu);
+    pmutex_unlock(&chan->w_mu);
     return 0;
 }
 
 static int unbuffered_chan_recv(chan_t* chan, void** data)
 {
-    pthread_mutex_lock(&chan->r_mu);
-    pthread_mutex_lock(&chan->m_mu);
+    pmutex_lock(&chan->r_mu);
+    pmutex_lock(&chan->m_mu);
 
     while (!chan->closed && !chan->w_waiting)
     {
         // Block until writer has set chan->data.
         chan->r_waiting++;
-        pthread_cond_wait(&chan->r_cond, &chan->m_mu);
+        pcond_wait(&chan->r_cond, &chan->m_mu);
         chan->r_waiting--;
     }
 
     if (chan->closed)
     {
-        pthread_mutex_unlock(&chan->m_mu);
-        pthread_mutex_unlock(&chan->r_mu);
+        pmutex_unlock(&chan->m_mu);
+        pmutex_unlock(&chan->r_mu);
         errno = EPIPE;
         return -1;
     }
@@ -357,10 +357,10 @@ static int unbuffered_chan_recv(chan_t* chan, void** data)
     chan->w_waiting--;
 
     // Signal waiting writer.
-    pthread_cond_signal(&chan->w_cond);
+    pcond_signal(&chan->w_cond);
 
-    pthread_mutex_unlock(&chan->m_mu);
-    pthread_mutex_unlock(&chan->r_mu);
+    pmutex_unlock(&chan->m_mu);
+    pmutex_unlock(&chan->r_mu);
     return 0;
 }
 
@@ -371,9 +371,9 @@ int chan_size(chan_t* chan)
     int size = 0;
     if (chan_is_buffered(chan))
     {
-        pthread_mutex_lock(&chan->m_mu);
+        pmutex_lock(&chan->m_mu);
         size = chan->queue->size;
-        pthread_mutex_unlock(&chan->m_mu);
+        pmutex_unlock(&chan->m_mu);
     }
     return size;
 }
@@ -462,9 +462,9 @@ static int chan_can_recv(chan_t* chan)
         return chan_size(chan) > 0;
     }
 
-    pthread_mutex_lock(&chan->m_mu);
+    pmutex_lock(&chan->m_mu);
     int sender = chan->w_waiting > 0;
-    pthread_mutex_unlock(&chan->m_mu);
+    pmutex_unlock(&chan->m_mu);
     return sender;
 }
 
@@ -474,16 +474,16 @@ static int chan_can_send(chan_t* chan)
     if (chan_is_buffered(chan))
     {
         // Can send if buffered channel is not full.
-        pthread_mutex_lock(&chan->m_mu);
+        pmutex_lock(&chan->m_mu);
         send = chan->queue->size < chan->queue->capacity;
-        pthread_mutex_unlock(&chan->m_mu);
+        pmutex_unlock(&chan->m_mu);
     }
     else
     {
         // Can send if unbuffered channel has receiver.
-        pthread_mutex_lock(&chan->m_mu);
+        pmutex_lock(&chan->m_mu);
         send = chan->r_waiting > 0;
-        pthread_mutex_unlock(&chan->m_mu);
+        pmutex_unlock(&chan->m_mu);
     }
 
     return send;

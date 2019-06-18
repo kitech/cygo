@@ -6,10 +6,12 @@
 
 #include <unistd.h>
 #include <sys/syscall.h>
-#include <threads.h>
+// #include <threads.h>
 
 #include <yieldtypes.h>
 #include <corona_util.h>
+
+#include "futex.h"
 
 pid_t gettid() {
 #ifdef SYS_gettid
@@ -26,17 +28,17 @@ int (array_randcmp) (const void*a, const void*b) {
     return n-1;
 }
 
-static mtx_t loglk;
+static pmutex_t loglk;
 void
 __attribute__((no_instrument_function))
 loglock() {
-    // mtx_lock(&loglk);
+    // pmutex_lock(&loglk);
 }
 void
 __attribute__((no_instrument_function))
 logunlock() {
-    // mtx_unlock(&loglk);
-    // mtx_trylock(&loglk);
+    // pmutex_unlock(&loglk);
+    // pmutex_trylock(&loglk);
 }
 
 #define lograw(fmt, ...)                                                \

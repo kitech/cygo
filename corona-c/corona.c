@@ -2,7 +2,6 @@
 #include <unistd.h>
 #include <stdio.h>
 #include <assert.h>
-#include <pthread.h>
 
 #include <gc/gc.h>
 // #include <private/pthread_support.h>
@@ -29,12 +28,12 @@ typedef struct yieldinfo {
 typedef struct machine {
     int id;
     Queue* ngrs; // fiber*  新任务，未分配栈
-    mtx_t ngrsmu;
+    pmutex_t ngrsmu;
     HashTable* grs;  // # grid => fiber*
-    pthread_mutex_t grsmu;
+    pmutex_t grsmu;
     fiber* curgr;   // 当前在执行的, 这好像得用栈结构吗？(应该不需要，fibers之间是并列关系)
-    pthread_mutex_t pkmu; // pack lock
-    pthread_cond_t pkcd;
+    pmutex_t pkmu; // pack lock
+    pcond_t pkcd;
     bool parking;
     yieldinfo yinfo;
     struct GC_stack_base stksb;
@@ -49,12 +48,12 @@ typedef struct corona {
     HashTableConf htconf;
     HashTable* mths; // thno => pthread_t*
     HashTable* mcs; // thno => machine*
-    mtx_t mcsmu;
+    pmutex_t mcsmu;
     bool crninited;
-    pthread_mutex_t crninitmu;
-    pthread_cond_t crninitcd;
-    mtx_t crninitmu2; // TODO
-    cnd_t crninitcd2; // TODO
+    pmutex_t crninitmu;
+    pcond_t crninitcd;
+    pmutex_t crninitmu2; // TODO
+    pcond_t crninitcd2; // TODO
     coro_context coctx0;
     coro_context maincoctx;
 
@@ -301,24 +300,24 @@ crn_machine_get(int id) {
 }
 
 void crn_machine_gradd(machine* mc, fiber* gr) {
-    pthread_mutex_lock(&mc->grsmu);
+    pmutex_lock(&mc->grsmu);
     hashtable_add(mc->grs, (void*)(uintptr_t)gr->id, gr);
-    pthread_mutex_unlock(&mc->grsmu);
+    pmutex_unlock(&mc->grsmu);
 }
 fiber*
 __attribute__((no_instrument_function))
 crn_machine_grget(machine* mc, int id) {
     fiber* gr = 0;
-    pthread_mutex_lock(&mc->grsmu);
+    pmutex_lock(&mc->grsmu);
     hashtable_get(mc->grs, (void*)(uintptr_t)id, (void**)&gr);
-    pthread_mutex_unlock(&mc->grsmu);
+    pmutex_unlock(&mc->grsmu);
     return gr;
 }
 fiber* crn_machine_grdel(machine* mc, int id) {
     fiber* gr = 0;
-    pthread_mutex_lock(&mc->grsmu);
+    pmutex_lock(&mc->grsmu);
     hashtable_remove(mc->grs, (void*)(uintptr_t)id, (void**)&gr);
-    pthread_mutex_unlock(&mc->grsmu);
+    pmutex_unlock(&mc->grsmu);
     // assert(gr != 0);
     return gr;
 }
@@ -333,7 +332,7 @@ fiber* crn_machine_grtake(machine* mc) {
     assert(mc->id == 1);
     fiber* gr = nilptr;
     Array* arr = nilptr;
-    pthread_mutex_lock(&mc->grsmu);
+    pmutex_lock(&mc->grsmu);
     hashtable_get_keys(mc->grs, &arr);
     if (arr != nilptr) {
         void* key = nilptr;
@@ -341,7 +340,7 @@ fiber* crn_machine_grtake(machine* mc) {
         hashtable_remove(mc->grs, key, (void**)&gr);
         array_destroy(arr);
     }
-    pthread_mutex_unlock(&mc->grsmu);
+    pmutex_unlock(&mc->grsmu);
     return gr;
 }
 void crn_machine_signal(machine* mc) {
@@ -350,7 +349,7 @@ void crn_machine_signal(machine* mc) {
         return;
         assert(mc != nilptr);
     }
-    pthread_cond_signal(&mc->pkcd);
+    pcond_signal(&mc->pkcd);
 }
 
 static __thread int gcurmcid__ = 0; // thread local
@@ -411,11 +410,11 @@ void crn_post(coro_func fn, void*arg) {
     int id = crn_nxtid(gnr__);
     fiber* gr = crn_fiber_new(id, fn, arg);
     crn_fiber_new2(gr);
-    mtx_lock(&mc->ngrsmu);
+    pmutex_lock(&mc->ngrsmu);
     queue_enqueue(mc->ngrs, gr);
     int qsz = queue_size(mc->ngrs);
-    mtx_unlock(&mc->ngrsmu);
-    pthread_cond_signal(&mc->pkcd);
+    pmutex_unlock(&mc->ngrsmu);
+    pcond_signal(&mc->pkcd);
     if (qsz > 128) {
         linfo("wow so many ngrs %d\n", qsz);
     }
@@ -457,24 +456,24 @@ void* crn_procer1(void*arg) {
     // linfo("%d %d\n", mc->id, gettid());
     crn_procer_setname(mc->id);
     gnr__->crninited = true;
-    pthread_cond_signal(&gnr__->crninitcd);
+    pcond_signal(&gnr__->crninitcd);
 
     for (;;) {
-        mtx_lock(&mc->ngrsmu);
+        pmutex_lock(&mc->ngrsmu);
         int newgn = queue_size(mc->ngrs);
-        mtx_unlock(&mc->ngrsmu);
+        pmutex_unlock(&mc->ngrsmu);
         if (newgn == 0) {
             mc->parking = true;
-            pthread_cond_wait(&mc->pkcd, &mc->pkmu);
+            pcond_wait(&mc->pkcd, &mc->pkmu);
             mc->parking = false;
         }
 
         // linfo("newgr %d\n", newgn);
         for (newgn = 0;; newgn ++) {
             fiber* newgr = nilptr;
-            mtx_lock(&mc->ngrsmu);
+            pmutex_lock(&mc->ngrsmu);
             queue_poll(mc->ngrs, (void**)&newgr);
-            mtx_unlock(&mc->ngrsmu);
+            pmutex_unlock(&mc->ngrsmu);
             if (newgr == nilptr) {
                 break;
             }
@@ -543,7 +542,7 @@ fiber* crn_sched_get_glob_one(machine*mc) {
 static
 fiber* crn_sched_get_ready_one(machine*mc) {
     Array* arr = 0;
-    pthread_mutex_lock(&mc->grsmu);
+    pmutex_lock(&mc->grsmu);
     hashtable_get_keys(mc->grs, &arr);
     fiber* rungr = 0;
     for (int i = 0; arr != 0 && i < array_size(arr); i ++) {
@@ -561,7 +560,7 @@ fiber* crn_sched_get_ready_one(machine*mc) {
     if (arr != 0) {
         array_destroy(arr);
     }
-    pthread_mutex_unlock(&mc->grsmu);
+    pmutex_unlock(&mc->grsmu);
     return rungr;
 }
 static
@@ -579,9 +578,9 @@ void crn_sched_run_one(machine* mc, fiber* rungr) {
     if (curst == waiting) {
         // 在这才解锁，用于确保rungr状态完全切换完成
         if (rungr->hclock != nilptr) {
-            mtx_t* l = rungr->hclock;
+            pmutex_t* l = rungr->hclock;
             rungr->hclock = nilptr;
-            mtx_unlock(l);
+            pmutex_unlock(l);
             // linfo("unlocked chan lock %p on %d\n", l, rungr->id);
         }
     } else if (curst == finished) {
@@ -641,7 +640,7 @@ void* crn_procerx(void*arg) {
         } else {
             mc->parking = true;
             // linfo("no task, parking... %d\n", mc->id);
-            pthread_cond_wait(&mc->pkcd, &mc->pkmu);
+            pcond_wait(&mc->pkcd, &mc->pkmu);
             mc->parking = false;
         }
         // sleep(3);
@@ -881,7 +880,7 @@ void crn_wait_init_done(corona* nr) {
     if (nr->crninited) {
         return;
     }
-    pthread_cond_wait(&nr->crninitcd, &nr->crninitmu);
+    pcond_wait(&nr->crninitcd, &nr->crninitmu);
 }
 
 corona* crn_init_and_wait_done() {

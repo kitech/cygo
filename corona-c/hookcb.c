@@ -29,7 +29,7 @@ typedef struct fdcontext {
 
 typedef struct hookcb {
     HashTable* fdctxs; // fd => fdcontext*
-    mtx_t mu;
+    pmutex_t mu;
 } hookcb;
 
 fdcontext* fdcontext_new(int fd) {
@@ -128,10 +128,10 @@ void hookcb_oncreate(int fd, int fdty, bool isNonBlocking, int domain, int sockt
     }
 
     fdcontext* oldfdctx = 0;
-    mtx_lock(&hkcb->mu);
+    pmutex_lock(&hkcb->mu);
     hashtable_remove(hkcb->fdctxs, (void*)(uintptr_t)fd, (void**)&oldfdctx);
     hashtable_add(hkcb->fdctxs, (void*)(uintptr_t)fd, (void*)fdctx);
-    mtx_unlock(&hkcb->mu);
+    pmutex_unlock(&hkcb->mu);
     if (oldfdctx != nilptr) {
         crn_raw_free(oldfdctx);
     }
@@ -143,9 +143,9 @@ void hookcb_onclose(int fd) {
     // linfo("fd closed %d\n", fd);
 
     fdcontext* fdctx = 0;
-    mtx_lock(&hkcb->mu);
+    pmutex_lock(&hkcb->mu);
     hashtable_remove(hkcb->fdctxs, (void*)(uintptr_t)fd, (void**)&fdctx);
-    mtx_unlock(&hkcb->mu);
+    pmutex_unlock(&hkcb->mu);
     // maybe not found when just startup
     if (fdctx == 0) {
         linfo("fd not found in context %d\n", fd);
@@ -159,9 +159,9 @@ void hookcb_ondup(int from, int to) {
     if (hkcb == 0) return ;
 
     fdcontext* fdctx = 0;
-    mtx_lock(&hkcb->mu);
+    pmutex_lock(&hkcb->mu);
     hashtable_get(hkcb->fdctxs, (void*)(uintptr_t)from, (void**)&fdctx);
-    mtx_unlock(&hkcb->mu);
+    pmutex_unlock(&hkcb->mu);
     assert(fdctx != 0);
     fdcontext* tofdctx = fdcontext_new(to);
     memcpy(tofdctx, fdctx, sizeof(fdcontext));
@@ -173,9 +173,9 @@ fdcontext* hookcb_get_fdcontext(int fd) {
     if (hkcb == 0) return 0;
 
     fdcontext* fdctx = 0;
-    mtx_lock(&hkcb->mu);
+    pmutex_lock(&hkcb->mu);
     hashtable_get(hkcb->fdctxs, (void*)(uintptr_t)fd, (void**)&fdctx);
-    mtx_unlock(&hkcb->mu);
+    pmutex_unlock(&hkcb->mu);
     if (fdctx == 0) {
         // assert(fdctx != 0);
     }

@@ -16,7 +16,7 @@
 typedef struct netpoller {
     struct event_base * loop;
     HashTable* watchers; // ev_watcher* => fiber*
-    mtx_t evmu;
+    pmutex_t evmu;
 } netpoller;
 
 static netpoller* gnpl__ = 0;
@@ -135,7 +135,7 @@ void netpoller_readfd(int fd, int ytype, fiber* gr) {
     d->mcid = gr->mcid;
     d->ytype = ytype;
     d->fd = fd;
-    // mtx_lock(&np->evmu);
+
     struct event* evt = event_new(np->loop, fd, EV_READ|EV_CLOSED, netpoller_evwatcher_cb, d);
     d->evt = evt;
     int rv = event_add(evt, 0);
@@ -147,7 +147,7 @@ void netpoller_readfd(int fd, int ytype, fiber* gr) {
         // assert(rv == 0);
         return;
     }
-    // mtx_unlock(&np->evmu);
+
     if (d != nilptr) {
         // linfo("event_add d=%p\n", d);
     }
@@ -163,7 +163,7 @@ void netpoller_writefd(int fd, int ytype, fiber* gr) {
     d->mcid = gr->mcid;
     d->ytype = ytype;
     d->fd = fd;
-    // mtx_lock(&np->evmu);
+
     struct event* evt = event_new(np->loop, fd, EV_WRITE|EV_CLOSED, netpoller_evwatcher_cb, d);
     d->evt = evt;
     int rv = event_add(evt, 0);
@@ -174,7 +174,7 @@ void netpoller_writefd(int fd, int ytype, fiber* gr) {
         // assert(rv == 0);
         return;
     }
-    // mtx_unlock(&np->evmu);
+
     // linfo("evwrite add d=%p %ld\n", d, fd);
 }
 
@@ -189,7 +189,7 @@ void netpoller_timer(long ns, int ytype, fiber* gr) {
     d->fd = ns;
     d->tv.tv_sec = ns/1000000000;
     d->tv.tv_usec = ns/1000 % 1000000;
-    // mtx_lock(&np->evmu);
+
     struct event* tmer = evtimer_new(np->loop, netpoller_evwatcher_cb, d);
     // struct event* tmer = event_new(np->loop, -1, 0, netpoller_evwatcher_cb, d);
     d->evt = tmer;
@@ -201,7 +201,7 @@ void netpoller_timer(long ns, int ytype, fiber* gr) {
         // assert(rv == 0);
         return;
     }
-    // mtx_unlock(&np->evmu);
+
     // linfo("timer add d=%p %ld\n", d, ns);
 }
 

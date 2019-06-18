@@ -1,9 +1,9 @@
 #ifndef chan_h
 #define chan_h
 
-#include <pthread.h>
 #include <stdint.h>
 
+#include "futex.h"
 #include "szqueue.h"
 
 
@@ -19,14 +19,14 @@ typedef struct chan_t
     szqueue_t*         queue;
 
     // Unbuffered channel properties
-    pthread_mutex_t  r_mu;
-    pthread_mutex_t  w_mu;
+    pmutex_t  r_mu;
+    pmutex_t  w_mu;
     void*            data;
 
     // Shared properties
-    pthread_mutex_t  m_mu;
-    pthread_cond_t   r_cond;
-    pthread_cond_t   w_cond;
+    pmutex_t  m_mu;
+    pcond_t   r_cond;
+    pcond_t   w_cond;
     int              closed;
     int              r_waiting;
     int              w_waiting;

@@ -11,9 +11,8 @@
 #include <stdatomic.h>
 
 // sys
-#include <pthread.h>
-#include <threads.h>
-// c11 mtx_t
+// #include <pthread.h>
+// #include <threads.h> // c11 mtx_t
 #include <sys/epoll.h>
 #include <sys/timerfd.h>
 
@@ -63,7 +62,7 @@ struct fiber {
     grstate state;
     bool isresume;
     void* hcelem;
-    mtx_t* hclock; // hchan.lock
+    pmutex_t* hclock; // hchan.lock
     int pkreason;
     fiber* wokeby; //
     void* wokehc; // hchan*

@@ -2,14 +2,14 @@
 #define _HCHAN_H_
 
 #include <stdbool.h>
-#include <threads.h>
+// #include <threads.h>
 
 // typedef struct hchan hchan;
 
 typedef struct hchan {
     chan_t* c;
     int cap;
-    mtx_t lock;
+    pmutex_t lock;
     szqueue_t* recvq; // fiber*
     szqueue_t* sendq; // fiber*
     bool closed;

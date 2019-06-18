@@ -14,14 +14,14 @@ static
 void sellock(scase** cas0, uint16_t* lockorder, int ncases) {
     for (int i = 0; i < ncases; i++) {
         scase* cas = cas0[lockorder[i]];
-        mtx_lock(&cas->hc->lock);
+        pmutex_lock(&cas->hc->lock);
     }
 }
 static
 void selunlock(scase** cas0, uint16_t* lockorder, int ncases) {
     for (int i = ncases-1; i >= 0; i--) {
         scase* cas = cas0[lockorder[i]];
-        mtx_unlock(&cas->hc->lock);
+        pmutex_unlock(&cas->hc->lock);
     }
 }
 static
