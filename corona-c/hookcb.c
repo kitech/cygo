@@ -68,8 +68,12 @@ int hookcb_fd_set_nonblocking(int fd, bool isNonBlocking) {
     }
     return fdcontext_set_nonblocking(fdctx, isNonBlocking);
 }
-bool fdcontext_is_socket(fdcontext*fdctx) {return fdctx->fdty == FDISSOCKET; }
+bool fdcontext_is_socket(fdcontext*fdctx) {
+    if (fdctx == 0) return false;
+    return fdctx->fdty == FDISSOCKET;
+}
 bool fdcontext_is_tcpsocket(fdcontext*fdctx) {
+    if (fdctx == 0) return false;
     return fdctx->fdty == FDISSOCKET && fdctx->sockty == SOCK_STREAM;
 }
 bool fdcontext_is_nonblocking(fdcontext*fdctx){ return fdctx->isNonBlocking; }

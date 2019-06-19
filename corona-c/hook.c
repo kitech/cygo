@@ -160,15 +160,17 @@ int connect(int fd, const struct sockaddr *addr, socklen_t addrlen)
 int accept(int sockfd, struct sockaddr *addr, socklen_t *addrlen)
 {
     if (!accept_f) initHook();
-    linfo("%d fdnb=%d\n", sockfd, fd_is_nonblocking(sockfd));
+    // linfo("%d fdnb=%d\n", sockfd, fd_is_nonblocking(sockfd));
     while(1){
         int rv = accept_f(sockfd, addr, addrlen);
         int eno = rv < 0 ? errno : 0;
         if (rv >= 0) {
             hookcb_oncreate(rv, FDISSOCKET, false, AF_INET, SOCK_STREAM, 0);
+            linfo("%d fdnb=%d newfd=%d newnb=%d\n", sockfd, fd_is_nonblocking(sockfd),
+                  rv, fd_is_nonblocking(rv));
             return rv;
         }
-        if (eno != EINPROGRESS) {
+        if (eno != EINPROGRESS && eno != EAGAIN) {
             linfo("fd=%d err=%d eno=%d err=%s\n", sockfd, rv, errno, strerror(errno));
             return rv;
         }

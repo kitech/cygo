@@ -90,7 +90,8 @@ proc gogorunner_cleanup(arg :pointer) =
         elif akty == akInt:
             deallocShared(akval)
             discard
-        elif akty == akPointer: discard
+        elif akty == akPointer or akty == akPtr or akty == akRef:
+            discard
         elif akty == akFloat or akty == akFloat64:
             deallocShared(akval)
             discard
@@ -133,7 +134,7 @@ proc gogorunner(arg : pointer) =
         elif akty == akInt:
             ptrtmps[idx] = akval
             avalues[idx] = ptrtmps[idx]
-        elif akty == akPointer:
+        elif akty == akPointer or akty == akPtr or akty == akRef:
             ptrtmps[idx] = akval
             avalues[idx] = ptrtmps[idx].addr
         elif akty == akFloat or akty == akFloat64:
@@ -182,7 +183,7 @@ proc gopackany*(fn:proc, args:varargs[Any, toany]) =
             var v = allocShared0(cs.len()+1)
             copyMem(v, cs, cs.len())
             pointer_array_set(pargs, validx.cint, v)
-        elif arg.kind == akPointer:
+        elif arg.kind == akPointer or arg.kind == akPtr or arg.kind == akRef:
             var v = arg.getPointer()
             pointer_array_set(pargs, validx.cint, v)
         elif arg.kind == akFloat or arg.kind == akFloat64:

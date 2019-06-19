@@ -712,7 +712,7 @@ void crn_procer_resume_one(void* gr_, int ytype, int grid, int mcid) {
     // linfo("netpoller notify, ytype=%d %p, id=%d\n", ytype, gr, gr->id);
     if (grid != gr->id || mcid != gr->mcid) {
         // sometimes resume from netpoller is too late, gr already gone
-        linfo("Invalid gr %p curid=%d %d\n", gr, gr->id, grid);
+        ldebug("Invalid gr %p curid=%d %d\n", gr, gr->id, grid);
         return;
     }
     if (mygr != nilptr && gr->mcid == mygr->mcid) {
@@ -774,7 +774,7 @@ void crn_gc_push_other_roots1() {
             //       i, j, gr->id, (int)gr->state, grstate2str(gr->state),
             //       gr->pkreason, yield_type_name(gr->pkreason), gr);
             // linfo2("stkinfo top=%p btm=%p szo=%ld szr=%ld\n", stktop, stkbtm, gr->stack.ssze, stksz);
-            // GC_remove_roots(gr->stack.sptr, gr->stack.sptr + 1);
+            GC_remove_roots(gr->stack.sptr, gr->stack.sptr + 1);
             // GC_add_roots(gr->stack.sptr, ((void*)((uintptr_t)gr->stack.sptr) + 130000));
             if (gr->state != executing) {
                 GC_push_all_eager(stktop, stkbtm);
