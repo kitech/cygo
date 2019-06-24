@@ -3,7 +3,7 @@
 #include <assert.h>
 #include <time.h>
 
-#include <gc/gc.h>
+#include <gc.h>
 #include <coro.h>
 #include <collectc/hashtable.h>
 #include <collectc/array.h>

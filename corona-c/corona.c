@@ -3,7 +3,6 @@
 #include <stdio.h>
 #include <assert.h>
 
-#include <gc/gc.h>
 // #include <private/pthread_support.h>
 #include <coro.h>
 #include <collectc/hashtable.h>
@@ -495,7 +494,8 @@ void* crn_procer1(void*arg) {
             machine* mct = 0;
             for (int j = 0; j < array_size(arr2); j++) {
                 int rdidx = abs(rand()) % array_size(arr2);
-                void* key = array_peek_at(arr2, rdidx);
+                void* key = nilptr;
+                array_get_at(arr2, rdidx, &key);
                 if ((uintptr_t)key <= 2) continue;
 
                 // linfo("checking machine %d/%d %d\n", j, array_size(arr2), key);
@@ -750,6 +750,7 @@ corona* crn_get() { return gnr__;}
 static
 void crn_gc_push_other_roots1() {
     corona* nr = crn_get();
+    if (nr == nilptr) return;
     if (nr != nilptr && nr->crninited == false) return;
     // if (gcurmcid__ != 0) return;
 
@@ -885,10 +886,13 @@ void crn_wait_init_done(corona* nr) {
 
 corona* crn_init_and_wait_done() {
     corona* nr = crn_new();
-    crn_init(nr);
-    ltrace("wait signal...%d\n", 0);
-    crn_wait_init_done(nr);
-    ltrace("wait signal done %d\n", 0);
+    assert(nr != nilptr);
+    if (!nr->crninited) {
+        crn_init(nr);
+        ltrace("wait signal...%d\n", 0);
+        crn_wait_init_done(nr);
+        ltrace("wait signal done %d\n", 0);
+    }
     return nr;
 }
 

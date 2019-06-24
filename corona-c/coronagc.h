@@ -5,7 +5,7 @@
 
 #ifdef USE_BDWGC
 
-#include <gc/gc.h>
+#include <gc.h>
 extern void GC_push_all_eager(void*, void*);
 extern void GC_set_push_other_roots(void*);
 

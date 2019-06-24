@@ -11,6 +11,10 @@ goroutines, schedulers, channels, goselect and garbage collect.
 * [x] syscall hook
 * [ ] explict syscall functions wrapper
 
+### Usage
+
+All exported functions is `crnpub.h`
+
 ### Todos
 
 [x] channel select semantic
