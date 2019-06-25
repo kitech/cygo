@@ -1,7 +1,7 @@
 module corona
 
-#flag -I /home/me/code/corona/corona-c
-#flag -L /home/me/code/corona/corona-c  -L /home/me/code/corona/cltc/lib -lcorona -l:libcollectc.a -levent -levent_pthreads -L/home/me/code/corona/bdwgc/.libs -lgc -lpthread
+#flag -I $HOME/code/corona/corona-c
+#flag -L $HOME/me/code/corona/corona-c  -L $HOME/code/corona/cltc/lib -lcorona -l:libcollectc.a -levent -levent_pthreads -L $HOME/code/corona/bdwgc/.libs -lgc -lpthread
 
 #include <crnpub.h>
 

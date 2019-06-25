@@ -6,8 +6,8 @@
 #include <pthread.h>
 #include <unistd.h>
 #include <stdint.h>
-#include <gc/gc.h> // must put after <pthread.h>
-#include <gc/cord.h>
+#include <gc.h> // must put after <pthread.h>
+#include <cord.h>
 
 typedef uint8_t bool;
 typedef uint8_t byte;
