@@ -1,8 +1,10 @@
 #ifndef _CXRT_BASE_H_
 #define _CXRT_BASE_H_
 
+
 #include <stdio.h>
 #include <stdlib.h>
+#include <assert.h>
 #include <pthread.h>
 #include <unistd.h>
 #include <stdint.h>
@@ -41,5 +43,7 @@ extern void* cxrt_chan_recv(void*arg);
 
 #include <sys/types.h>
 extern pid_t gettid();
+
+#include "cxhashtable.h"
 
 #endif

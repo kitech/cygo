@@ -19,7 +19,8 @@ func main() {
 	err := psctx.Init()
 	gopp.ErrPrint(err)
 
-	g2n := g2nim{}
+	// g2n := g2nim{}
+	g2n := g2nc{}
 	g2n.psctx = psctx
 	g2n.genpkgs()
 	code, ext := g2n.code()

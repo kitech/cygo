@@ -1,10 +1,17 @@
-#include "cxrtbase.h"
 
+#include <assert.h>
 #include <stdarg.h>
+
+#include "cxrtbase.h"
 
 static void cxrt_init_gc_env() { GC_INIT(); }
 
 extern void cxrt_init_routine_env();
+
+void cxrt_init_routine_env() {
+    // assert(1==2);
+}
+
 void cxrt_init_env() {
     cxrt_init_gc_env();
     cxrt_init_routine_env();

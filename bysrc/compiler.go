@@ -5,6 +5,7 @@ import (
 	"go/ast"
 	"go/types"
 	"gopp"
+	"hash/fnv"
 	"log"
 	"reflect"
 	"strings"
@@ -147,6 +148,8 @@ func (c *g2nc) genAssignStmt(scope *ast.Scope, s *ast.AssignStmt) {
 				ischrv = true
 				chexpr = e.X
 			}
+		default:
+			log.Println("unknown")
 		}
 		if ischrv {
 			if s.Tok.String() == ":=" {
@@ -508,7 +511,23 @@ func (this *g2nc) genExpr(scope *ast.Scope, e ast.Expr) {
 		}
 		this.genExpr(scope, te.X)
 	case *ast.CompositeLit:
-		log.Println(te.Type, te.Elts)
+		log.Println("todo", te.Type, te.Elts)
+		this.out("0").outfh().outnl()
+		var vo = scope.Lookup("varname")
+		this.outf("if(hashtable_new(&%v) != CC_OK) {assert(1==2);}", vo.Data).outnl()
+		for idx, ex := range te.Elts {
+			switch e := ex.(type) {
+			case *ast.KeyValueExpr:
+				ho := fnv.New64()
+				kbuf := fmt.Sprintf("%v", e.Key)
+				ho.Write([]byte(kbuf))
+				this.outf("hashtable_add(%v, (void*)(uintptr_t)%vUL, (void*)(uintptr_t)%v)",
+					vo.Data, ho.Sum64(), 0).outfh().outnl()
+			default:
+				log.Println("unknown", idx, reflect.TypeOf(ex))
+			}
+		}
+
 	case *ast.CallExpr:
 		this.genCallExpr(scope, te)
 	case *ast.BasicLit:
@@ -567,6 +586,8 @@ func (this *g2nc) exprTypeName(scope *ast.Scope, e ast.Expr) string {
 		}
 	case *ast.ChanType:
 		return "void*"
+	case *ast.MapType:
+		return "HashTable*"
 	default:
 		log.Println("unknown", reflect.TypeOf(e), te, this.info.TypeOf(e))
 	}
@@ -604,8 +625,11 @@ func (this *g2nc) exprTypeFmt(scope *ast.Scope, e ast.Expr) string {
 		default:
 			log.Println("unknown")
 		}
+	case *types.Map:
+		// log.Println(t.String(), t.Key(), t.Elem())
+		return "p"
 	default:
-		log.Println("unknown")
+		log.Println("unknown", t)
 	}
 	return ""
 }
@@ -631,6 +655,13 @@ func (this *g2nc) genTypeSpec(scope *ast.Scope, spec *ast.TypeSpec) {
 	this.out("}", spec.Name.Name, ";")
 	this.outnl()
 }
+func putscope(scope *ast.Scope, k ast.ObjKind, name string, value interface{}) *ast.Scope {
+	var pscope = ast.NewScope(scope)
+	var varobj = ast.NewObj(k, name)
+	varobj.Data = value
+	pscope.Insert(varobj)
+	return pscope
+}
 func (c *g2nc) genValueSpec(scope *ast.Scope, spec *ast.ValueSpec) {
 	for idx, name := range spec.Names {
 		if spec.Type == nil {
@@ -641,8 +672,9 @@ func (c *g2nc) genValueSpec(scope *ast.Scope, spec *ast.ValueSpec) {
 		}
 		c.out(name.Name)
 		if idx < len(spec.Values) {
+			var ns = putscope(scope, ast.Var, "varname", name)
 			c.out("=")
-			c.genExpr(scope, spec.Values[idx])
+			c.genExpr(ns, spec.Values[idx])
 		} else {
 			// TODO set default value
 			c.out("=", "{0}")
@@ -669,6 +701,9 @@ func (this *g2nc) outf(format string, args ...interface{}) *g2nc {
 }
 
 func (this *g2nc) code() (string, string) {
-	code := "#include <cxrtbase.h>\n\n" + this.sb.String()
+	code := "#include <cxrtbase.h>\n\n"
+	code += "#include <collectc/hashtable.h>\n\n"
+	code += "#include <collectc/array.h>\n\n"
+	code += this.sb.String()
 	return code, "c"
 }
