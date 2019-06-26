@@ -332,6 +332,13 @@ func (c *g2nc) genCallExpr(scope *ast.Scope, te *ast.CallExpr) {
 	funame := te.Fun.(*ast.Ident).Name
 	if funame == "make" {
 		c.genCallExprMake(scope, te)
+	} else if funame == "len" {
+		c.genCallExprLen(scope, te)
+	} else if funame == "cap" {
+		c.genCallExprLen(scope, te)
+		// panic("not supported " + funame)
+	} else if funame == "delete" {
+		c.genCallExprDelete(scope, te)
 	} else {
 		c.genCallExprNorm(scope, te)
 	}
@@ -370,6 +377,38 @@ func (c *g2nc) genCallExprMake(scope *ast.Scope, te *ast.CallExpr) {
 		c.out(")")
 	default:
 		log.Println("unknown", itep, ity, lenep)
+	}
+}
+func (c *g2nc) genCallExprLen(scope *ast.Scope, te *ast.CallExpr) {
+	arg0 := te.Args[0]
+	argty := c.info.TypeOf(arg0)
+	if ismapty(argty.String()) {
+		c.outf("hashtable_size(%s)", arg0.(*ast.Ident).Name).outfh().outnl()
+	} else {
+		log.Println("todo", te.Args, argty)
+	}
+}
+func (c *g2nc) genCallExprDelete(scope *ast.Scope, te *ast.CallExpr) {
+	arg0 := te.Args[0]
+	arg1 := te.Args[1]
+	argty := c.info.TypeOf(arg0)
+	if ismapty(argty.String()) {
+		keystr := ""
+		switch te := arg1.(type) {
+		case *ast.BasicLit:
+			switch te.Kind {
+			case token.STRING:
+				keystr = fmt.Sprintf("cxhashtable_hash_str(%s)", te.Value)
+			default:
+				log.Println("todo", te.Kind)
+			}
+		default:
+			log.Println("todo", reflect.TypeOf(arg1), arg1)
+		}
+		c.outf("hashtable_remove(%s, (void*)(uintptr_t)%s, 0)",
+			arg0.(*ast.Ident).Name, keystr).outfh().outnl()
+	} else {
+		log.Println("todo", te.Args, argty)
 	}
 }
 func (c *g2nc) genCallExprNorm(scope *ast.Scope, te *ast.CallExpr) {
@@ -553,7 +592,7 @@ func (this *g2nc) genExpr(scope *ast.Scope, e ast.Expr) {
 		this.out("void*")
 	case *ast.IndexExpr:
 		varty := this.info.TypeOf(te.X)
-		if strings.HasPrefix(varty.String(), "map[") {
+		if ismapty(varty.String()) {
 			vo := scope.Lookup("varval")
 			this.genCxmapAddkv(scope, te.X, te.Index, vo.Data.(ast.Expr))
 		} else {
@@ -626,6 +665,8 @@ func (this *g2nc) exprTypeName(scope *ast.Scope, e ast.Expr) string {
 		switch te.Fun.(*ast.Ident).Name {
 		case "make":
 			return this.exprTypeName(scope, te.Args[0])
+		case "len", "cap":
+			return "int"
 		default:
 			rety := this.info.TypeOf(e)
 			log.Println(rety, reflect.TypeOf(rety))
@@ -637,7 +678,7 @@ func (this *g2nc) exprTypeName(scope *ast.Scope, e ast.Expr) string {
 	default:
 		log.Println("unknown", reflect.TypeOf(e), te, this.info.TypeOf(e))
 	}
-	return "unknown"
+	return "unknownty"
 }
 func (this *g2nc) exprTypeFmt(scope *ast.Scope, e ast.Expr) string {
 
@@ -653,9 +694,12 @@ func (this *g2nc) exprTypeFmt(scope *ast.Scope, e ast.Expr) string {
 			default:
 				log.Println("unknown", t)
 			}
+		case *ast.Ident:
+			return "d"
 		default:
-			log.Println("unknown", e)
+			log.Println("unknown", e, reflect.TypeOf(e))
 		}
+		return ""
 	}
 
 	// eval := this.info.Types[e]
@@ -668,8 +712,10 @@ func (this *g2nc) exprTypeFmt(scope *ast.Scope, e ast.Expr) string {
 			return "d"
 		case types.String:
 			return "s"
+		case types.Invalid:
+			return "d" // TODO
 		default:
-			log.Println("unknown")
+			log.Println("unknown", t, e, ety)
 		}
 	case *types.Map:
 		// log.Println(t.String(), t.Key(), t.Elem())
@@ -748,8 +794,6 @@ func (this *g2nc) outf(format string, args ...interface{}) *g2nc {
 
 func (this *g2nc) code() (string, string) {
 	code := "#include <cxrtbase.h>\n\n"
-	code += "#include <collectc/hashtable.h>\n\n"
-	code += "#include <collectc/array.h>\n\n"
 	code += this.sb.String()
 	return code, "c"
 }

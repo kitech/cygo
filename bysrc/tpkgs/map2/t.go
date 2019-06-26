@@ -9,6 +9,12 @@ func main() {
 
 	println(m1)
 
-	// mc := len(m1)
-	// println(mc)
+	mc1 := len(m1)
+	mc2 := cap(m1)
+	mc3 := cap(m1)
+	println(mc1, mc2, mc3)
+
+	delete(m1, "k1")
+	m4 := len(m1)
+	println(m4)
 }

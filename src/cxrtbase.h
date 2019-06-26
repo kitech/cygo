@@ -44,6 +44,9 @@ extern void* cxrt_chan_recv(void*arg);
 #include <sys/types.h>
 extern pid_t gettid();
 
+#include <collectc/hashtable.h>
+#include <collectc/array.h>
+
 #include "cxpriv.h"
 
 #endif
