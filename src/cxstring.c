@@ -3,10 +3,10 @@
 
 #include "cxpriv.h"
 
-typedef struct cxstring {
-    char* ptr;
-    int len;
-} cxstring;
+/* typedef struct cxstring { */
+/*     char* ptr; */
+/*     int len; */
+/* } cxstring; */
 
 cxstring* cxstring_new() {
     return (cxstring*)cxmalloc(sizeof(cxstring));

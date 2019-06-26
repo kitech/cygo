@@ -10,5 +10,21 @@
 
 #include "cxmemory.h"
 #include "cxstring.h"
+#include "cxhashtable.h"
+
+// cxstring begin
+typedef struct cxstring {
+    char* ptr;
+    int len;
+} cxstring;
+
+cxstring* cxstring_new_cstr(char* s);
+cxstring* cxstring_new_cstr2(char* s, int len);
+// cxstring end
+
+// cxhashtable begin
+size_t cxhashtable_hash_str(const char *key);
+size_t cxhashtable_hash_str2(const char *key, int len);
+// cxhashtable end
 
 #endif

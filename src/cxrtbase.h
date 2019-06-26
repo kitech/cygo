@@ -25,10 +25,10 @@ typedef float float32;
 typedef double float64;
 typedef uintptr_t uintptr;
 
-typedef struct {
-    char* data;
-    int len;
-} string;
+/* typedef struct { */
+/*     char* data; */
+/*     int len; */
+/* } string; */
 
 void println(const char* fmt, ...);
 
@@ -44,6 +44,6 @@ extern void* cxrt_chan_recv(void*arg);
 #include <sys/types.h>
 extern pid_t gettid();
 
-#include "cxhashtable.h"
+#include "cxpriv.h"
 
 #endif

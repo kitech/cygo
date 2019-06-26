@@ -20,3 +20,11 @@ int cxhashtable_new(HashTable** out) {
 
     return hashtable_new_conf(&htconf, out);
 }
+
+size_t cxhashtable_hash_str(const char *key) {
+    return hashtable_hash_string(key, strlen(key), 0);
+}
+
+size_t cxhashtable_hash_str2(const char *key, int len) {
+    return hashtable_hash_string(key, len, 0);
+}

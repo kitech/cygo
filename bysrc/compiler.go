@@ -3,9 +3,9 @@ package main
 import (
 	"fmt"
 	"go/ast"
+	"go/token"
 	"go/types"
 	"gopp"
-	"hash/fnv"
 	"log"
 	"reflect"
 	"strings"
@@ -522,19 +522,7 @@ func (this *g2nc) genExpr(scope *ast.Scope, e ast.Expr) {
 		for idx, ex := range te.Elts {
 			switch be := ex.(type) {
 			case *ast.KeyValueExpr:
-				ho := fnv.New64()
-				kbuf := fmt.Sprintf("%v", be.Key)
-				ho.Write([]byte(kbuf))
-
-				valstr := ""
-				switch ce := be.Value.(type) {
-				case *ast.BasicLit:
-					valstr = ce.Value
-				default:
-					log.Println("unknown", reflect.TypeOf(be))
-				}
-				this.outf("hashtable_add(%v, (void*)(uintptr_t)%vUL, (void*)(uintptr_t)%v)",
-					vo.Data, ho.Sum64(), valstr).outfh().outnl()
+				this.genCxmapAddkv(scope, vo.Data, be.Key, be.Value)
 			default:
 				log.Println("unknown", idx, reflect.TypeOf(ex))
 			}
@@ -550,7 +538,7 @@ func (this *g2nc) genExpr(scope *ast.Scope, e ast.Expr) {
 			case types.Int, types.UntypedInt:
 				this.out(te.Value)
 			case types.String, types.UntypedString:
-				this.out(fmt.Sprintf("%s", te.Value))
+				this.out(fmt.Sprintf("cxstring_new_cstr(%s)", te.Value))
 			default:
 				log.Println("unknown", t.String())
 			}
@@ -566,20 +554,8 @@ func (this *g2nc) genExpr(scope *ast.Scope, e ast.Expr) {
 	case *ast.IndexExpr:
 		varty := this.info.TypeOf(te.X)
 		if strings.HasPrefix(varty.String(), "map[") {
-			var ho = fnv.New64()
-			kbuf := fmt.Sprintf("%v", te.Index)
-			ho.Write([]byte(kbuf))
-
 			vo := scope.Lookup("varval")
-			valstr := ""
-			switch e := vo.Data.(ast.Expr).(type) {
-			case *ast.BasicLit:
-				valstr = e.Value
-			default:
-				log.Println("unknown", vo.Data, reflect.TypeOf(e))
-			}
-			this.outf("hashtable_add(%v, (void*)(uintptr_t)%vUL, (void*)(uintptr_t)%s)",
-				te.X, ho.Sum64(), valstr).outfh().outnl()
+			this.genCxmapAddkv(scope, te.X, te.Index, vo.Data.(ast.Expr))
 		} else {
 			log.Println("todo", te.X, te.Index)
 			log.Println("todo", reflect.TypeOf(te.X))
@@ -587,6 +563,39 @@ func (this *g2nc) genExpr(scope *ast.Scope, e ast.Expr) {
 	default:
 		log.Println("unknown", reflect.TypeOf(e), e, te)
 	}
+}
+func (c *g2nc) genCxmapAddkv(scope *ast.Scope, vnamex interface{}, ke, ve ast.Expr) {
+	keystr := ""
+	switch be := ke.(type) {
+	case *ast.BasicLit:
+		switch be.Kind {
+		case token.STRING:
+			keystr = fmt.Sprintf("cxhashtable_hash_str(%s)", be.Value)
+		default:
+			log.Println("unknown index key kind", be.Kind)
+		}
+	case *ast.Ident:
+		varty := c.info.TypeOf(ke)
+		switch varty.String() {
+		case "string":
+			keystr = fmt.Sprintf("cxhashtable_hash_str2(%s->ptr, %s->len)", be.Name, be.Name)
+		default:
+			log.Println("unknown", varty, ke)
+		}
+	default:
+		log.Println("unknown index key", ke, reflect.TypeOf(ke))
+	}
+
+	valstr := ""
+	switch be := ve.(type) {
+	case *ast.BasicLit:
+		valstr = be.Value
+	default:
+		log.Println("unknown", ve, reflect.TypeOf(ke))
+	}
+
+	c.outf("hashtable_add(%v, (void*)(uintptr_t)%v, (void*)(uintptr_t)%s)",
+		vnamex, keystr, valstr).outfh().outnl()
 }
 func (this *g2nc) exprTypeName(scope *ast.Scope, e ast.Expr) string {
 	switch te := e.(type) {
@@ -608,7 +617,11 @@ func (this *g2nc) exprTypeName(scope *ast.Scope, e ast.Expr) string {
 	case *ast.CompositeLit:
 		return this.exprTypeName(scope, te.Type)
 	case *ast.BasicLit:
-		return strings.ToLower(te.Kind.String())
+		tyname := strings.ToLower(te.Kind.String())
+		if tyname == "string" {
+			tyname = "cxstring*"
+		}
+		return tyname
 	case *ast.CallExpr:
 		switch te.Fun.(*ast.Ident).Name {
 		case "make":
