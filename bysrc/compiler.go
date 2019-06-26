@@ -149,8 +149,10 @@ func (c *g2nc) genAssignStmt(scope *ast.Scope, s *ast.AssignStmt) {
 				chexpr = e.X
 			}
 		default:
-			log.Println("unknown")
+			log.Println("unknown", reflect.TypeOf(e))
 		}
+		_, isidxas := s.Lhs[i].(*ast.IndexExpr)
+
 		if ischrv {
 			if s.Tok.String() == ":=" {
 				c.out(c.chanElemTypeName(chexpr))
@@ -158,12 +160,14 @@ func (c *g2nc) genAssignStmt(scope *ast.Scope, s *ast.AssignStmt) {
 				c.outfh().outnl()
 			}
 
-			var pscope = ast.NewScope(scope)
-			var varobj = ast.NewObj(ast.Var, "varname")
-			varobj.Data = s.Lhs[i]
-			pscope.Insert(varobj)
-			c.genExpr(pscope, s.Rhs[i])
-
+			var ns = putscope(scope, ast.Var, "varname", s.Lhs[i])
+			c.genExpr(ns, s.Rhs[i])
+		} else if isidxas {
+			if s.Tok.String() == ":=" {
+				c.out(c.exprTypeName(scope, s.Rhs[i]))
+			}
+			var ns = putscope(scope, ast.Var, "varval", s.Rhs[i])
+			c.genExpr(ns, s.Lhs[i])
 		} else {
 			if s.Tok.String() == ":=" {
 				c.out(c.exprTypeName(scope, s.Rhs[i]))
@@ -514,15 +518,23 @@ func (this *g2nc) genExpr(scope *ast.Scope, e ast.Expr) {
 		log.Println("todo", te.Type, te.Elts)
 		this.out("0").outfh().outnl()
 		var vo = scope.Lookup("varname")
-		this.outf("if(hashtable_new(&%v) != CC_OK) {assert(1==2);}", vo.Data).outnl()
+		this.outf("if(cxhashtable_new(&%v) != CC_OK) {assert(1==2);}", vo.Data).outnl()
 		for idx, ex := range te.Elts {
-			switch e := ex.(type) {
+			switch be := ex.(type) {
 			case *ast.KeyValueExpr:
 				ho := fnv.New64()
-				kbuf := fmt.Sprintf("%v", e.Key)
+				kbuf := fmt.Sprintf("%v", be.Key)
 				ho.Write([]byte(kbuf))
+
+				valstr := ""
+				switch ce := be.Value.(type) {
+				case *ast.BasicLit:
+					valstr = ce.Value
+				default:
+					log.Println("unknown", reflect.TypeOf(be))
+				}
 				this.outf("hashtable_add(%v, (void*)(uintptr_t)%vUL, (void*)(uintptr_t)%v)",
-					vo.Data, ho.Sum64(), 0).outfh().outnl()
+					vo.Data, ho.Sum64(), valstr).outfh().outnl()
 			default:
 				log.Println("unknown", idx, reflect.TypeOf(ex))
 			}
@@ -551,6 +563,27 @@ func (this *g2nc) genExpr(scope *ast.Scope, e ast.Expr) {
 		this.genExpr(scope, te.Y)
 	case *ast.ChanType:
 		this.out("void*")
+	case *ast.IndexExpr:
+		varty := this.info.TypeOf(te.X)
+		if strings.HasPrefix(varty.String(), "map[") {
+			var ho = fnv.New64()
+			kbuf := fmt.Sprintf("%v", te.Index)
+			ho.Write([]byte(kbuf))
+
+			vo := scope.Lookup("varval")
+			valstr := ""
+			switch e := vo.Data.(ast.Expr).(type) {
+			case *ast.BasicLit:
+				valstr = e.Value
+			default:
+				log.Println("unknown", vo.Data, reflect.TypeOf(e))
+			}
+			this.outf("hashtable_add(%v, (void*)(uintptr_t)%vUL, (void*)(uintptr_t)%s)",
+				te.X, ho.Sum64(), valstr).outfh().outnl()
+		} else {
+			log.Println("todo", te.X, te.Index)
+			log.Println("todo", reflect.TypeOf(te.X))
+		}
 	default:
 		log.Println("unknown", reflect.TypeOf(e), e, te)
 	}
