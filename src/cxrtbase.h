@@ -57,6 +57,11 @@ typedef struct cxstring { char* ptr; int len; } cxstring;
 // typedef struct cxstring string;
 cxstring* cxstring_new_cstr(char* s);
 cxstring* cxstring_new_cstr2(char* s, int len);
+cxstring* cxstring_add(cxstring* s0, cxstring* s1);
+int cxstring_len(cxstring* s);
+cxstring* cxstring_sub(cxstring* s0, int start, int end);
+bool cxstring_eq(cxstring* s0, cxstring* s1);
+bool cxstring_ne(cxstring* s0, cxstring* s1);
 // cxstring end
 
 // cxhashtable begin

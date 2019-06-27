@@ -176,6 +176,7 @@ func (c *g2nc) genAssignStmt(scope *ast.Scope, s *ast.AssignStmt) {
 
 			c.out(" = ")
 			c.genExpr(scope, s.Rhs[i])
+			c.outfh().outnl()
 		}
 	}
 
@@ -383,7 +384,9 @@ func (c *g2nc) genCallExprLen(scope *ast.Scope, te *ast.CallExpr) {
 	arg0 := te.Args[0]
 	argty := c.info.TypeOf(arg0)
 	if ismapty(argty.String()) {
-		c.outf("hashtable_size(%s)", arg0.(*ast.Ident).Name).outfh().outnl()
+		c.outf("hashtable_size(%s)", arg0.(*ast.Ident).Name)
+	} else if isstrty(argty.String()) {
+		c.outf("cxstring_len(%s)", arg0.(*ast.Ident).Name)
 	} else {
 		log.Println("todo", te.Args, argty)
 	}
@@ -426,7 +429,18 @@ func (c *g2nc) genCallExprNorm(scope *ast.Scope, te *ast.CallExpr) {
 		c.out(", ")
 	}
 	for idx, e1 := range te.Args {
-		c.genExpr(scope, e1)
+		tety := c.info.TypeOf(e1)
+		if isstrty2(tety) {
+			c.out("(")
+			c.genExpr(scope, e1)
+			c.out(")->len,")
+
+			c.out("(")
+			c.genExpr(scope, e1)
+			c.out(")->ptr")
+		} else {
+			c.genExpr(scope, e1)
+		}
 		c.out(gopp.IfElseStr(idx == len(te.Args)-1, "", ", "))
 	}
 	c.out(")")
@@ -537,12 +551,12 @@ func (this *g2nc) genExpr(scope *ast.Scope, e ast.Expr) {
 		this.genFieldList(scope, te.Fields, false, true, ";\n", false)
 	case *ast.UnaryExpr:
 		log.Println(te.Op.String(), te.X)
-		switch te.Op.String() {
-		case "<-":
+		switch te.Op {
+		case token.ARROW:
 			this.genRecvStmt(scope, te.X)
 			return
 		default:
-			log.Println("unknown", te.Op.String())
+			// log.Println("unknown", te.Op.String())
 		}
 		switch t2 := te.X.(type) {
 		case *ast.CompositeLit:
@@ -552,6 +566,7 @@ func (this *g2nc) genExpr(scope *ast.Scope, e ast.Expr) {
 		default:
 			log.Println(reflect.TypeOf(te), t2, reflect.TypeOf(te.X))
 		}
+		this.outf("%v", te.Op.String())
 		this.genExpr(scope, te.X)
 	case *ast.CompositeLit:
 		log.Println("todo", te.Type, te.Elts)
@@ -570,6 +585,10 @@ func (this *g2nc) genExpr(scope *ast.Scope, e ast.Expr) {
 		this.genCallExpr(scope, te)
 	case *ast.BasicLit:
 		ety := this.info.TypeOf(e)
+		if ety == nil { // we created
+			this.out(te.Value)
+			break
+		}
 		switch t := ety.Underlying().(type) {
 		case *types.Basic:
 			switch t.Kind() {
@@ -584,9 +603,27 @@ func (this *g2nc) genExpr(scope *ast.Scope, e ast.Expr) {
 			log.Println("unknown", t, reflect.TypeOf(t))
 		}
 	case *ast.BinaryExpr:
-		this.genExpr(scope, te.X)
-		this.out(te.Op.String())
-		this.genExpr(scope, te.Y)
+		opty := this.info.TypeOf(te.X)
+		if isstrty2(opty) {
+			switch te.Op {
+			case token.EQL:
+				this.out("cxstring_eq(")
+			case token.NEQ:
+				this.out("cxstring_ne(")
+			case token.ADD:
+				this.out("cxstring_add(")
+			default:
+				log.Println("todo", te.Op)
+			}
+			this.genExpr(scope, te.X)
+			this.out(",")
+			this.genExpr(scope, te.Y)
+			this.out(")")
+		} else {
+			this.genExpr(scope, te.X)
+			this.out(te.Op.String())
+			this.genExpr(scope, te.Y)
+		}
 	case *ast.ChanType:
 		this.out("void*")
 	case *ast.IndexExpr:
@@ -597,6 +634,27 @@ func (this *g2nc) genExpr(scope *ast.Scope, e ast.Expr) {
 		} else {
 			log.Println("todo", te.X, te.Index)
 			log.Println("todo", reflect.TypeOf(te.X))
+		}
+	case *ast.SliceExpr:
+		varty := this.info.TypeOf(te.X)
+		lowe := te.Low
+		highe := te.High
+		if lowe == nil {
+			lowe = newLitInt(0)
+		}
+		if isstrty2(varty) {
+			this.outf("cxstring_sub(%v, ", te.X)
+			this.genExpr(scope, lowe)
+			this.out(",")
+
+			if highe == nil {
+				this.outf("(%v)->len", te.X)
+			} else {
+				this.genExpr(scope, te.High)
+			}
+			this.out(")")
+		} else {
+			log.Println("todo", varty, te)
 		}
 	default:
 		log.Println("unknown", reflect.TypeOf(e), e, te)
@@ -642,8 +700,15 @@ func (this *g2nc) exprTypeName(scope *ast.Scope, e ast.Expr) string {
 		switch rety := ety.(type) {
 		case *types.Chan:
 			return "void*"
+		case *types.Basic:
+			switch rety.Kind() {
+			case types.Bool:
+				return "bool"
+			default:
+				log.Println("todo", rety)
+			}
 		default:
-			log.Println("unknown", ety, rety)
+			log.Println("unknown", ety, rety, reflect.TypeOf(ety))
 		}
 		return te.Name
 	case *ast.ArrayType:
@@ -651,7 +716,14 @@ func (this *g2nc) exprTypeName(scope *ast.Scope, e ast.Expr) string {
 	case *ast.StructType:
 		log.Println("todo")
 	case *ast.UnaryExpr:
-		return this.exprTypeName(scope, te.X) + "*"
+		switch te.Op {
+		case token.AND:
+			return this.exprTypeName(scope, te.X) + "*"
+		case token.NOT:
+			return "bool"
+		default:
+			log.Println("todo", te)
+		}
 	case *ast.CompositeLit:
 		return this.exprTypeName(scope, te.Type)
 	case *ast.BasicLit:
@@ -674,6 +746,24 @@ func (this *g2nc) exprTypeName(scope *ast.Scope, e ast.Expr) string {
 		return "void*"
 	case *ast.MapType:
 		return "HashTable*"
+	case *ast.SliceExpr:
+		varty := this.info.TypeOf(te.X)
+		if isstrty2(varty) {
+			return "cxstring*"
+		} else {
+			log.Println("toto", varty)
+		}
+	case *ast.BinaryExpr:
+		if te.Op.IsOperator() {
+			switch te.Op {
+			case token.EQL, token.NEQ:
+				return "bool"
+			default:
+				log.Println("todo", te.Op)
+			}
+		} else {
+			log.Println("todo", te)
+		}
 	default:
 		log.Println("unknown", reflect.TypeOf(e), te, this.info.TypeOf(e))
 	}
@@ -682,7 +772,7 @@ func (this *g2nc) exprTypeName(scope *ast.Scope, e ast.Expr) string {
 func (this *g2nc) exprTypeFmt(scope *ast.Scope, e ast.Expr) string {
 
 	ety := this.info.TypeOf(e)
-	log.Println(reflect.TypeOf(e), ety)
+	// log.Println(reflect.TypeOf(e), ety)
 	if ety == nil {
 		switch t := e.(type) {
 		case *ast.CallExpr:
@@ -710,7 +800,9 @@ func (this *g2nc) exprTypeFmt(scope *ast.Scope, e ast.Expr) string {
 		case types.Int:
 			return "d"
 		case types.String:
-			return "s"
+			return ".*s"
+		case types.Bool:
+			return "d"
 		case types.Invalid:
 			return "d" // TODO
 		default:
