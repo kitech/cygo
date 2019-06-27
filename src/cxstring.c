@@ -1,7 +1,7 @@
 #include <stdbool.h>
 #include <ctype.h>
 
-#include "cxpriv.h"
+#include "cxrtbase.h"
 
 /* typedef struct cxstring { */
 /*     char* ptr; */

@@ -31,13 +31,13 @@ func (this *g2nc) genpkgs() {
 }
 
 func (this *g2nc) genpkg(name string, pkg *ast.Package) {
-	log.Println(name)
+	log.Println("processing package", name)
 	for name, f := range pkg.Files {
 		this.genfile(pkg.Scope, name, f)
 	}
 }
 func (this *g2nc) genfile(scope *ast.Scope, name string, f *ast.File) {
-	log.Println(name)
+	log.Println("processing file", name)
 
 	// decls order?
 	for _, d := range f.Decls {
@@ -555,9 +555,8 @@ func (this *g2nc) genExpr(scope *ast.Scope, e ast.Expr) {
 		this.genExpr(scope, te.X)
 	case *ast.CompositeLit:
 		log.Println("todo", te.Type, te.Elts)
-		this.out("0").outfh().outnl()
+		this.outf("cxhashtable_new()").outfh().outnl()
 		var vo = scope.Lookup("varname")
-		this.outf("if(cxhashtable_new(&%v) != CC_OK) {assert(1==2);}", vo.Data).outnl()
 		for idx, ex := range te.Elts {
 			switch be := ex.(type) {
 			case *ast.KeyValueExpr:

@@ -5,13 +5,16 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <assert.h>
+#include <string.h>
 #include <pthread.h>
 #include <unistd.h>
 #include <stdint.h>
-#include <gc.h> // must put after <pthread.h>
-#include <cord.h>
+#include <stdbool.h>
 
-typedef uint8_t bool;
+#include <gc.h> // must put after <pthread.h>
+
+// golang type map
+// typedef uint8_t bool;
 typedef uint8_t byte;
 typedef uint8_t uint8;
 typedef int8_t int8;
@@ -25,11 +28,7 @@ typedef float float32;
 typedef double float64;
 typedef uintptr_t uintptr;
 
-/* typedef struct { */
-/*     char* data; */
-/*     int len; */
-/* } string; */
-
+// utils
 void println(const char* fmt, ...);
 
 // TODO
@@ -44,9 +43,25 @@ extern void* cxrt_chan_recv(void*arg);
 #include <sys/types.h>
 extern pid_t gettid();
 
+// cxmemory
+void* cxmalloc(int size);
+void* cxrealloc(void*ptr, int size);
+void cxfree(void* ptr);
+
 #include <collectc/hashtable.h>
 #include <collectc/array.h>
+HashTable* cxhashtable_new();
 
-#include "cxpriv.h"
+// cxstring begin
+typedef struct cxstring { char* ptr; int len; } cxstring;
+// typedef struct cxstring string;
+cxstring* cxstring_new_cstr(char* s);
+cxstring* cxstring_new_cstr2(char* s, int len);
+// cxstring end
+
+// cxhashtable begin
+size_t cxhashtable_hash_str(const char *key);
+size_t cxhashtable_hash_str2(const char *key, int len);
+// cxhashtable end
 
 #endif

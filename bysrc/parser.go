@@ -61,7 +61,7 @@ func (this *ParserContext) Init() error {
 	this.conf.DisableUnusedImportCheck = true
 	this.conf.Error = func(err error) { log.Println(err) }
 	this.typkgs, err = this.conf.Check(this.path, this.fset, files, &this.info)
-	log.Println("types:", len(this.info.Types),
+	log.Println("pkgs", this.typkgs.Name(), "types:", len(this.info.Types),
 		"typedefs", len(this.typeDeclsm), "funcdefs", len(this.funcDeclsm))
 
 	nodes := this.gb.TopologicalSort()

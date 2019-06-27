@@ -1,5 +1,5 @@
 
-#include "cxpriv.h"
+#include "cxrtbase.h"
 
 void* cxmalloc(int size) {
     return calloc(1, size);

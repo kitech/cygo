@@ -5,6 +5,7 @@ import (
 	"io/ioutil"
 	"log"
 	"os"
+	"time"
 )
 
 var fname string
@@ -18,6 +19,11 @@ func main() {
 	psctx := NewParserContext(fname)
 	err := psctx.Init()
 	gopp.ErrPrint(err)
+	if err != nil {
+		println()
+		println()
+		time.Sleep(5 * time.Second)
+	}
 
 	// g2n := g2nim{}
 	g2n := g2nc{}
