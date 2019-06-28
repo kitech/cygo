@@ -149,7 +149,7 @@ func (c *g2nc) genAssignStmt(scope *ast.Scope, s *ast.AssignStmt) {
 				chexpr = e.X
 			}
 		default:
-			log.Println("unknown", reflect.TypeOf(e))
+			// log.Println("unknown", reflect.TypeOf(e))
 		}
 		_, isidxas := s.Lhs[i].(*ast.IndexExpr)
 
@@ -387,6 +387,15 @@ func (c *g2nc) genCallExprLen(scope *ast.Scope, te *ast.CallExpr) {
 		c.outf("hashtable_size(%s)", arg0.(*ast.Ident).Name)
 	} else if isstrty(argty.String()) {
 		c.outf("cxstring_len(%s)", arg0.(*ast.Ident).Name)
+	} else if isslicety(argty.String()) {
+		funame := te.Fun.(*ast.Ident).Name
+		if funame == "len" {
+			c.outf("array_size(%s)", arg0.(*ast.Ident).Name)
+		} else if funame == "cap" {
+			c.outf("array_capacity(%s)", arg0.(*ast.Ident).Name)
+		} else {
+			panic(funame)
+		}
 	} else {
 		log.Println("todo", te.Args, argty)
 	}
@@ -544,7 +553,8 @@ func (this *g2nc) genExpr(scope *ast.Scope, e ast.Expr) {
 	switch te := e.(type) {
 	case *ast.Ident:
 		// log.Println(te.Name, te.String(), te.IsExported(), te.Obj)
-		this.out(te.Name, " ")
+		idname := gopp.IfElseStr(te.Name == "nil", "nilptr", te.Name)
+		this.out(idname, " ")
 	case *ast.ArrayType:
 		log.Println("unimplemented", te, reflect.TypeOf(e))
 	case *ast.StructType:
@@ -569,16 +579,26 @@ func (this *g2nc) genExpr(scope *ast.Scope, e ast.Expr) {
 		this.outf("%v", te.Op.String())
 		this.genExpr(scope, te.X)
 	case *ast.CompositeLit:
-		log.Println("todo", te.Type, te.Elts)
-		this.outf("cxhashtable_new()").outfh().outnl()
-		var vo = scope.Lookup("varname")
-		for idx, ex := range te.Elts {
-			switch be := ex.(type) {
-			case *ast.KeyValueExpr:
-				this.genCxmapAddkv(scope, vo.Data, be.Key, be.Value)
-			default:
-				log.Println("unknown", idx, reflect.TypeOf(ex))
+		switch be := te.Type.(type) {
+		case *ast.MapType:
+			this.outf("cxhashtable_new()").outfh().outnl()
+			var vo = scope.Lookup("varname")
+			for idx, ex := range te.Elts {
+				switch be := ex.(type) {
+				case *ast.KeyValueExpr:
+					this.genCxmapAddkv(scope, vo.Data, be.Key, be.Value)
+				default:
+					log.Println("unknown", idx, reflect.TypeOf(ex))
+				}
 			}
+		case *ast.ArrayType:
+			this.outf("cxarray_new()").outfh().outnl()
+			var vo = scope.Lookup("varname")
+			for idx, ex := range te.Elts {
+				this.genCxarrAdd(scope, vo.Data, ex, idx)
+			}
+		default:
+			log.Println("todo", te.Type, reflect.TypeOf(te.Type))
 		}
 
 	case *ast.CallExpr:
@@ -628,9 +648,16 @@ func (this *g2nc) genExpr(scope *ast.Scope, e ast.Expr) {
 		this.out("void*")
 	case *ast.IndexExpr:
 		varty := this.info.TypeOf(te.X)
+		vo := scope.Lookup("varval")
 		if ismapty(varty.String()) {
-			vo := scope.Lookup("varval")
 			this.genCxmapAddkv(scope, te.X, te.Index, vo.Data.(ast.Expr))
+		} else if isslicety(varty.String()) {
+			// get or set?
+			if vo == nil { // right value
+				this.genCxarrGet(scope, te.X, te.Index)
+			} else { // left value
+				this.genCxarrSet(scope, te.X, te.Index, vo.Data)
+			}
 		} else {
 			log.Println("todo", te.X, te.Index)
 			log.Println("todo", reflect.TypeOf(te.X))
@@ -649,6 +676,17 @@ func (this *g2nc) genExpr(scope *ast.Scope, e ast.Expr) {
 
 			if highe == nil {
 				this.outf("(%v)->len", te.X)
+			} else {
+				this.genExpr(scope, te.High)
+			}
+			this.out(")")
+		} else if isslicety2(varty) {
+			this.outf("cxarray_slice(%v, ", te.X)
+			this.genExpr(scope, lowe)
+			this.out(",")
+
+			if highe == nil {
+				this.outf("array_size(%v)", te.X)
 			} else {
 				this.genExpr(scope, te.High)
 			}
@@ -693,6 +731,50 @@ func (c *g2nc) genCxmapAddkv(scope *ast.Scope, vnamex interface{}, ke, ve ast.Ex
 	c.outf("hashtable_add(%v, (void*)(uintptr_t)%v, (void*)(uintptr_t)%s)",
 		vnamex, keystr, valstr).outfh().outnl()
 }
+func (c *g2nc) genCxarrAdd(scope *ast.Scope, vnamex interface{}, ve ast.Expr, idx int) {
+	// log.Println(vnamex, ve, idx)
+	valstr := ""
+	switch be := ve.(type) {
+	case *ast.BasicLit:
+		valstr = be.Value
+	default:
+		log.Println("unknown", ve, reflect.TypeOf(ve))
+	}
+	c.outf("array_add(%v, (void*)(uintptr_t)%v)", vnamex, valstr).outfh().outnl()
+}
+func (c *g2nc) genCxarrSet(scope *ast.Scope, vname ast.Expr, vidx ast.Expr, elem interface{}) {
+	idxstr := ""
+	valstr := ""
+
+	switch te := vidx.(type) {
+	case *ast.BasicLit:
+		idxstr = te.Value
+	default:
+		log.Println("todo", vidx, reflect.TypeOf(vidx))
+	}
+
+	switch te := elem.(type) {
+	case *ast.BasicLit:
+		valstr = te.Value
+	default:
+		log.Println("todo", elem, reflect.TypeOf(elem))
+	}
+
+	c.outf("array_replace_at(%v, (void*)(uintptr_t)%v, %v, 0)",
+		vname, valstr, idxstr).outfh().outnl()
+}
+func (c *g2nc) genCxarrGet(scope *ast.Scope, vname ast.Expr, vidx ast.Expr) {
+	idxstr := ""
+
+	switch te := vidx.(type) {
+	case *ast.BasicLit:
+		idxstr = te.Value
+	default:
+		log.Println("todo", vidx, reflect.TypeOf(vidx))
+	}
+
+	c.outf("cxarray_get_at(%v, %v)", vname, idxstr)
+}
 func (this *g2nc) exprTypeName(scope *ast.Scope, e ast.Expr) string {
 	switch te := e.(type) {
 	case *ast.Ident:
@@ -712,7 +794,7 @@ func (this *g2nc) exprTypeName(scope *ast.Scope, e ast.Expr) string {
 		}
 		return te.Name
 	case *ast.ArrayType:
-		log.Println("todo")
+		return "Array*"
 	case *ast.StructType:
 		log.Println("todo")
 	case *ast.UnaryExpr:
@@ -750,9 +832,14 @@ func (this *g2nc) exprTypeName(scope *ast.Scope, e ast.Expr) string {
 		varty := this.info.TypeOf(te.X)
 		if isstrty2(varty) {
 			return "cxstring*"
+		} else if isslicety2(varty) {
+			return "Array*"
 		} else {
 			log.Println("toto", varty)
 		}
+	case *ast.IndexExpr:
+		varty := this.info.TypeOf(e)
+		return strings.ToLower(varty.String())
 	case *ast.BinaryExpr:
 		if te.Op.IsOperator() {
 			switch te.Op {
@@ -811,8 +898,10 @@ func (this *g2nc) exprTypeFmt(scope *ast.Scope, e ast.Expr) string {
 	case *types.Map:
 		// log.Println(t.String(), t.Key(), t.Elem())
 		return "p"
+	case *types.Slice:
+		return "p"
 	default:
-		log.Println("unknown", t)
+		log.Println("unknown", t, reflect.TypeOf(ety))
 	}
 	return ""
 }

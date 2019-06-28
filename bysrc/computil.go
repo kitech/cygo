@@ -16,10 +16,12 @@ type compContext struct {
 	rty types.Type
 }
 
-func ismapty(tystr string) bool    { return strings.HasPrefix(tystr, "map[") }
-func ismapty2(typ types.Type) bool { return ismapty(typ.String()) }
-func isstrty(tystr string) bool    { return tystr == "string" }
-func isstrty2(typ types.Type) bool { return isstrty(typ.String()) }
+func ismapty(tystr string) bool      { return strings.HasPrefix(tystr, "map[") }
+func ismapty2(typ types.Type) bool   { return ismapty(typ.String()) }
+func isstrty(tystr string) bool      { return tystr == "string" }
+func isstrty2(typ types.Type) bool   { return isstrty(typ.String()) }
+func isslicety(tystr string) bool    { return strings.HasPrefix(tystr, "[]") }
+func isslicety2(typ types.Type) bool { return isslicety(typ.String()) }
 
 func newLitInt(v int) *ast.BasicLit {
 	return &ast.BasicLit{Kind: token.INT, Value: fmt.Sprintf("%d", v)}

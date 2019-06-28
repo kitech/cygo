@@ -21,12 +21,15 @@ typedef int8_t int8;
 typedef uint16_t uint16;
 typedef int16_t int16;
 typedef uint32_t uint32;
+typedef uint32_t rune;
 typedef int32_t int32;
 typedef uint64_t uint64;
 typedef int64_t int64;
 typedef float float32;
 typedef double float64;
 typedef uintptr_t uintptr;
+
+#define nilptr NULL
 
 // utils
 void println(const char* fmt, ...);
@@ -50,7 +53,6 @@ void cxfree(void* ptr);
 
 #include <collectc/hashtable.h>
 #include <collectc/array.h>
-HashTable* cxhashtable_new();
 
 // cxstring begin
 typedef struct cxstring { char* ptr; int len; } cxstring;
@@ -65,8 +67,14 @@ bool cxstring_ne(cxstring* s0, cxstring* s1);
 // cxstring end
 
 // cxhashtable begin
+HashTable* cxhashtable_new();
 size_t cxhashtable_hash_str(const char *key);
 size_t cxhashtable_hash_str2(const char *key, int len);
 // cxhashtable end
+
+// cxarray begin
+Array* cxarray_new();
+Array* cxarray_slice(Array* a0, int start, int end);
+void* cxarray_get_at(Array* a0, int idx);
 
 #endif

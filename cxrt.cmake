@@ -5,7 +5,8 @@ set(mydir ${CMAKE_CURRENT_LIST_DIR})
 include_directories(${mydir}/src ${mydir}/include ${mydir}/bdwgc/include)
 
 add_library(cxrt STATIC  ${mydir}/src/cxrtbase.c
-  ${mydir}/src/cxmemory.c ${mydir}/src/cxstring.c ${mydir}/src/cxhashtable.c)
+  ${mydir}/src/cxmemory.c ${mydir}/src/cxstring.c
+  ${mydir}/src/cxhashtable.c ${mydir}/src/cxarray.c)
 
 include_directories(${mydir}/corona-c ${mydir}/cltc/include)
 set(corona_c_srcs
