@@ -45,6 +45,8 @@ func (this *g2nim) genfile(scope *ast.Scope, name string, f *ast.File) {
 		case *ast.FuncDecl:
 		default:
 			this.genDecl(scope, d)
+			if r == nil {
+			}
 		}
 	}
 

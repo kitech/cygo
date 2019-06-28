@@ -2,11 +2,15 @@ package main
 
 import (
 	"go/ast"
+	"go/importer"
 	"go/parser"
 	"go/token"
 	"go/types"
 	"gopp"
 	"log"
+	"os"
+	"reflect"
+	"strings"
 
 	"golang.org/x/tools/go/ast/astutil"
 
@@ -49,9 +53,40 @@ func NewParserContext(path string) *ParserContext {
 	return this
 }
 
+func nameFilter(filename string) bool {
+	ossfxs := []string{"plan9", "solaris", "aix", "bsd", "freebsd", "openbsd",
+		"netbsd", "dragonfly", "darwin", "ios", "windows", "nacljs", "nacl", "js"}
+	for _, sfx := range ossfxs {
+		if strings.HasSuffix(filename, "_"+sfx+".go") {
+			return false
+		}
+		if strings.HasSuffix(filename, "_test.go") {
+			return false
+		}
+	}
+
+	return true // keep
+}
+
+func dirFilter(f os.FileInfo) bool { return nameFilter(f.Name()) }
+
+type mypkgimporter struct{}
+
+func (this *mypkgimporter) Import(path string) (pkgo *types.Package, err error) {
+	if true {
+		// go 1.12
+		fset := token.NewFileSet()
+		pkgo, err = importer.ForCompiler(fset, "source", nil).Import(path)
+	} else {
+		pkgo, err = importer.Default().Import(path)
+	}
+	gopp.ErrPrint(err, path)
+	return pkgo, err
+}
+
 func (this *ParserContext) Init() error {
 	this.fset = token.NewFileSet()
-	pkgs, err := parser.ParseDir(this.fset, this.path, nil, 0|parser.AllErrors)
+	pkgs, err := parser.ParseDir(this.fset, this.path, dirFilter, 0|parser.AllErrors)
 	gopp.ErrPrint(err)
 	this.pkgs = pkgs
 
@@ -60,6 +95,9 @@ func (this *ParserContext) Init() error {
 
 	this.conf.DisableUnusedImportCheck = true
 	this.conf.Error = func(err error) { log.Println(err) }
+	this.conf.FakeImportC = true
+	this.conf.Importer = &mypkgimporter{}
+
 	this.typkgs, err = this.conf.Check(this.path, this.fset, files, &this.info)
 	log.Println("pkgs", this.typkgs.Name(), "types:", len(this.info.Types),
 		"typedefs", len(this.typeDeclsm), "funcdefs", len(this.funcDeclsm))
@@ -95,10 +133,13 @@ func (pc *ParserContext) walkpass0() {
 	var files []*ast.File
 	for _, pkg := range pkgs {
 		for _, file := range pkg.Files {
+			if strings.HasSuffix(file.Name.Name, "_test") {
+				continue
+			}
 			files = append(files, file)
 		}
 
-		var curfds []string // stack
+		var curfds []string // stack, current func decls
 		astutil.Apply(pkg, func(c *astutil.Cursor) bool {
 			tc := *c
 			this.cursors[c.Node()] = &tc
@@ -110,14 +151,27 @@ func (pc *ParserContext) walkpass0() {
 				this.funcDeclsm[t.Name.Name] = t
 				curfds = append(curfds, t.Name.Name)
 			case *ast.CallExpr:
-				var curfd = curfds[len(curfds)-1]
-				this.putFuncCallDependcy(curfd, t.Fun.(*ast.Ident).Name)
+				if len(curfds) == 0 { // global scope call
+					log.Println("wtf", t, t.Fun, reflect.TypeOf(t.Fun))
+					// break
+				} else {
+					var curfd = curfds[len(curfds)-1]
+					switch be := t.Fun.(type) {
+					case *ast.Ident:
+						this.putFuncCallDependcy(curfd, be.Name)
+					default:
+						log.Println(t.Fun, reflect.TypeOf(t.Fun))
+					}
+				}
 			}
 			return true
 		}, func(c *astutil.Cursor) bool {
 			switch t := c.Node().(type) {
 			case *ast.FuncDecl:
 				curfds = curfds[:len(curfds)-1]
+			default:
+				if t == nil {
+				}
 			}
 			return true
 		})

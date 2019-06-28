@@ -20,6 +20,10 @@ type g2nc struct {
 	info *types.Info
 }
 
+func (c *g2nc) exprpos(e ast.Expr) token.Position {
+	return c.psctx.fset.Position(e.Pos())
+}
+
 func (this *g2nc) genpkgs() {
 	this.info = &this.psctx.info
 
@@ -293,7 +297,8 @@ func (c *g2nc) genRangeStmt(scope *ast.Scope, s *ast.RangeStmt) {
 		c.genBlockStmt(scope, s.Body)
 		c.out("  }").outnl()
 		c.out("}").outnl()
-
+		if be == nil {
+		}
 	// TODO Array/String
 	default:
 		if isstrty2(varty) {
@@ -346,6 +351,9 @@ func (c *g2nc) genIfStmt(scope *ast.Scope, s *ast.IfStmt) {
 }
 func (c *g2nc) genSwitchStmt(scope *ast.Scope, s *ast.SwitchStmt) {
 	tagty := c.info.TypeOf(s.Tag)
+	if tagty == nil {
+		log.Println(tagty, c.exprpos(s.Tag))
+	}
 	log.Println(tagty, reflect.TypeOf(tagty), reflect.TypeOf(tagty.Underlying()))
 	switch tty := tagty.(type) {
 	case *types.Basic:
@@ -393,20 +401,25 @@ func (c *g2nc) genCaseClause(scope *ast.Scope, s *ast.CaseClause) {
 }
 
 func (c *g2nc) genCallExpr(scope *ast.Scope, te *ast.CallExpr) {
-	funame := te.Fun.(*ast.Ident).Name
-	if funame == "make" {
-		c.genCallExprMake(scope, te)
-	} else if funame == "len" {
-		c.genCallExprLen(scope, te)
-	} else if funame == "cap" {
-		c.genCallExprLen(scope, te)
-		// panic("not supported " + funame)
-	} else if funame == "delete" {
-		c.genCallExprDelete(scope, te)
-	} else if funame == "println" {
-		c.genCallExprPrintln(scope, te)
-	} else {
-		c.genCallExprNorm(scope, te)
+	switch be := te.Fun.(type) {
+	case *ast.Ident:
+		funame := be.Name
+		if funame == "make" {
+			c.genCallExprMake(scope, te)
+		} else if funame == "len" {
+			c.genCallExprLen(scope, te)
+		} else if funame == "cap" {
+			c.genCallExprLen(scope, te)
+			// panic("not supported " + funame)
+		} else if funame == "delete" {
+			c.genCallExprDelete(scope, te)
+		} else if funame == "println" {
+			c.genCallExprPrintln(scope, te)
+		} else {
+			c.genCallExprNorm(scope, te)
+		}
+	default:
+		log.Println("todo", be, reflect.TypeOf(be))
 	}
 }
 func (c *g2nc) genCallExprMake(scope *ast.Scope, te *ast.CallExpr) {
@@ -677,6 +690,8 @@ func (this *g2nc) genTypeExpr(scope *ast.Scope, e ast.Expr) {
 			idname := gopp.IfElseStr(te.Name == "nil", "nilptr", te.Name)
 			idname = gopp.IfElseStr(te.Name == "string", "cxstring*", te.Name)
 			this.out(idname, " ")
+			if be == nil {
+			}
 		default:
 			this.out(te.Name)
 		}
@@ -702,7 +717,7 @@ func (this *g2nc) genExpr(scope *ast.Scope, e ast.Expr) {
 		idname = gopp.IfElseStr(idname == "string", "cxstring*", idname)
 		this.out(idname, " ")
 	case *ast.ArrayType:
-		log.Println("unimplemented", te, reflect.TypeOf(e))
+		log.Println("unimplemented", te, reflect.TypeOf(e), e.Pos())
 	case *ast.StructType:
 		this.genFieldList(scope, te.Fields, false, true, ";\n", false)
 	case *ast.UnaryExpr:
@@ -722,7 +737,7 @@ func (this *g2nc) genExpr(scope *ast.Scope, e ast.Expr) {
 		case *ast.UnaryExpr:
 			log.Println(t2, t2.X, t2.Op)
 		default:
-			log.Println(reflect.TypeOf(te), t2, reflect.TypeOf(te.X))
+			log.Println(reflect.TypeOf(te), t2, reflect.TypeOf(te.X), te.Pos())
 		}
 		if keepop {
 			this.outf("%v", te.Op.String())
@@ -747,6 +762,8 @@ func (this *g2nc) genExpr(scope *ast.Scope, e ast.Expr) {
 			for idx, ex := range te.Elts {
 				this.genCxarrAdd(scope, vo.Data, ex, idx)
 			}
+			if be == nil {
+			}
 		default:
 			log.Println("todo", te.Type, reflect.TypeOf(te.Type))
 		}
@@ -767,6 +784,8 @@ func (this *g2nc) genExpr(scope *ast.Scope, e ast.Expr) {
 			case types.String, types.UntypedString:
 				this.out(fmt.Sprintf("cxstring_new_cstr(%s)", te.Value))
 			case types.Float64, types.Float32:
+				this.out(te.Value)
+			case types.Uint8, types.Int8:
 				this.out(te.Value)
 			default:
 				log.Println("unknown", t.String())
@@ -1015,16 +1034,21 @@ func (this *g2nc) exprTypeName(scope *ast.Scope, e ast.Expr) string {
 		}
 		return tyname
 	case *ast.CallExpr:
-		switch te.Fun.(*ast.Ident).Name {
-		case "make":
-			return this.exprTypeName(scope, te.Args[0])
-		case "len", "cap":
-			return "int"
+		switch be := te.Fun.(type) {
+		case *ast.Ident:
+			switch te.Fun.(*ast.Ident).Name {
+			case "make":
+				return this.exprTypeName(scope, te.Args[0])
+			case "len", "cap":
+				return "int"
+			default:
+				rety := this.info.TypeOf(te.Fun)
+				// log.Println(rety, reflect.TypeOf(rety))
+				// log.Println(rety.Underlying(), reflect.TypeOf(rety.Underlying()))
+				return sign2rety(rety.String())
+			}
 		default:
-			rety := this.info.TypeOf(te.Fun)
-			// log.Println(rety, reflect.TypeOf(rety))
-			// log.Println(rety.Underlying(), reflect.TypeOf(rety.Underlying()))
-			return sign2rety(rety.String())
+			log.Println("todo", be, reflect.TypeOf(be))
 		}
 	case *ast.ChanType:
 		return "void*"
@@ -1118,6 +1142,8 @@ func (this *g2nc) genGenDecl(scope *ast.Scope, d *ast.GenDecl) {
 			this.genTypeSpec(scope, tspec)
 		case *ast.ValueSpec:
 			this.genValueSpec(scope, tspec)
+		case *ast.ImportSpec:
+			log.Println("todo", reflect.TypeOf(d), reflect.TypeOf(spec), tspec.Path)
 		default:
 			log.Println("unknown", reflect.TypeOf(d), reflect.TypeOf(spec))
 		}
@@ -1142,6 +1168,9 @@ func putscope(scope *ast.Scope, k ast.ObjKind, name string, value interface{}) *
 func (c *g2nc) genValueSpec(scope *ast.Scope, spec *ast.ValueSpec) {
 	for idx, name := range spec.Names {
 		if spec.Type == nil {
+			if len(spec.Names) != len(spec.Values) {
+				log.Println("todo", idx, len(spec.Names), len(spec.Values), spec.Names, spec.Values)
+			}
 			v := spec.Values[idx]
 			c.out(c.exprTypeName(scope, v))
 		} else {

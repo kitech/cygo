@@ -23,7 +23,7 @@ func main() {
 	if err != nil && !strings.Contains(err.Error(), "declared but not used") {
 		println()
 		println()
-		time.Sleep(3 * time.Second)
+		time.Sleep(2 * time.Second)
 	}
 
 	// g2n := g2nim{}
