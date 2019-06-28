@@ -118,6 +118,8 @@ func (this *g2nc) genStmt(scope *ast.Scope, stmt ast.Stmt, idx int) {
 		this.genGoStmt(scope, t)
 	case *ast.ForStmt:
 		this.genForStmt(scope, t)
+	case *ast.RangeStmt:
+		this.genRangeStmt(scope, t)
 	case *ast.IncDecStmt:
 		this.genIncDecStmt(scope, t)
 	case *ast.BranchStmt:
@@ -177,8 +179,9 @@ func (c *g2nc) genAssignStmt(scope *ast.Scope, s *ast.AssignStmt) {
 			}
 			c.genExpr(scope, s.Lhs[i])
 
+			var ns = putscope(scope, ast.Var, "varname", s.Lhs[i])
 			c.out(" = ")
-			c.genExpr(scope, s.Rhs[i])
+			c.genExpr(ns, s.Rhs[i])
 			c.outfh().outnl()
 		}
 	}
@@ -253,6 +256,63 @@ func (c *g2nc) genForStmt(scope *ast.Scope, s *ast.ForStmt) {
 	c.genStmt(scope, s.Post, 0)
 	c.out(")")
 	c.genBlockStmt(scope, s.Body)
+}
+func (c *g2nc) genRangeStmt(scope *ast.Scope, s *ast.RangeStmt) {
+	varty := c.info.TypeOf(s.X)
+	log.Println(varty, reflect.TypeOf(varty))
+	switch be := varty.(type) {
+	case *types.Map:
+		keytystr := c.exprTypeName(scope, s.Key)
+		valtystr := c.exprTypeName(scope, s.Value)
+
+		c.out("{").outnl()
+		c.out("  HashTableIter htiter").outfh().outnl()
+		c.out("  hashtable_iter_init(&htiter, ")
+		c.genExpr(scope, s.X)
+		c.out(")").outfh().outnl()
+		c.out("  TableEntry *entry").outfh().outnl()
+		c.out("  while (hashtable_iter_next(&htiter, &entry) != CC_ITER_END) {").outnl()
+		c.outf("    %s %v = entry->key", keytystr, s.Key).outfh().outnl()
+		c.outf("    %s %v = entry->value", valtystr, s.Value).outfh().outnl()
+		c.genBlockStmt(scope, s.Body)
+		c.out("  }").outnl()
+		c.out("}").outnl()
+	case *types.Slice:
+		keyidstr := fmt.Sprintf("%v", s.Key)
+		keyidstr = gopp.IfElseStr(keyidstr == "_", "idx", keyidstr)
+		valtystr := c.exprTypeName(scope, s.Value)
+
+		c.out("{").outnl()
+		c.outf("  for (int %s = 0; %s < array_size(%v); %s++) {",
+			keyidstr, keyidstr, s.X, keyidstr).outnl()
+		c.outf("     %s %v = {0}", valtystr, s.Value).outfh().outnl()
+		var tmpvar = tmpvarname()
+		c.outf("    void* %s = {0}", tmpvar).outfh().outnl()
+		c.outf("    int rv = array_get_at(%v, %s, (void**)&%s)", s.X, keyidstr, tmpvar).outfh().outnl()
+		c.outf("    %v = (%v)(uintptr_t)%s", s.Value, valtystr, tmpvar).outfh().outnl()
+		c.genBlockStmt(scope, s.Body)
+		c.out("  }").outnl()
+		c.out("}").outnl()
+
+	// TODO Array/String
+	default:
+		if isstrty2(varty) {
+			keyidstr := fmt.Sprintf("%v", s.Key)
+			keyidstr = gopp.IfElseStr(keyidstr == "_", "idx", keyidstr)
+			valtystr := c.exprTypeName(scope, s.Value)
+
+			c.out("{").outnl()
+			c.outf("  for (int %s = 0; %s < (%v)->len; %s++) {",
+				keyidstr, keyidstr, s.X, keyidstr).outnl()
+			c.outf("     %s %v = {0}", valtystr, s.Value).outfh().outnl()
+			c.outf("    %v = (%v->ptr)[%s]", s.Value, s.X, keyidstr).outfh().outnl()
+			c.genBlockStmt(scope, s.Body)
+			c.out("  }").outnl()
+			c.out("}").outnl()
+		} else {
+			log.Println("todo", s.Key, s.Value, s.X, varty)
+		}
+	}
 }
 func (c *g2nc) genIncDecStmt(scope *ast.Scope, s *ast.IncDecStmt) {
 	c.genExpr(scope, s.X)
@@ -440,6 +500,20 @@ func (c *g2nc) genCallExprDelete(scope *ast.Scope, te *ast.CallExpr) {
 	}
 }
 func (c *g2nc) genCallExprPrintln(scope *ast.Scope, te *ast.CallExpr) {
+	tmpnames := make([]string, len(te.Args))
+	for idx, e1 := range te.Args {
+		tety := c.info.TypeOf(e1)
+		if isstrty2(tety) {
+			switch tety.(type) {
+			case *types.Basic:
+				tname := tmpvarname()
+				c.outf("cxstring* %s = ", tname)
+				c.genExpr(scope, e1)
+				c.outfh().outnl()
+				tmpnames[idx] = tname
+			}
+		}
+	}
 	c.genExpr(scope, te.Fun)
 	c.out("(")
 	if len(te.Args) > 0 {
@@ -455,11 +529,13 @@ func (c *g2nc) genCallExprPrintln(scope *ast.Scope, te *ast.CallExpr) {
 		tety := c.info.TypeOf(e1)
 		if isstrty2(tety) {
 			c.out("(")
-			c.genExpr(scope, e1)
+			c.out(tmpnames[idx])
+			// c.genExpr(scope, e1)
 			c.out(")->len,")
 
 			c.out("(")
-			c.genExpr(scope, e1)
+			c.out(tmpnames[idx])
+			// c.genExpr(scope, e1)
 			c.out(")->ptr")
 		} else {
 			c.genExpr(scope, e1)
@@ -608,7 +684,9 @@ func (this *g2nc) genTypeExpr(scope *ast.Scope, e ast.Expr) {
 		this.genTypeExpr(scope, te.X)
 		this.out("*")
 	case *ast.MapType:
-		this.out("HashTable*")
+		this.outf("/*%v=>%v*/HashTable*", te.Key, te.Value)
+	case *ast.ArrayType:
+		this.outf("/*%v*/Array*", te.Elt)
 	default:
 		log.Println(e, reflect.TypeOf(e))
 	}
@@ -785,7 +863,8 @@ func (c *g2nc) genCxmapAddkv(scope *ast.Scope, vnamex interface{}, ke, ve ast.Ex
 	case *ast.BasicLit:
 		switch be.Kind {
 		case token.STRING:
-			keystr = fmt.Sprintf("cxhashtable_hash_str(%s)", be.Value)
+			// keystr = fmt.Sprintf("cxhashtable_hash_str(%s)", be.Value)
+			keystr = fmt.Sprintf("cxstring_new_cstr(%s)", be.Value)
 		default:
 			log.Println("unknown index key kind", be.Kind)
 		}
@@ -793,7 +872,8 @@ func (c *g2nc) genCxmapAddkv(scope *ast.Scope, vnamex interface{}, ke, ve ast.Ex
 		varty := c.info.TypeOf(ke)
 		switch varty.String() {
 		case "string":
-			keystr = fmt.Sprintf("cxhashtable_hash_str2(%s->ptr, %s->len)", be.Name, be.Name)
+			// keystr = fmt.Sprintf("cxhashtable_hash_str2(%s->ptr, %s->len)", be.Name, be.Name)
+			keystr = be.Name
 		default:
 			log.Println("unknown", varty, ke)
 		}
@@ -802,7 +882,8 @@ func (c *g2nc) genCxmapAddkv(scope *ast.Scope, vnamex interface{}, ke, ve ast.Ex
 		switch varty.String() {
 		case "string":
 			sym := fmt.Sprintf("%v->%v", be.X, be.Sel)
-			keystr = fmt.Sprintf("cxhashtable_hash_str2((%s)->ptr, (%s)->len)", sym, sym)
+			// keystr = fmt.Sprintf("cxhashtable_hash_str2((%s)->ptr, (%s)->len)", sym, sym)
+			keystr = sym
 		default:
 			log.Println("unknown", varty, ke)
 		}
@@ -837,7 +918,14 @@ func (c *g2nc) genCxarrAdd(scope *ast.Scope, vnamex interface{}, ve ast.Expr, id
 	valstr := ""
 	switch be := ve.(type) {
 	case *ast.BasicLit:
-		valstr = be.Value
+		switch be.Kind {
+		case token.STRING:
+			valstr = fmt.Sprintf("cxstring_new_cstr(%v)", be.Value)
+		case token.INT:
+			valstr = be.Value
+		default:
+			log.Println("todo", ve, idx, reflect.TypeOf(ve))
+		}
 	default:
 		log.Println("unknown", ve, reflect.TypeOf(ve))
 	}
@@ -887,11 +975,20 @@ func (this *g2nc) exprTypeName(scope *ast.Scope, e ast.Expr) string {
 			switch rety.Kind() {
 			case types.Bool:
 				return "bool"
+			case types.String:
+				return "cxstring*"
+			case types.Int:
+				return "int"
+			case types.Rune:
+				return "rune"
 			default:
 				log.Println("todo", rety)
 			}
 		case *types.Named:
 			return te.Name
+		case *types.Pointer:
+			ety := this.info.TypeOf(e)
+			return sign2rety(ety.String())
 		default:
 			log.Println("unknown", ety, rety, reflect.TypeOf(ety))
 		}
@@ -994,6 +1091,8 @@ func (this *g2nc) exprTypeFmt(scope *ast.Scope, e ast.Expr) string {
 		case types.String:
 			return ".*s"
 		case types.Bool:
+			return "d"
+		case types.Rune:
 			return "d"
 		case types.Invalid:
 			return "d" // TODO

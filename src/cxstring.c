@@ -22,12 +22,14 @@ void cxstring_free(cxstring* sobj) {
 int cxstring_len(cxstring* sobj) { return sobj->len; }
 int cxstring_at(cxstring* sobj, int idx) { return sobj->ptr[idx]; }
 
+// for null terminated string
 cxstring* cxstring_new_cstr(char* s) {
     cxstring* t = cxstring_new();
     t->ptr = strdup(s);
     t->len = strlen(s);
     return t;
 }
+// for non null terminated string
 cxstring* cxstring_new_cstr2(char* s, int len) {
     cxstring* t = cxstring_new();
     t->ptr = strndup(s, len);
@@ -35,9 +37,11 @@ cxstring* cxstring_new_cstr2(char* s, int len) {
     return t;
 }
 
+// for null terminated string
 char* cxstring_to_cstr(cxstring* sobj) {
     return (char*)strndup(sobj->ptr, sobj->len);
 }
+// for non null terminated string
 char* cxstring_to_cstr2(cxstring* sobj, int len) {
     return (char*)strndup(sobj->ptr, len);
 }

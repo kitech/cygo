@@ -45,3 +45,10 @@ func sign2rety(v string) string {
 	}
 	return gopp.IfElseStr(isptr, retstr+"*", retstr)
 }
+
+var tmpvarno = 12345
+
+func tmpvarname() string {
+	tmpvarno++
+	return fmt.Sprintf("gxtv%d", tmpvarno)
+}
