@@ -6,6 +6,8 @@ import (
 	"go/token"
 	"go/types"
 	"strings"
+
+	"gopp"
 )
 
 // compile line context
@@ -31,4 +33,15 @@ func newLitStr(v string) *ast.BasicLit {
 }
 func newLitFloat(v float32) *ast.BasicLit {
 	return &ast.BasicLit{Kind: token.FLOAT, Value: fmt.Sprintf("%f", v)}
+}
+
+func sign2rety(v string) string {
+	segs := strings.Split(v, " ")
+	retstr := segs[len(segs)-1]
+	isptr := retstr[0] == '*'
+	pos := strings.LastIndex(retstr, "/.")
+	if pos > 0 {
+		retstr = retstr[pos+2:]
+	}
+	return gopp.IfElseStr(isptr, retstr+"*", retstr)
 }

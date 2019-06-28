@@ -28,6 +28,7 @@ typedef int64_t int64;
 typedef float float32;
 typedef double float64;
 typedef uintptr_t uintptr;
+typedef void* error;
 
 #define nilptr NULL
 
