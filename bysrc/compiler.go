@@ -579,6 +579,9 @@ func (c *g2nc) genCallExprPrintln(scope *ast.Scope, te *ast.CallExpr) {
 			c.out(tmpnames[idx])
 			// c.genExpr(scope, e1)
 			c.out(")->ptr")
+		} else if iseface2(tety) {
+			c.genExpr(scope, e1)
+			c.out(".data")
 		} else {
 			c.genExpr(scope, e1)
 		}
@@ -755,12 +758,44 @@ func (this *g2nc) genTypeExpr(scope *ast.Scope, e ast.Expr) {
 		this.outf("/*%v=>%v*/HashTable*", te.Key, te.Value)
 	case *ast.ArrayType:
 		this.outf("/*%v*/Array*", te.Elt)
+	case *ast.InterfaceType:
+		if te.Methods != nil && te.Methods.NumFields() > 0 {
+			this.outf("cxiface")
+		} else {
+			this.outf("cxeface")
+		}
 	default:
 		log.Println(e, reflect.TypeOf(e))
 	}
 }
 
 func (this *g2nc) genExpr(scope *ast.Scope, e ast.Expr) {
+	varname := scope.Lookup("varname")
+	if varname != nil {
+		vartyp := this.info.TypeOf(varname.Data.(ast.Expr))
+		if iseface2(vartyp) {
+			_, iscallexpr := e.(*ast.CallExpr)
+			_, isidt := e.(*ast.Ident)
+			// _, lisidt := varname.Data.(ast.Expr).(*ast.Ident)
+			if !iscallexpr && !isidt {
+				// vartyp2 := reflect.TypeOf(varname.Data.(ast.Expr))
+				this.out("(cxeface){0}").outfh().outnl()
+
+				tmpvar := tmpvarname()
+				this.out(this.exprTypeName(scope, e), tmpvar, "=")
+				ns := putscope(scope, ast.Var, "varname", newIdent(tmpvar))
+				this.genExpr2(ns, e)
+				this.outfh().outnl()
+				this.genExpr2(scope, varname.Data.(ast.Expr))
+				this.outeq()
+				this.outf("cxeface_new_of2((void*)&%s, sizeof(%s))", tmpvar, tmpvar)
+				return
+			}
+		}
+	}
+	this.genExpr2(scope, e)
+}
+func (this *g2nc) genExpr2(scope *ast.Scope, e ast.Expr) {
 	// log.Println(reflect.TypeOf(e))
 	switch te := e.(type) {
 	case *ast.Ident:
@@ -928,6 +963,16 @@ func (this *g2nc) genExpr(scope *ast.Scope, e ast.Expr) {
 	case *ast.StarExpr:
 		this.genExpr(scope, te.X)
 		this.out("*")
+	case *ast.InterfaceType:
+		if te.Methods != nil && te.Methods.NumFields() > 0 {
+			this.out("cxiface")
+		} else {
+			this.out("cxeface")
+		}
+	case *ast.TypeAssertExpr:
+		this.outf("(%s)(*(void**)(", this.exprTypeName(scope, te.Type))
+		this.genExpr(scope, te.X)
+		this.out(".data))")
 	default:
 		log.Println("unknown", reflect.TypeOf(e), e, te)
 	}
@@ -1004,7 +1049,9 @@ func (c *g2nc) genCxarrAdd(scope *ast.Scope, vnamex interface{}, ve ast.Expr, id
 	default:
 		log.Println("unknown", ve, reflect.TypeOf(ve))
 	}
-	c.outf("array_add(%v, (void*)(uintptr_t)%v)", vnamex, valstr).outfh().outnl()
+
+	c.outf("array_add(%v, (void*)(uintptr_t)%v)",
+		vnamex.(*ast.Ident).Name, valstr).outfh().outnl()
 }
 func (c *g2nc) genCxarrSet(scope *ast.Scope, vname ast.Expr, vidx ast.Expr, elem interface{}) {
 	idxstr := ""
@@ -1070,6 +1117,11 @@ func (this *g2nc) exprTypeName(scope *ast.Scope, e ast.Expr) string {
 		case *types.Pointer:
 			ety := this.info.TypeOf(e)
 			return sign2rety(ety.String())
+		case *types.Interface:
+			return gopp.IfElseStr(rety.NumMethods() > 0, "cxiface", "cxeface")
+		case *types.Signature:
+			r0ty := rety.Results().At(0)
+			return typesty2str(r0ty.Type())
 		default:
 			log.Println("unknown", ety, rety, reflect.TypeOf(ety))
 		}
@@ -1144,6 +1196,8 @@ func (this *g2nc) exprTypeName(scope *ast.Scope, e ast.Expr) string {
 		}
 	case *ast.StarExpr:
 		return this.exprTypeName(scope, te.X) + "*"
+	case *ast.TypeAssertExpr:
+		return this.exprTypeName(scope, te.Type)
 	default:
 		log.Println("unknown", reflect.TypeOf(e), te, this.info.TypeOf(e))
 	}
@@ -1200,6 +1254,8 @@ func (this *g2nc) exprTypeFmt(scope *ast.Scope, e ast.Expr) string {
 		// log.Println(t.String(), t.Key(), t.Elem())
 		return "p"
 	case *types.Slice:
+		return "p"
+	case *types.Interface:
 		return "p"
 	default:
 		log.Println("unknown", t, reflect.TypeOf(ety))

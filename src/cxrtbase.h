@@ -35,6 +35,22 @@ typedef void* error;
 
 #define nilptr NULL
 
+typedef struct _type {
+    void* reserver;
+} _type;
+typedef struct cxeface {
+    _type* _type; // _type
+    void* data;
+} cxeface;
+typedef struct itab {
+    void* reserver;
+} itab;
+typedef struct cxiface {
+    itab* itab; // itab
+    void* data;
+} cxiface;
+cxeface cxeface_new_of2(void* data, int sz);
+
 // utils
 void println(const char* fmt, ...);
 void println2(const char* filename, int lineno, const char* funcname, const char* fmt, ...);
@@ -57,7 +73,7 @@ void* cxrealloc(void*ptr, int size);
 void cxfree(void* ptr);
 char* cxstrdup(char* str);
 char* cxstrndup(char* str, int n);
-
+void* cxmemdup(void* ptr, int sz);
 
 #include <collectc/hashtable.h>
 #include <collectc/array.h>

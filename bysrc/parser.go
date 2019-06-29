@@ -78,7 +78,7 @@ func (this *ParserContext) Init() error {
 
 	this.conf.DisableUnusedImportCheck = true
 	this.conf.Error = func(err error) {
-		if !strings.Contains(err.Error(), "fd declared but not used") {
+		if !strings.Contains(err.Error(), "declared but not used") {
 			log.Println(err)
 		}
 	}

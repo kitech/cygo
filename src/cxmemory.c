@@ -25,3 +25,10 @@ char* cxstrndup(char* str, int n) {
     strncpy(ds, str, n);
     return ds;
 }
+
+void* cxmemdup(void* ptr, int sz) {
+    void* dp = cxmalloc(sz);
+    memcpy(dp, ptr, sz);
+    return dp;
+}
+

@@ -32,6 +32,8 @@ func isstrty2(typ types.Type) bool {
 }
 func isslicety(tystr string) bool    { return strings.HasPrefix(tystr, "[]") }
 func isslicety2(typ types.Type) bool { return isslicety(typ.String()) }
+func iseface(tystr string) bool      { return strings.HasPrefix(tystr, "interface{}") }
+func iseface2(typ types.Type) bool   { return iseface(typ.String()) }
 
 func newLitInt(v int) *ast.BasicLit {
 	return &ast.BasicLit{Kind: token.INT, Value: fmt.Sprintf("%d", v)}
@@ -42,12 +44,19 @@ func newLitStr(v string) *ast.BasicLit {
 func newLitFloat(v float32) *ast.BasicLit {
 	return &ast.BasicLit{Kind: token.FLOAT, Value: fmt.Sprintf("%f", v)}
 }
+func newIdent(v string) *ast.Ident {
+	idt := &ast.Ident{}
+	idt.Name = v
+	return idt
+}
 
 func typesty2str(typ types.Type) string {
 	ret := ""
 	switch aty := typ.(type) {
 	case *types.Basic:
 		ret = fmt.Sprintf("%v", typ)
+	case *types.Interface:
+		return gopp.IfElseStr(aty.NumMethods() > 0, "cxiface", "cxeface")
 	default:
 		gopp.G_USED(aty)
 		log.Println("todo", typ, reflect.TypeOf(typ))
@@ -71,6 +80,9 @@ func sign2rety(v string) string {
 	pos := strings.LastIndex(retstr, "/.")
 	if pos > 0 {
 		retstr = retstr[pos+2:]
+	}
+	if iseface(retstr) {
+		retstr = "cxeface"
 	}
 	return gopp.IfElseStr(isptr, retstr+"*", retstr)
 }
