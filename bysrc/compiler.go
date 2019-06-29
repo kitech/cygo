@@ -252,9 +252,13 @@ func (c *g2nc) genRoutineWcall(scope *ast.Scope, e *ast.CallExpr) {
 }
 
 func (c *g2nc) genForStmt(scope *ast.Scope, s *ast.ForStmt) {
+	isefor := s.Init == nil && s.Cond == nil && s.Post == nil // for {}
 	c.out("for (")
 	c.genStmt(scope, s.Init, 0)
 	// c.out(";") // TODO ast.AssignStmt has put ;
+	if isefor {
+		c.out(";")
+	}
 	c.genExpr(scope, s.Cond)
 	c.out(";")
 	c.genStmt(scope, s.Post, 0)
@@ -527,8 +531,10 @@ func (c *g2nc) genCallExprPrintln(scope *ast.Scope, te *ast.CallExpr) {
 			}
 		}
 	}
-	c.genExpr(scope, te.Fun)
+	// c.genExpr(scope, te.Fun)
+	c.out("println2")
 	c.out("(")
+	c.out("__FILE__, __LINE__, __FUNCTION__", gopp.IfElseStr(len(te.Args) > 0, ",", ""))
 	if len(te.Args) > 0 {
 		var tyfmts []string
 		for _, e1 := range te.Args {
@@ -785,7 +791,7 @@ func (this *g2nc) genExpr(scope *ast.Scope, e ast.Expr) {
 				this.out(fmt.Sprintf("cxstring_new_cstr(%s)", te.Value))
 			case types.Float64, types.Float32:
 				this.out(te.Value)
-			case types.Uint8, types.Int8:
+			case types.Uint8, types.Int8, types.Uint32, types.Int32:
 				this.out(te.Value)
 			default:
 				log.Println("unknown", t.String())
@@ -992,14 +998,20 @@ func (this *g2nc) exprTypeName(scope *ast.Scope, e ast.Expr) string {
 			return "void*"
 		case *types.Basic:
 			switch rety.Kind() {
-			case types.Bool:
+			case types.Bool, types.UntypedBool:
 				return "bool"
 			case types.String:
 				return "cxstring*"
 			case types.Int:
 				return "int"
+			case types.Uint:
+				return "uint"
 			case types.Rune:
 				return "rune"
+			case types.Int8:
+				return "int8"
+			case types.Uint8:
+				return "uint8"
 			default:
 				log.Println("todo", rety)
 			}

@@ -4,10 +4,14 @@
 
 #include "cxrtbase.h"
 
-static void cxrt_init_gc_env() { GC_INIT(); }
+extern void GC_allow_register_threads();
+static void cxrt_init_gc_env() {
+    GC_set_free_space_divisor(50); // default 3
+    GC_INIT();
+    GC_allow_register_threads();
+}
 
 extern void cxrt_init_routine_env();
-
 void cxrt_init_routine_env() {
     // assert(1==2);
 }
@@ -18,6 +22,22 @@ void cxrt_init_env() {
 }
 
 void println(const char* fmt, ...) {
+    va_list arg;
+    int done;
+
+    va_start (arg, fmt);
+    done = vprintf (fmt, arg);
+    va_end (arg);
+
+    printf("\n");
+}
+void println2(const char* filename, int lineno, const char* funcname, const char* fmt, ...) {
+    const char* fbname = strrchr(filename, '/');
+    if (fbname != nilptr) { fbname = fbname + 1; }
+    else { fbname = filename; }
+
+    printf("%s:%d:%s ", fbname, lineno, funcname);
+
     va_list arg;
     int done;
 

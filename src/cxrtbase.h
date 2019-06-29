@@ -28,12 +28,14 @@ typedef int64_t int64;
 typedef float float32;
 typedef double float64;
 typedef uintptr_t uintptr;
+typedef unsigned int uint;
 typedef void* error;
 
 #define nilptr NULL
 
 // utils
 void println(const char* fmt, ...);
+void println2(const char* filename, int lineno, const char* funcname, const char* fmt, ...);
 
 // TODO
 #define gogorun
@@ -51,6 +53,9 @@ extern pid_t gettid();
 void* cxmalloc(int size);
 void* cxrealloc(void*ptr, int size);
 void cxfree(void* ptr);
+char* cxstrdup(char* str);
+char* cxstrndup(char* str, int n);
+
 
 #include <collectc/hashtable.h>
 #include <collectc/array.h>

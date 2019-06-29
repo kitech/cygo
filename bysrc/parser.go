@@ -2,6 +2,7 @@ package main
 
 import (
 	"go/ast"
+	"go/build"
 	"go/importer"
 	"go/parser"
 	"go/token"
@@ -34,7 +35,8 @@ type ParserContext struct {
 	funcDeclsv    []*ast.FuncDecl
 	funcdeclNodes map[string]graph.Node
 
-	gb *graph.Graph
+	gb     *graph.Graph
+	bdpkgs *build.Package
 }
 
 func NewParserContext(path string) *ParserContext {
@@ -53,22 +55,17 @@ func NewParserContext(path string) *ParserContext {
 	return this
 }
 
-func nameFilter(filename string) bool {
-	ossfxs := []string{"plan9", "solaris", "aix", "bsd", "freebsd", "openbsd",
-		"netbsd", "dragonfly", "darwin", "ios", "windows", "nacljs", "nacl", "js"}
-	for _, sfx := range ossfxs {
-		if strings.HasSuffix(filename, "_"+sfx+".go") {
-			return false
-		}
-		if strings.HasSuffix(filename, "_test.go") {
-			return false
+func (this *ParserContext) nameFilter(filename string) bool {
+	for _, okfile := range this.bdpkgs.GoFiles {
+		if filename == okfile {
+			return true // keep
 		}
 	}
-
-	return true // keep
+	return false
 }
-
-func dirFilter(f os.FileInfo) bool { return nameFilter(f.Name()) }
+func (this *ParserContext) dirFilter(f os.FileInfo) bool {
+	return this.nameFilter(f.Name())
+}
 
 type mypkgimporter struct{}
 
@@ -85,8 +82,12 @@ func (this *mypkgimporter) Import(path string) (pkgo *types.Package, err error) 
 }
 
 func (this *ParserContext) Init() error {
+	bdpkgs, err := build.ImportDir(this.path, 0)
+	gopp.ErrPrint(err)
+	this.bdpkgs = bdpkgs
+
 	this.fset = token.NewFileSet()
-	pkgs, err := parser.ParseDir(this.fset, this.path, dirFilter, 0|parser.AllErrors)
+	pkgs, err := parser.ParseDir(this.fset, this.path, this.dirFilter, 0|parser.AllErrors)
 	gopp.ErrPrint(err)
 	this.pkgs = pkgs
 

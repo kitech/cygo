@@ -25,25 +25,25 @@ int cxstring_at(cxstring* sobj, int idx) { return sobj->ptr[idx]; }
 // for null terminated string
 cxstring* cxstring_new_cstr(char* s) {
     cxstring* t = cxstring_new();
-    t->ptr = strdup(s);
+    t->ptr = cxstrdup(s);
     t->len = strlen(s);
     return t;
 }
 // for non null terminated string
 cxstring* cxstring_new_cstr2(char* s, int len) {
     cxstring* t = cxstring_new();
-    t->ptr = strndup(s, len);
+    t->ptr = cxstrndup(s, len);
     t->len = len;
     return t;
 }
 
 // for null terminated string
 char* cxstring_to_cstr(cxstring* sobj) {
-    return (char*)strndup(sobj->ptr, sobj->len);
+    return (char*)cxstrndup(sobj->ptr, sobj->len);
 }
 // for non null terminated string
 char* cxstring_to_cstr2(cxstring* sobj, int len) {
-    return (char*)strndup(sobj->ptr, len);
+    return (char*)cxstrndup(sobj->ptr, len);
 }
 
 cxstring* cxstring_add(cxstring* s0, cxstring* s1) {
@@ -71,7 +71,7 @@ cxstring* cxstring_double(double v) {
     cxstring* ns = cxstring_new();
     char buf[64] = {0};
     snprintf(buf, sizeof(buf)-1, "%f", v);
-    ns->ptr = strdup(buf);
+    ns->ptr = cxstrdup(buf);
     ns->len = strlen(ns->ptr);
     return ns;
 }
@@ -81,7 +81,7 @@ cxstring* cxstring_int64(int64_t v) {
     cxstring* ns = cxstring_new();
     char buf[64] = {0};
     snprintf(buf, sizeof(buf)-1, "%ld", v);
-    ns->ptr = strdup(buf);
+    ns->ptr = cxstrdup(buf);
     ns->len = strlen(ns->ptr);
     return ns;
 }
@@ -91,7 +91,7 @@ cxstring* cxstring_uint64(uint64_t v) {
     cxstring* ns = cxstring_new();
     char buf[64] = {0};
     snprintf(buf, sizeof(buf)-1, "%uld", v);
-    ns->ptr = strdup(buf);
+    ns->ptr = cxstrdup(buf);
     ns->len = strlen(ns->ptr);
     return ns;
 }
@@ -164,7 +164,7 @@ cxstring* cxstring_trim(cxstring* s, cxstring* cutset) {
         }
     }
     cxstring* ns = cxstring_new();
-    ns->ptr = strndup(s->ptr+bpos, epos - bpos);
+    ns->ptr = cxstrndup(s->ptr+bpos, epos - bpos);
     ns->len = epos - bpos;
     return ns;
 }
@@ -185,7 +185,7 @@ cxstring* cxstring_rtrim(cxstring* s, cxstring* cutset) {
         }
     }
     cxstring* ns = cxstring_new();
-    ns->ptr = strndup(s->ptr+bpos, epos - bpos);
+    ns->ptr = cxstrndup(s->ptr+bpos, epos - bpos);
     ns->len = epos - bpos;
     return ns;
 }
@@ -206,7 +206,7 @@ cxstring* cxstring_ltrim(cxstring* s, cxstring* cutset) {
         }
     }
     cxstring* ns = cxstring_new();
-    ns->ptr = strndup(s->ptr+bpos, epos - bpos);
+    ns->ptr = cxstrndup(s->ptr+bpos, epos - bpos);
     ns->len = epos - bpos;
     return ns;
 }
@@ -265,7 +265,7 @@ bool cxstring_ge(cxstring* s0, cxstring* s1) {
 
 cxstring* cxstring_dup(cxstring* s) {
     cxstring* ns = cxstring_new();
-    ns->ptr = strndup(s->ptr, s->len);
+    ns->ptr = cxstrndup(s->ptr, s->len);
     ns->len = s->len;
     return ns;
 }
@@ -276,14 +276,14 @@ cxstring* cxstring_title(cxstring* s) {
 }
 
 int cxstring_to_int(cxstring* s) {
-    char* t = strndup(s->ptr, s->len);
+    char* t = cxstrndup(s->ptr, s->len);
     int v = atoi(t);
     cxfree(t);
     return v;
 }
 
 float cxstring_to_float(cxstring* s) {
-    char* t = strndup(s->ptr, s->len);
+    char* t = cxstrndup(s->ptr, s->len);
     float v = atof(t);
     cxfree(t);
     return v;
