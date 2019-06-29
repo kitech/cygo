@@ -10,6 +10,7 @@ import (
 	"gopp"
 	"log"
 	"os"
+	"path/filepath"
 	"reflect"
 	"strings"
 
@@ -37,6 +38,7 @@ type ParserContext struct {
 
 	gb     *graph.Graph
 	bdpkgs *build.Package
+	ccode  string
 }
 
 func NewParserContext(path string) *ParserContext {
@@ -55,47 +57,31 @@ func NewParserContext(path string) *ParserContext {
 	return this
 }
 
-func (this *ParserContext) nameFilter(filename string) bool {
-	for _, okfile := range this.bdpkgs.GoFiles {
-		if filename == okfile {
-			return true // keep
-		}
-	}
-	return false
-}
-func (this *ParserContext) dirFilter(f os.FileInfo) bool {
-	return this.nameFilter(f.Name())
-}
-
-type mypkgimporter struct{}
-
-func (this *mypkgimporter) Import(path string) (pkgo *types.Package, err error) {
-	if true {
-		// go 1.12
-		fset := token.NewFileSet()
-		pkgo, err = importer.ForCompiler(fset, "source", nil).Import(path)
-	} else {
-		pkgo, err = importer.Default().Import(path)
-	}
-	gopp.ErrPrint(err, path)
-	return pkgo, err
-}
-
 func (this *ParserContext) Init() error {
-	bdpkgs, err := build.ImportDir(this.path, 0)
+	bdpkgs, err := build.ImportDir(this.path, build.ImportComment)
 	gopp.ErrPrint(err)
 	this.bdpkgs = bdpkgs
+	if len(bdpkgs.InvalidGoFiles) > 0 {
+		log.Fatalln("Have InvalidGoFiles", bdpkgs.InvalidGoFiles)
+	}
+	// TODO use go-clang to resolve c function signature
+	// TODO extract c code from bdpkgs.CgoFiles
 
 	this.fset = token.NewFileSet()
-	pkgs, err := parser.ParseDir(this.fset, this.path, this.dirFilter, 0|parser.AllErrors)
+	pkgs, err := parser.ParseDir(this.fset, this.path, this.dirFilter, 0|parser.AllErrors|parser.ParseComments)
 	gopp.ErrPrint(err)
 	this.pkgs = pkgs
 
+	this.ccode = this.pickCCode()
 	this.walkpass0()
 	files := this.files
 
 	this.conf.DisableUnusedImportCheck = true
-	this.conf.Error = func(err error) { log.Println(err) }
+	this.conf.Error = func(err error) {
+		if !strings.Contains(err.Error(), "fd declared but not used") {
+			log.Println(err)
+		}
+	}
 	this.conf.FakeImportC = true
 	this.conf.Importer = &mypkgimporter{}
 
@@ -125,6 +111,90 @@ func (this *ParserContext) Init() error {
 	}
 
 	return err
+}
+
+func (this *ParserContext) nameFilter2(filename string, files []string) bool {
+	for _, okfile := range files {
+		if filename == okfile {
+			return true // keep
+		}
+	}
+	return false
+}
+func (this *ParserContext) nameFilter(filename string) bool {
+	if this.nameFilter2(filename, this.bdpkgs.GoFiles) {
+		return true
+	}
+	if this.nameFilter2(filename, this.bdpkgs.CgoFiles) {
+		return true
+	}
+	return false
+}
+func (this *ParserContext) dirFilter(f os.FileInfo) bool {
+	return this.nameFilter(f.Name())
+}
+
+type mypkgimporter struct{}
+
+func (this *mypkgimporter) Import(path string) (pkgo *types.Package, err error) {
+	if true {
+		// go 1.12
+		fset := token.NewFileSet()
+		pkgo, err = importer.ForCompiler(fset, "source", nil).Import(path)
+	} else {
+		pkgo, err = importer.Default().Import(path)
+	}
+	gopp.ErrPrint(err, path)
+	return pkgo, err
+}
+
+func (p *ParserContext) exprpos(e ast.Node) token.Position {
+	return p.fset.Position(e.Pos())
+}
+
+func (this *ParserContext) pickCCode() string {
+	rawcode := this.pickCCode2()
+	lines := strings.Split(rawcode, "\n")
+	rawcode = ""
+	for _, line := range lines {
+		if !strings.HasPrefix(line, "#cgo ") {
+			rawcode += line + "\n"
+		}
+	}
+	// log.Println("got c code", rawcode)
+	return rawcode
+}
+func (this *ParserContext) pickCCode2() string {
+	ccode := ""
+	for _, f := range this.bdpkgs.CgoFiles {
+		var fo *ast.File = this.findFileobj(f)
+		ccode += this.pickCCode3(fo)
+	}
+	return ccode
+}
+func (this *ParserContext) pickCCode3(fo *ast.File) string {
+	for idx, cmto := range fo.Comments {
+		// isimpcblock(cmto)???
+		for idx2, impo := range fo.Imports {
+			gopp.G_USED(idx, idx2)
+			if impo.Pos()-token.Pos(len("\nimport ")) == cmto.End() {
+				// log.Println("got c code", cmto.Text())
+				return cmto.Text()
+			}
+		}
+	}
+	return ""
+}
+func (this *ParserContext) findFileobj(fbname string) *ast.File {
+	for _, pkgo := range this.pkgs {
+		for filename, fileo := range pkgo.Files {
+			name := filepath.Base(filename)
+			if name == fbname {
+				return fileo
+			}
+		}
+	}
+	return nil
 }
 
 func (pc *ParserContext) walkpass0() {

@@ -19,8 +19,8 @@ func main() {
 
 	psctx := NewParserContext(fname)
 	err := psctx.Init()
-	gopp.ErrPrint(err)
 	if err != nil && !strings.Contains(err.Error(), "declared but not used") {
+		gopp.ErrPrint(err)
 		println()
 		println()
 		time.Sleep(2 * time.Second)

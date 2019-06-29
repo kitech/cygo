@@ -20,7 +20,7 @@ type g2nc struct {
 	info *types.Info
 }
 
-func (c *g2nc) exprpos(e ast.Expr) token.Position {
+func (c *g2nc) exprpos(e ast.Node) token.Position {
 	return c.psctx.fset.Position(e.Pos())
 }
 
@@ -41,7 +41,12 @@ func (this *g2nc) genpkg(name string, pkg *ast.Package) {
 	}
 }
 func (this *g2nc) genfile(scope *ast.Scope, name string, f *ast.File) {
-	log.Println("processing file", name)
+	log.Println("processing", name)
+	/*
+		for idx, cmto := range f.Comments {
+			log.Println(idx, len(f.Comments), cmto.Text())
+		}
+	*/
 
 	// decls order?
 	for _, d := range f.Decls {
@@ -85,15 +90,31 @@ func (this *g2nc) genPreFuncDecl(scope *ast.Scope, d *ast.FuncDecl) {
 		this.genChanStargs(scope, stmt.Chan) // chan structure args
 	}
 }
-func (this *g2nc) genFuncDecl(scope *ast.Scope, d *ast.FuncDecl) {
-	this.genFieldList(scope, d.Type.Results, true, false, "", false)
-	this.out(d.Name.String())
+func (this *g2nc) genFuncDecl(scope *ast.Scope, fd *ast.FuncDecl) {
+	if fd.Body == nil {
+		log.Println("decl only func", fd.Name)
+		return
+	}
+	this.genFieldList(scope, fd.Type.Results, true, false, "", false)
+	if fd.Recv != nil {
+		recvtystr := this.exprTypeName(scope, fd.Recv.List[0].Type)
+		recvtystr = strings.TrimRight(recvtystr, "*")
+		this.out(recvtystr + "_" + fd.Name.String())
+	} else {
+		this.out(fd.Name.String())
+	}
 	this.out("(")
-	this.genFieldList(scope, d.Type.Params, false, true, ",", true)
+	if fd.Recv != nil {
+		this.genFieldList(scope, fd.Recv, false, true, ",", true)
+		if fd.Type.Params != nil && fd.Type.Params.NumFields() > 0 {
+			this.out(",")
+		}
+	}
+	this.genFieldList(scope, fd.Type.Params, false, true, ",", true)
 	this.out(")").outnl()
 	scope = ast.NewScope(scope)
-	scope.Insert(ast.NewObj(ast.Fun, d.Name.Name))
-	this.genBlockStmt(scope, d.Body)
+	scope.Insert(ast.NewObj(ast.Fun, fd.Name.Name))
+	this.genBlockStmt(scope, fd.Body)
 	this.outnl()
 }
 
@@ -241,7 +262,7 @@ func (c *g2nc) genRoutineWcall(scope *ast.Scope, e *ast.CallExpr) {
 
 	c.out("// gogorun", funame).outnl()
 	c.out("{")
-	c.out(stname, "*args = (", stname, "*)GC_malloc(sizeof(", stname, "))").outfh().outnl()
+	c.out(stname, "*args = (", stname, "*)cxmalloc(sizeof(", stname, "))").outfh().outnl()
 	for idx, arg := range e.Args {
 		c.out(fmt.Sprintf("args->a%d", idx), "=")
 		c.genExpr(scope, arg)
@@ -422,6 +443,8 @@ func (c *g2nc) genCallExpr(scope *ast.Scope, te *ast.CallExpr) {
 		} else {
 			c.genCallExprNorm(scope, te)
 		}
+	case *ast.SelectorExpr:
+		c.genCallExprNorm(scope, te)
 	default:
 		log.Println("todo", be, reflect.TypeOf(be))
 	}
@@ -571,8 +594,32 @@ func (c *g2nc) genCallExprPrintln(scope *ast.Scope, te *ast.CallExpr) {
 }
 func (c *g2nc) genCallExprNorm(scope *ast.Scope, te *ast.CallExpr) {
 	// funame := te.Fun.(*ast.Ident).Name
-	c.genExpr(scope, te.Fun)
+	selfn, isselfn := te.Fun.(*ast.SelectorExpr)
+	isidt := false
+	iscfn := false
+	if isselfn {
+		var selidt *ast.Ident
+		selidt, isidt = selfn.X.(*ast.Ident)
+		iscfn = isidt && selidt.Name == "C"
+	}
+
+	if isselfn {
+		if iscfn {
+			c.genExpr(scope, selfn.Sel)
+		} else {
+			vartystr := c.exprTypeName(scope, selfn.X)
+			vartystr = strings.TrimRight(vartystr, "*")
+			c.out(vartystr + "_" + selfn.Sel.Name)
+		}
+	} else {
+		c.genExpr(scope, te.Fun)
+	}
+
 	c.out("(")
+	if isselfn && !iscfn {
+		c.genExpr(scope, selfn.X)
+		c.out(gopp.IfElseStr(len(te.Args) > 0, ",", ""))
+	}
 	for idx, e1 := range te.Args {
 		c.genExpr(scope, e1)
 		c.out(gopp.IfElseStr(idx == len(te.Args)-1, "", ", "))
@@ -596,7 +643,7 @@ func (c *g2nc) genSendStmt(scope *ast.Scope, s *ast.SendStmt) {
 	var elemtyname = c.chanElemTypeName(s.Chan)
 	var chanargname = "chan_arg_" + elemtyname
 	c.out("{").outnl()
-	c.outf("%s* args = (%s*)GC_malloc(sizeof(%s))", chanargname, chanargname, chanargname).outfh().outnl()
+	c.outf("%s* args = (%s*)cxmalloc(sizeof(%s))", chanargname, chanargname, chanargname).outfh().outnl()
 	c.out("args->elem = ")
 	c.genExpr(scope, s.Value)
 	c.outfh().outnl()
@@ -738,7 +785,7 @@ func (this *g2nc) genExpr(scope *ast.Scope, e ast.Expr) {
 		keepop := true
 		switch t2 := te.X.(type) {
 		case *ast.CompositeLit:
-			this.out(fmt.Sprintf("(%v*)GC_malloc(sizeof(%v));", t2.Type, t2.Type)).outnl()
+			this.out(fmt.Sprintf("(%v*)cxmalloc(sizeof(%v));", t2.Type, t2.Type)).outnl()
 			keepop = false
 		case *ast.UnaryExpr:
 			log.Println(t2, t2.X, t2.Op)
@@ -872,8 +919,11 @@ func (this *g2nc) genExpr(scope *ast.Scope, e ast.Expr) {
 			log.Println("todo", varty, te)
 		}
 	case *ast.SelectorExpr:
-		this.genExpr(scope, te.X)
-		this.out("->")
+		if iscsel(te.X) {
+		} else {
+			this.genExpr(scope, te.X)
+			this.out("->")
+		}
 		this.genExpr(scope, te.Sel)
 	case *ast.StarExpr:
 		this.genExpr(scope, te.X)
@@ -1059,6 +1109,9 @@ func (this *g2nc) exprTypeName(scope *ast.Scope, e ast.Expr) string {
 				// log.Println(rety.Underlying(), reflect.TypeOf(rety.Underlying()))
 				return sign2rety(rety.String())
 			}
+		case *ast.SelectorExpr:
+			vartyp := this.info.TypeOf(te)
+			return typesty2str(vartyp)
 		default:
 			log.Println("todo", be, reflect.TypeOf(be))
 		}
@@ -1089,6 +1142,8 @@ func (this *g2nc) exprTypeName(scope *ast.Scope, e ast.Expr) string {
 		} else {
 			log.Println("todo", te)
 		}
+	case *ast.StarExpr:
+		return this.exprTypeName(scope, te.X) + "*"
 	default:
 		log.Println("unknown", reflect.TypeOf(e), te, this.info.TypeOf(e))
 	}
@@ -1099,18 +1154,24 @@ func (this *g2nc) exprTypeFmt(scope *ast.Scope, e ast.Expr) string {
 	ety := this.info.TypeOf(e)
 	// log.Println(reflect.TypeOf(e), ety)
 	if ety == nil {
-		switch t := e.(type) {
+		switch te := e.(type) {
 		case *ast.CallExpr:
 			// TODO builtin type preput to types.Info
-			switch t.Fun.(*ast.Ident).Name {
+			switch te.Fun.(*ast.Ident).Name {
 			case "gettid":
 				return "d"
 			default:
-				log.Println("unknown", t)
+				log.Println("unknown", te)
 			}
 		case *ast.Ident:
 			return "d"
+		case *ast.SelectorExpr:
+			if iscsel(te.X) {
+				return "d-cgo"
+			}
+			return fmt.Sprintf("%v", te)
 		default:
+			gopp.G_USED(te)
 			log.Println("unknown", e, reflect.TypeOf(e))
 		}
 		return ""
@@ -1143,7 +1204,7 @@ func (this *g2nc) exprTypeFmt(scope *ast.Scope, e ast.Expr) string {
 	default:
 		log.Println("unknown", t, reflect.TypeOf(ety))
 	}
-	return ""
+	return fmt.Sprintf("d-%v", e)
 }
 
 func (this *g2nc) genGenDecl(scope *ast.Scope, d *ast.GenDecl) {
@@ -1156,6 +1217,9 @@ func (this *g2nc) genGenDecl(scope *ast.Scope, d *ast.GenDecl) {
 			this.genValueSpec(scope, tspec)
 		case *ast.ImportSpec:
 			log.Println("todo", reflect.TypeOf(d), reflect.TypeOf(spec), tspec.Path)
+			this.outf("// import %v by %s", tspec.Path, this.exprpos(tspec)).outnl().outnl()
+			// log.Println(tspec.Comment)
+			// log.Println(tspec.Doc)
 		default:
 			log.Println("unknown", reflect.TypeOf(d), reflect.TypeOf(spec))
 		}
@@ -1219,7 +1283,8 @@ func (this *g2nc) outf(format string, args ...interface{}) *g2nc {
 }
 
 func (this *g2nc) code() (string, string) {
-	code := "#include <cxrtbase.h>\n\n"
+	code := this.psctx.ccode
+	code += "#include <cxrtbase.h>\n\n"
 	code += this.sb.String()
 	return code, "c"
 }

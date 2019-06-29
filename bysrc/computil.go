@@ -6,6 +6,7 @@ import (
 	"go/token"
 	"go/types"
 	"log"
+	"reflect"
 	"strings"
 
 	"gopp"
@@ -40,6 +41,27 @@ func newLitStr(v string) *ast.BasicLit {
 }
 func newLitFloat(v float32) *ast.BasicLit {
 	return &ast.BasicLit{Kind: token.FLOAT, Value: fmt.Sprintf("%f", v)}
+}
+
+func typesty2str(typ types.Type) string {
+	ret := ""
+	switch aty := typ.(type) {
+	case *types.Basic:
+		ret = fmt.Sprintf("%v", typ)
+	default:
+		gopp.G_USED(aty)
+		log.Println("todo", typ, reflect.TypeOf(typ))
+		ret = fmt.Sprintf("%v", typ)
+	}
+	return ret
+}
+
+func iscsel(e ast.Expr) bool {
+	idt, ok := e.(*ast.Ident)
+	if ok {
+		return idt.Name == "C"
+	}
+	return false
 }
 
 func sign2rety(v string) string {

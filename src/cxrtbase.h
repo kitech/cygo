@@ -10,6 +10,8 @@
 #include <unistd.h>
 #include <stdint.h>
 #include <stdbool.h>
+#include <errno.h>
+#include <sys/socket.h>
 
 #include <gc.h> // must put after <pthread.h>
 
