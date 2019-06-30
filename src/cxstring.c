@@ -295,3 +295,6 @@ char* CString(cxstring* s) {
 cxstring* GoString(char* s) {
     return cxstring_new_cstr(s);
 }
+cxstring* GoStringN(char* s, int n) {
+    return cxstring_new_cstr2(s, n);
+}

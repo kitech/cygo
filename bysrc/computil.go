@@ -34,6 +34,10 @@ func isslicety(tystr string) bool    { return strings.HasPrefix(tystr, "[]") }
 func isslicety2(typ types.Type) bool { return isslicety(typ.String()) }
 func iseface(tystr string) bool      { return strings.HasPrefix(tystr, "interface{}") }
 func iseface2(typ types.Type) bool   { return iseface(typ.String()) }
+func istypety(tystr string) bool     { return strings.HasPrefix(tystr, "type ") }
+func istypety2(typ types.Type) bool  { return iseface(typ.String()) }
+func isvarty(tystr string) bool      { return strings.HasPrefix(tystr, "var ") }
+func isvarty2(typ types.Type) bool   { return iseface(typ.String()) }
 
 func newLitInt(v int) *ast.BasicLit {
 	return &ast.BasicLit{Kind: token.INT, Value: fmt.Sprintf("%d", v)}

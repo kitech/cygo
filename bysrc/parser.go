@@ -225,37 +225,37 @@ func (pc *ParserContext) walkpass1() {
 		astutil.Apply(pkg, func(c *astutil.Cursor) bool {
 			tc := *c
 			this.cursors[c.Node()] = &tc
-			switch t := c.Node().(type) {
+			switch te := c.Node().(type) {
 			case *ast.TypeSpec:
 				// log.Println("typedef", t.Name.Name)
-				this.typeDeclsm[t.Name.Name] = t
+				this.typeDeclsm[te.Name.Name] = te
 			case *ast.FuncDecl:
-				if t.Recv != nil && t.Recv.NumFields() > 0 {
-					varty := t.Recv.List[0].Type
+				if te.Recv != nil && te.Recv.NumFields() > 0 {
+					varty := te.Recv.List[0].Type
 					varty2 := varty.(*ast.StarExpr).X
 					tyname := varty2.(*ast.Ident).Name
-					fnfullname := tyname + "_" + t.Name.Name
-					this.funcDeclsm[fnfullname] = t
+					fnfullname := tyname + "_" + te.Name.Name
+					this.funcDeclsm[fnfullname] = te
 				} else {
-					this.funcDeclsm[t.Name.Name] = t
-					curfds = append(curfds, t.Name.Name)
+					this.funcDeclsm[te.Name.Name] = te
+					curfds = append(curfds, te.Name.Name)
 				}
 			case *ast.CallExpr:
 				if len(curfds) == 0 { // global scope call
-					switch be := t.Fun.(type) {
+					switch be := te.Fun.(type) {
 					case *ast.SelectorExpr:
 						if iscsel(be.X) {
 							break
 						} else {
-							log.Println("wtf", t, t.Fun, reflect.TypeOf(t.Fun))
+							log.Println("wtf", te, te.Fun, reflect.TypeOf(te.Fun))
 						}
 					default:
-						log.Println("wtf", t, t.Fun, reflect.TypeOf(t.Fun))
+						log.Println("wtf", te, te.Fun, reflect.TypeOf(te.Fun))
 					}
 					// break
 				} else {
 					var curfd = curfds[len(curfds)-1]
-					switch be := t.Fun.(type) {
+					switch be := te.Fun.(type) {
 					case *ast.Ident:
 						this.putFuncCallDependcy(curfd, be.Name)
 					case *ast.SelectorExpr:
@@ -268,8 +268,18 @@ func (pc *ParserContext) walkpass1() {
 						fnfullname := tyname + "_" + be.Sel.Name
 						this.putFuncCallDependcy(curfd, fnfullname)
 					default:
-						log.Println("todo", t.Fun, reflect.TypeOf(t.Fun))
+						log.Println("todo", te.Fun, reflect.TypeOf(te.Fun))
 					}
+				}
+			case *ast.Ident: // func name referenced
+				if len(curfds) == 0 {
+					break
+				}
+				var curfd = curfds[len(curfds)-1]
+				varobj := this.info.ObjectOf(te)
+				switch varobj.(type) {
+				case *types.Func:
+					this.putFuncCallDependcy(curfd, te.Name)
 				}
 			}
 			return true

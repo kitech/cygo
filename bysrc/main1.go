@@ -23,7 +23,7 @@ func main() {
 		gopp.ErrPrint(err)
 		println()
 		println()
-		time.Sleep(2 * time.Second)
+		time.Sleep(1 * time.Second)
 	}
 
 	// g2n := g2nim{}

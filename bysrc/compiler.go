@@ -190,8 +190,13 @@ func (this *g2nc) genStmt(scope *ast.Scope, stmt ast.Stmt, idx int) {
 	case *ast.ReturnStmt:
 		this.genReturnStmt(scope, t)
 	default:
-		log.Println("unknown", reflect.TypeOf(stmt), t)
+		if stmt == nil { // for {}
+		} else {
+			log.Println("unknown", reflect.TypeOf(stmt), t)
+		}
 	}
+
+	this.outfh().outnl()
 }
 func (c *g2nc) genAssignStmt(scope *ast.Scope, s *ast.AssignStmt) {
 	// log.Println(s.Tok.String(), s.Tok.Precedence(), s.Tok.IsOperator(), s.Tok.IsLiteral(), s.Lhs)
@@ -213,7 +218,7 @@ func (c *g2nc) genAssignStmt(scope *ast.Scope, s *ast.AssignStmt) {
 			if s.Tok.String() == ":=" {
 				c.out(c.chanElemTypeName(chexpr))
 				c.genExpr(scope, s.Lhs[i])
-				c.outfh().outnl()
+				// c.outfh().outnl()
 			}
 
 			var ns = putscope(scope, ast.Var, "varname", s.Lhs[i])
@@ -233,7 +238,7 @@ func (c *g2nc) genAssignStmt(scope *ast.Scope, s *ast.AssignStmt) {
 			var ns = putscope(scope, ast.Var, "varname", s.Lhs[i])
 			c.out(" = ")
 			c.genExpr(ns, s.Rhs[i])
-			c.outfh().outnl()
+			// c.outfh().outnl()
 		}
 	}
 
@@ -288,7 +293,7 @@ func (c *g2nc) genRoutineWcall(scope *ast.Scope, e *ast.CallExpr) {
 
 	c.out("// gogorun", funame).outnl()
 	c.out("{")
-	c.out(stname, "*args = (", stname, "*)cxmalloc(sizeof(", stname, "))").outfh().outnl()
+	c.out(stname, "*args = (", stname, "*)cxmalloc(sizeof(", stname, "))") //.outfh().outnl()
 	for idx, arg := range e.Args {
 		c.out(fmt.Sprintf("args->a%d", idx), "=")
 		c.genExpr(scope, arg)
@@ -301,20 +306,24 @@ func (c *g2nc) genRoutineWcall(scope *ast.Scope, e *ast.CallExpr) {
 func (c *g2nc) genForStmt(scope *ast.Scope, s *ast.ForStmt) {
 	isefor := s.Init == nil && s.Cond == nil && s.Post == nil // for {}
 	c.out("for (")
+
 	c.genStmt(scope, s.Init, 0)
 	// c.out(";") // TODO ast.AssignStmt has put ;
 	if isefor {
-		c.out(";")
+		// c.out(";")
 	}
 	c.genExpr(scope, s.Cond)
 	c.out(";")
-	c.genStmt(scope, s.Post, 0)
+
 	c.out(")")
+	c.out("{")
 	c.genBlockStmt(scope, s.Body)
+	c.genStmt(scope, s.Post, 2) // Post move to real post, to resolve ';' problem
+	c.out("}")
 }
 func (c *g2nc) genRangeStmt(scope *ast.Scope, s *ast.RangeStmt) {
 	varty := c.info.TypeOf(s.X)
-	log.Println(varty, reflect.TypeOf(varty))
+	// log.Println(varty, reflect.TypeOf(varty))
 	switch be := varty.(type) {
 	case *types.Map:
 		keytystr := c.exprTypeName(scope, s.Key)
@@ -452,6 +461,7 @@ func (c *g2nc) genCaseClause(scope *ast.Scope, s *ast.CaseClause) {
 }
 
 func (c *g2nc) genCallExpr(scope *ast.Scope, te *ast.CallExpr) {
+	scope = putscope(scope, ast.Fun, "infncall", te.Fun)
 	switch be := te.Fun.(type) {
 	case *ast.Ident:
 		funame := be.Name
@@ -618,7 +628,7 @@ func (c *g2nc) genCallExprPrintln(scope *ast.Scope, te *ast.CallExpr) {
 	// check if real need, ;\n
 	cs := c.psctx.cursors[te]
 	if cs.Name() != "Args" {
-		c.outfh().outnl()
+		// c.outfh().outnl()
 	}
 }
 func (c *g2nc) genCallExprNorm(scope *ast.Scope, te *ast.CallExpr) {
@@ -658,7 +668,7 @@ func (c *g2nc) genCallExprNorm(scope *ast.Scope, te *ast.CallExpr) {
 	// check if real need, ;\n
 	cs := c.psctx.cursors[te]
 	if cs.Name() != "Args" {
-		c.outfh().outnl()
+		// c.outfh().outnl()
 	}
 }
 
@@ -672,7 +682,7 @@ func (c *g2nc) genSendStmt(scope *ast.Scope, s *ast.SendStmt) {
 	var elemtyname = c.chanElemTypeName(s.Chan)
 	var chanargname = "chan_arg_" + elemtyname
 	c.out("{").outnl()
-	c.outf("%s* args = (%s*)cxmalloc(sizeof(%s))", chanargname, chanargname, chanargname).outfh().outnl()
+	c.outf("%s* args = (%s*)cxmalloc(sizeof(%s))", chanargname, chanargname, chanargname) //.outfh().outnl()
 	c.out("args->elem = ")
 	c.genExpr(scope, s.Value)
 	c.outfh().outnl()
@@ -732,7 +742,7 @@ func (c *g2nc) genReturnStmt(scope *ast.Scope, e *ast.ReturnStmt) {
 			c.out(",") // TODO
 		}
 	}
-	c.outfh().outnl().outnl()
+	// c.outfh().outnl().outnl()
 }
 
 // keepvoid
@@ -835,7 +845,7 @@ func (this *g2nc) genExpr2(scope *ast.Scope, e ast.Expr) {
 	case *ast.StructType:
 		this.genFieldList(scope, te.Fields, false, true, ";\n", false)
 	case *ast.UnaryExpr:
-		log.Println(te.Op.String(), te.X)
+		// log.Println(te.Op.String(), te.X)
 		switch te.Op {
 		case token.ARROW:
 			this.genRecvStmt(scope, te.X)
@@ -846,7 +856,7 @@ func (this *g2nc) genExpr2(scope *ast.Scope, e ast.Expr) {
 		keepop := true
 		switch t2 := te.X.(type) {
 		case *ast.CompositeLit:
-			this.out(fmt.Sprintf("(%v*)cxmalloc(sizeof(%v));", t2.Type, t2.Type)).outnl()
+			this.out(fmt.Sprintf("(%v*)cxmalloc(sizeof(%v))", t2.Type, t2.Type)) //.outnl()
 			keepop = false
 		case *ast.UnaryExpr:
 			log.Println(t2, t2.X, t2.Op)
@@ -860,7 +870,7 @@ func (this *g2nc) genExpr2(scope *ast.Scope, e ast.Expr) {
 	case *ast.CompositeLit:
 		switch be := te.Type.(type) {
 		case *ast.MapType:
-			this.outf("cxhashtable_new()").outfh().outnl()
+			this.outf("cxhashtable_new()") //.outfh().outnl()
 			var vo = scope.Lookup("varname")
 			for idx, ex := range te.Elts {
 				switch be := ex.(type) {
@@ -871,7 +881,7 @@ func (this *g2nc) genExpr2(scope *ast.Scope, e ast.Expr) {
 				}
 			}
 		case *ast.ArrayType:
-			this.outf("cxarray_new()").outfh().outnl()
+			this.outf("cxarray_new()") //.outfh().outnl()
 			var vo = scope.Lookup("varname")
 			for idx, ex := range te.Elts {
 				this.genCxarrAdd(scope, vo.Data, ex, idx)
@@ -987,8 +997,16 @@ func (this *g2nc) genExpr2(scope *ast.Scope, e ast.Expr) {
 		}
 		this.genExpr(scope, te.Sel)
 	case *ast.StarExpr:
-		this.genExpr(scope, te.X)
-		this.out("*")
+		varobj := this.psctx.info.ObjectOf(te.X.(*ast.Ident))
+		if istypety(varobj.String()) {
+			this.genExpr(scope, te.X)
+			this.out("*")
+		} else if isvarty(varobj.String()) {
+			this.out("*")
+			this.genExpr(scope, te.X)
+		} else {
+			log.Println("todo", varobj.Type(), varobj.String())
+		}
 	case *ast.InterfaceType:
 		if te.Methods != nil && te.Methods.NumFields() > 0 {
 			this.out("cxiface")
@@ -1057,7 +1075,7 @@ func (c *g2nc) genCxmapAddkv(scope *ast.Scope, vnamex interface{}, ke, ve ast.Ex
 	}
 
 	c.outf("hashtable_add(%v, (void*)(uintptr_t)%v, (void*)(uintptr_t)%s)",
-		varstr, keystr, valstr).outfh().outnl()
+		varstr, keystr, valstr) // .outfh().outnl()
 }
 func (c *g2nc) genCxarrAdd(scope *ast.Scope, vnamex interface{}, ve ast.Expr, idx int) {
 	// log.Println(vnamex, ve, idx)
@@ -1077,7 +1095,7 @@ func (c *g2nc) genCxarrAdd(scope *ast.Scope, vnamex interface{}, ve ast.Expr, id
 	}
 
 	c.outf("array_add(%v, (void*)(uintptr_t)%v)",
-		vnamex.(*ast.Ident).Name, valstr).outfh().outnl()
+		vnamex.(*ast.Ident).Name, valstr) // .outfh().outnl()
 }
 func (c *g2nc) genCxarrSet(scope *ast.Scope, vname ast.Expr, vidx ast.Expr, elem interface{}) {
 	idxstr := ""
@@ -1263,13 +1281,13 @@ func (this *g2nc) exprTypeFmt(scope *ast.Scope, e ast.Expr) string {
 		return "p"
 	case *types.Basic:
 		switch t.Kind() {
-		case types.Int:
-			return "d"
 		case types.String:
 			return ".*s"
 		case types.Bool:
 			return "d"
-		case types.Rune:
+		case types.Int, types.Int64, types.Int32 /*types.Rune*/, types.Int16, types.Int8:
+			return "d"
+		case types.Uint, types.Uint64, types.Uint32, types.Uint16, types.Uint8:
 			return "d"
 		case types.Invalid:
 			return "d" // TODO
@@ -1343,7 +1361,7 @@ func (c *g2nc) genValueSpec(scope *ast.Scope, spec *ast.ValueSpec) {
 			// TODO set default value
 			c.out("=", "{0}")
 		}
-		c.outfh().outnl()
+		c.outfh().outnl() // TODO global value
 	}
 }
 

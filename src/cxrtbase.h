@@ -90,6 +90,7 @@ bool cxstring_eq(cxstring* s0, cxstring* s1);
 bool cxstring_ne(cxstring* s0, cxstring* s1);
 char* CString(cxstring* s);
 cxstring* GoString(char* s);
+cxstring* GoStringN(char* s, int n);
 // cxstring end
 
 // cxhashtable begin
