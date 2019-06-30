@@ -232,11 +232,20 @@ func (pc *ParserContext) walkpass1() {
 			case *ast.FuncDecl:
 				if te.Recv != nil && te.Recv.NumFields() > 0 {
 					varty := te.Recv.List[0].Type
-					varty2 := varty.(*ast.StarExpr).X
-					tyname := varty2.(*ast.Ident).Name
-					fnfullname := tyname + "_" + te.Name.Name
-					this.funcDeclsm[fnfullname] = te
-					curfds = append(curfds, fnfullname)
+					if ve, ok := varty.(*ast.StarExpr); ok {
+						varty2 := ve.X
+						tyname := varty2.(*ast.Ident).Name
+						fnfullname := tyname + "_" + te.Name.Name
+						this.funcDeclsm[fnfullname] = te
+						curfds = append(curfds, fnfullname)
+					} else if ve, ok := varty.(*ast.Ident); ok {
+						tyname := ve.Name
+						fnfullname := tyname + "_" + te.Name.Name
+						this.funcDeclsm[fnfullname] = te
+						curfds = append(curfds, fnfullname)
+					} else {
+						log.Println("todo", varty, reflect.TypeOf(te.Recv.List[0]))
+					}
 				} else {
 					this.funcDeclsm[te.Name.Name] = te
 					curfds = append(curfds, te.Name.Name)

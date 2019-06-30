@@ -21,6 +21,9 @@ type g2nc struct {
 }
 
 func (c *g2nc) exprpos(e ast.Node) token.Position {
+	if e == nil {
+		return token.Position{}
+	}
 	return c.psctx.fset.Position(e.Pos())
 }
 
@@ -160,6 +163,7 @@ func (this *g2nc) genBlockStmt(scope *ast.Scope, stmt *ast.BlockStmt) {
 // clause index?
 func (this *g2nc) genStmt(scope *ast.Scope, stmt ast.Stmt, idx int) {
 	// log.Println(stmt, reflect.TypeOf(stmt))
+	addfh := true
 	switch t := stmt.(type) {
 	case *ast.AssignStmt:
 		this.genAssignStmt(scope, t)
@@ -184,7 +188,8 @@ func (this *g2nc) genStmt(scope *ast.Scope, stmt ast.Stmt, idx int) {
 	case *ast.SwitchStmt:
 		this.genSwitchStmt(scope, t)
 	case *ast.CaseClause:
-		this.genCaseClause(scope, t)
+		// addfh = false
+		this.genCaseClause(scope, t, idx)
 	case *ast.SendStmt:
 		this.genSendStmt(scope, t)
 	case *ast.ReturnStmt:
@@ -195,8 +200,9 @@ func (this *g2nc) genStmt(scope *ast.Scope, stmt ast.Stmt, idx int) {
 			log.Println("unknown", reflect.TypeOf(stmt), t)
 		}
 	}
-
-	this.outfh().outnl()
+	if addfh {
+		this.outfh().outnl()
+	}
 }
 func (c *g2nc) genAssignStmt(scope *ast.Scope, s *ast.AssignStmt) {
 	// log.Println(s.Tok.String(), s.Tok.Precedence(), s.Tok.IsOperator(), s.Tok.IsLiteral(), s.Lhs)
@@ -412,9 +418,10 @@ func (c *g2nc) genIfStmt(scope *ast.Scope, s *ast.IfStmt) {
 func (c *g2nc) genSwitchStmt(scope *ast.Scope, s *ast.SwitchStmt) {
 	tagty := c.info.TypeOf(s.Tag)
 	if tagty == nil {
-		log.Println(tagty, c.exprpos(s.Tag))
+		log.Println(tagty, c.exprpos(s))
+	} else {
+		log.Println(tagty, reflect.TypeOf(tagty), reflect.TypeOf(tagty.Underlying()))
 	}
-	log.Println(tagty, reflect.TypeOf(tagty), reflect.TypeOf(tagty.Underlying()))
 	switch tty := tagty.(type) {
 	case *types.Basic:
 		switch tty.Kind() {
@@ -424,7 +431,11 @@ func (c *g2nc) genSwitchStmt(scope *ast.Scope, s *ast.SwitchStmt) {
 			log.Println("unknown", tagty, reflect.TypeOf(tagty))
 		}
 	default:
-		log.Println("unknown", tagty, reflect.TypeOf(tagty))
+		if tagty == nil {
+			c.genSwitchStmtIf(scope, s)
+		} else {
+			log.Println("unknown", tagty, reflect.TypeOf(tagty))
+		}
 	}
 
 }
@@ -437,7 +448,7 @@ func (c *g2nc) genSwitchStmtNum(scope *ast.Scope, s *ast.SwitchStmt) {
 func (c *g2nc) genSwitchStmtStr(scope *ast.Scope, s *ast.SwitchStmt) {
 	log.Println(s.Tag)
 }
-func (c *g2nc) genCaseClause(scope *ast.Scope, s *ast.CaseClause) {
+func (c *g2nc) genCaseClause(scope *ast.Scope, s *ast.CaseClause, idx int) {
 	log.Println(s.List, s.Body)
 	if len(s.List) == 0 {
 		// default
@@ -446,17 +457,59 @@ func (c *g2nc) genCaseClause(scope *ast.Scope, s *ast.CaseClause) {
 			c.genStmt(scope, s_, idx)
 		}
 	} else {
-		if len(s.List) != len(s.Body) {
-			log.Println("wtf", s.List, s.Body)
+		switch s.List[0].(type) {
+		case *ast.BinaryExpr:
+			c.genCaseClauseIf(scope, s, idx)
+			return
 		}
+
 		// TODO precheck if have fallthrough
-		for idx, e := range s.List {
+		for idx, ce := range s.List {
 			c.out("case")
-			c.genExpr(scope, e)
+			c.genExpr(scope, ce)
 			c.out(":").outnl()
-			c.genStmt(scope, s.Body[idx], idx)
+			for idx2, be := range s.Body {
+				c.genStmt(scope, be, idx2)
+			}
 			c.out("break").outfh().outnl()
+			gopp.G_USED(idx)
 		}
+	}
+}
+func (c *g2nc) genSwitchStmtIf(scope *ast.Scope, s *ast.SwitchStmt) {
+	log.Println(s.Tag, s.Body == nil)
+	c.outf("// %v", reflect.TypeOf(s)).outnl()
+	c.genBlockStmt(scope, s.Body)
+}
+func (c *g2nc) genCaseClauseIf(scope *ast.Scope, s *ast.CaseClause, idx int) {
+	log.Println(s.List, s.Body)
+	for _, expr := range s.List {
+		log.Println(expr, reflect.TypeOf(expr))
+	}
+	if len(s.List) == 0 {
+		// default
+		c.out("default:").outnl()
+		for idx, s_ := range s.Body {
+			c.genStmt(scope, s_, idx)
+		}
+	} else {
+		// TODO precheck if have fallthrough
+		c.out("//", gopp.IfElseStr(idx > 0, "else", "")).outnl()
+		c.out("if (")
+		for idx, ce := range s.List {
+			c.out("(")
+			c.genExpr(scope, ce)
+			c.out(")")
+			if idx < len(s.List)-1 {
+				c.out("||").outnl()
+			}
+			gopp.G_USED(idx)
+		}
+		c.out(") {").outnl()
+		for idx, be := range s.Body {
+			c.genStmt(scope, be, idx)
+		}
+		c.out("}").outnl()
 	}
 }
 
@@ -538,13 +591,19 @@ func (c *g2nc) genCallExprLen(scope *ast.Scope, te *ast.CallExpr) {
 			log.Println("todo", reflect.TypeOf(arg0))
 		}
 	} else if isstrty(argty.String()) {
-		c.outf("cxstring_len(%s)", arg0.(*ast.Ident).Name)
+		c.out("cxstring_len(")
+		c.genExpr(scope, arg0)
+		c.out(")")
 	} else if isslicety(argty.String()) {
 		funame := te.Fun.(*ast.Ident).Name
 		if funame == "len" {
-			c.outf("array_size(%s)", arg0.(*ast.Ident).Name)
+			c.outf("array_size(")
+			c.genExpr(scope, arg0)
+			c.out(")")
 		} else if funame == "cap" {
-			c.outf("array_capacity(%s)", arg0.(*ast.Ident).Name)
+			c.out("array_capacity(")
+			c.genExpr(scope, arg0)
+			c.out(")")
 		} else {
 			panic(funame)
 		}
@@ -870,21 +929,23 @@ func (this *g2nc) genExpr2(scope *ast.Scope, e ast.Expr) {
 	case *ast.CompositeLit:
 		switch be := te.Type.(type) {
 		case *ast.MapType:
-			this.outf("cxhashtable_new()") //.outfh().outnl()
+			this.outf("cxhashtable_new()").outfh().outnl()
 			var vo = scope.Lookup("varname")
 			for idx, ex := range te.Elts {
 				switch be := ex.(type) {
 				case *ast.KeyValueExpr:
 					this.genCxmapAddkv(scope, vo.Data, be.Key, be.Value)
+					this.outfh().outnl()
 				default:
 					log.Println("unknown", idx, reflect.TypeOf(ex))
 				}
 			}
 		case *ast.ArrayType:
-			this.outf("cxarray_new()") //.outfh().outnl()
+			this.outf("cxarray_new()").outfh().outnl()
 			var vo = scope.Lookup("varname")
 			for idx, ex := range te.Elts {
 				this.genCxarrAdd(scope, vo.Data, ex, idx)
+				this.outfh().outnl()
 			}
 			if be == nil {
 			}
@@ -903,7 +964,7 @@ func (this *g2nc) genExpr2(scope *ast.Scope, e ast.Expr) {
 		switch t := ety.Underlying().(type) {
 		case *types.Basic:
 			switch t.Kind() {
-			case types.Int, types.UntypedInt:
+			case types.Int, types.UntypedInt, types.UntypedRune:
 				this.out(te.Value)
 			case types.String, types.UntypedString:
 				this.out(fmt.Sprintf("cxstring_new_cstr(%s)", te.Value))
@@ -953,9 +1014,25 @@ func (this *g2nc) genExpr2(scope *ast.Scope, e ast.Expr) {
 			} else { // left value
 				this.genCxarrSet(scope, te.X, te.Index, vo.Data)
 			}
+		} else if isstrty(varty.String()) {
+			if vo == nil { // right value
+				this.out("((cxstring*)")
+				this.genExpr(scope, te.X)
+				this.out(")->ptr[")
+				this.genExpr(scope, te.Index)
+				this.out("]")
+			} else { // left value
+				this.out("((cxstring*)")
+				this.genExpr(scope.Outer, te.X) // temporarily left value
+				this.out(")->ptr[")
+				this.genExpr(scope, te.Index)
+				this.out("]")
+				this.out("=")
+				this.genExpr(scope, vo.Data.(ast.Expr))
+			}
 		} else {
 			log.Println("todo", te.X, te.Index)
-			log.Println("todo", reflect.TypeOf(te.X))
+			log.Println("todo", reflect.TypeOf(te.X), varty.String(), this.exprpos(te.X))
 		}
 	case *ast.SliceExpr:
 		varty := this.info.TypeOf(te.X)
@@ -1017,6 +1094,10 @@ func (this *g2nc) genExpr2(scope *ast.Scope, e ast.Expr) {
 		this.outf("(%s)(*(void**)(", this.exprTypeName(scope, te.Type))
 		this.genExpr(scope, te.X)
 		this.out(".data))")
+	case *ast.ParenExpr:
+		this.out("(")
+		this.genExpr(scope, te.X)
+		this.out(")")
 	default:
 		log.Println("unknown", reflect.TypeOf(e), e, te)
 	}
@@ -1230,7 +1311,8 @@ func (this *g2nc) exprTypeName(scope *ast.Scope, e ast.Expr) string {
 	case *ast.BinaryExpr:
 		if te.Op.IsOperator() {
 			switch te.Op {
-			case token.EQL, token.NEQ:
+			case token.EQL, token.NEQ, token.LAND,
+				token.GTR, token.LSS, token.LEQ, token.GEQ:
 				return "bool"
 			default:
 				log.Println("todo", te.Op)

@@ -23,6 +23,7 @@ extern void cxfree(void* ptr);
 Array* cxarray_new() {
     Array* res = 0;
     ArrayConf arrconf = {0};
+    arrconf.capacity = 1;
     arrconf.mem_alloc = cxmalloc;
     arrconf.mem_calloc = cxcalloc;
     arrconf.mem_free = cxfree;
