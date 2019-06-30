@@ -31,7 +31,10 @@ func (this *g2nc) genpkgs() {
 	for pname, pkg := range this.psctx.pkgs {
 		pkg.Scope = ast.NewScope(nil)
 		this.genpkg(pname, pkg)
+
+		this.genFuncs(pkg)
 	}
+
 }
 
 func (this *g2nc) genpkg(name string, pkg *ast.Package) {
@@ -48,8 +51,31 @@ func (this *g2nc) genfile(scope *ast.Scope, name string, f *ast.File) {
 		}
 	*/
 
-	// decls order?
+	// non-func decls
 	for _, d := range f.Decls {
+		switch r := d.(type) {
+		case *ast.FuncDecl:
+		default:
+			this.genDecl(scope, d)
+			if r == nil {
+			}
+		}
+	}
+
+	// decls order?
+	// for _, d := range f.Decls {
+	// 	this.genDecl(scope, d)
+	// }
+}
+
+func (this *g2nc) genFuncs(pkg *ast.Package) {
+	scope := pkg.Scope
+	// ordered funcDeclsv
+	for _, d := range this.psctx.funcDeclsv {
+		if d == nil {
+			log.Println("wtf", d)
+			continue
+		}
 		this.genDecl(scope, d)
 	}
 }

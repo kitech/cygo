@@ -86,6 +86,8 @@ func (this *ParserContext) Init() error {
 	this.conf.Importer = &mypkgimporter{}
 
 	this.typkgs, err = this.conf.Check(this.path, this.fset, files, &this.info)
+
+	this.walkpass1()
 	log.Println("pkgs", this.typkgs.Name(), "types:", len(this.info.Types),
 		"typedefs", len(this.typeDeclsm), "funcdefs", len(this.funcDeclsm))
 
@@ -209,6 +211,15 @@ func (pc *ParserContext) walkpass0() {
 			}
 			files = append(files, file)
 		}
+	}
+	this.files = files
+}
+
+func (pc *ParserContext) walkpass1() {
+	this := pc
+	pkgs := pc.pkgs
+
+	for _, pkg := range pkgs {
 
 		var curfds []string // stack, current func decls
 		astutil.Apply(pkg, func(c *astutil.Cursor) bool {
@@ -216,22 +227,48 @@ func (pc *ParserContext) walkpass0() {
 			this.cursors[c.Node()] = &tc
 			switch t := c.Node().(type) {
 			case *ast.TypeSpec:
-				log.Println("typedef", t.Name.Name)
+				// log.Println("typedef", t.Name.Name)
 				this.typeDeclsm[t.Name.Name] = t
 			case *ast.FuncDecl:
-				this.funcDeclsm[t.Name.Name] = t
-				curfds = append(curfds, t.Name.Name)
+				if t.Recv != nil && t.Recv.NumFields() > 0 {
+					varty := t.Recv.List[0].Type
+					varty2 := varty.(*ast.StarExpr).X
+					tyname := varty2.(*ast.Ident).Name
+					fnfullname := tyname + "_" + t.Name.Name
+					this.funcDeclsm[fnfullname] = t
+				} else {
+					this.funcDeclsm[t.Name.Name] = t
+					curfds = append(curfds, t.Name.Name)
+				}
 			case *ast.CallExpr:
 				if len(curfds) == 0 { // global scope call
-					log.Println("wtf", t, t.Fun, reflect.TypeOf(t.Fun))
+					switch be := t.Fun.(type) {
+					case *ast.SelectorExpr:
+						if iscsel(be.X) {
+							break
+						} else {
+							log.Println("wtf", t, t.Fun, reflect.TypeOf(t.Fun))
+						}
+					default:
+						log.Println("wtf", t, t.Fun, reflect.TypeOf(t.Fun))
+					}
 					// break
 				} else {
 					var curfd = curfds[len(curfds)-1]
 					switch be := t.Fun.(type) {
 					case *ast.Ident:
 						this.putFuncCallDependcy(curfd, be.Name)
+					case *ast.SelectorExpr:
+						if iscsel(be.X) {
+							break
+						}
+						varty := this.info.TypeOf(be.X)
+						tyname := sign2rety(varty.String())
+						tyname = strings.TrimRight(tyname, "*")
+						fnfullname := tyname + "_" + be.Sel.Name
+						this.putFuncCallDependcy(curfd, fnfullname)
 					default:
-						log.Println(t.Fun, reflect.TypeOf(t.Fun))
+						log.Println("todo", t.Fun, reflect.TypeOf(t.Fun))
 					}
 				}
 			}
@@ -239,15 +276,16 @@ func (pc *ParserContext) walkpass0() {
 		}, func(c *astutil.Cursor) bool {
 			switch t := c.Node().(type) {
 			case *ast.FuncDecl:
-				curfds = curfds[:len(curfds)-1]
-			default:
-				if t == nil {
+				if t.Recv != nil && t.Recv.NumFields() > 0 {
+				} else {
+					curfds = curfds[:len(curfds)-1]
 				}
+			default:
+				gopp.G_USED(t)
 			}
 			return true
 		})
 	}
-	this.files = files
 }
 
 func (pc *ParserContext) putTyperefDependcy(funame, tyname string) {

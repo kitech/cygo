@@ -16,9 +16,18 @@ struct array_s {
 };
 typedef struct array_s hkarray;
 
+extern void* cxmalloc(size_t size);
+extern void* cxcalloc(size_t blocks, size_t size);
+extern void cxfree(void* ptr);
+
 Array* cxarray_new() {
     Array* res = 0;
-    int rv = array_new(&res);
+    ArrayConf arrconf = {0};
+    arrconf.mem_alloc = cxmalloc;
+    arrconf.mem_calloc = cxcalloc;
+    arrconf.mem_free = cxfree;
+
+    int rv = array_new_conf(&arrconf, &res);
     assert(rv == CC_OK);
     return res;
 }

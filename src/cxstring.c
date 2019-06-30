@@ -289,3 +289,9 @@ float cxstring_to_float(cxstring* s) {
     return v;
 }
 
+char* CString(cxstring* s) {
+    return cxstrndup(s->ptr, s->len);
+}
+cxstring* GoString(char* s) {
+    return cxstring_new_cstr(s);
+}

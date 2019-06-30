@@ -68,8 +68,8 @@ extern void* cxrt_chan_recv(void*arg);
 extern pid_t gettid();
 
 // cxmemory
-void* cxmalloc(int size);
-void* cxrealloc(void*ptr, int size);
+void* cxmalloc(size_t size);
+void* cxrealloc(void*ptr, size_t size);
 void cxfree(void* ptr);
 char* cxstrdup(char* str);
 char* cxstrndup(char* str, int n);
@@ -88,6 +88,8 @@ int cxstring_len(cxstring* s);
 cxstring* cxstring_sub(cxstring* s0, int start, int end);
 bool cxstring_eq(cxstring* s0, cxstring* s1);
 bool cxstring_ne(cxstring* s0, cxstring* s1);
+char* CString(cxstring* s);
+cxstring* GoString(char* s);
 // cxstring end
 
 // cxhashtable begin
