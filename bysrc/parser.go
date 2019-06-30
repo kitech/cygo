@@ -20,15 +20,16 @@ import (
 )
 
 type ParserContext struct {
-	path     string
-	fset     *token.FileSet
-	pkgs     map[string]*ast.Package
-	files    []*ast.File
-	typkgs   *types.Package
-	conf     types.Config
-	info     types.Info
-	cursors  map[ast.Node]*astutil.Cursor
-	grstargs map[string]bool // goroutines packed arguments structure
+	path      string
+	pkgrename string
+	fset      *token.FileSet
+	pkgs      map[string]*ast.Package
+	files     []*ast.File
+	typkgs    *types.Package
+	conf      types.Config
+	info      types.Info
+	cursors   map[ast.Node]*astutil.Cursor
+	grstargs  map[string]bool // goroutines packed arguments structure
 
 	typeDeclsm    map[string]*ast.TypeSpec
 	typeDeclsv    []*ast.TypeSpec
@@ -41,9 +42,10 @@ type ParserContext struct {
 	ccode  string
 }
 
-func NewParserContext(path string) *ParserContext {
+func NewParserContext(path string, pkgrename string) *ParserContext {
 	this := &ParserContext{}
 	this.path = path
+	this.pkgrename = pkgrename
 	this.info.Types = make(map[ast.Expr]types.TypeAndValue)
 	this.info.Defs = make(map[*ast.Ident]types.Object)
 	this.info.Uses = make(map[*ast.Ident]types.Object)
@@ -335,4 +337,33 @@ func (pc *ParserContext) putFuncCallDependcy(name0, name1 string) {
 	// log.Println("adding", name0, n0.Value, "->", name1, n1.Value)
 	err := pc.gb.MakeEdge(n1, n0)
 	gopp.ErrPrint(err, name0, name1)
+}
+
+func (pc *ParserContext) getImportNameMap() map[string]string {
+	pkgrenames := map[string]string{} // path => rename
+	for pname, pkgo := range pc.pkgs {
+		log.Println(pname, pkgo.Name, pkgo.Imports)
+		for fname, fileo := range pkgo.Files {
+			log.Println(fname, fileo.Imports)
+			for _, declo := range fileo.Decls {
+				ad, ok := declo.(*ast.GenDecl)
+				if !ok {
+					continue
+				}
+				for _, tspec := range ad.Specs {
+					id, ok := tspec.(*ast.ImportSpec)
+					if ok {
+						log.Println(id.Name, id.Path)
+						dirp := strings.Trim(id.Path.Value, "\"")
+						if id.Name != nil {
+							pkgrenames[dirp] = id.Name.Name
+						} else {
+							pkgrenames[dirp] = ""
+						}
+					}
+				}
+			}
+		}
+	}
+	return pkgrenames
 }

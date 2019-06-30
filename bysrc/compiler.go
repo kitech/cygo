@@ -21,8 +21,10 @@ func init() {
 }
 
 type g2nc struct {
-	psctx *ParserContext
-	sb    strings.Builder
+	psctx  *ParserContext
+	sb     strings.Builder
+	curpkg string
+	pkgo   *ast.Package
 
 	info *types.Info
 }
@@ -40,11 +42,27 @@ func (this *g2nc) genpkgs() {
 	// pkgs order?
 	for pname, pkg := range this.psctx.pkgs {
 		pkg.Scope = ast.NewScope(nil)
+		this.curpkg = pkg.Name
+		this.pkgo = pkg
+
 		this.genpkg(pname, pkg)
 
 		this.genFuncs(pkg)
 	}
 
+}
+func (c *g2nc) pkgpfx() string {
+	pfx := ""
+	if c.curpkg == "main" {
+	} else {
+		if c.psctx.pkgrename != "" {
+			pfx = c.psctx.pkgrename
+		} else {
+			pfx = c.curpkg
+		}
+		pfx += "_"
+	}
+	return pfx
 }
 
 func (this *g2nc) genpkg(name string, pkg *ast.Package) {
@@ -129,15 +147,18 @@ func (this *g2nc) genPreFuncDecl(scope *ast.Scope, d *ast.FuncDecl) {
 func (this *g2nc) genFuncDecl(scope *ast.Scope, fd *ast.FuncDecl) {
 	if fd.Body == nil {
 		log.Println("decl only func", fd.Name)
-		return
+		this.out("extern")
+		// return
 	}
+
+	pkgpfx := this.pkgpfx()
 	this.genFieldList(scope, fd.Type.Results, true, false, "", false)
 	if fd.Recv != nil {
 		recvtystr := this.exprTypeName(scope, fd.Recv.List[0].Type)
 		recvtystr = strings.TrimRight(recvtystr, "*")
-		this.out(recvtystr + "_" + fd.Name.String())
+		this.out(pkgpfx + recvtystr + "_" + fd.Name.String())
 	} else {
-		this.out(fd.Name.String())
+		this.out(pkgpfx + fd.Name.String())
 	}
 	this.out("(")
 	if fd.Recv != nil {
@@ -148,9 +169,13 @@ func (this *g2nc) genFuncDecl(scope *ast.Scope, fd *ast.FuncDecl) {
 	}
 	this.genFieldList(scope, fd.Type.Params, false, true, ",", true)
 	this.out(")").outnl()
-	scope = ast.NewScope(scope)
-	scope.Insert(ast.NewObj(ast.Fun, fd.Name.Name))
-	this.genBlockStmt(scope, fd.Body)
+	if fd.Body != nil {
+		scope = ast.NewScope(scope)
+		scope.Insert(ast.NewObj(ast.Fun, fd.Name.Name))
+		this.genBlockStmt(scope, fd.Body)
+	} else {
+		this.outfh()
+	}
 	this.outnl()
 }
 
@@ -711,10 +736,13 @@ func (c *g2nc) genCallExprNorm(scope *ast.Scope, te *ast.CallExpr) {
 	selfn, isselfn := te.Fun.(*ast.SelectorExpr)
 	isidt := false
 	iscfn := false
+	ispkgsel := false
 	if isselfn {
 		var selidt *ast.Ident
 		selidt, isidt = selfn.X.(*ast.Ident)
 		iscfn = isidt && selidt.Name == "C"
+		selty := c.info.TypeOf(selfn.X)
+		ispkgsel = isinvalidty2(selty)
 	}
 
 	if isselfn {
@@ -730,7 +758,7 @@ func (c *g2nc) genCallExprNorm(scope *ast.Scope, te *ast.CallExpr) {
 	}
 
 	c.out("(")
-	if isselfn && !iscfn {
+	if isselfn && !iscfn && !ispkgsel {
 		c.genExpr(scope, selfn.X)
 		c.out(gopp.IfElseStr(len(te.Args) > 0, ",", ""))
 	}
@@ -1436,7 +1464,7 @@ func (this *g2nc) genGenDecl(scope *ast.Scope, d *ast.GenDecl) {
 		case *ast.ValueSpec:
 			this.genValueSpec(scope, tspec)
 		case *ast.ImportSpec:
-			log.Println("todo", reflect.TypeOf(d), reflect.TypeOf(spec), tspec.Path)
+			log.Println("todo", reflect.TypeOf(d), reflect.TypeOf(spec), tspec.Path, tspec.Name)
 			this.outf("// import %v by %s", tspec.Path, this.exprpos(tspec)).outnl().outnl()
 			// log.Println(tspec.Comment)
 			// log.Println(tspec.Doc)
@@ -1503,7 +1531,9 @@ func (this *g2nc) outf(format string, args ...interface{}) *g2nc {
 }
 
 func (this *g2nc) code() (string, string) {
-	code := this.psctx.ccode
+	code := ""
+	code += fmt.Sprintf("// %s\n", this.psctx.bdpkgs.Dir)
+	code += this.psctx.ccode
 	code += "#include <cxrtbase.h>\n\n"
 	code += this.sb.String()
 	return code, "c"
