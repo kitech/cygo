@@ -236,6 +236,7 @@ func (pc *ParserContext) walkpass1() {
 					tyname := varty2.(*ast.Ident).Name
 					fnfullname := tyname + "_" + te.Name.Name
 					this.funcDeclsm[fnfullname] = te
+					curfds = append(curfds, fnfullname)
 				} else {
 					this.funcDeclsm[te.Name.Name] = te
 					curfds = append(curfds, te.Name.Name)
@@ -284,14 +285,15 @@ func (pc *ParserContext) walkpass1() {
 			}
 			return true
 		}, func(c *astutil.Cursor) bool {
-			switch t := c.Node().(type) {
+			switch te := c.Node().(type) {
 			case *ast.FuncDecl:
-				if t.Recv != nil && t.Recv.NumFields() > 0 {
+				if te.Recv != nil && te.Recv.NumFields() > 0 {
+					curfds = curfds[:len(curfds)-1]
 				} else {
 					curfds = curfds[:len(curfds)-1]
 				}
 			default:
-				gopp.G_USED(t)
+				gopp.G_USED(te)
 			}
 			return true
 		})
@@ -303,6 +305,9 @@ func (pc *ParserContext) putTyperefDependcy(funame, tyname string) {
 }
 
 func (pc *ParserContext) putFuncCallDependcy(name0, name1 string) {
+	if name0 == name1 {
+		return
+	}
 	if _, ok := builtinfns[name1]; ok {
 		return
 	}
