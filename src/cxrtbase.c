@@ -47,6 +47,23 @@ void println2(const char* filename, int lineno, const char* funcname, const char
 
     printf("\n");
 }
+void panic(cxstring*s) {
+    if (s != nilptr) {
+        printf("%.*s", s->len, s->ptr);
+    }else{
+        printf("<%p>", s);
+    }
+    memcpy((void*)0x1, "abc", 3);
+}
+void panicln(cxstring*s) {
+    cxstring* lr = cxstring_new_cstr("\n");
+    if (s != nilptr) {
+        s = cxstring_add(s, lr);
+    } else{
+        s = lr;
+    }
+    panic(s);
+}
 
 #include <unistd.h>
 #include <sys/syscall.h>

@@ -8,10 +8,17 @@ import (
 	"gopp"
 	"log"
 	"reflect"
+	"runtime/debug"
 	"strings"
 
 	"golang.org/x/tools/go/ast/astutil"
 )
+
+func init() {
+	if false {
+		debug.PrintStack()
+	}
+}
 
 type g2nc struct {
 	psctx *ParserContext
@@ -513,6 +520,13 @@ func (c *g2nc) genCaseClauseIf(scope *ast.Scope, s *ast.CaseClause, idx int) {
 	}
 }
 
+func (c *g2nc) funcistype(idt *ast.Ident) bool {
+	switch idt.Name {
+	case "string":
+		return true
+	}
+	return false
+}
 func (c *g2nc) genCallExpr(scope *ast.Scope, te *ast.CallExpr) {
 	scope = putscope(scope, ast.Fun, "infncall", te.Fun)
 	switch be := te.Fun.(type) {
@@ -529,6 +543,8 @@ func (c *g2nc) genCallExpr(scope *ast.Scope, te *ast.CallExpr) {
 			c.genCallExprDelete(scope, te)
 		} else if funame == "println" {
 			c.genCallExprPrintln(scope, te)
+		} else if c.funcistype(be) {
+			c.genTypeCtor(scope, te)
 		} else {
 			c.genCallExprNorm(scope, te)
 		}
@@ -730,6 +746,27 @@ func (c *g2nc) genCallExprNorm(scope *ast.Scope, te *ast.CallExpr) {
 		// c.outfh().outnl()
 	}
 }
+func (c *g2nc) genTypeCtor(scope *ast.Scope, te *ast.CallExpr) {
+	switch be := te.Fun.(type) {
+	case *ast.Ident:
+		switch be.Name {
+		case "string":
+			arg0 := te.Args[0]
+			switch ce := arg0.(type) {
+			case *ast.BasicLit:
+				c.outf("cxstring_new_char(%v)", ce.Value)
+			case *ast.Ident:
+				c.outf("cxstring_new_char(%v)", ce.Name)
+			default:
+				log.Println("todo", te.Fun, ce)
+			}
+		default:
+			log.Println("todo", te.Fun)
+		}
+	default:
+		log.Println("todo", te.Fun, be)
+	}
+}
 
 // chan structure args
 func (c *g2nc) genChanStargs(scope *ast.Scope, e ast.Expr) {
@@ -894,7 +931,6 @@ func (this *g2nc) genExpr2(scope *ast.Scope, e ast.Expr) {
 	// log.Println(reflect.TypeOf(e))
 	switch te := e.(type) {
 	case *ast.Ident:
-		// log.Println(te.Name, te.String(), te.IsExported(), te.Obj, reflect.TypeOf(e))
 		idname := te.Name
 		idname = gopp.IfElseStr(idname == "nil", "nilptr", idname)
 		idname = gopp.IfElseStr(idname == "string", "cxstring*", idname)
@@ -1314,6 +1350,8 @@ func (this *g2nc) exprTypeName(scope *ast.Scope, e ast.Expr) string {
 			case token.EQL, token.NEQ, token.LAND,
 				token.GTR, token.LSS, token.LEQ, token.GEQ:
 				return "bool"
+			case token.SUB, token.ADD, token.MUL, token.QUO, token.REM:
+				return this.exprTypeName(scope, te.X)
 			default:
 				log.Println("todo", te.Op)
 			}

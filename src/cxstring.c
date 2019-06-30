@@ -36,6 +36,23 @@ cxstring* cxstring_new_cstr2(char* s, int len) {
     t->len = len;
     return t;
 }
+cxstring* cxstring_new_char(char ch) {
+    cxstring* t = cxstring_new();
+    t->ptr = cxmalloc(2);
+    t->len = 1;
+    t->ptr[0] = ch;
+    return t;
+}
+cxstring* cxstring_new_rune(rune ch) {
+    cxstring* t = cxstring_new();
+    t->ptr = cxmalloc(4);
+    t->len = 3;
+    char* p = &ch;
+    t->ptr[0] = p[0];
+    t->ptr[1] = p[1];
+    t->ptr[2] = p[2];
+    return t;
+}
 
 // for null terminated string
 char* cxstring_to_cstr(cxstring* sobj) {
@@ -61,7 +78,7 @@ cxstring* cxstring_sub(cxstring* s0, int start, int end) {
     cxstring* ns = cxstring_new();
     int rlen = end - start;
     char* rs = cxmalloc(rlen+1);
-    memcpy(rs, s0->ptr+rlen, rlen);
+    memcpy(rs, s0->ptr+start, rlen);
     ns->ptr = rs;
     ns->len = rlen;
     return ns;

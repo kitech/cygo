@@ -64,6 +64,8 @@ extern void* cxrt_chan_new(int sz);
 extern void cxrt_chan_send(void*ch, void*arg);
 extern void* cxrt_chan_recv(void*arg);
 
+
+
 #include <sys/types.h>
 extern pid_t gettid();
 
@@ -91,6 +93,9 @@ bool cxstring_ne(cxstring* s0, cxstring* s1);
 char* CString(cxstring* s);
 cxstring* GoString(char* s);
 cxstring* GoStringN(char* s, int n);
+cxstring* cxstring_new_char(char ch);
+void panic(cxstring* s);
+void panicln(cxstring*s);
 // cxstring end
 
 // cxhashtable begin
