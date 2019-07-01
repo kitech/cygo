@@ -5,6 +5,7 @@ import (
 	"io/ioutil"
 	"log"
 	"os"
+	"runtime"
 	"strings"
 	"time"
 )
@@ -24,6 +25,7 @@ func main() {
 
 	gopath := os.Getenv("GOPATH")
 	gopaths := strings.Split(gopath, ":")
+	gopaths = append(gopaths, runtime.GOROOT())
 
 	for len(pkgpaths) > 0 {
 		fname := pkgpaths[0]

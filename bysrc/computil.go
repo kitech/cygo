@@ -61,6 +61,7 @@ func typesty2str(typ types.Type) string {
 	switch aty := typ.(type) {
 	case *types.Basic:
 		ret = fmt.Sprintf("%v", typ)
+		ret = strings.Replace(ret, ".", "_", 1) // unsafe.Pointer
 	case *types.Interface:
 		return gopp.IfElseStr(aty.NumMethods() > 0, "cxiface", "cxeface")
 	default:
@@ -98,4 +99,20 @@ var tmpvarno = 12345
 func tmpvarname() string {
 	tmpvarno++
 	return fmt.Sprintf("gxtv%d", tmpvarno)
+}
+
+// ast.CallExpr.Fun
+func funcistype(idt ast.Expr) bool {
+	switch te := idt.(type) {
+	case *ast.Ident:
+		switch te.Name {
+		case "string":
+			return true
+		}
+	case *ast.SelectorExpr:
+		if fmt.Sprintf("%v", te.X) == "unsafe" && fmt.Sprintf("%v", te.Sel) == "Pointer" {
+			return true
+		}
+	}
+	return false
 }

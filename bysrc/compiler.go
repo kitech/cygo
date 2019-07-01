@@ -147,12 +147,13 @@ func (this *g2nc) genPreFuncDecl(scope *ast.Scope, d *ast.FuncDecl) {
 func (this *g2nc) genFuncDecl(scope *ast.Scope, fd *ast.FuncDecl) {
 	if fd.Body == nil {
 		log.Println("decl only func", fd.Name)
-		this.out("extern")
+		this.out("extern").outsp()
 		// return
 	}
 
 	pkgpfx := this.pkgpfx()
 	this.genFieldList(scope, fd.Type.Results, true, false, "", false)
+	this.outsp()
 	if fd.Recv != nil {
 		recvtystr := this.exprTypeName(scope, fd.Recv.List[0].Type)
 		recvtystr = strings.TrimRight(recvtystr, "*")
@@ -166,6 +167,9 @@ func (this *g2nc) genFuncDecl(scope *ast.Scope, fd *ast.FuncDecl) {
 		if fd.Type.Params != nil && fd.Type.Params.NumFields() > 0 {
 			this.out(",")
 		}
+	}
+	if fd.Name.Name == "main" {
+		this.out("int argc, char**argv")
 	}
 	this.genFieldList(scope, fd.Type.Params, false, true, ",", true)
 	this.out(")").outnl()
@@ -254,7 +258,7 @@ func (c *g2nc) genAssignStmt(scope *ast.Scope, s *ast.AssignStmt) {
 
 		if ischrv {
 			if s.Tok.String() == ":=" {
-				c.out(c.chanElemTypeName(chexpr))
+				c.out(c.chanElemTypeName(chexpr)).outsp()
 				c.genExpr(scope, s.Lhs[i])
 				// c.outfh().outnl()
 			}
@@ -263,13 +267,13 @@ func (c *g2nc) genAssignStmt(scope *ast.Scope, s *ast.AssignStmt) {
 			c.genExpr(ns, s.Rhs[i])
 		} else if isidxas {
 			if s.Tok.String() == ":=" {
-				c.out(c.exprTypeName(scope, s.Rhs[i]))
+				c.out(c.exprTypeName(scope, s.Rhs[i])).outsp()
 			}
 			var ns = putscope(scope, ast.Var, "varval", s.Rhs[i])
 			c.genExpr(ns, s.Lhs[i])
 		} else {
 			if s.Tok.String() == ":=" {
-				c.out(c.exprTypeName(scope, s.Rhs[i]))
+				c.out(c.exprTypeName(scope, s.Rhs[i])).outsp()
 			}
 			c.genExpr(scope, s.Lhs[i])
 
@@ -443,7 +447,7 @@ func (c *g2nc) genIfStmt(scope *ast.Scope, s *ast.IfStmt) {
 	c.out(")")
 	c.genBlockStmt(scope, s.Body)
 	if s.Else != nil {
-		c.out("else")
+		c.out("else").outsp()
 		c.genStmt(scope, s.Else, 0)
 	}
 }
@@ -545,13 +549,6 @@ func (c *g2nc) genCaseClauseIf(scope *ast.Scope, s *ast.CaseClause, idx int) {
 	}
 }
 
-func (c *g2nc) funcistype(idt *ast.Ident) bool {
-	switch idt.Name {
-	case "string":
-		return true
-	}
-	return false
-}
 func (c *g2nc) genCallExpr(scope *ast.Scope, te *ast.CallExpr) {
 	scope = putscope(scope, ast.Fun, "infncall", te.Fun)
 	switch be := te.Fun.(type) {
@@ -568,13 +565,17 @@ func (c *g2nc) genCallExpr(scope *ast.Scope, te *ast.CallExpr) {
 			c.genCallExprDelete(scope, te)
 		} else if funame == "println" {
 			c.genCallExprPrintln(scope, te)
-		} else if c.funcistype(be) {
+		} else if funcistype(be) {
 			c.genTypeCtor(scope, te)
 		} else {
 			c.genCallExprNorm(scope, te)
 		}
 	case *ast.SelectorExpr:
-		c.genCallExprNorm(scope, te)
+		if funcistype(te.Fun) {
+			c.genTypeCtor(scope, te)
+		} else {
+			c.genCallExprNorm(scope, te)
+		}
 	default:
 		log.Println("todo", be, reflect.TypeOf(be))
 	}
@@ -791,6 +792,13 @@ func (c *g2nc) genTypeCtor(scope *ast.Scope, te *ast.CallExpr) {
 		default:
 			log.Println("todo", te.Fun)
 		}
+	case *ast.SelectorExpr:
+		c.out("(")
+		c.genExpr(scope, te.Fun)
+		c.out(")")
+		c.out("(")
+		c.genExpr(scope, te.Args[0])
+		c.out(")")
 	default:
 		log.Println("todo", te.Fun, be)
 	}
@@ -859,7 +867,7 @@ func (c *g2nc) chanElemTypeName(e ast.Expr) string {
 	return elemtyname
 }
 func (c *g2nc) genReturnStmt(scope *ast.Scope, e *ast.ReturnStmt) {
-	c.out("return")
+	c.out("return").outsp()
 	for idx, ae := range e.Results {
 		c.genExpr(scope, ae)
 		if idx < len(e.Results)-1 {
@@ -885,6 +893,7 @@ func (this *g2nc) genFieldList(scope *ast.Scope, flds *ast.FieldList,
 	for idx, fld := range flds.List {
 		_, _ = idx, fld
 		this.genTypeExpr(scope, fld.Type)
+		this.outsp()
 		if withname && len(fld.Names) > 0 {
 			this.genExpr(scope, fld.Names[0])
 		}
@@ -962,7 +971,7 @@ func (this *g2nc) genExpr2(scope *ast.Scope, e ast.Expr) {
 		idname := te.Name
 		idname = gopp.IfElseStr(idname == "nil", "nilptr", idname)
 		idname = gopp.IfElseStr(idname == "string", "cxstring*", idname)
-		this.out(idname, " ")
+		this.out(idname, "")
 	case *ast.ArrayType:
 		log.Println("unimplemented", te, reflect.TypeOf(e), e.Pos())
 	case *ast.StructType:
@@ -1134,9 +1143,16 @@ func (this *g2nc) genExpr2(scope *ast.Scope, e ast.Expr) {
 		if iscsel(te.X) {
 		} else {
 			this.genExpr(scope, te.X)
-			this.out("->")
+			selxty := this.info.TypeOf(te.X)
+			log.Println(selxty, reflect.TypeOf(selxty))
+			if isinvalidty2(selxty) { // package
+				this.out("_")
+			} else {
+				this.out("->")
+			}
 		}
 		this.genExpr(scope, te.Sel)
+		this.outsp()
 	case *ast.StarExpr:
 		varobj := this.psctx.info.ObjectOf(te.X.(*ast.Ident))
 		if istypety(varobj.String()) {
@@ -1390,6 +1406,8 @@ func (this *g2nc) exprTypeName(scope *ast.Scope, e ast.Expr) string {
 		return this.exprTypeName(scope, te.X) + "*"
 	case *ast.TypeAssertExpr:
 		return this.exprTypeName(scope, te.Type)
+	case *ast.SelectorExpr:
+		return fmt.Sprintf("%v_%v", te.X, te.Sel)
 	default:
 		log.Println("unknown", reflect.TypeOf(e), te, this.info.TypeOf(e))
 	}
@@ -1437,6 +1455,10 @@ func (this *g2nc) exprTypeFmt(scope *ast.Scope, e ast.Expr) string {
 			return "d"
 		case types.Uint, types.Uint64, types.Uint32, types.Uint16, types.Uint8:
 			return "d"
+		case types.UnsafePointer:
+			return "p"
+		case types.Uintptr:
+			return "p"
 		case types.Invalid:
 			return "d" // TODO
 		default:
@@ -1456,7 +1478,7 @@ func (this *g2nc) exprTypeFmt(scope *ast.Scope, e ast.Expr) string {
 }
 
 func (this *g2nc) genGenDecl(scope *ast.Scope, d *ast.GenDecl) {
-	log.Println(d.Tok, d.Specs, len(d.Specs), d.Tok.IsKeyword(), d.Tok.IsLiteral(), d.Tok.IsOperator())
+	// log.Println(d.Tok, d.Specs, len(d.Specs), d.Tok.IsKeyword(), d.Tok.IsLiteral(), d.Tok.IsOperator())
 	for _, spec := range d.Specs {
 		switch tspec := spec.(type) {
 		case *ast.TypeSpec:
@@ -1467,20 +1489,60 @@ func (this *g2nc) genGenDecl(scope *ast.Scope, d *ast.GenDecl) {
 			log.Println("todo", reflect.TypeOf(d), reflect.TypeOf(spec), tspec.Path, tspec.Name)
 			this.outf("// import %v by %s", tspec.Path, this.exprpos(tspec)).outnl().outnl()
 			// log.Println(tspec.Comment)
-			// log.Println(tspec.Doc)
 		default:
 			log.Println("unknown", reflect.TypeOf(d), reflect.TypeOf(spec))
 		}
 	}
 }
 func (this *g2nc) genTypeSpec(scope *ast.Scope, spec *ast.TypeSpec) {
-	// log.Println(spec.Name, spec.Type)
-	this.outf("struct %s {", spec.Name.Name)
-	this.outnl()
-	this.genExpr(scope, spec.Type)
-	this.out("}").outfh().outnl()
-	this.outf("typedef struct %s %s", spec.Name.Name, spec.Name.Name).outfh()
-	this.outnl().outnl()
+	switch te := spec.Type.(type) {
+	case *ast.StructType:
+		this.outf("struct %s {", spec.Name.Name)
+		this.outnl()
+		this.genExpr(scope, spec.Type)
+		this.out("}").outfh().outnl()
+		this.outf("typedef struct %s %s", spec.Name.Name, spec.Name.Name).outfh()
+		this.outnl().outnl()
+	case *ast.Ident:
+		this.outf("typedef %v %v", spec.Type, spec.Name.Name).outfh().outnl()
+		if this.pkgpfx() != "" {
+			this.outf("typedef %v %s%v", spec.Type, this.pkgpfx(), spec.Name.Name).outfh().outnl()
+		}
+	case *ast.StarExpr:
+		this.out("typedef").outsp()
+		this.genExpr(scope, te.X)
+		this.out("*").outsp()
+		this.out(spec.Name.Name)
+		this.outfh().outnl()
+
+		if this.pkgpfx() != "" {
+			this.out("typedef").outsp()
+			this.genExpr(scope, te.X)
+			this.out("*").outsp()
+			this.out(this.pkgpfx() + spec.Name.Name)
+			this.outfh().outnl()
+		}
+	case *ast.SelectorExpr:
+		this.out("typedef").outsp()
+		this.genExpr(scope, te.X)
+		this.out("_")
+		this.genExpr(scope, te.Sel)
+		this.outsp()
+		this.out(spec.Name.Name)
+		this.outfh().outnl()
+
+		if this.pkgpfx() != "" {
+			this.out("typedef").outsp()
+			this.genExpr(scope, te.X)
+			this.out("_")
+			this.genExpr(scope, te.Sel)
+			this.outsp()
+			this.out(this.pkgpfx() + spec.Name.Name)
+			this.outfh().outnl()
+		}
+	default:
+		log.Println("todo", spec.Name, spec.Type, reflect.TypeOf(spec.Type), te)
+	}
 }
 func putscope(scope *ast.Scope, k ast.ObjKind, name string, value interface{}) *ast.Scope {
 	var pscope = ast.NewScope(scope)
@@ -1498,8 +1560,11 @@ func (c *g2nc) genValueSpec(scope *ast.Scope, spec *ast.ValueSpec) {
 			v := spec.Values[idx]
 			c.out(c.exprTypeName(scope, v))
 		} else {
-			c.genExpr(scope, spec.Type)
+			// log.Println(spec.Type, reflect.TypeOf(spec.Type))
+			// c.genExpr(scope, spec.Type)
+			c.out(c.exprTypeName(scope, spec.Type))
 		}
+		c.outsp()
 		c.out(name.Name)
 		if idx < len(spec.Values) {
 			var ns = putscope(scope, ast.Var, "varname", name)
@@ -1513,6 +1578,7 @@ func (c *g2nc) genValueSpec(scope *ast.Scope, spec *ast.ValueSpec) {
 	}
 }
 
+func (this *g2nc) outsp() *g2nc   { return this.out(" ") }
 func (this *g2nc) outeq() *g2nc   { return this.out("=") }
 func (this *g2nc) outstar() *g2nc { return this.out("*") }
 func (this *g2nc) outfh() *g2nc   { return this.out(";") }
@@ -1520,7 +1586,7 @@ func (this *g2nc) outnl() *g2nc   { return this.out("\n") }
 func (this *g2nc) out(ss ...string) *g2nc {
 	for _, s := range ss {
 		// fmt.Print(s, " ")
-		this.sb.WriteString(s + " ")
+		this.sb.WriteString(s + "")
 	}
 	return this
 }
