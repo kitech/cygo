@@ -50,3 +50,9 @@ void* cxarray_get_at(Array* a0, int idx) {
     assert(rv == CC_OK);
     return out;
 }
+
+Array* cxarray_append(Array* a0, void* v) {
+    int rv = array_add(a0, v);
+    assert(rv == CC_OK);
+    return a0;
+}

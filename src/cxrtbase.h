@@ -54,6 +54,7 @@ cxeface cxeface_new_of2(void* data, int sz);
 // utils
 void println(const char* fmt, ...);
 void println2(const char* filename, int lineno, const char* funcname, const char* fmt, ...);
+#define unsafe_Sizeof(x) sizeof(x)
 
 // TODO
 #define gogorun
@@ -63,7 +64,6 @@ extern void cxrt_routine_post(void (*f)(void*), void*arg);
 extern void* cxrt_chan_new(int sz);
 extern void cxrt_chan_send(void*ch, void*arg);
 extern void* cxrt_chan_recv(void*arg);
-
 
 
 #include <sys/types.h>
@@ -83,6 +83,7 @@ void* cxmemdup(void* ptr, int sz);
 // cxstring begin
 typedef struct cxstring { char* ptr; int len; } cxstring;
 // typedef struct cxstring string;
+cxstring* cxstring_new();
 cxstring* cxstring_new_cstr(char* s);
 cxstring* cxstring_new_cstr2(char* s, int len);
 cxstring* cxstring_add(cxstring* s0, cxstring* s1);
@@ -94,6 +95,7 @@ char* CString(cxstring* s);
 cxstring* GoString(char* s);
 cxstring* GoStringN(char* s, int n);
 cxstring* cxstring_new_char(char ch);
+cxstring* cxstring_dup(cxstring* s);
 void panic(cxstring* s);
 void panicln(cxstring*s);
 // cxstring end
@@ -108,5 +110,7 @@ size_t cxhashtable_hash_str2(const char *key, int len);
 Array* cxarray_new();
 Array* cxarray_slice(Array* a0, int start, int end);
 void* cxarray_get_at(Array* a0, int idx);
+Array* cxarray_append(Array* a0, void* v);
 
 #endif
+

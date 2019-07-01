@@ -8,6 +8,7 @@ import (
 	"log"
 	"reflect"
 	"strings"
+	"unicode"
 
 	"gopp"
 )
@@ -30,14 +31,26 @@ func isstrty2(typ types.Type) bool {
 	}
 	return isstrty(typ.String())
 }
-func isslicety(tystr string) bool      { return strings.HasPrefix(tystr, "[]") }
-func isslicety2(typ types.Type) bool   { return isslicety(typ.String()) }
+func isslicety(tystr string) bool    { return strings.HasPrefix(tystr, "[]") }
+func isslicety2(typ types.Type) bool { return isslicety(typ.String()) }
+func isarrayty(tystr string) bool {
+	s := ""
+	for _, c := range tystr {
+		if !unicode.IsDigit(c) {
+			s += string(c)
+		}
+	}
+	return strings.HasPrefix(s, "[]") && !strings.HasPrefix(tystr, "[]")
+}
+func isarrayty2(typ types.Type) bool   { return isarrayty(typ.String()) }
 func iseface(tystr string) bool        { return strings.HasPrefix(tystr, "interface{}") }
 func iseface2(typ types.Type) bool     { return iseface(typ.String()) }
 func istypety(tystr string) bool       { return strings.HasPrefix(tystr, "type ") }
 func istypety2(typ types.Type) bool    { return istypety(typ.String()) }
 func isvarty(tystr string) bool        { return strings.HasPrefix(tystr, "var ") }
 func isvarty2(typ types.Type) bool     { return isvarty(typ.String()) }
+func isstructty(tystr string) bool     { return strings.Contains(tystr, "/.") } // struct ???
+func isstructty2(typ types.Type) bool  { return isstructty(typ.String()) }
 func isinvalidty(tystr string) bool    { return strings.HasPrefix(tystr, "invalid ") }
 func isinvalidty2(typ types.Type) bool { return isinvalidty(typ.String()) }
 
@@ -88,9 +101,16 @@ func sign2rety(v string) string {
 	if pos > 0 {
 		retstr = retstr[pos+2:]
 	}
+	if isstrty(retstr) {
+		return "cxstring*"
+	}
 	if iseface(retstr) {
 		retstr = "cxeface"
 	}
+	if retstr == "unsafe.Pointer" {
+		return "unsafe_Pointer"
+	}
+
 	return gopp.IfElseStr(isptr, retstr+"*", retstr)
 }
 

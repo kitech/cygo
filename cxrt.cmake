@@ -8,6 +8,7 @@ add_library(cxrt STATIC  ${mydir}/src/cxrtbase.c
   ${mydir}/src/cxmemory.c ${mydir}/src/cxstring.c
   ${mydir}/src/cxhashtable.c ${mydir}/src/cxarray.c
   ${mydir}/src/cxiface.c
+#  ${mydir}/src/cppminrt.cpp
   )
 
 include_directories(${mydir}/corona-c ${mydir}/cltc/include)
@@ -35,8 +36,11 @@ add_library(crn STATIC ${corona_c_srcs})
 set(CMAKE_C_FLAGS "-g -O0 -std=c11 -D_GNU_SOURCE ")
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -DGC_THREADS")
 set(corona_c_flags "-DNRDEBUG -DCORO_STACKALLOC -DCORO_UCONTEXT -DHAVE_UCONTEXT_H -DHAVE_SETJMP_H -DHAVE_SIGALTSTACK -fstack-usage")
+set(CMAKE_CXX_FLAGS "-nostdlib -fno-rtti -fno-rtti -fno-exceptions")
+#set(CMAKE_CXX_COMPILER "cc")
+
 set_target_properties(crn PROPERTIES COMPILE_FLAGS ${corona_c_flags})
 #set_target_properties(corona PROPERTIES COMPILE_FLAGS ${corona_c_flags})
 #target_link_libraries(corona -L./bdwgc/.libs -L./cltc/lib gc collectc event event_pthreads pthread dl)
-set(cxrt_ldflags "-L${mydir}/bdwgc/.libs -L${mydir}/cltc/lib -lgc -lcollectc -levent -levent_pthreads -lcurl -lpthread -ldl")
+set(cxrt_ldflags "-L${mydir}/bdwgc/.libs -L${mydir}/cltc/lib -lgc -lcollectc -levent -levent_pthreads -lcurl -lpthread -ldl -lc")
 

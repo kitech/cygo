@@ -147,6 +147,9 @@ func (this *g2nc) genPreFuncDecl(scope *ast.Scope, d *ast.FuncDecl) {
 func (this *g2nc) genFuncDecl(scope *ast.Scope, fd *ast.FuncDecl) {
 	if fd.Body == nil {
 		log.Println("decl only func", fd.Name)
+		if this.curpkg == "unsafe" && fd.Name.Name == "Sizeof" {
+			this.out("//")
+		}
 		this.out("extern").outsp()
 		// return
 	}
@@ -501,7 +504,7 @@ func (c *g2nc) genCaseClause(scope *ast.Scope, s *ast.CaseClause, idx int) {
 
 		// TODO precheck if have fallthrough
 		for idx, ce := range s.List {
-			c.out("case")
+			c.out("case").outsp()
 			c.genExpr(scope, ce)
 			c.out(":").outnl()
 			for idx2, be := range s.Body {
@@ -561,6 +564,8 @@ func (c *g2nc) genCallExpr(scope *ast.Scope, te *ast.CallExpr) {
 		} else if funame == "cap" {
 			c.genCallExprLen(scope, te)
 			// panic("not supported " + funame)
+		} else if funame == "append" {
+			c.genCallExprAppend(scope, te)
 		} else if funame == "delete" {
 			c.genCallExprDelete(scope, te)
 		} else if funame == "println" {
@@ -576,6 +581,8 @@ func (c *g2nc) genCallExpr(scope *ast.Scope, te *ast.CallExpr) {
 		} else {
 			c.genCallExprNorm(scope, te)
 		}
+	case *ast.ArrayType:
+		c.genTypeCtor(scope, te)
 	default:
 		log.Println("todo", be, reflect.TypeOf(be))
 	}
@@ -636,7 +643,7 @@ func (c *g2nc) genCallExprLen(scope *ast.Scope, te *ast.CallExpr) {
 		c.out("cxstring_len(")
 		c.genExpr(scope, arg0)
 		c.out(")")
-	} else if isslicety(argty.String()) {
+	} else if isslicety(argty.String()) || isarrayty(argty.String()) {
 		funame := te.Fun.(*ast.Ident).Name
 		if funame == "len" {
 			c.outf("array_size(")
@@ -649,6 +656,47 @@ func (c *g2nc) genCallExprLen(scope *ast.Scope, te *ast.CallExpr) {
 		} else {
 			panic(funame)
 		}
+	} else {
+		log.Println("todo", te.Args, argty)
+	}
+}
+func (c *g2nc) genCallExprAppend(scope *ast.Scope, te *ast.CallExpr) {
+	arg0 := te.Args[0]
+	argty := c.info.TypeOf(arg0)
+	if ismapty(argty.String()) {
+		panic(argty.String())
+		switch be := arg0.(type) {
+		case *ast.Ident:
+			c.outf("hashtable_size(%s)", be.Name)
+		case *ast.SelectorExpr:
+			c.out("hashtable_size(")
+			c.genExpr(scope, be.X)
+			c.out("->")
+			c.genExpr(scope, be.Sel)
+			c.out(")")
+		default:
+			log.Println("todo", reflect.TypeOf(arg0))
+		}
+	} else if isstrty(argty.String()) {
+		panic(argty.String())
+		c.out("cxstring_len(")
+		c.genExpr(scope, arg0)
+		c.out(")")
+	} else if isslicety(argty.String()) || isarrayty(argty.String()) {
+		// funame := te.Fun.(*ast.Ident).Name
+		for idx := 1; idx < len(te.Args); idx++ {
+			ae := te.Args[idx]
+			if idx > 1 {
+				c.genExpr(scope, arg0)
+				c.outeq()
+			}
+			c.outf("cxarray_append(")
+			c.genExpr(scope, arg0)
+			c.out(",")
+			c.genExpr(scope, ae)
+			c.out(")").outfh().outnl()
+		}
+
 	} else {
 		log.Println("todo", te.Args, argty)
 	}
@@ -785,7 +833,12 @@ func (c *g2nc) genTypeCtor(scope *ast.Scope, te *ast.CallExpr) {
 			case *ast.BasicLit:
 				c.outf("cxstring_new_char(%v)", ce.Value)
 			case *ast.Ident:
-				c.outf("cxstring_new_char(%v)", ce.Name)
+				varty := c.info.TypeOf(arg0)
+				if isslicety2(varty) {
+					c.outf("cxstring_new_cstr2((%v)->ptr, (%v)->len)", ce.Name, ce.Name)
+				} else {
+					c.outf("cxstring_new_char(%v)", ce.Name)
+				}
 			default:
 				log.Println("todo", te.Fun, ce)
 			}
@@ -797,6 +850,10 @@ func (c *g2nc) genTypeCtor(scope *ast.Scope, te *ast.CallExpr) {
 		c.genExpr(scope, te.Fun)
 		c.out(")")
 		c.out("(")
+		c.genExpr(scope, te.Args[0])
+		c.out(")")
+	case *ast.ArrayType:
+		c.out("cxstring_dup(")
 		c.genExpr(scope, te.Args[0])
 		c.out(")")
 	default:
@@ -902,6 +959,10 @@ func (this *g2nc) genFieldList(scope *ast.Scope, flds *ast.FieldList,
 	}
 }
 
+func (c *g2nc) genStructZeroFields(scope *ast.Scope) {
+	log.Println("zero struct fields")
+}
+
 func (this *g2nc) genTypeExpr(scope *ast.Scope, e ast.Expr) {
 	switch te := e.(type) {
 	case *ast.Ident:
@@ -933,6 +994,10 @@ func (this *g2nc) genTypeExpr(scope *ast.Scope, e ast.Expr) {
 		} else {
 			this.outf("cxeface")
 		}
+	case *ast.SelectorExpr:
+		this.genExpr(scope, te.X)
+		this.out("_")
+		this.genExpr(scope, te.Sel)
 	default:
 		log.Println(e, reflect.TypeOf(e))
 	}
@@ -988,7 +1053,8 @@ func (this *g2nc) genExpr2(scope *ast.Scope, e ast.Expr) {
 		keepop := true
 		switch t2 := te.X.(type) {
 		case *ast.CompositeLit:
-			this.out(fmt.Sprintf("(%v*)cxmalloc(sizeof(%v))", t2.Type, t2.Type)) //.outnl()
+			// this.out(fmt.Sprintf("(%v*)cxmalloc(sizeof(%v))", t2.Type, t2.Type)) //.outnl()
+			this.outf("%v_new_zero()", t2.Type) //.outnl()
 			keepop = false
 		case *ast.UnaryExpr:
 			log.Println(t2, t2.X, t2.Op)
@@ -1314,6 +1380,14 @@ func (this *g2nc) exprTypeName(scope *ast.Scope, e ast.Expr) string {
 				return "int8"
 			case types.Uint8:
 				return "uint8"
+			case types.Int64:
+				return "int64"
+			case types.Uint64:
+				return "uint64"
+			case types.Uintptr:
+				return "uintptr"
+			case types.UnsafePointer:
+				return sign2rety(rety.String())
 			default:
 				log.Println("todo", rety)
 			}
@@ -1369,6 +1443,8 @@ func (this *g2nc) exprTypeName(scope *ast.Scope, e ast.Expr) string {
 		case *ast.SelectorExpr:
 			vartyp := this.info.TypeOf(te)
 			return typesty2str(vartyp)
+		case *ast.ArrayType:
+			return this.exprTypeName(scope, te.Args[0])
 		default:
 			log.Println("todo", be, reflect.TypeOf(be))
 		}
@@ -1469,7 +1545,11 @@ func (this *g2nc) exprTypeFmt(scope *ast.Scope, e ast.Expr) string {
 		return "p"
 	case *types.Slice:
 		return "p"
+	case *types.Array:
+		return "p"
 	case *types.Interface:
+		return "p"
+	case *types.Struct:
 		return "p"
 	default:
 		log.Println("unknown", t, reflect.TypeOf(ety))
@@ -1502,7 +1582,25 @@ func (this *g2nc) genTypeSpec(scope *ast.Scope, spec *ast.TypeSpec) {
 		this.genExpr(scope, spec.Type)
 		this.out("}").outfh().outnl()
 		this.outf("typedef struct %s %s", spec.Name.Name, spec.Name.Name).outfh()
-		this.outnl().outnl()
+		this.outnl()
+		this.outf("%s* %s_new_zero() {", spec.Name.Name, spec.Name.Name).outnl()
+		this.outf("  %s* obj = (%s*)cxmalloc(sizeof(%s))",
+			spec.Name.Name, spec.Name.Name, spec.Name.Name).outfh().outnl()
+		for _, fld := range te.Fields.List {
+			fldty := this.info.TypeOf(fld.Type)
+			for _, fldname := range fld.Names {
+				if isstrty2(fldty) {
+					this.outf("obj->%s = cxstring_new()", fldname.Name).outfh().outnl()
+				} else if isslicety2(fldty) {
+					this.outf("obj->%s = cxarray_new()", fldname.Name).outfh().outnl()
+				} else if ismapty2(fldty) {
+					this.outf("obj->%s = cxhashtable_new()", fldname.Name).outfh().outnl()
+				}
+			}
+		}
+		this.out("  return obj").outfh().outnl()
+		this.out("}").outnl()
+		this.outnl()
 	case *ast.Ident:
 		this.outf("typedef %v %v", spec.Type, spec.Name.Name).outfh().outnl()
 		if this.pkgpfx() != "" {
@@ -1552,7 +1650,9 @@ func putscope(scope *ast.Scope, k ast.ObjKind, name string, value interface{}) *
 	return pscope
 }
 func (c *g2nc) genValueSpec(scope *ast.Scope, spec *ast.ValueSpec) {
-	for idx, name := range spec.Names {
+	for idx, varname := range spec.Names {
+		isglobvar := c.psctx.isglobal(varname)
+		varty := c.info.TypeOf(spec.Type)
 		if spec.Type == nil {
 			if len(spec.Names) != len(spec.Values) {
 				log.Println("todo", idx, len(spec.Names), len(spec.Values), spec.Names, spec.Values)
@@ -1563,18 +1663,50 @@ func (c *g2nc) genValueSpec(scope *ast.Scope, spec *ast.ValueSpec) {
 			// log.Println(spec.Type, reflect.TypeOf(spec.Type))
 			// c.genExpr(scope, spec.Type)
 			c.out(c.exprTypeName(scope, spec.Type))
+			if isstructty2(varty) && !strings.HasPrefix(varty.String(), "*") {
+				c.outstar()
+			}
 		}
 		c.outsp()
-		c.out(name.Name)
+		c.out(varname.Name)
 		if idx < len(spec.Values) {
-			var ns = putscope(scope, ast.Var, "varname", name)
+			var ns = putscope(scope, ast.Var, "varname", varname)
 			c.out("=")
 			c.genExpr(ns, spec.Values[idx])
 		} else {
-			// TODO set default value
-			c.out("=", "{0}")
+			c.outeq()
+			if isglobvar {
+				c.out("{0}") // must constant for c
+			} else if isstrty2(varty) {
+				c.out("cxstring_new()")
+			} else if isslicety2(varty) {
+				c.out("cxarray_new()")
+			} else if ismapty2(varty) {
+				c.out("cxhashtable_new()")
+			} else if isstructty2(varty) {
+				tystr := sign2rety(varty.String())
+				tystr = strings.Trim(tystr, "*")
+				c.outf("%s_new_zero()", tystr)
+			} else {
+				c.out("{0}")
+			}
 		}
-		c.outfh().outnl() // TODO global value
+		if isglobvar {
+			c.outfh().outnl() // TODO global value
+		}
+	}
+}
+
+func (psctx *ParserContext) isglobal(e ast.Node) bool {
+	// log.Println(e, reflect.TypeOf(e))
+	switch te := e.(type) {
+	case *ast.File:
+		return true
+	case *ast.FuncDecl:
+		return false
+	default:
+		gopp.G_USED(te)
+		return psctx.isglobal(psctx.cursors[e].Parent())
 	}
 }
 
