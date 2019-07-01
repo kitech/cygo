@@ -23,7 +23,12 @@ type compContext struct {
 
 func ismapty(tystr string) bool    { return strings.HasPrefix(tystr, "map[") }
 func ismapty2(typ types.Type) bool { return ismapty(typ.String()) }
-func isstrty(tystr string) bool    { return tystr == "string" }
+func isstrty(tystr string) bool {
+	if strings.HasPrefix(tystr, "untyped ") {
+		tystr = tystr[8:]
+	}
+	return tystr == "string"
+}
 func isstrty2(typ types.Type) bool {
 	if typ == nil {
 		log.Println("todo", typ)
@@ -110,7 +115,7 @@ func sign2rety(v string) string {
 	if retstr == "unsafe.Pointer" {
 		return "unsafe_Pointer"
 	}
-
+	retstr = strings.TrimLeft(retstr, "*")
 	return gopp.IfElseStr(isptr, retstr+"*", retstr)
 }
 

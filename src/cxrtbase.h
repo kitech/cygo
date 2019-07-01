@@ -34,6 +34,7 @@ typedef unsigned int uint;
 typedef void* error;
 
 #define nilptr NULL
+#define iota 0
 
 typedef struct _type {
     void* reserver;
