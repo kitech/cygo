@@ -49,7 +49,7 @@ func isarrayty(tystr string) bool {
 }
 func isarrayty2(typ types.Type) bool   { return isarrayty(typ.String()) }
 func iseface(tystr string) bool        { return strings.HasPrefix(tystr, "interface{}") }
-func iseface2(typ types.Type) bool     { return iseface(typ.String()) }
+func iseface2(typ types.Type) bool     { return typ != nil && iseface(typ.String()) }
 func istypety(tystr string) bool       { return strings.HasPrefix(tystr, "type ") }
 func istypety2(typ types.Type) bool    { return istypety(typ.String()) }
 func isvarty(tystr string) bool        { return strings.HasPrefix(tystr, "var ") }
@@ -119,25 +119,64 @@ func sign2rety(v string) string {
 	return gopp.IfElseStr(isptr, retstr+"*", retstr)
 }
 
-var tmpvarno = 12345
+var tmpvarno = 100
 
 func tmpvarname() string {
 	tmpvarno++
 	return fmt.Sprintf("gxtv%d", tmpvarno)
 }
 
-// ast.CallExpr.Fun
-func funcistype(idt ast.Expr) bool {
+// idt is ast.CallExpr.Fun
+func funcistypedep(idt ast.Expr) bool {
 	switch te := idt.(type) {
 	case *ast.Ident:
 		switch te.Name {
 		case "string":
 			return true
+		default:
+			log.Println("todo", idt, reflect.TypeOf(idt))
 		}
 	case *ast.SelectorExpr:
 		if fmt.Sprintf("%v", te.X) == "unsafe" && fmt.Sprintf("%v", te.Sel) == "Pointer" {
 			return true
 		}
+	default:
+		log.Println("todo", idt, reflect.TypeOf(idt))
 	}
 	return false
+}
+
+type basecomp struct {
+	psctx    *ParserContext
+	strtypes map[string]types.TypeAndValue
+}
+
+func newbasecomp(psctx *ParserContext) *basecomp {
+	bc := &basecomp{strtypes: map[string]types.TypeAndValue{}}
+	bc.psctx = psctx
+	bc.initbc()
+	return bc
+}
+func (bc *basecomp) initbc() {
+	psctx := bc.psctx
+	for tye, tyval := range psctx.info.Types {
+		bc.strtypes[bc.exprstr(tye)] = tyval
+	}
+}
+
+// idt is ast.CallExpr.Fun
+func (bc *basecomp) funcistype(idt ast.Expr) bool {
+	tyval, ok := bc.strtypes[bc.exprstr(idt)]
+	if ok {
+	}
+	return ok && tyval.IsType()
+}
+
+func (bc *basecomp) exprstr(e ast.Expr) string { return types.ExprString(e) }
+
+func (c *basecomp) exprpos(e ast.Node) token.Position {
+	if e == nil {
+		return token.Position{}
+	}
+	return c.psctx.fset.Position(e.Pos())
 }

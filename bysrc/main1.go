@@ -5,6 +5,7 @@ import (
 	"io/ioutil"
 	"log"
 	"os"
+	"os/exec"
 	"runtime"
 	"strings"
 	"time"
@@ -68,7 +69,14 @@ func main() {
 		code += str
 		extname = ext
 	}
-	ioutil.WriteFile("opkgs/foo."+extname, []byte(code), 0644)
+	fname := "opkgs/foo." + extname
+	ioutil.WriteFile(fname, []byte(code), 0644)
+	clangfmt(fname)
+}
+func clangfmt(fname string) {
+	cmdo := exec.Command("clang-format", "-i", fname)
+	err := cmdo.Run()
+	gopp.ErrPrint(err, fname)
 }
 func dogen(fname string, pkgrename string) (*ParserContext, *g2nc) {
 	psctx := NewParserContext(fname, pkgrename)
@@ -82,7 +90,7 @@ func dogen(fname string, pkgrename string) (*ParserContext, *g2nc) {
 
 	// g2n := g2nim{}
 	g2n := g2nc{}
-	g2n.psctx = psctx
+	g2n.basecomp = newbasecomp(psctx)
 	g2n.genpkgs()
 	code, ext := g2n.code()
 	dstfile := psctx.bdpkgs.Name + ".go." + ext

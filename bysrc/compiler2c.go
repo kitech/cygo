@@ -21,19 +21,13 @@ func init() {
 }
 
 type g2nc struct {
-	psctx  *ParserContext
+	*basecomp
+
 	sb     strings.Builder
 	curpkg string
 	pkgo   *ast.Package
 
 	info *types.Info
-}
-
-func (c *g2nc) exprpos(e ast.Node) token.Position {
-	if e == nil {
-		return token.Position{}
-	}
-	return c.psctx.fset.Position(e.Pos())
 }
 
 func (this *g2nc) genpkgs() {
@@ -570,13 +564,13 @@ func (c *g2nc) genCallExpr(scope *ast.Scope, te *ast.CallExpr) {
 			c.genCallExprDelete(scope, te)
 		} else if funame == "println" {
 			c.genCallExprPrintln(scope, te)
-		} else if funcistype(be) {
+		} else if c.funcistype(be) {
 			c.genTypeCtor(scope, te)
 		} else {
 			c.genCallExprNorm(scope, te)
 		}
 	case *ast.SelectorExpr:
-		if funcistype(te.Fun) {
+		if c.funcistype(te.Fun) {
 			c.genTypeCtor(scope, te)
 		} else {
 			c.genCallExprNorm(scope, te)
@@ -722,11 +716,14 @@ func (c *g2nc) genCallExprDelete(scope *ast.Scope, te *ast.CallExpr) {
 			default:
 				log.Println("todo", te.Kind)
 			}
+		case *ast.Ident:
+			keystr = c.exprstr(arg1)
 		default:
-			log.Println("todo", reflect.TypeOf(arg1), arg1)
+			log.Println("todo", reflect.TypeOf(arg1), arg1, c.exprstr(arg1), c.exprpos(arg0))
 		}
-		c.outf("hashtable_remove(%s, (void*)(uintptr_t)%s, 0)",
-			arg0.(*ast.Ident).Name, keystr).outfh().outnl()
+		c.outf("hashtable_remove(")
+		c.genExpr(scope, arg0)
+		c.outf(", (void*)(uintptr_t)%s, 0)", keystr).outfh().outnl()
 	} else {
 		log.Println("todo", te.Args, argty)
 	}
@@ -810,6 +807,7 @@ func (c *g2nc) genCallExprNorm(scope *ast.Scope, te *ast.CallExpr) {
 			c.out(vartystr + "_" + selfn.Sel.Name)
 		}
 	} else {
+
 		c.genExpr(scope, te.Fun)
 	}
 
@@ -850,14 +848,17 @@ func (c *g2nc) genTypeCtor(scope *ast.Scope, te *ast.CallExpr) {
 				log.Println("todo", te.Fun, ce)
 			}
 		default:
-			log.Println("todo", te.Fun)
+			// log.Println("todo", te.Fun)
+			c.outf("(%s)(", c.exprstr(te.Fun))
+			c.genFuncArgs(scope, te.Args)
+			c.outf(")")
 		}
 	case *ast.SelectorExpr:
 		c.out("(")
 		c.genExpr(scope, te.Fun)
 		c.out(")")
 		c.out("(")
-		c.genExpr(scope, te.Args[0])
+		c.genFuncArgs(scope, te.Args)
 		c.out(")")
 	case *ast.ArrayType:
 		c.out("cxstring_dup(")
@@ -865,6 +866,14 @@ func (c *g2nc) genTypeCtor(scope *ast.Scope, te *ast.CallExpr) {
 		c.out(")")
 	default:
 		log.Println("todo", te.Fun, be)
+	}
+}
+func (c *g2nc) genFuncArgs(scope *ast.Scope, args []ast.Expr) {
+	for idx, arg := range args {
+		c.genExpr(scope, arg)
+		if idx+1 < len(args) {
+			c.out(",")
+		}
 	}
 }
 
@@ -1155,7 +1164,11 @@ func (this *g2nc) genExpr2(scope *ast.Scope, e ast.Expr) {
 		varty := this.info.TypeOf(te.X)
 		vo := scope.Lookup("varval")
 		if ismapty(varty.String()) {
-			this.genCxmapAddkv(scope, te.X, te.Index, vo.Data.(ast.Expr))
+			if vo == nil {
+				this.genCxmapAddkv(scope, te.X, te.Index, nil)
+			} else {
+				this.genCxmapAddkv(scope, te.X, te.Index, vo.Data)
+			}
 		} else if isslicety(varty.String()) {
 			// get or set?
 			if vo == nil { // right value
@@ -1264,7 +1277,7 @@ func (this *g2nc) genExpr2(scope *ast.Scope, e ast.Expr) {
 		log.Println("unknown", reflect.TypeOf(e), e, te)
 	}
 }
-func (c *g2nc) genCxmapAddkv(scope *ast.Scope, vnamex interface{}, ke, ve ast.Expr) {
+func (c *g2nc) genCxmapAddkv(scope *ast.Scope, vnamex interface{}, ke ast.Expr, vei interface{}) {
 	keystr := ""
 	switch be := ke.(type) {
 	case *ast.BasicLit:
@@ -1299,13 +1312,13 @@ func (c *g2nc) genCxmapAddkv(scope *ast.Scope, vnamex interface{}, ke, ve ast.Ex
 	}
 
 	valstr := ""
-	switch be := ve.(type) {
+	switch be := vei.(type) {
 	case *ast.BasicLit:
 		valstr = be.Value
 	case *ast.Ident:
 		valstr = be.Name
 	default:
-		log.Println("unknown", ve, reflect.TypeOf(ke), reflect.TypeOf(ve))
+		log.Println("unknown", vei, reflect.TypeOf(ke), reflect.TypeOf(vei))
 	}
 
 	varstr := fmt.Sprintf("%v", vnamex)
@@ -1374,219 +1387,65 @@ func (c *g2nc) genCxarrGet(scope *ast.Scope, vname ast.Expr, vidx ast.Expr) {
 	c.outf("cxarray_get_at(%v, %v)", vname, idxstr)
 }
 func (this *g2nc) exprTypeName(scope *ast.Scope, e ast.Expr) string {
+	log.Println(e, reflect.TypeOf(e))
+	tyname := this.exprTypeNameImpl(scope, e)
+	if tyname == "unknownty" {
+		// log.Panicln(tyname, e, reflect.TypeOf(e), this.exprpos(e))
+	}
+	return tyname
+}
+func (this *g2nc) exprTypeNameImpl(scope *ast.Scope, e ast.Expr) string {
 
 	{
 		// return "unknownty"
 	}
 
-	switch te := e.(type) {
-	case *ast.Ident:
-		ety := this.info.TypeOf(e)
-		switch rety := ety.(type) {
-		case *types.Chan:
-			return "void*"
-		case *types.Basic:
-			switch rety.Kind() {
-			case types.Bool, types.UntypedBool:
-				return "bool"
-			case types.String:
-				return "cxstring*"
-			case types.Int, types.UntypedInt:
-				return "int"
-			case types.Uint:
-				return "uint"
-			case types.Rune:
-				return "rune"
-			case types.Int8:
-				return "int8"
-			case types.Uint8:
-				return "uint8"
-			case types.Int64:
-				return "int64"
-			case types.Uint64:
-				return "uint64"
-			case types.Uintptr:
-				return "uintptr"
-			case types.Float64, types.Float32:
-				return rety.Name()
-			case types.UnsafePointer:
-				return sign2rety(rety.String())
-			default:
-				log.Println("todo", rety)
-			}
-		case *types.Named:
-			return te.Name
-		case *types.Pointer:
-			ety := this.info.TypeOf(e)
-			log.Println(ety, sign2rety(ety.String()))
-			return sign2rety(ety.String())
-		case *types.Interface:
-			return gopp.IfElseStr(rety.NumMethods() > 0, "cxiface", "cxeface")
-		case *types.Signature:
-			r0ty := rety.Results().At(0)
-			return typesty2str(r0ty.Type())
-		default:
-			log.Println("unknown", ety, rety, reflect.TypeOf(ety))
+	goty := this.info.TypeOf(e)
+	tyval, isudty := this.strtypes[goty.String()]
+
+	switch te := goty.(type) {
+	case *types.Basic:
+		if isstrty(te.Name()) {
+			return "cxstring*"
+		} else {
+			return te.Name()
 		}
-		return te.Name
-	case *ast.ArrayType:
+	case *types.Named:
+		return sign2rety(te.String())
+	case *types.Pointer:
+		return sign2rety(te.String())
+	case *types.Slice, *types.Array:
 		return "Array*"
-	case *ast.StructType:
-		log.Println("todo")
-	case *ast.UnaryExpr:
-		switch te.Op {
-		case token.AND:
-			return this.exprTypeName(scope, te.X) + "*"
-		case token.NOT:
-			return "bool"
-		default:
-			log.Println("todo", te)
-		}
-	case *ast.CompositeLit:
-		return this.exprTypeName(scope, te.Type)
-	case *ast.BasicLit:
-		tyname := strings.ToLower(te.Kind.String())
-		if tyname == "string" {
-			tyname = "cxstring*"
-		}
-		return tyname
-	case *ast.CallExpr:
-		switch be := te.Fun.(type) {
-		case *ast.Ident:
-			switch te.Fun.(*ast.Ident).Name {
-			case "make":
-				return this.exprTypeName(scope, te.Args[0])
-			case "len", "cap":
-				return "int"
-			default:
-				rety := this.info.TypeOf(te.Fun)
-				// log.Println(rety, reflect.TypeOf(rety))
-				// log.Println(rety.Underlying(), reflect.TypeOf(rety.Underlying()))
-				return sign2rety(rety.String())
-			}
-		case *ast.SelectorExpr:
-			vartyp := this.info.TypeOf(te)
-			return typesty2str(vartyp)
-		case *ast.ArrayType:
-			return this.exprTypeName(scope, te.Args[0])
-		case *ast.ParenExpr:
-			return this.exprTypeName(scope, be.X)
-		default:
-			log.Println("todo", be, reflect.TypeOf(be))
-		}
-	case *ast.ChanType:
-		return "void*"
-	case *ast.MapType:
-		return "HashTable*"
-	case *ast.SliceExpr:
-		varty := this.info.TypeOf(te.X)
-		if isstrty2(varty) {
-			return "cxstring*"
-		} else if isslicety2(varty) {
-			return "Array*"
-		} else {
-			log.Println("toto", varty)
-		}
-	case *ast.IndexExpr:
-		varty := this.info.TypeOf(e)
-		return strings.ToLower(varty.String())
-	case *ast.BinaryExpr:
-		if te.Op.IsOperator() {
-			switch te.Op {
-			case token.EQL, token.NEQ, token.LAND,
-				token.GTR, token.LSS, token.LEQ, token.GEQ:
-				return "bool"
-			case token.SUB, token.ADD, token.MUL, token.QUO, token.REM:
-				return this.exprTypeName(scope, te.X)
-			case token.SHL:
-				return this.exprTypeName(scope, te.X)
-			default:
-				log.Println("todo", te.Op)
-			}
-		} else {
-			log.Println("todo", te)
-		}
-	case *ast.StarExpr:
-		varty := this.info.TypeOf(e)
-		if isstrty2(varty) {
-			return "cxstring*"
-		}
-		return this.exprTypeName(scope, te.X) + "*"
-	case *ast.TypeAssertExpr:
-		return this.exprTypeName(scope, te.Type)
-	case *ast.SelectorExpr:
-		return fmt.Sprintf("%v_%v", te.X, te.Sel)
 	default:
-		log.Println("unknown", reflect.TypeOf(e), te, this.info.TypeOf(e))
+		log.Println(goty, reflect.TypeOf(goty), isudty, tyval, te)
+		return te.String()
 	}
-	return "unknownty"
+
+	panic("Not reachable")
 }
 func (this *g2nc) exprTypeFmt(scope *ast.Scope, e ast.Expr) string {
+	goty := this.info.TypeOf(e)
+	tyval, isudty := this.strtypes[goty.String()]
 
-	ety := this.info.TypeOf(e)
-	// log.Println(reflect.TypeOf(e), ety)
-	if ety == nil {
-		switch te := e.(type) {
-		case *ast.CallExpr:
-			// TODO builtin type preput to types.Info
-			switch te.Fun.(*ast.Ident).Name {
-			case "gettid":
-				return "d"
-			default:
-				log.Println("unknown", te)
-			}
-		case *ast.Ident:
-			return "d"
-		case *ast.SelectorExpr:
-			if iscsel(te.X) {
-				return "d-cgo"
-			}
-			return fmt.Sprintf("%v", te)
-		default:
-			gopp.G_USED(te)
-			log.Println("unknown", e, reflect.TypeOf(e))
-		}
-		return ""
-	}
-
-	// eval := this.info.Types[e]
-	switch t := ety.Underlying().(type) {
-	case *types.Pointer:
-		return "p"
+	switch te := goty.(type) {
 	case *types.Basic:
-		switch t.Kind() {
-		case types.String:
-			return ".*s"
-		case types.Bool:
+		if isstrty(te.Name()) {
+			return "*.s"
+		} else {
 			return "d"
-		case types.Int, types.Int64, types.Int32 /*types.Rune*/, types.Int16, types.Int8:
-			return "d"
-		case types.Uint, types.Uint64, types.Uint32, types.Uint16, types.Uint8:
-			return "d"
-		case types.UnsafePointer:
-			return "p"
-		case types.Uintptr:
-			return "p"
-		case types.Invalid:
-			return "d" // TODO
-		default:
-			log.Println("unknown", t, e, ety)
 		}
-	case *types.Map:
-		// log.Println(t.String(), t.Key(), t.Elem())
-		return "p"
-	case *types.Slice:
-		return "p"
-	case *types.Array:
-		return "p"
-	case *types.Interface:
-		return "p"
-	case *types.Struct:
-		return "p"
+	case *types.Named:
+		return "%p"
+	case *types.Pointer:
+		return "%p"
+	case *types.Slice, *types.Array:
+		return "%p"
 	default:
-		log.Println("unknown", t, reflect.TypeOf(ety))
+		log.Println(goty, reflect.TypeOf(goty), isudty, tyval, te)
+		return "%d-wt"
 	}
-	return fmt.Sprintf("d-%v", e)
+
+	panic("Not reachable")
 }
 
 func (this *g2nc) genGenDecl(scope *ast.Scope, d *ast.GenDecl) {
@@ -1700,6 +1559,10 @@ func (c *g2nc) genValueSpec(scope *ast.Scope, spec *ast.ValueSpec, validx int) {
 			varty = types.Typ[types.UntypedInt]
 		}
 		if varty == nil {
+			varty = types.Typ[types.UntypedInt]
+			log.Println("todo", spec.Values[idx], types.ExprString(spec.Values[idx]))
+		}
+		if varty == nil {
 			panic("ddd")
 		}
 		if validx == 0 {
@@ -1717,7 +1580,15 @@ func (c *g2nc) genValueSpec(scope *ast.Scope, spec *ast.ValueSpec, validx int) {
 			c.out(sign2rety(varty.String())).outsp()
 		} else {
 			c.out("/*var*/").outsp()
-			c.out(sign2rety(varty.String())).outsp()
+			if isstrty2(varty) {
+				c.out("cxstring*").outsp()
+			} else if isarrayty2(varty) || isslicety2(varty) {
+				c.out("Array*").outsp()
+			} else if ismapty2(varty) {
+				c.out("HashTable*").outsp()
+			} else {
+				c.out(sign2rety(varty.String())).outsp()
+			}
 		}
 		if isglobvar && isstrty2(varty) {
 			log.Println("not supported global string/struct value", varname)

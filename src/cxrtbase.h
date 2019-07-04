@@ -32,6 +32,8 @@ typedef double float64;
 typedef uintptr_t uintptr;
 typedef unsigned int uint;
 typedef void* error;
+typedef int C_int;
+typedef unsigned int C_uint;
 
 #define nilptr NULL
 #define iota 0
