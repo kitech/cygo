@@ -51,7 +51,7 @@ logunlock() {
         fflush(stderr); logunlock();                                    \
     }
 
-static int loglvl = LOGLVL_ERROR;
+static int loglvl = LOGLVL_INFO;
 // or CRNDEBUG="loglvl=3..."
 void crn_loglvl_forenv() {
     char sep = ',';

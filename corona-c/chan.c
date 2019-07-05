@@ -24,6 +24,7 @@
 #include "futex.h"
 #include "chan.h"
 #include "szqueue.h"
+#include "coronapriv.h"
 
 #ifdef _WIN32
 #include <windows.h>
@@ -66,23 +67,27 @@ void current_utc_time(struct timespec *ts) {
 #endif
 }
 
+static void chan_finalizer(void* ch) {
+    linfo("chan dtor %p\n", ch);
+}
 // Allocates and returns a new channel. The capacity specifies whether the
 // channel should be buffered or not. A capacity of 0 will create an unbuffered
 // channel. Sets errno and returns NULL if initialization failed.
 chan_t* chan_init(size_t capacity)
 {
-    chan_t* chan = (chan_t*) malloc(sizeof(chan_t));
+    chan_t* chan = (chan_t*) crn_gc_malloc(sizeof(chan_t));
     if (!chan)
     {
         errno = ENOMEM;
         return NULL;
     }
+    crn_set_finalizer(chan, chan_finalizer);
 
     if (capacity > 0)
     {
         if (buffered_chan_init(chan, capacity) != 0)
         {
-            free(chan);
+            crn_gc_free(chan);
             return NULL;
         }
     }
@@ -90,11 +95,10 @@ chan_t* chan_init(size_t capacity)
     {
         if (unbuffered_chan_init(chan) != 0)
         {
-            free(chan);
+            crn_gc_free(chan);
             return NULL;
         }
     }
-    
     return chan;
 }
 
@@ -175,7 +179,7 @@ void chan_dispose(chan_t* chan)
     pmutex_destroy(&chan->m_mu);
     pcond_destroy(&chan->r_cond);
     pcond_destroy(&chan->w_cond);
-    free(chan);
+    crn_gc_free(chan);
 }
 
 // Once a channel is closed, data cannot be sent into it. If the channel is
@@ -496,7 +500,7 @@ static int chan_is_buffered(chan_t* chan)
 
 int chan_send_int32(chan_t* chan, int32_t data)
 {
-    int32_t* wrapped = malloc(sizeof(int32_t));
+    int32_t* wrapped = crn_gc_malloc(sizeof(int32_t));
     if (!wrapped)
     {
         return -1;
@@ -507,7 +511,7 @@ int chan_send_int32(chan_t* chan, int32_t data)
     int success = chan_send(chan, wrapped);
     if (success != 0)
     {
-        free(wrapped);
+        crn_gc_free(wrapped);
     }
 
     return success;
@@ -520,7 +524,7 @@ int chan_recv_int32(chan_t* chan, int32_t* data)
     if (wrapped != NULL)
     {
         *data = *wrapped;
-        free(wrapped);
+        crn_gc_free(wrapped);
     }
 
     return success;
@@ -528,7 +532,7 @@ int chan_recv_int32(chan_t* chan, int32_t* data)
 
 int chan_send_int64(chan_t* chan, int64_t data)
 {
-    int64_t* wrapped = malloc(sizeof(int64_t));
+    int64_t* wrapped = crn_gc_malloc(sizeof(int64_t));
     if (!wrapped)
     {
         return -1;
@@ -539,7 +543,7 @@ int chan_send_int64(chan_t* chan, int64_t data)
     int success = chan_send(chan, wrapped);
     if (success != 0)
     {
-        free(wrapped);
+        crn_gc_free(wrapped);
     }
 
     return success;
@@ -552,7 +556,7 @@ int chan_recv_int64(chan_t* chan, int64_t* data)
     if (wrapped != NULL)
     {
         *data = *wrapped;
-        free(wrapped);
+        crn_gc_free(wrapped);
     }
 
     return success;
@@ -560,7 +564,7 @@ int chan_recv_int64(chan_t* chan, int64_t* data)
 
 int chan_send_double(chan_t* chan, double data)
 {
-    double* wrapped = malloc(sizeof(double));
+    double* wrapped = crn_gc_malloc(sizeof(double));
     if (!wrapped)
     {
         return -1;
@@ -571,7 +575,7 @@ int chan_send_double(chan_t* chan, double data)
     int success = chan_send(chan, wrapped);
     if (success != 0)
     {
-        free(wrapped);
+        crn_gc_free(wrapped);
     }
 
     return success;
@@ -584,7 +588,7 @@ int chan_recv_double(chan_t* chan, double* data)
     if (wrapped != NULL)
     {
         *data = *wrapped;
-        free(wrapped);
+        crn_gc_free(wrapped);
     }
 
     return success;
@@ -592,7 +596,7 @@ int chan_recv_double(chan_t* chan, double* data)
 
 int chan_send_buf(chan_t* chan, void* data, size_t size)
 {
-    void* wrapped = malloc(size);
+    void* wrapped = crn_gc_malloc(size);
     if (!wrapped)
     {
         return -1;
@@ -603,7 +607,7 @@ int chan_send_buf(chan_t* chan, void* data, size_t size)
     int success = chan_send(chan, wrapped);
     if (success != 0)
     {
-        free(wrapped);
+        crn_gc_free(wrapped);
     }
 
     return success;
@@ -616,7 +620,7 @@ int chan_recv_buf(chan_t* chan, void* data, size_t size)
     if (wrapped != NULL)
     {
         memcpy(data, wrapped, size);
-        free(wrapped);
+        crn_gc_free(wrapped);
     }
 
     return success;

@@ -33,7 +33,7 @@ typedef struct hookcb {
 } hookcb;
 
 fdcontext* fdcontext_new(int fd) {
-    fdcontext* fdctx = (fdcontext*)crn_raw_malloc(sizeof(fdcontext));
+    fdcontext* fdctx = (fdcontext*)crn_gc_malloc(sizeof(fdcontext));
     fdctx->fd = fd;
     return fdctx;
 }
@@ -89,12 +89,16 @@ static int hashtable_cmp_int(const void *key1, const void *key2) {
 
 hookcb* hookcb_new() {
     // so, this is live forever, not use GC_malloc
-    hookcb* hkcb = (hookcb*)crn_raw_malloc(sizeof(hookcb));
+    hookcb* hkcb = (hookcb*)crn_gc_malloc(sizeof(hookcb));
     HashTableConf htconf;
     hashtable_conf_init(&htconf);
     htconf.hash = hashtable_hash_ptr;
     htconf.key_compare = hashtable_cmp_int;
     htconf.key_length = sizeof(void*);
+    htconf.mem_alloc = crn_gc_malloc;
+    htconf.mem_free = crn_gc_free;
+    htconf.mem_calloc = crn_gc_calloc;
+
     hashtable_new_conf(&htconf, &hkcb->fdctxs);
 
     return hkcb;
@@ -110,7 +114,9 @@ hookcb* hookcb_get() {
     return ghkcb__;
 }
 
+extern bool gcinited;
 void hookcb_oncreate(int fd, int fdty, bool isNonBlocking, int domain, int sockty, int protocol) {
+    if (!gcinited) return;
     hookcb* hkcb = hookcb_get();
     if (hkcb == 0) return ;
     if (!fd_is_nonblocking(fd)) {
@@ -137,11 +143,12 @@ void hookcb_oncreate(int fd, int fdty, bool isNonBlocking, int domain, int sockt
     hashtable_add(hkcb->fdctxs, (void*)(uintptr_t)fd, (void*)fdctx);
     pmutex_unlock(&hkcb->mu);
     if (oldfdctx != nilptr) {
-        crn_raw_free(oldfdctx);
+        crn_gc_free(oldfdctx);
     }
 }
 
 void hookcb_onclose(int fd) {
+    if (!gcinited) return;
     hookcb* hkcb = hookcb_get();
     if (hkcb == 0) return ;
     // linfo("fd closed %d\n", fd);
@@ -154,7 +161,7 @@ void hookcb_onclose(int fd) {
     if (fdctx == 0) {
         linfo("fd not found in context %d\n", fd);
     }else{
-        crn_raw_free(fdctx);
+        crn_gc_free(fdctx);
     }
 }
 

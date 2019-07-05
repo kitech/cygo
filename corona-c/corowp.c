@@ -7,7 +7,7 @@
 // 对于non threadsafe的函数，做了简单lock
 
 coro_context* corowp_context_new() {
-    coro_context* ctx = (coro_context*)crn_raw_malloc(sizeof(coro_context));
+    coro_context* ctx = (coro_context*)crn_gc_malloc(sizeof(coro_context));
     return ctx;
 }
 
@@ -30,7 +30,7 @@ void corowp_destroy (coro_context *ctx) { coro_destroy(ctx); }
 typedef struct coro_stack coro_stack;
 
 coro_stack* corowp_stack_new() {
-    coro_stack* stk = (coro_stack*)crn_raw_malloc(sizeof(coro_stack));
+    coro_stack* stk = (coro_stack*)crn_gc_malloc(sizeof(coro_stack));
     return stk;
 }
 int corowp_stack_alloc (coro_stack *stack, unsigned int size) {

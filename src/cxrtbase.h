@@ -32,6 +32,7 @@ typedef double float64;
 typedef uintptr_t uintptr;
 typedef unsigned int uint;
 typedef void* error;
+typedef void* voidptr;
 typedef int C_int;
 typedef unsigned int C_uint;
 
@@ -63,14 +64,14 @@ void println2(const char* filename, int lineno, const char* funcname, const char
 #define gogorun
 
 extern void cxrt_init_env();
-extern void cxrt_routine_post(void (*f)(void*), void*arg);
+extern void cxrt_fiber_post(void (*fn)(void*), void*arg);
 extern void* cxrt_chan_new(int sz);
 extern void cxrt_chan_send(void*ch, void*arg);
-extern void* cxrt_chan_recv(void*arg);
-
+extern void* cxrt_chan_recv(void*ch);
+extern void cxrt_set_finalizer(void*ptr, void(*fn)(void*));
 
 #include <sys/types.h>
-extern pid_t gettid();
+extern pid_t cxgettid();
 
 // cxmemory
 void* cxmalloc(size_t size);

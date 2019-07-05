@@ -9,7 +9,7 @@ endif()
 include(../cxrt.cmake)
 
 add_executable(genoe opkgs/foo.c)
-target_link_libraries(genoe -L. cxrt ${cxrt_ldflags})
+target_link_libraries(genoe -L. cxrt crn ${cxrt_ldflags})
 
 
 

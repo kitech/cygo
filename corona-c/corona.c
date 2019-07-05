@@ -80,8 +80,12 @@ void crn_machine_grfree(machine* mc, int id);
 void crn_machine_signal(machine* mc);
 
 // fiber internal API
+static void fiber_finalizer(fiber* gr) {
+    linfo("fiber dtor %p\n", gr);
+}
 fiber* crn_fiber_new(int id, coro_func fn, void* arg) {
-    fiber* gr = (fiber*)crn_raw_malloc(sizeof(fiber));
+    fiber* gr = (fiber*)crn_gc_malloc(sizeof(fiber));
+    crn_set_finalizer(gr, fiber_finalizer);
     gr->id = id;
     gr->fnproc = fn;
     gr->arg = arg;
@@ -108,7 +112,7 @@ void crn_fiber_destroy(fiber* gr) {
 
     atomic_setint(&gr->state, nostack);
     if (gr->stack.sptr != 0) {
-        crn_gc_free(gr->stack.sptr);
+        crn_gc_free2(gr->stack.sptr);
     }
     Array* specs = nilptr;
     hashtable_get_values(gr->specifics, &specs);
@@ -116,12 +120,12 @@ void crn_fiber_destroy(fiber* gr) {
         for (int i = 0; i < array_size(specs); i ++) {
             void* v = nilptr;
             array_get_at(specs, i, &v);
-            if (v != nilptr) crn_raw_free(v);
+            if (v != nilptr) crn_gc_free(v);
         }
         array_destroy(specs);
     }
     hashtable_destroy(gr->specifics);
-    crn_raw_free(gr); // malloc/calloc分配的不能用GC_FREE()释放
+    crn_gc_free(gr); // malloc/calloc分配的不能用GC_FREE()释放
     ssze += sizeof(fiber);
     // linfo("gr %d on %d, freed %d, %d\n", grid, mcid, ssze, sizeof(fiber));
     corowp_destroy(&gr->coctx);
@@ -261,13 +265,24 @@ void crn_fiber_suspend(fiber* gr) {
 
 // machine internal API
 machine* crn_machine_new(int id) {
-    machine* mc = (machine*)crn_raw_malloc(sizeof(machine));
+    machine* mc = (machine*)crn_gc_malloc(sizeof(machine));
     mc->id = id;
-    ltrace("htconf=%o\n", crn_dft_htconf());
-    hashtable_new_conf(crn_dft_htconf(), &mc->grs);
-    queue_new(&mc->ngrs);
-    corowp_create(&mc->coctx0, 0, 0, 0, 0);
+    HashTableConf* htconf = crn_dft_htconf();
+    ltrace("htconf=%p\n", htconf);
+    hashtable_new_conf(htconf, &mc->grs);
+    QueueConf qconf = {0};
+    queue_conf_init(&qconf);
+    qconf.capacity = 1;
+    qconf.mem_alloc = htconf->mem_alloc;
+    qconf.mem_free = htconf->mem_free;
+    qconf.mem_calloc = htconf->mem_calloc;
+
+    queue_new_conf(&qconf, &mc->ngrs);
+    // corowp_create(&mc->coctx0, 0, 0, 0, 0);
     return mc;
+}
+void crn_machine_init_crctx(machine* mc) {
+    corowp_create(&mc->coctx0, 0, 0, 0, 0);
 }
 machine*
 __attribute__((no_instrument_function))
@@ -353,11 +368,9 @@ void crn_machine_signal(machine* mc) {
 
 static __thread int gcurmcid__ = 0; // thread local
 static __thread int gcurgrid__ = 0; // thread local
-int
-__attribute__((no_instrument_function))
+int __attribute__((no_instrument_function))
 crn_get_goid() { return gcurgrid__; }
-fiber*
-__attribute__((no_instrument_function))
+fiber* __attribute__((no_instrument_function))
 crn_fiber_getcur() {
     int grid = gcurgrid__;
     int mcid = gcurmcid__;
@@ -392,12 +405,13 @@ void crn_fiber_setspec(void* spec, void* val) {
     }
     void* oldv = nilptr;
     hashtable_remove(gr->specifics, spec, &oldv);
-    if (oldv != nilptr) { crn_raw_free(oldv);  }
+    if (oldv != nilptr) { crn_gc_free(oldv);  }
     hashtable_add(gr->specifics, spec, val);
 }
 // int crn_num_fibers() { return atomic_getint(gnr__); }
 // procer internal API
 void crn_post(coro_func fn, void*arg) {
+    linfo("post fn=%p, arg=%p\n", fn, arg);
     machine* mc = crn_machine_get(1);
     // linfo("mc=%p, %d %p, %d\n", mc, mc->id, mc->ngrs, queue_size(mc->ngrs));
     if (mc != 0 && mc->id != 1) {
@@ -484,6 +498,7 @@ void* crn_procer1(void*arg) {
         // find free machine and runnable fiber
         Array* arr2 = nilptr;
         hashtable_get_keys(gnr__->mcs, &arr2);
+        int arr2sz = arr2 == nilptr ? 0 : array_size(arr2);
         for (;arr2 != nilptr;) {
             fiber* gr = crn_machine_grtake(mc);
             if (gr == nilptr) {
@@ -492,8 +507,9 @@ void* crn_procer1(void*arg) {
             }
 
             machine* mct = 0;
-            for (int j = 0; j < array_size(arr2); j++) {
-                int rdidx = abs(rand()) % array_size(arr2);
+
+            for (int j = 0; j < arr2sz; j++) {
+                int rdidx = abs(rand()) % arr2sz;
                 void* key = nilptr;
                 array_get_at(arr2, rdidx, &key);
                 if ((uintptr_t)key <= 2) continue;
@@ -557,10 +573,8 @@ fiber* crn_sched_get_ready_one(machine*mc) {
         }
         // linfo("grid=%d mcid=%d, grstate=%d\n", gr->id, gr->mcid, atomic_getint(&gr->state));
     }
-    if (arr != 0) {
-        array_destroy(arr);
-    }
     pmutex_unlock(&mc->grsmu);
+    if (arr != 0) { array_destroy(arr); }
     return rungr;
 }
 static
@@ -618,6 +632,7 @@ void* crn_procerx(void*arg) {
     if (crn_thread_createcb != 0) {
         crn_thread_createcb((void*)(uintptr_t)mc->id);
     }
+    crn_machine_init_crctx(mc);
 
     // linfo("%d %d\n", mc->id, gettid());
     crn_procer_setname(mc->id);
@@ -807,6 +822,7 @@ static
 void crn_gc_on_thread_event(GC_EventType evty, void* thid) {
     linfo2("%d=%s %p\n", evty, crn_gc_event_name(evty), thid);
 }
+bool gcinited = false;
 static
 void crn_init_intern() {
     srand(time(0));
@@ -825,6 +841,7 @@ void crn_init_intern() {
     // linfo("main thread registered: %d\n", GC_thread_is_registered()); // yes
     // linfo("gcfreq=%d\n", GC_get_full_freq()); // 19
     // GC_set_full_freq(5);
+    gcinited = true;
 
     // log init here
     netpoller_use_threads();
@@ -837,11 +854,15 @@ corona* crn_new() {
     }
     crn_init_intern();
 
-    corona* nr = (corona*)crn_raw_malloc(sizeof(corona));
+    corona* nr = (corona*)crn_gc_malloc(sizeof(corona));
     hashtable_conf_init(&nr->htconf);
     nr->htconf.key_length = sizeof(void*);
     nr->htconf.hash = hashtable_hash_ptr;
     nr->htconf.key_compare = hashtable_cmp_int;
+
+    nr->htconf.mem_alloc = crn_gc_malloc;
+    nr->htconf.mem_free = crn_gc_free;
+    nr->htconf.mem_calloc = crn_gc_calloc;
 
     hashtable_new_conf(&nr->htconf, &nr->mths);
     hashtable_new_conf(&nr->htconf, &nr->mcs);
@@ -889,9 +910,9 @@ corona* crn_init_and_wait_done() {
     assert(nr != nilptr);
     if (!nr->crninited) {
         crn_init(nr);
-        ltrace("wait signal...%d\n", 0);
+        linfo("wait signal...%d %d\n", nr->crninited, gettid());
         crn_wait_init_done(nr);
-        ltrace("wait signal done %d\n", 0);
+        linfo("wait signal done %d %d\n", nr->crninited, gettid());
     }
     return nr;
 }

@@ -28,11 +28,11 @@ void netpoller_use_threads() {
 
 netpoller* netpoller_new() {
     assert(gnpl__ == 0);
-    netpoller* np = (netpoller*)crn_raw_malloc(sizeof(netpoller));
+    netpoller* np = (netpoller*)crn_gc_malloc(sizeof(netpoller));
     np->loop = event_base_new();
     assert(np->loop != 0);
 
-    hashtable_new(&np->watchers);
+    // hashtable_new(&np->watchers);
 
     gnpl__ = np;
     return np;
@@ -75,8 +75,7 @@ evdata* evdata_new(int evtyp, void* data) {
     assert(evtyp >= 0);
 
     netpoller* np = gnpl__;
-    // evdata* d = crn_gc_malloc(sizeof(evdata));
-    evdata* d = crn_raw_malloc(sizeof(evdata));
+    evdata* d = crn_gc_malloc(sizeof(evdata));
     d->evtyp = evtyp;
     d->data = data;
     // GC_register_finalizer(d, atstgc_finalizer_fn, nilptr, nilptr, nilptr);
@@ -84,7 +83,6 @@ evdata* evdata_new(int evtyp, void* data) {
 }
 void evdata_free(evdata* d) {
     // crn_gc_free(d);
-    crn_raw_free(d);
 }
 
 extern void crn_procer_resume_one(void* cbdata, int ytype, int grid, int mcid);

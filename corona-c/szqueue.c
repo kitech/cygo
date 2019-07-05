@@ -12,6 +12,7 @@
 #include <stdlib.h>
 
 #include "szqueue.h"
+#include "coronapriv.h"
 
 #if defined(_WIN32) && !defined(ENOBUFS)
 #include <winsock.h>
@@ -22,6 +23,10 @@
 static inline int szqueue_at_capacity(szqueue_t* queue)
 {
     return queue->size >= queue->capacity;
+}
+
+static void szqueue_finalizer(void* q) {
+    linfo("szqueue dtor %p\n", q);
 }
 
 // Allocates and returns a new queue. The capacity specifies the maximum
@@ -36,16 +41,17 @@ szqueue_t* szqueue_init(size_t capacity)
         return NULL;
     }
 
-    szqueue_t* queue = (szqueue_t*) malloc(sizeof(szqueue_t));
-    void**   data  = (void**) malloc(capacity * sizeof(void*));
+    szqueue_t* queue = (szqueue_t*) crn_gc_malloc(sizeof(szqueue_t));
+    void**   data  = (void**) crn_gc_malloc(capacity * sizeof(void*));
     if (!queue || !data)
     {
         // In case of free(NULL), no operation is performed.
-        free(queue);
-        free(data);
+        crn_gc_free(queue);
+        crn_gc_free(data);
         errno = ENOMEM;
         return NULL;
     }
+    crn_set_finalizer(queue, szqueue_finalizer);
 
     queue->size = 0;
     queue->next = 0;
@@ -57,8 +63,8 @@ szqueue_t* szqueue_init(size_t capacity)
 // Releases the queue resources.
 void szqueue_dispose(szqueue_t* queue)
 {
-    free(queue->data);
-    free(queue);
+    crn_gc_free(queue->data);
+    crn_gc_free(queue);
 }
 
 // Enqueues an item in the queue. Returns 0 is the add succeeded or -1 if it

@@ -114,7 +114,7 @@ func (this *g2nc) genDecl(scope *ast.Scope, d ast.Decl) {
 	}
 }
 func (this *g2nc) genPreFuncDecl(scope *ast.Scope, d *ast.FuncDecl) {
-	// goroutines struct and functions wrapper
+	// gofibers struct and functions wrapper
 	var gostmts []*ast.GoStmt
 	var sdstmts []*ast.SendStmt
 	// var rvstmts []* UnaryExpr
@@ -131,8 +131,8 @@ func (this *g2nc) genPreFuncDecl(scope *ast.Scope, d *ast.FuncDecl) {
 		log.Println("found gostmts", d.Name.Name, len(gostmts))
 	}
 	for _, stmt := range gostmts {
-		this.genRoutineStargs(scope, stmt.Call)
-		this.genRoutineStwrap(scope, stmt.Call)
+		this.genFiberStargs(scope, stmt.Call)
+		this.genFiberStwrap(scope, stmt.Call)
 	}
 	for _, stmt := range sdstmts {
 		this.genChanStargs(scope, stmt.Chan) // chan structure args
@@ -286,11 +286,11 @@ func (this *g2nc) genGoStmt(scope *ast.Scope, stmt *ast.GoStmt) {
 	// calleename := stmt.Call.Fun.(*ast.Ident).Name
 	// this.genCallExpr(scope, stmt.Call)
 	// define function in function in c?
-	// this.genRoutineStargs(scope, stmt.Call)
-	// this.genRoutineStwrap(scope, stmt.Call)
-	this.genRoutineWcall(scope, stmt.Call)
+	// this.genFiberStargs(scope, stmt.Call)
+	// this.genFiberStwrap(scope, stmt.Call)
+	this.genFiberWcall(scope, stmt.Call)
 }
-func (c *g2nc) genRoutineStargs(scope *ast.Scope, e *ast.CallExpr) {
+func (c *g2nc) genFiberStargs(scope *ast.Scope, e *ast.CallExpr) {
 	funame := e.Fun.(*ast.Ident).Name
 	if _, ok := c.psctx.grstargs[funame]; ok {
 		return
@@ -301,19 +301,20 @@ func (c *g2nc) genRoutineStargs(scope *ast.Scope, e *ast.CallExpr) {
 		fldname := fmt.Sprintf("a%d", idx)
 		fldtype := c.exprTypeName(scope, ae)
 		log.Println(funame, fldtype, fldname, reflect.TypeOf(ae))
-		c.out(fldtype, fldname).outfh().outnl()
+		c.out(fldtype).outsp().out(fldname).outfh().outnl()
 	}
-	c.out("}", funame+"_routine_args").outfh().outnl()
+	c.out("}", funame+"_fiber_args").outfh().outnl()
 }
-func (c *g2nc) genRoutineStwrap(scope *ast.Scope, e *ast.CallExpr) {
+func (c *g2nc) genFiberStwrap(scope *ast.Scope, e *ast.CallExpr) {
 	funame := e.Fun.(*ast.Ident).Name
 	if _, ok := c.psctx.grstargs[funame]; ok {
 		return
 	}
 	c.psctx.grstargs[funame] = true
 
-	stname := funame + "_routine_args"
-	c.out("void", funame+"_routine", "(void* vpargs)").outnl()
+	stname := funame + "_fiber_args"
+	c.out("void").outsp()
+	c.out(funame+"_fiber", "(void* vpargs)").outnl()
 	c.out("{").outnl()
 	c.out(stname, "*args = (", stname, "*)vpargs").outfh().outnl()
 	c.out(funame, "(")
@@ -325,20 +326,20 @@ func (c *g2nc) genRoutineStwrap(scope *ast.Scope, e *ast.CallExpr) {
 	c.out(")").outfh().outnl()
 	c.out("}").outnl().outnl()
 }
-func (c *g2nc) genRoutineWcall(scope *ast.Scope, e *ast.CallExpr) {
+func (c *g2nc) genFiberWcall(scope *ast.Scope, e *ast.CallExpr) {
 	funame := e.Fun.(*ast.Ident).Name
-	wfname := funame + "_routine"
-	stname := funame + "_routine_args"
+	wfname := funame + "_fiber"
+	stname := funame + "_fiber_args"
 
 	c.out("// gogorun", funame).outnl()
 	c.out("{")
-	c.out(stname, "*args = (", stname, "*)cxmalloc(sizeof(", stname, "))") //.outfh().outnl()
+	c.outf("%s *args = (%s)cxmalloc(sizeof(%s))", stname, stname, stname).outfh().outnl()
 	for idx, arg := range e.Args {
-		c.out(fmt.Sprintf("args->a%d", idx), "=")
+		c.outf("args->a%d", idx).outeq()
 		c.genExpr(scope, arg)
 		c.outfh().outnl()
 	}
-	c.out(fmt.Sprintf("cxrt_routine_post(%s, args);", wfname)).outnl()
+	c.outf("cxrt_fiber_post(%s, args)", wfname).outfh().outnl()
 	c.out("}").outnl()
 }
 
@@ -887,7 +888,8 @@ func (c *g2nc) genSendStmt(scope *ast.Scope, s *ast.SendStmt) {
 	var elemtyname = c.chanElemTypeName(s.Chan)
 	var chanargname = "chan_arg_" + elemtyname
 	c.out("{").outnl()
-	c.outf("%s* args = (%s*)cxmalloc(sizeof(%s))", chanargname, chanargname, chanargname) //.outfh().outnl()
+	c.outf("%s* args = (%s*)cxmalloc(sizeof(%s))",
+		chanargname, chanargname, chanargname).outfh().outnl()
 	c.out("args->elem = ")
 	c.genExpr(scope, s.Value)
 	c.outfh().outnl()
@@ -900,6 +902,11 @@ func (c *g2nc) genRecvStmt(scope *ast.Scope, e ast.Expr) {
 	var elemtyname = c.chanElemTypeName(e)
 	var chanargname = "chan_arg_" + elemtyname
 
+	varobj := scope.Lookup("varname")
+	if varobj != nil {
+		c.outeq().out("{0}").outfh().outnl()
+	}
+
 	c.out("{")
 	c.out("void* rvx = cxrt_chan_recv(")
 	c.genExpr(scope, e)
@@ -907,7 +914,6 @@ func (c *g2nc) genRecvStmt(scope *ast.Scope, e ast.Expr) {
 	c.out(" // c = rv->v").outfh().outnl()
 	c.outf("%s rvp = ((%s*)rvx)->elem", elemtyname, chanargname).outfh().outnl()
 
-	varobj := scope.Lookup("varname")
 	if varobj != nil {
 		c.genExpr(scope, varobj.Data.(ast.Expr)) // left
 		c.out("= rvp").outfh().outnl()
@@ -980,43 +986,7 @@ func (c *g2nc) genStructZeroFields(scope *ast.Scope) {
 }
 
 func (this *g2nc) genTypeExpr(scope *ast.Scope, e ast.Expr) {
-	switch te := e.(type) {
-	case *ast.Ident:
-		ety := this.info.TypeOf(e)
-		if ety == nil {
-			log.Println(reflect.TypeOf(e))
-			panic(e)
-		}
-		switch be := ety.(type) {
-		case *types.Basic:
-			idname := gopp.IfElseStr(te.Name == "nil", "nilptr", te.Name)
-			idname = gopp.IfElseStr(te.Name == "string", "cxstring*", te.Name)
-			this.out(idname, " ")
-			if be == nil {
-			}
-		default:
-			this.out(te.Name)
-		}
-	case *ast.StarExpr:
-		this.genTypeExpr(scope, te.X)
-		this.out("*")
-	case *ast.MapType:
-		this.outf("/*%v=>%v*/HashTable*", te.Key, te.Value)
-	case *ast.ArrayType:
-		this.outf("/*%v*/Array*", te.Elt)
-	case *ast.InterfaceType:
-		if te.Methods != nil && te.Methods.NumFields() > 0 {
-			this.outf("cxiface")
-		} else {
-			this.outf("cxeface")
-		}
-	case *ast.SelectorExpr:
-		this.genExpr(scope, te.X)
-		this.out("_")
-		this.genExpr(scope, te.Sel)
-	default:
-		log.Println(e, reflect.TypeOf(e))
-	}
+	this.out(this.exprTypeName(scope, e))
 }
 
 func (this *g2nc) genExpr(scope *ast.Scope, e ast.Expr) {
@@ -1416,8 +1386,10 @@ func (this *g2nc) exprTypeNameImpl(scope *ast.Scope, e ast.Expr) string {
 		return sign2rety(te.String())
 	case *types.Slice, *types.Array:
 		return "Array*"
+	case *types.Chan:
+		return "voidptr"
 	default:
-		log.Println(goty, reflect.TypeOf(goty), isudty, tyval, te)
+		log.Println("todo", goty, reflect.TypeOf(goty), isudty, tyval, te)
 		return te.String()
 	}
 
@@ -1581,14 +1553,17 @@ func (c *g2nc) genValueSpec(scope *ast.Scope, spec *ast.ValueSpec, validx int) {
 		} else {
 			c.out("/*var*/").outsp()
 			if isstrty2(varty) {
-				c.out("cxstring*").outsp()
+				c.out("cxstring*")
 			} else if isarrayty2(varty) || isslicety2(varty) {
-				c.out("Array*").outsp()
+				c.out("Array*")
 			} else if ismapty2(varty) {
-				c.out("HashTable*").outsp()
+				c.out("HashTable*")
+			} else if ischanty2(varty) {
+				c.out("voidptr")
 			} else {
-				c.out(sign2rety(varty.String())).outsp()
+				c.out(sign2rety(varty.String()))
 			}
+			c.outsp()
 		}
 		if isglobvar && isstrty2(varty) {
 			log.Println("not supported global string/struct value", varname)

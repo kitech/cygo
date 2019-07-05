@@ -52,6 +52,8 @@ func iseface(tystr string) bool        { return strings.HasPrefix(tystr, "interf
 func iseface2(typ types.Type) bool     { return typ != nil && iseface(typ.String()) }
 func istypety(tystr string) bool       { return strings.HasPrefix(tystr, "type ") }
 func istypety2(typ types.Type) bool    { return istypety(typ.String()) }
+func ischanty(tystr string) bool       { return strings.HasPrefix(tystr, "chan ") }
+func ischanty2(typ types.Type) bool    { return ischanty(typ.String()) }
 func isvarty(tystr string) bool        { return strings.HasPrefix(tystr, "var ") }
 func isvarty2(typ types.Type) bool     { return isvarty(typ.String()) }
 func isstructty(tystr string) bool     { return strings.Contains(tystr, "/.") } // struct ???

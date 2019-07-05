@@ -500,12 +500,12 @@ struct hostent* gethostbyname(const char* name)
 
     buf = crn_fiber_getspec(&bufkey);
     if (buf == nilptr) {
-        buf = crn_raw_malloc(4096);
+        buf = crn_gc_malloc(4096);
         crn_fiber_setspec(&bufkey, buf);
     }
     host = crn_fiber_getspec(&reskey);
     if (host == nilptr) {
-        host = crn_raw_malloc(sizeof(struct hostent));
+        host = crn_gc_malloc(sizeof(struct hostent));
         crn_fiber_setspec(&reskey, host);
     }
     assert(buf != nilptr); assert(host != nilptr);

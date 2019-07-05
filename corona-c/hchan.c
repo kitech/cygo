@@ -5,16 +5,23 @@
 
 // wrapper chan_t with fiber integeration
 
+static void hchan_finalizer(void* hc) {
+    linfo("hchan dtor %p %d\n", hc, gettid());
+    // assert(1==2);
+}
 
 hchan* hchan_new(int cap) {
-    hchan* hc = (hchan*)crn_raw_malloc(sizeof(hchan));
-    hc->c = chan_init(cap);
+    hchan* hc = (hchan*)crn_gc_malloc(sizeof(hchan));
+    crn_set_finalizer(hc, hchan_finalizer);
+    hc->c = chan_init(cap);  // why 248 cause hc gced too early?
     hc->cap = cap;
 
     // only support max 32 concurrent fibers on one hchan
     // should enough
     hc->recvq = szqueue_init(32);
     hc->sendq = szqueue_init(32);
+
+    return hc;
 }
 
 int hchan_close(hchan* hc) {
