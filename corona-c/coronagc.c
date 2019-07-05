@@ -28,7 +28,7 @@ void* crn_gc_realloc(void* ptr, size_t size) {
     return GC_REALLOC(ptr, size);
 }
 void crn_gc_free(void* ptr) {
-    // GC_FREE(ptr);
+    GC_FREE(ptr);
 }
 void crn_gc_free2(void* ptr) {
     GC_FREE(ptr);

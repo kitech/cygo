@@ -333,7 +333,7 @@ func (c *g2nc) genFiberWcall(scope *ast.Scope, e *ast.CallExpr) {
 
 	c.out("// gogorun", funame).outnl()
 	c.out("{")
-	c.outf("%s *args = (%s)cxmalloc(sizeof(%s))", stname, stname, stname).outfh().outnl()
+	c.outf("%s* args = (%s*)cxmalloc(sizeof(%s))", stname, stname, stname).outfh().outnl()
 	for idx, arg := range e.Args {
 		c.outf("args->a%d", idx).outeq()
 		c.genExpr(scope, arg)
@@ -971,6 +971,7 @@ func (this *g2nc) genFieldList(scope *ast.Scope, flds *ast.FieldList,
 
 	for idx, fld := range flds.List {
 		_, _ = idx, fld
+		log.Println(this.exprTypeName(scope, fld.Type))
 		this.genTypeExpr(scope, fld.Type)
 		this.outsp()
 		if withname && len(fld.Names) > 0 {
@@ -1371,23 +1372,40 @@ func (this *g2nc) exprTypeNameImpl(scope *ast.Scope, e ast.Expr) string {
 	}
 
 	goty := this.info.TypeOf(e)
+	return this.exprTypeNameImpl2(scope, goty)
+}
+func (this *g2nc) exprTypeNameImpl2(scope *ast.Scope, ety types.Type) string {
+
+	{
+		// return "unknownty"
+	}
+
+	goty := ety
 	tyval, isudty := this.strtypes[goty.String()]
+	log.Println(goty, reflect.TypeOf(goty))
 
 	switch te := goty.(type) {
 	case *types.Basic:
 		if isstrty(te.Name()) {
 			return "cxstring*"
 		} else {
+			if strings.Contains(te.Name(), "string") {
+				log.Println(te.Name())
+			}
 			return te.Name()
 		}
 	case *types.Named:
-		return sign2rety(te.String())
+		return te.Obj().Name()
+		// return sign2rety(te.String())
 	case *types.Pointer:
-		return sign2rety(te.String())
+		tystr := this.exprTypeNameImpl2(scope, te.Elem())
+		return tystr + "*"
 	case *types.Slice, *types.Array:
 		return "Array*"
 	case *types.Chan:
 		return "voidptr"
+	case *types.Map:
+		return "HashTable*"
 	default:
 		log.Println("todo", goty, reflect.TypeOf(goty), isudty, tyval, te)
 		return te.String()
@@ -1402,19 +1420,21 @@ func (this *g2nc) exprTypeFmt(scope *ast.Scope, e ast.Expr) string {
 	switch te := goty.(type) {
 	case *types.Basic:
 		if isstrty(te.Name()) {
-			return "*.s"
+			return ".*s"
 		} else {
 			return "d"
 		}
 	case *types.Named:
-		return "%p"
+		return "p"
 	case *types.Pointer:
-		return "%p"
+		return "p"
 	case *types.Slice, *types.Array:
-		return "%p"
+		return "p"
+	case *types.Map:
+		return "p"
 	default:
 		log.Println(goty, reflect.TypeOf(goty), isudty, tyval, te)
-		return "%d-wt"
+		return "d-wt"
 	}
 
 	panic("Not reachable")

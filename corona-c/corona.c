@@ -760,6 +760,7 @@ hashtable_cmp_int(const void *key1, const void *key2) {
 
 corona* crn_get() { return gnr__;}
 
+// FIXME 导致过早回收？？？
 // this callback function run on stoped world
 // dont alloc memory on heap in this function, or maybe hang for malloc related deadlock
 static
@@ -815,7 +816,9 @@ void crn_gc_on_collection_event(GC_EventType evty) {
     // linfo2("%d=%s mcid=%d\n", evty, crn_gc_event_name(evty), gcurmcid__);
     if (evty == GC_EVENT_POST_STOP_WORLD) {
         // here call is equal to GC_set_push_other_roots() callback call
-        // crn_gc_push_other_roots2();
+        // seems not equal: when call push other roots1 here, seems gc collectc fine
+        // but if use GC_set_push_other_roots, seems gc collected shouldn't collect memory
+        crn_gc_push_other_roots1();
     }
 }
 static
@@ -833,7 +836,7 @@ void crn_init_intern() {
     // GC_set_rate(5);
     // GC_set_all_interior_pointers(1);
     // TODO
-    GC_set_push_other_roots(crn_gc_push_other_roots1); // run in which threads?
+    // GC_set_push_other_roots(crn_gc_push_other_roots1); // run in which threads?
     GC_set_on_collection_event(crn_gc_on_collection_event);
     // GC_set_on_thread_event(crn_gc_on_thread_event);
     GC_INIT();

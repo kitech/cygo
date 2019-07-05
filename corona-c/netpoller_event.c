@@ -24,6 +24,7 @@ static netpoller* gnpl__ = 0;
 void netpoller_use_threads() {
     evthread_use_pthreads();
     // or evthread_use_windows_threads()
+    event_set_mem_functions(crn_gc_malloc, crn_gc_realloc, crn_gc_free);
 }
 
 netpoller* netpoller_new() {
@@ -82,7 +83,7 @@ evdata* evdata_new(int evtyp, void* data) {
     return d;
 }
 void evdata_free(evdata* d) {
-    // crn_gc_free(d);
+    crn_gc_free(d);
 }
 
 extern void crn_procer_resume_one(void* cbdata, int ytype, int grid, int mcid);
