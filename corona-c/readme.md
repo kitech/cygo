@@ -59,6 +59,10 @@ Thanks all the contributors.
     occurs when call linfo/log write in push_other_roots callback
     says that linfo/log has some where not safe point
     related with signal handler
-    
+[ ] GC_clear_fl_marks infinite loop
+
 ### Note
 * A program entering an infinite recursion or running out of space in the stack memory is known as a stack overflow
+
+GC_NPROCS=1 ./prog to set gc thread count
+

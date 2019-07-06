@@ -115,7 +115,8 @@ void crn_fiber_destroy(fiber* gr) {
         crn_gc_free2(gr->stack.sptr);
     }
     Array* specs = nilptr;
-    hashtable_get_values(gr->specifics, &specs);
+    int rv = hashtable_get_values(gr->specifics, &specs);
+    assert(rv == CC_OK);
     if (specs != nilptr) {
         for (int i = 0; i < array_size(specs); i ++) {
             void* v = nilptr;
@@ -264,6 +265,9 @@ void crn_fiber_suspend(fiber* gr) {
 }
 
 // machine internal API
+static void machine_finalizer(void* mc) {
+    linfo("machine dtor %p\n", mc);
+}
 machine* crn_machine_new(int id) {
     machine* mc = (machine*)crn_gc_malloc(sizeof(machine));
     mc->id = id;
@@ -284,8 +288,7 @@ machine* crn_machine_new(int id) {
 void crn_machine_init_crctx(machine* mc) {
     corowp_create(&mc->coctx0, 0, 0, 0, 0);
 }
-machine*
-__attribute__((no_instrument_function))
+machine* __attribute__((no_instrument_function))
 crn_machine_get(int id) {
     if (id <= 0) {
         linfo("Invalid mcid %d\n", id);
@@ -293,7 +296,8 @@ crn_machine_get(int id) {
         assert(id > 0);
     }
     machine* mc = 0;
-    hashtable_get(gnr__->mcs, (void*)(uintptr_t)id, (void**)&mc);
+    int rv = hashtable_get(gnr__->mcs, (void*)(uintptr_t)id, (void**)&mc);
+    assert(rv == CC_OK || rv == CC_ERR_KEY_NOT_FOUND);
     // linfo("get mc %d=%p\n", id, mc);
     if (mc == 0 && id != 1) {
         linfo("cannot get mc %d\n", id);
@@ -315,22 +319,24 @@ crn_machine_get(int id) {
 
 void crn_machine_gradd(machine* mc, fiber* gr) {
     pmutex_lock(&mc->grsmu);
-    hashtable_add(mc->grs, (void*)(uintptr_t)gr->id, gr);
+    int rv = hashtable_add(mc->grs, (void*)(uintptr_t)gr->id, gr);
+    assert(rv == CC_OK);
     pmutex_unlock(&mc->grsmu);
 }
-fiber*
-__attribute__((no_instrument_function))
+fiber* __attribute__((no_instrument_function))
 crn_machine_grget(machine* mc, int id) {
     fiber* gr = 0;
     pmutex_lock(&mc->grsmu);
-    hashtable_get(mc->grs, (void*)(uintptr_t)id, (void**)&gr);
+    int rv = hashtable_get(mc->grs, (void*)(uintptr_t)id, (void**)&gr);
+    assert(rv == CC_OK);
     pmutex_unlock(&mc->grsmu);
     return gr;
 }
 fiber* crn_machine_grdel(machine* mc, int id) {
     fiber* gr = 0;
     pmutex_lock(&mc->grsmu);
-    hashtable_remove(mc->grs, (void*)(uintptr_t)id, (void**)&gr);
+    int rv = hashtable_remove(mc->grs, (void*)(uintptr_t)id, (void**)&gr);
+    assert(rv == CC_OK);
     pmutex_unlock(&mc->grsmu);
     // assert(gr != 0);
     return gr;
@@ -347,11 +353,14 @@ fiber* crn_machine_grtake(machine* mc) {
     fiber* gr = nilptr;
     Array* arr = nilptr;
     pmutex_lock(&mc->grsmu);
-    hashtable_get_keys(mc->grs, &arr);
+    int rv = hashtable_get_keys(mc->grs, &arr);
+    assert(rv == CC_OK);
     if (arr != nilptr) {
         void* key = nilptr;
-        array_get_at(arr, 0, (void**)&key);
-        hashtable_remove(mc->grs, key, (void**)&gr);
+        rv = array_get_at(arr, 0, (void**)&key);
+        assert(rv == CC_OK);
+        rv = hashtable_remove(mc->grs, key, (void**)&gr);
+        assert(rv == CC_OK);
         array_destroy(arr);
     }
     pmutex_unlock(&mc->grsmu);
@@ -394,7 +403,8 @@ void* crn_fiber_getspec(void* spec) {
         return 0;
     }
     void* v = nilptr;
-    hashtable_get(gr->specifics, spec, &v);
+    int rv = hashtable_get(gr->specifics, spec, &v);
+    assert(rv == CC_OK);
     return v;
 }
 void crn_fiber_setspec(void* spec, void* val) {
@@ -404,9 +414,11 @@ void crn_fiber_setspec(void* spec, void* val) {
         return;
     }
     void* oldv = nilptr;
-    hashtable_remove(gr->specifics, spec, &oldv);
+    int rv = hashtable_remove(gr->specifics, spec, &oldv);
+    assert(rv == CC_OK);
     if (oldv != nilptr) { crn_gc_free(oldv);  }
-    hashtable_add(gr->specifics, spec, val);
+    rv = hashtable_add(gr->specifics, spec, val);
+    assert(rv == CC_OK);
 }
 // int crn_num_fibers() { return atomic_getint(gnr__); }
 // procer internal API
@@ -424,7 +436,8 @@ void crn_post(coro_func fn, void*arg) {
     fiber* gr = crn_fiber_new(id, fn, arg);
     crn_fiber_new2(gr);
     pmutex_lock(&mc->ngrsmu);
-    queue_enqueue(mc->ngrs, gr);
+    int rv = queue_enqueue(mc->ngrs, gr);
+    assert(rv == CC_OK);
     int qsz = queue_size(mc->ngrs);
     pmutex_unlock(&mc->ngrsmu);
     pcond_signal(&mc->pkcd);
@@ -485,8 +498,9 @@ void* crn_procer1(void*arg) {
         for (newgn = 0;; newgn ++) {
             fiber* newgr = nilptr;
             pmutex_lock(&mc->ngrsmu);
-            queue_poll(mc->ngrs, (void**)&newgr);
+            int rv = queue_poll(mc->ngrs, (void**)&newgr);
             pmutex_unlock(&mc->ngrsmu);
+            assert(rv == CC_OK || rv == CC_ERR_OUT_OF_RANGE);
             if (newgr == nilptr) {
                 break;
             }
@@ -497,7 +511,8 @@ void* crn_procer1(void*arg) {
         // TODO 应该放到schedule中
         // find free machine and runnable fiber
         Array* arr2 = nilptr;
-        hashtable_get_keys(gnr__->mcs, &arr2);
+        int rv = hashtable_get_keys(gnr__->mcs, &arr2);
+        assert(rv == CC_OK);
         int arr2sz = arr2 == nilptr ? 0 : array_size(arr2);
         for (;arr2 != nilptr;) {
             fiber* gr = crn_machine_grtake(mc);
@@ -511,7 +526,8 @@ void* crn_procer1(void*arg) {
             for (int j = 0; j < arr2sz; j++) {
                 int rdidx = abs(rand()) % arr2sz;
                 void* key = nilptr;
-                array_get_at(arr2, rdidx, &key);
+                int rv = array_get_at(arr2, rdidx, &key);
+                assert(rv == CC_OK);
                 if ((uintptr_t)key <= 2) continue;
 
                 // linfo("checking machine %d/%d %d\n", j, array_size(arr2), key);
@@ -537,7 +553,7 @@ void* crn_procer1(void*arg) {
                 break;
             }
         }
-        if (arr2 != nilptr) array_destroy(arr2);
+        if (arr2 != nilptr) { array_destroy(arr2); }
     }
 }
 
@@ -559,13 +575,16 @@ static
 fiber* crn_sched_get_ready_one(machine*mc) {
     Array* arr = 0;
     pmutex_lock(&mc->grsmu);
-    hashtable_get_keys(mc->grs, &arr);
+    int rv = hashtable_get_keys(mc->grs, &arr);
+    assert(rv == CC_OK || rv == CC_ERR_INVALID_CAPACITY);
     fiber* rungr = 0;
     for (int i = 0; arr != 0 && i < array_size(arr); i ++) {
         fiber* gr = 0;
         void* key = 0;
-        array_get_at(arr, i, &key);  assert(key != 0);
-        hashtable_get(mc->grs, key, (void**)&gr); assert(gr != 0);
+        rv = array_get_at(arr, i, &key);  assert(key != 0);
+        assert(rv == CC_OK);
+        rv = hashtable_get(mc->grs, key, (void**)&gr); assert(gr != 0);
+        assert(rv == CC_OK);
         if (atomic_getint(&gr->state) == runnable) {
             // linfo("found a runnable job %d on %d\n", (uintptr_t)key, mc->id);
             rungr = gr;
@@ -662,9 +681,9 @@ void* crn_procerx(void*arg) {
     }
 }
 
-bool
-__attribute__((no_instrument_function))
+bool __attribute__((no_instrument_function))
 crn_in_procer() { return gcurmcid__ != 0; }
+
 int crn_procer_yield(long fd, int ytype) {
     // check是否是procer线程
     if (gcurmcid__ == 0) {
@@ -884,8 +903,10 @@ void crn_init(corona* nr) {
     for (int i = 5; i > 0; i --) {
         machine* mc = crn_machine_new(i);
         pthread_t* t = &mc->th;
-        hashtable_add(nr->mths, (void*)(uintptr_t)i, t);
-        hashtable_add(nr->mcs, (void*)(uintptr_t)i, mc);
+        int rv = hashtable_add(nr->mths, (void*)(uintptr_t)i, t);
+        assert(rv == CC_OK);
+        rv = hashtable_add(nr->mcs, (void*)(uintptr_t)i, mc);
+        assert(rv == CC_OK);
         if (i == 1) {
             pthread_create(t, 0, crn_procer1, (void*)mc);
         } else if (i == 2) {
