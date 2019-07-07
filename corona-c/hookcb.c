@@ -104,21 +104,30 @@ hookcb* hookcb_new() {
     return hkcb;
 }
 
+extern bool gcinited;
+
 hookcb* hookcb_get() {
+    assert(gcinited == true);
     if (ghkcb__ == 0) {
         hookcb* hkcb = hookcb_new();
-        assert(ghkcb__ == 0);
-        ghkcb__ = hkcb;
+        // assert(ghkcb__ == 0);
+        if (ghkcb__ == 0) {
+            ghkcb__ = hkcb;
+        }
     }
     assert (ghkcb__ != 0);
     return ghkcb__;
 }
 
-extern bool gcinited;
+
 void hookcb_oncreate(int fd, int fdty, bool isNonBlocking, int domain, int sockty, int protocol) {
+    if (!crn_in_procer()) return;
     if (!gcinited) return;
     hookcb* hkcb = hookcb_get();
-    if (hkcb == 0) return ;
+    if (hkcb == 0) {
+        linfo("why nil %d\n", fd);
+        return ;
+    }
     if (!fd_is_nonblocking(fd)) {
         // set nonblocking???
         // linfo("fd is blocking %d, nb=%d\n", fd, fd_is_nonblocking(fd));
@@ -148,6 +157,7 @@ void hookcb_oncreate(int fd, int fdty, bool isNonBlocking, int domain, int sockt
 }
 
 void hookcb_onclose(int fd) {
+    if (!crn_in_procer()) return;
     if (!gcinited) return;
     hookcb* hkcb = hookcb_get();
     if (hkcb == 0) return ;

@@ -34,6 +34,7 @@ typedef struct machine {
     pmutex_t pkmu; // pack lock
     pcond_t pkcd;
     bool parking;
+    bool stopworld;
     yieldinfo yinfo;
     struct GC_stack_base stksb;
     void* gchandle;
@@ -95,8 +96,10 @@ fiber* crn_fiber_new(int id, coro_func fn, void* arg) {
 }
 // alloc stack and context
 void crn_fiber_new2(fiber*gr) {
+    assert(sizeof(grstate) == sizeof(int));
     // corowp_stack_alloc(&gr->stack, dftstkusz);
     gr->stack.sptr = GC_malloc_uncollectable(dftstksz);
+    // gr->stack.sptr = calloc(1, dftstksz);
     gr->stack.ssze = dftstksz;
     gr->mystksb.mem_base = (void*)((uintptr_t)gr->stack.sptr + dftstksz);
     atomic_setint(&gr->state, runnable);
@@ -113,10 +116,12 @@ void crn_fiber_destroy(fiber* gr) {
     atomic_setint(&gr->state, nostack);
     if (gr->stack.sptr != 0) {
         crn_gc_free2(gr->stack.sptr);
+        // free(gr->stack.sptr);
     }
     Array* specs = nilptr;
     int rv = hashtable_get_values(gr->specifics, &specs);
-    assert(rv == CC_OK);
+    if (rv != CC_OK && rv != 2) linfo("rv=%d sz=%d\n", rv, hashtable_size(gr->specifics));
+    assert(rv == CC_OK || rv == 2);
     if (specs != nilptr) {
         for (int i = 0; i < array_size(specs); i ++) {
             void* v = nilptr;
@@ -126,10 +131,10 @@ void crn_fiber_destroy(fiber* gr) {
         array_destroy(specs);
     }
     hashtable_destroy(gr->specifics);
-    crn_gc_free(gr); // malloc/calloc分配的不能用GC_FREE()释放
     ssze += sizeof(fiber);
     // linfo("gr %d on %d, freed %d, %d\n", grid, mcid, ssze, sizeof(fiber));
     corowp_destroy(&gr->coctx);
+    crn_gc_free(gr); // malloc/calloc分配的不能用GC_FREE()释放
 }
 
 // frame related for some frame based integeration
@@ -328,16 +333,17 @@ crn_machine_grget(machine* mc, int id) {
     fiber* gr = 0;
     pmutex_lock(&mc->grsmu);
     int rv = hashtable_get(mc->grs, (void*)(uintptr_t)id, (void**)&gr);
-    assert(rv == CC_OK);
     pmutex_unlock(&mc->grsmu);
+    if (rv != CC_OK && rv != CC_ERR_KEY_NOT_FOUND) linfo("rv=%d\n", rv);
+    assert(rv == CC_OK || rv == CC_ERR_KEY_NOT_FOUND);
     return gr;
 }
 fiber* crn_machine_grdel(machine* mc, int id) {
     fiber* gr = 0;
     pmutex_lock(&mc->grsmu);
     int rv = hashtable_remove(mc->grs, (void*)(uintptr_t)id, (void**)&gr);
-    assert(rv == CC_OK);
     pmutex_unlock(&mc->grsmu);
+    assert(rv == CC_OK);
     // assert(gr != 0);
     return gr;
 }
@@ -354,16 +360,17 @@ fiber* crn_machine_grtake(machine* mc) {
     Array* arr = nilptr;
     pmutex_lock(&mc->grsmu);
     int rv = hashtable_get_keys(mc->grs, &arr);
-    assert(rv == CC_OK);
+    if (rv != CC_OK && rv != 2) linfo("rv=%d\n", rv);
+    assert(rv == CC_OK || rv == 2);
     if (arr != nilptr) {
         void* key = nilptr;
         rv = array_get_at(arr, 0, (void**)&key);
         assert(rv == CC_OK);
         rv = hashtable_remove(mc->grs, key, (void**)&gr);
         assert(rv == CC_OK);
-        array_destroy(arr);
     }
     pmutex_unlock(&mc->grsmu);
+    if (arr != nilptr) array_destroy(arr);
     return gr;
 }
 void crn_machine_signal(machine* mc) {
@@ -423,7 +430,7 @@ void crn_fiber_setspec(void* spec, void* val) {
 // int crn_num_fibers() { return atomic_getint(gnr__); }
 // procer internal API
 void crn_post(coro_func fn, void*arg) {
-    linfo("post fn=%p, arg=%p\n", fn, arg);
+    linfo("post fn=%p, arg=%p %d\n", fn, arg, gnr__->gridno);
     machine* mc = crn_machine_get(1);
     // linfo("mc=%p, %d %p, %d\n", mc, mc->id, mc->ngrs, queue_size(mc->ngrs));
     if (mc != 0 && mc->id != 1) {
@@ -662,8 +669,10 @@ void* crn_procerx(void*arg) {
         // check global queue
         fiber* rungr = crn_sched_get_ready_one(mc);
         if (rungr != 0) {
+            mc->curgr = rungr;
             crn_sched_run_one(mc, rungr);
             crn_procer_yield_commit(mc, rungr);
+            mc->curgr = nilptr;
             continue;
         }
         if (rand() % 3 == 2) {
@@ -743,6 +752,12 @@ void crn_procer_resume_one(void* gr_, int ytype, int grid, int mcid) {
     fiber* gr = (fiber*)gr_;
     fiber* mygr = crn_fiber_getcur();
     ytype = (ytype == 0 ? gr->pkreason : ytype);
+    machine* mc = crn_machine_get(mcid);
+    fiber* gr2 = crn_machine_grget(mc, grid);
+    if (gr2 != gr) {
+        ldebug("Invalid gr %p=%p curid=%d %d\n", gr, gr2, grid);
+        return;
+    }
     // linfo("netpoller notify, ytype=%d %p, id=%d\n", ytype, gr, gr->id);
     if (grid != gr->id || mcid != gr->mcid) {
         // sometimes resume from netpoller is too late, gr already gone
@@ -810,10 +825,10 @@ void crn_gc_push_other_roots1() {
             //       i, j, gr->id, (int)gr->state, grstate2str(gr->state),
             //       gr->pkreason, yield_type_name(gr->pkreason), gr);
             // linfo2("stkinfo top=%p btm=%p szo=%ld szr=%ld\n", stktop, stkbtm, gr->stack.ssze, stksz);
-            GC_remove_roots(gr->stack.sptr, gr->stack.sptr + 1);
+            // GC_remove_roots(gr->stack.sptr, gr->stack.sptr + 1);
             // GC_add_roots(gr->stack.sptr, ((void*)((uintptr_t)gr->stack.sptr) + 130000));
             if (gr->state != executing) {
-                GC_push_all_eager(stktop, stkbtm);
+                // GC_push_all_eager(stktop, stkbtm);
             }else
             if (gr->state == executing) {
                 // GC_remove_roots(stktop, (void*)((uintptr_t)stkbtm + 1)); // assert crash
@@ -832,18 +847,67 @@ void crn_gc_push_other_roots2() {
 }
 static
 void crn_gc_on_collection_event(GC_EventType evty) {
+    if (gnr__ == nilptr || (gnr__ != nilptr && gnr__->crninited == false)) {
+        return;
+    }
+
     // linfo2("%d=%s mcid=%d\n", evty, crn_gc_event_name(evty), gcurmcid__);
     if (evty == GC_EVENT_POST_STOP_WORLD) {
         // here call is equal to GC_set_push_other_roots() callback call
         // seems not equal: when call push other roots1 here, seems gc collectc fine
         // but if use GC_set_push_other_roots, seems gc collected shouldn't collect memory
-        crn_gc_push_other_roots1();
+        // crn_gc_push_other_roots1();
+    } else if (evty == GC_EVENT_PRE_STOP_WORLD) {
+        linfo2("%d %d\n", evty, gettid());
+        for (int i = 3; i <= 5; i++ ) {
+            machine* mc = crn_machine_get(i);
+            mc->stopworld = true;
+        }
+
+        bool allpark = true;
+
+        /* for (;;) { */
+        /*     for (int i = 3; i <= 5; i++ ) { */
+        /*         machine* mc = crn_machine_get(i); */
+        /*         linfo2("%d %p %d\n", i, mc, mc->parking); */
+        /*         if (mc->parking == false) { */
+        /*             allpark = false; */
+        /*             break; */
+        /*         } */
+        /*     } */
+        /*     if (!allpark) { */
+        /*         usleep(100*1000); */
+        /*     }else{ */
+        /*         break; */
+        /*     } */
+        /* } */
+    } else if (evty == GC_EVENT_POST_STOP_WORLD) {
+        for (int i = 3; i <= 5; i++ ) {
+            machine* mc = crn_machine_get(i);
+            if (mc->parking == true) {
+                continue;
+            }
+            linfo2("needed reset stkbtm? %d %p\n", i, mc->curgr);
+            if (mc->curgr == nilptr) {
+                continue;
+            }
+            linfo2("needed reset stkbtm? %d %p\n", i, mc->curgr);
+        }
+    } else if (evty == GC_EVENT_PRE_START_WORLD) {
+        for (int i = 3; i <= 5; i++ ) {
+            machine* mc = crn_machine_get(i);
+            mc->stopworld = false;
+        }
     }
 }
 static
 void crn_gc_on_thread_event(GC_EventType evty, void* thid) {
     linfo2("%d=%s %p\n", evty, crn_gc_event_name(evty), thid);
 }
+static void crn_gc_start_handler() {
+    linfo2("gc start %d\n", 0);
+}
+
 bool gcinited = false;
 static
 void crn_init_intern() {
@@ -856,6 +920,7 @@ void crn_init_intern() {
     // GC_set_all_interior_pointers(1);
     // TODO
     // GC_set_push_other_roots(crn_gc_push_other_roots1); // run in which threads?
+    // GC_set_start_callback(crn_gc_start_handler);
     GC_set_on_collection_event(crn_gc_on_collection_event);
     // GC_set_on_thread_event(crn_gc_on_thread_event);
     GC_INIT();
@@ -863,6 +928,9 @@ void crn_init_intern() {
     // linfo("main thread registered: %d\n", GC_thread_is_registered()); // yes
     // linfo("gcfreq=%d\n", GC_get_full_freq()); // 19
     // GC_set_full_freq(5);
+    // struct GC_stack_base stksb;
+    // GC_get_stack_base(&stksb);
+    // GC_register_my_thread(&stksb);
     gcinited = true;
 
     // log init here
@@ -937,6 +1005,7 @@ corona* crn_init_and_wait_done() {
         linfo("wait signal...%d %d\n", nr->crninited, gettid());
         crn_wait_init_done(nr);
         linfo("wait signal done %d %d\n", nr->crninited, gettid());
+        usleep(100*1000);
     }
     return nr;
 }

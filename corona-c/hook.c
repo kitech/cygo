@@ -108,7 +108,7 @@ int pipe2(int pipefd[2], int flags)
 #endif
 int socket(int domain, int type, int protocol)
 {
-    // if (crn_in_procer())
+    // if (!crn_in_procer()) return;
     if (!socket_f) initHook();
     // linfo("socket_f=%p\n", socket_f);
 
@@ -139,6 +139,7 @@ int socketpair(int domain, int type, int protocol, int sv[2])
 int connect(int fd, const struct sockaddr *addr, socklen_t addrlen)
 {
     if (!connect_f) initHook();
+    if (!crn_in_procer()) return connect_f(fd, addr, addrlen);
     // linfo("%d\n", fd);
     time_t btime = time(0);
     for (int i = 0;; i++) {

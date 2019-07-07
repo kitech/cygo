@@ -38,3 +38,6 @@ clean:
 
 # some tricks
 # gdb: handle SIGXCPU SIG33 SIG35 SIGPWR nostop noprint
+
+# https://github.com/ivmai/bdwgc/issues/154#issuecomment-293088265
+# ./configure --enable-static=no --enable-shared=yes --enable-cplusplus --disable-thread-local --enable-gc-debug --enable-gc-assertion --disable-parallel-mark

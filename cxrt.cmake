@@ -42,5 +42,7 @@ set(CMAKE_CXX_FLAGS "-nostdlib -fno-rtti -fno-rtti -fno-exceptions")
 set_target_properties(crn PROPERTIES COMPILE_FLAGS ${corona_c_flags})
 #set_target_properties(corona PROPERTIES COMPILE_FLAGS ${corona_c_flags})
 #target_link_libraries(corona -L./bdwgc/.libs -L./cltc/lib gc collectc event event_pthreads pthread dl)
-set(cxrt_ldflags "-L${mydir}/bdwgc/.libs -L${mydir}/cltc/lib -lgc -lcollectc -levent -levent_pthreads -lcurl -lpthread -ldl -lc")
+set(cxrt_ldflags "-lcurl -lcollectc -levent -levent_pthreads -L${mydir}/bdwgc/.libs -L${mydir}/cltc/lib -lgc -lpthread -ldl -lc")
+# note: all libraries which maybe create threads, must put before -lgc
+
 
