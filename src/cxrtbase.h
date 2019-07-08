@@ -77,6 +77,7 @@ extern pid_t cxgettid();
 void* cxmalloc(size_t size);
 void* cxrealloc(void*ptr, size_t size);
 void cxfree(void* ptr);
+void* cxcalloc(size_t nmemb, size_t size);
 char* cxstrdup(char* str);
 char* cxstrndup(char* str, int n);
 void* cxmemdup(void* ptr, int sz);

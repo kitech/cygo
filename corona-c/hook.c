@@ -501,7 +501,7 @@ struct hostent* gethostbyname(const char* name)
 
     buf = crn_fiber_getspec(&bufkey);
     if (buf == nilptr) {
-        buf = crn_gc_malloc(4096);
+        buf = crn_gc_malloc(5096);
         crn_fiber_setspec(&bufkey, buf);
     }
     host = crn_fiber_getspec(&reskey);
@@ -831,7 +831,7 @@ FILE* fopen(const char *pathname, const char *mode)
 
     FILE* fp = fopen_f(pathname, mode);
     int fd = fileno(fp);
-    hookcb_oncreate(fd, FDISFILE, 0, 0,0,0);
+    // hookcb_oncreate(fd, FDISFILE, 0, 0,0,0);
     // linfo("%s %s %d fdnb=%d\n", pathname, mode, fd, fd_is_nonblocking(fd));
     return fp;
 }

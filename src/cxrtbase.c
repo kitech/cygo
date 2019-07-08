@@ -1,6 +1,7 @@
 
 #include <assert.h>
 #include <stdarg.h>
+#include <execinfo.h>
 
 #include "cxrtbase.h"
 
@@ -93,7 +94,7 @@ void printlndep(const char* fmt, ...) {
     printf("\n");
 }
 void println2(const char* filename, int lineno, const char* funcname, const char* fmt, ...) {
-    static __thread char obuf[512] = {0};
+    static __thread char obuf[712] = {0};
     const char* fbname = strrchr(filename, '/');
     if (fbname != nilptr) { fbname = fbname + 1; }
     else { fbname = filename; }
@@ -108,13 +109,23 @@ void println2(const char* filename, int lineno, const char* funcname, const char
 
     write(STDERR_FILENO, obuf, len);
 }
+
+#define MAX_STACK_LEVELS  50
 void panic(cxstring*s) {
     if (s != nilptr) {
         printf("%.*s", s->len, s->ptr);
     }else{
         printf("<%p>", s);
     }
+
+    void *buffer[MAX_STACK_LEVELS];
+    int levels = backtrace(buffer, MAX_STACK_LEVELS);
+    // print to stderr (fd = 2), and remove this function from the trace
+    backtrace_symbols_fd(buffer + 1, levels - 1, 2);
+
     memcpy((void*)0x1, "abc", 3);
+    // abort();
+    // raise(SIGABRT);
 }
 void panicln(cxstring*s) {
     cxstring* lr = cxstring_new_cstr("\n");

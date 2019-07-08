@@ -24,7 +24,7 @@ void crn_set_finalizer(void* ptr, void(*fn)(void* ptr));
 /* void* crn_raw_realloc(void* ptr, size_t size); */
 /* void crn_raw_free(void* ptr); */
 
-#define crn_malloc_st(/*typedesc*/st) (st*)crn_raw_malloc(sizeof(st))
+#define crn_malloc_st(/*typedesc*/st) (st*)crn_gc_malloc(sizeof(st))
 #define convto(/*typedesc*/ st, /*var*/ var) (st*)(var)
 
 #endif

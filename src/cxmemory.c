@@ -2,15 +2,13 @@
 #include "cxrtbase.h"
 
 void* cxmalloc(size_t size) {
-    // return calloc(1, size);
-    return GC_MALLOC(size);
+    void* ptr = GC_MALLOC(size);
+    return ptr;
 }
 void* cxrealloc(void*ptr, size_t size) {
-    // return realloc(ptr, size);
     return GC_REALLOC(ptr, size);
 }
 void cxfree(void* ptr) {
-    // free(ptr);
     GC_FREE(ptr);
 }
 void* cxcalloc(size_t blocks, size_t size) {

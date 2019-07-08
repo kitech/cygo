@@ -158,12 +158,14 @@ void hookcb_oncreate(int fd, int fdty, bool isNonBlocking, int domain, int sockt
     fdctx->domain = domain;
     fdctx->sockty = sockty;
     fdctx->protocol = protocol;
+    // linfo("fdctx new %d %p\n", fd, fdctx);
 
     if (crn_in_procer() && fdty == FDISSOCKET)
     if (!fd_is_nonblocking(fd)) {
         int rv = fdcontext_set_nonblocking(fdctx, true);
         assert(fd_is_nonblocking(fd) == true);
     }
+
 
     fdcontext* oldfdctx = 0;
     pmutex_lock(&hkcb->mu);

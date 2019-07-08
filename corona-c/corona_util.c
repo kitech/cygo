@@ -111,7 +111,7 @@ void
 __attribute__((no_instrument_function))
 crn_simlog(int level, const char *filename, int line, const char* funcname, const char *fmt, ...) {
     if (level > loglvl) return;
-    static __thread char obuf[512] = {0};
+    static __thread char obuf[612] = {0};
     char* fbname = strrchr(filename, '/');
     if (fbname != NULL) fbname ++;
     struct timeval ltv = {0};
@@ -133,7 +133,7 @@ crn_simlog(int level, const char *filename, int line, const char* funcname, cons
 
 // nolock version, used when stopped the world
 void crn_simlog2(int level, const char *filename, int line, const char* funcname, const char *fmt, ...) {
-    static __thread char obuf[512] = {0};
+    static __thread char obuf[612] = {0};
     char* fbname = strrchr(filename, '/');
     if (fbname != NULL) fbname ++;
     struct timeval ltv = {0};

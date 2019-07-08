@@ -352,7 +352,8 @@ crn_machine_get(int id) {
     // linfo("get mc %d=%p\n", id, mc);
     if (mc == 0 && id != 1) {
         linfo("cannot get mc %d %d\n", id, hashtable_size(gnr__->mcs));
-        dumphtkeys(gnr__->mcs);
+        // dumphtkeys(gnr__->mcs);
+        checkhtkeys(gnr__->mcs,&gnr__->mcsmu);
         // assert(mc != 0);
     }
     if (mc != 0) {
@@ -442,6 +443,7 @@ crn_fiber_getcur() {
         return 0;
     }
     machine* mcx = crn_machine_get(mcid);
+    assert(mcx != nilptr);
     fiber* gr = 0;
     gr = crn_machine_grget(mcx, grid);
     if (gr == nilptr) {
@@ -495,7 +497,8 @@ void crn_post(coro_func fn, void*arg) {
     assert(rv == CC_OK);
     int qsz = queue_size(mc->ngrs);
     pmutex_unlock(&mc->ngrsmu);
-    dumphtkeys(gnr__->mcs);
+    // dumphtkeys(gnr__->mcs);
+    checkhtkeys(gnr__->mcs,&gnr__->mcsmu);
     if (qsz > 128) {
         linfo("wow so many ngrs %d\n", qsz);
     }
@@ -562,8 +565,8 @@ static void* crn_procer1(void*arg) {
             // dumphtkeys(gnr__->mcs);
             crn_machine_gradd(mc, newgr);
             newgn ++;
-            linfo("move q to 1 %d of %d\n", newgr->id, newgn);
-            dumphtkeys(gnr__->mcs);
+            // dumphtkeys(gnr__->mcs);
+            checkhtkeys(gnr__->mcs,&gnr__->mcsmu);
         }
         if (newgn == 0) continue;
 
@@ -609,7 +612,7 @@ static void* crn_procer1(void*arg) {
                 break;
             }
             if (mct != nilptr) {
-                linfo("move %d to %d\n", gr->id, mct->id);
+                lverb("move %d to %d\n", gr->id, mct->id);
                 crn_machine_gradd(mct, gr);
                 crn_machine_signal(mct);
                 break;
@@ -668,6 +671,7 @@ void crn_sched_run_one(machine* mc, fiber* rungr) {
     rungr->mcid = mc->id;
     rungr->savefrm = mc->savefrm;
     crn_fiber_run(rungr);
+    // GC_call_with_alloc_lock(crn_gc_setbottom0, rungr);
     gcurgrid__ = 0;
     mc->curgr = nilptr;
 
@@ -756,7 +760,9 @@ int crn_procer_yield(long fd, int ytype) {
     }
     // linfo("yield fd=%ld, ytype=%s(%d), mcid=%d, grid=%d\n", fd, yield_type_name(ytype), ytype, gcurmcid__, gcurgrid__);
     machine* mc = crn_machine_get(gcurmcid__);
+    assert(mc != nilptr);
     fiber* gr = crn_fiber_getcur();
+    assert(gr != nilptr);
     gr->pkreason = ytype;
     if (ytype == YIELD_TYPE_CHAN_RECV || ytype == YIELD_TYPE_CHAN_SEND ||
         ytype == YIELD_TYPE_CHAN_SELECT || ytype == YIELD_TYPE_CHAN_SELECT_NOCASE) {
@@ -779,7 +785,9 @@ int crn_procer_yield_multi(int ytype, int nfds, long fds[], int ytypes[]) {
     }
     // linfo("yield %d ytype=%s(%d), mcid=%d, grid=%d\n", nfds, yield_type_name(ytype), ytype, gcurmcid__, gcurgrid__);
     machine* mc = crn_machine_get(gcurmcid__);
+    assert(mc != nilptr);
     fiber* gr = crn_fiber_getcur();
+    assert(gr != nilptr);
     gr->pkreason = ytype;
 
     mc->yinfo.seted = true;
@@ -804,9 +812,10 @@ int crn_procer_yield_multi(int ytype, int nfds, long fds[], int ytypes[]) {
 }
 void crn_procer_resume_one(void* gr_, int ytype, int grid, int mcid) {
     fiber* gr = (fiber*)gr_;
-    fiber* mygr = crn_fiber_getcur();
+    fiber* curgr = crn_fiber_getcur();
     ytype = (ytype == 0 ? gr->pkreason : ytype);
     machine* mc = crn_machine_get(mcid);
+    assert(mc != nilptr);
     fiber* gr2 = crn_machine_grget(mc, grid);
     if (gr2 != gr) {
         ldebug("Invalid gr %p=%p curid=%d %d\n", gr, gr2, grid);
@@ -818,7 +827,7 @@ void crn_procer_resume_one(void* gr_, int ytype, int grid, int mcid) {
         ldebug("Invalid gr %p curid=%d %d\n", gr, gr->id, grid);
         return;
     }
-    if (mygr != nilptr && gr->mcid == mygr->mcid) {
+    if (curgr != nilptr && gr->mcid == curgr->mcid) {
         crn_fiber_resume_same_thread(gr);
         // 相同machine线程的情况，要主动出让执行权。
         // 另外考虑是否只针对chan send/recv。
@@ -878,10 +887,10 @@ void crn_gc_push_other_roots1() {
             //       i, j, gr->id, (int)gr->state, grstate2str(gr->state),
             //       gr->pkreason, yield_type_name(gr->pkreason), gr);
             // linfo2("stkinfo top=%p btm=%p szo=%ld szr=%ld\n", stktop, stkbtm, gr->stack.ssze, stksz);
-            // GC_remove_roots(gr->stack.sptr, gr->stack.sptr + 1);
+            GC_remove_roots(gr->stack.sptr, gr->stack.sptr + 1);
             // GC_add_roots(gr->stack.sptr, ((void*)((uintptr_t)gr->stack.sptr) + 130000));
             if (gr->state != executing) {
-                // GC_push_all_eager(stktop, stkbtm);
+                GC_push_all_eager(stktop, stkbtm);
             }else
             if (gr->state == executing) {
                 // GC_remove_roots(stktop, (void*)((uintptr_t)stkbtm + 1)); // assert crash
@@ -899,11 +908,14 @@ void crn_gc_push_other_roots2() {
     linfo2("tid=%d mcid=%d\n", gettid(), gcurmcid__);
 }
 static
+void crn_gc_on_collection_event2(GC_EventType evty) {
+}
+static
 void crn_gc_on_collection_event(GC_EventType evty) {
     if (gnr__ == nilptr || (gnr__ != nilptr && gnr__->crninited == false)) {
         return;
     }
-    GC_alloc_unlock();
+    // GC_alloc_unlock();
     // linfo2("%d=%s mcid=%d\n", evty, crn_gc_event_name(evty), gcurmcid__);
     if (evty == GC_EVENT_PRE_STOP_WORLD) {
         linfo2("%d %d\n", evty, gettid());
@@ -966,7 +978,7 @@ void crn_gc_on_collection_event(GC_EventType evty) {
     } else if (evty == GC_EVENT_END) {
         linfo2("gc finished %d\n", 0);
     }
-    GC_alloc_lock();
+    // GC_alloc_lock();
 }
 static
 void crn_gc_on_thread_event(GC_EventType evty, void* thid) {
@@ -983,13 +995,15 @@ void crn_init_intern() {
     crn_loglvl_forenv();
 
     GC_set_free_space_divisor(50); // default 3
+    GC_set_dont_precollect(1);
+    GC_set_dont_expand(1);
     // GC_enable_incremental();
     // GC_set_rate(5);
     // GC_set_all_interior_pointers(1);
     // TODO
     // GC_set_push_other_roots(crn_gc_push_other_roots1); // run in which threads?
     GC_set_start_callback(crn_gc_start_handler);
-    // GC_set_on_collection_event(crn_gc_on_collection_event);
+    GC_set_on_collection_event(crn_gc_on_collection_event2);
     // GC_set_on_thread_event(crn_gc_on_thread_event);
     GC_INIT();
     GC_allow_register_threads();
@@ -1077,7 +1091,8 @@ corona* crn_init_and_wait_done() {
         crn_wait_init_done(nr);
         linfo("wait signal done %d %d\n", nr->crninited, gettid());
         usleep(100*1000);
-        dumphtkeys(nr->mcs);
+        // dumphtkeys(nr->mcs);
+        checkhtkeys(nr->mcs,&nr->mcsmu);
     }
     return nr;
 }
