@@ -82,7 +82,7 @@ void* cxrt_chan_recv(void*ch) {
 }
 
 /////
-void println(const char* fmt, ...) {
+void printlndep(const char* fmt, ...) {
     va_list arg;
     int done;
 
@@ -93,20 +93,20 @@ void println(const char* fmt, ...) {
     printf("\n");
 }
 void println2(const char* filename, int lineno, const char* funcname, const char* fmt, ...) {
+    static __thread char obuf[512] = {0};
     const char* fbname = strrchr(filename, '/');
     if (fbname != nilptr) { fbname = fbname + 1; }
     else { fbname = filename; }
 
-    printf("%s:%d:%s ", fbname, lineno, funcname);
+    int len = snprintf(obuf, sizeof(obuf)-1, "%s:%d:%s ", fbname, lineno, funcname);
 
     va_list arg;
-    int done;
-
     va_start (arg, fmt);
-    done = vprintf (fmt, arg);
+    len += vsnprintf(obuf+len,sizeof(obuf)-len-1,fmt,arg);
     va_end (arg);
+    obuf[len++] = '\n';
 
-    printf("\n");
+    write(STDERR_FILENO, obuf, len);
 }
 void panic(cxstring*s) {
     if (s != nilptr) {

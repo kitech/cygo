@@ -81,8 +81,9 @@ void crn_machine_grfree(machine* mc, int id);
 void crn_machine_signal(machine* mc);
 
 // fiber internal API
-static void fiber_finalizer(fiber* gr) {
-    linfo("fiber dtor %p\n", gr);
+static void fiber_finalizer(void* gr) {
+    fiber* f = (fiber*)gr;
+    linfo("fiber dtor %p %d\n", gr, f->id);
 }
 fiber* crn_fiber_new(int id, coro_func fn, void* arg) {
     fiber* gr = (fiber*)crn_gc_malloc(sizeof(fiber));
@@ -94,9 +95,16 @@ fiber* crn_fiber_new(int id, coro_func fn, void* arg) {
     hashtable_new_conf(&gnr__->htconf, &gr->specifics);
     return gr;
 }
+static void crn_fiber_setstate(fiber* gr, grstate state) {
+    assert(sizeof(grstate) == sizeof(int));
+    atomic_setint((int*)(&gr->state), (int)state);
+}
+static grstate crn_fiber_getstate(fiber* gr) {
+    assert(sizeof(grstate) == sizeof(int));
+    return atomic_getint((int*)(&gr->state));
+}
 // alloc stack and context
 void crn_fiber_new2(fiber*gr) {
-    assert(sizeof(grstate) == sizeof(int));
     // corowp_stack_alloc(&gr->stack, dftstkusz);
     gr->stack.sptr = GC_malloc_uncollectable(dftstksz);
     // gr->stack.sptr = calloc(1, dftstksz);
@@ -165,7 +173,7 @@ void* crn_gc_setbottom1(void*arg) {
 
 void crn_fiber_forward(void* arg) {
     fiber* gr = (fiber*)arg;
-    GC_call_with_alloc_lock(crn_gc_setbottom1, gr);
+    // GC_call_with_alloc_lock(crn_gc_setbottom1, gr);
 
     gr->fnproc(gr->arg);
     atomic_setint(&gr->state, finished);
@@ -177,20 +185,6 @@ void crn_fiber_forward(void* arg) {
 
     // 这个跳回ctx应该是不对的，有可能要跳到其他的gr而不是默认gr？
     corowp_transfer(&gr->coctx, gr->coctx0); // 这句要写在函数fnproc退出之前？
-}
-
-// 由于需要考虑线程的问题，不能直接在netpoller线程调用
-void crn_fiber_resume(fiber* gr) {
-    assert(gr->isresume == true);
-    grstate oldst = atomic_getint(&gr->state);
-    assert(oldst != executing);
-    assert(oldst != finished);
-    atomic_setint(&gr->state, executing);
-
-    if (gr->myfrm != nilptr) crn_set_frame(gr->myfrm); // 恢复fiber的frame
-    GC_call_with_alloc_lock(crn_gc_setbottom1, gr);
-    // 对-DCORO_UCONTEXT/-DCORO_ASM等来说，这句是真正开始执行
-    corowp_transfer(gr->coctx0, &gr->coctx);
 }
 
 // TODO 有时候它不一定是从ctx0跳转，或者是跳转到ctx0。这几个函数都是 crn_fiber_run/resume,suspend
@@ -208,9 +202,24 @@ void crn_fiber_run_first(fiber* gr) {
     mc->curgr = gr;
     coro_context* curcoctx = curgr == 0? gr->coctx0 : &curgr->coctx; // 暂时无用
 
+    GC_call_with_alloc_lock(crn_gc_setbottom1, gr);
     // 对-DCORO_UCONTEXT/-DCORO_ASM等来说，这句是真正开始执行
     corowp_transfer(gr->coctx0, &gr->coctx);
     // corowp_transfer(&gr->coctx, gr->coctx0); // 这句要写在函数fnproc退出之前？
+}
+
+// 由于需要考虑线程的问题，不能直接在netpoller线程调用
+void crn_fiber_resume(fiber* gr) {
+    assert(gr->isresume == true);
+    grstate oldst = atomic_getint(&gr->state);
+    assert(oldst != executing);
+    assert(oldst != finished);
+    atomic_setint(&gr->state, executing);
+
+    if (gr->myfrm != nilptr) crn_set_frame(gr->myfrm); // 恢复fiber的frame
+    GC_call_with_alloc_lock(crn_gc_setbottom1, gr);
+    // 对-DCORO_UCONTEXT/-DCORO_ASM等来说，这句是真正开始执行
+    corowp_transfer(gr->coctx0, &gr->coctx);
 }
 
 void crn_fiber_run(fiber* gr) {
@@ -273,8 +282,12 @@ void crn_fiber_suspend(fiber* gr) {
 static void machine_finalizer(void* mc) {
     linfo("machine dtor %p\n", mc);
 }
+static void queue_finalizer(void* mc) {
+    linfo("machine dtor %p\n", mc);
+}
 machine* crn_machine_new(int id) {
     machine* mc = (machine*)crn_gc_malloc(sizeof(machine));
+    crn_set_finalizer(mc,machine_finalizer);
     mc->id = id;
     HashTableConf* htconf = crn_dft_htconf();
     ltrace("htconf=%p\n", htconf);
@@ -287,12 +300,43 @@ machine* crn_machine_new(int id) {
     qconf.mem_calloc = htconf->mem_calloc;
 
     queue_new_conf(&qconf, &mc->ngrs);
-    // corowp_create(&mc->coctx0, 0, 0, 0, 0);
+    crn_set_finalizer(mc->ngrs, queue_finalizer);
+    corowp_create(&mc->coctx0, 0, 0, 0, 0);
     return mc;
 }
 void crn_machine_init_crctx(machine* mc) {
     corowp_create(&mc->coctx0, 0, 0, 0, 0);
 }
+static void dumphtkeys(HashTable* ht) {
+    Array* arr = nilptr;
+    hashtable_get_keys(ht, &arr);
+    linfo("%p keysz %d keys=%p\n", ht, array_size(arr), arr);
+    if (arr != nilptr && array_size(arr) > 0)
+        for (int i = 0; i < array_size(arr); i++) {
+            void* key = nilptr;
+            array_get_at(arr, i, &key);
+            linfo("i=%d key=%d\n", i, key);
+        }
+    if (arr != nilptr) array_destroy(arr);
+}
+static bool checkhtkeys(HashTable* ht, pmutex_t* lock) {
+    Array* arr = nilptr;
+    pmutex_lock(lock);
+    int rv = hashtable_get_keys(ht, &arr);
+    int htsz = hashtable_size(ht);
+    pmutex_unlock(lock);
+    if (htsz > 0) {
+        assert(arr != nilptr);
+        int arsz = array_size(arr);
+        if (arsz != htsz) {
+            lwarn("arsz=%d, htsz=%d\n", arsz, htsz);
+            assert(arsz == htsz);
+        }
+    }
+    if (arr != nilptr) array_destroy(arr);
+    return false;
+}
+
 machine* __attribute__((no_instrument_function))
 crn_machine_get(int id) {
     if (id <= 0) {
@@ -301,11 +345,14 @@ crn_machine_get(int id) {
         assert(id > 0);
     }
     machine* mc = 0;
+    pmutex_lock(&gnr__->mcsmu);
     int rv = hashtable_get(gnr__->mcs, (void*)(uintptr_t)id, (void**)&mc);
+    pmutex_unlock(&gnr__->mcsmu);
     assert(rv == CC_OK || rv == CC_ERR_KEY_NOT_FOUND);
     // linfo("get mc %d=%p\n", id, mc);
     if (mc == 0 && id != 1) {
-        linfo("cannot get mc %d\n", id);
+        linfo("cannot get mc %d %d\n", id, hashtable_size(gnr__->mcs));
+        dumphtkeys(gnr__->mcs);
         // assert(mc != 0);
     }
     if (mc != 0) {
@@ -324,9 +371,9 @@ crn_machine_get(int id) {
 
 void crn_machine_gradd(machine* mc, fiber* gr) {
     pmutex_lock(&mc->grsmu);
-    int rv = hashtable_add(mc->grs, (void*)(uintptr_t)gr->id, gr);
-    assert(rv == CC_OK);
+    int rv = hashtable_add(mc->grs, (void*)(uintptr_t)(gr->id), gr);
     pmutex_unlock(&mc->grsmu);
+    assert(rv == CC_OK);
 }
 fiber* __attribute__((no_instrument_function))
 crn_machine_grget(machine* mc, int id) {
@@ -375,7 +422,7 @@ fiber* crn_machine_grtake(machine* mc) {
 }
 void crn_machine_signal(machine* mc) {
     if (mc == nilptr) {
-        linfo("Invalid mc %p\n", mc);
+        lwarn("Invalid mc %p\n", mc);
         return;
         assert(mc != nilptr);
     }
@@ -443,14 +490,16 @@ void crn_post(coro_func fn, void*arg) {
     fiber* gr = crn_fiber_new(id, fn, arg);
     crn_fiber_new2(gr);
     pmutex_lock(&mc->ngrsmu);
+    assert(mc->ngrs != nilptr);
     int rv = queue_enqueue(mc->ngrs, gr);
     assert(rv == CC_OK);
     int qsz = queue_size(mc->ngrs);
     pmutex_unlock(&mc->ngrsmu);
-    pcond_signal(&mc->pkcd);
+    dumphtkeys(gnr__->mcs);
     if (qsz > 128) {
         linfo("wow so many ngrs %d\n", qsz);
     }
+    pcond_signal(&mc->pkcd);
 }
 
 static
@@ -464,7 +513,7 @@ void* crn_procer_netpoller(void*arg) {
     machine* mc = (machine*)arg;
     struct GC_stack_base stksb = {};
     GC_get_stack_base(&stksb);
-    GC_register_my_thread(&stksb);
+    // GC_register_my_thread(&stksb);
     mc->gchandle = GC_get_my_stackbottom(&mc->stksb);
     ltrace("%d, %d\n", mc->id, gettid());
     crn_procer_setname(mc->id);
@@ -479,12 +528,11 @@ void* crn_procer_netpoller(void*arg) {
     return nilptr;
 }
 
-static
-void* crn_procer1(void*arg) {
+static void* crn_procer1(void*arg) {
     machine* mc = (machine*)arg;
     struct GC_stack_base stksb = {};
     GC_get_stack_base(&stksb);
-    GC_register_my_thread(&stksb);
+    // GC_register_my_thread(&stksb);
     mc->gchandle = GC_get_my_stackbottom(&mc->stksb);
     // linfo("%d %d\n", mc->id, gettid());
     crn_procer_setname(mc->id);
@@ -502,7 +550,7 @@ void* crn_procer1(void*arg) {
         }
 
         // linfo("newgr %d\n", newgn);
-        for (newgn = 0;; newgn ++) {
+        for (newgn = 0;;) {
             fiber* newgr = nilptr;
             pmutex_lock(&mc->ngrsmu);
             int rv = queue_poll(mc->ngrs, (void**)&newgr);
@@ -511,14 +559,20 @@ void* crn_procer1(void*arg) {
             if (newgr == nilptr) {
                 break;
             }
+            // dumphtkeys(gnr__->mcs);
             crn_machine_gradd(mc, newgr);
+            newgn ++;
+            linfo("move q to 1 %d of %d\n", newgr->id, newgn);
+            dumphtkeys(gnr__->mcs);
         }
         if (newgn == 0) continue;
 
         // TODO 应该放到schedule中
         // find free machine and runnable fiber
         Array* arr2 = nilptr;
+        pmutex_lock(&gnr__->mcsmu);
         int rv = hashtable_get_keys(gnr__->mcs, &arr2);
+        pmutex_unlock(&gnr__->mcsmu);
         assert(rv == CC_OK);
         int arr2sz = arr2 == nilptr ? 0 : array_size(arr2);
         for (;arr2 != nilptr;) {
@@ -534,6 +588,7 @@ void* crn_procer1(void*arg) {
                 int rdidx = abs(rand()) % arr2sz;
                 void* key = nilptr;
                 int rv = array_get_at(arr2, rdidx, &key);
+                if (rv != CC_OK) linfo("rv=%d %d\n", rv, arr2sz);
                 assert(rv == CC_OK);
                 if ((uintptr_t)key <= 2) continue;
 
@@ -554,7 +609,7 @@ void* crn_procer1(void*arg) {
                 break;
             }
             if (mct != nilptr) {
-                // linfo("move %d to %d\n", gr->id, mct->id);
+                linfo("move %d to %d\n", gr->id, mct->id);
                 crn_machine_gradd(mct, gr);
                 crn_machine_signal(mct);
                 break;
@@ -605,6 +660,7 @@ fiber* crn_sched_get_ready_one(machine*mc) {
 }
 static
 void crn_sched_run_one(machine* mc, fiber* rungr) {
+    mc->curgr = rungr;
     gcurgrid__ = rungr->id;
     rungr->coctx0 = &mc->coctx0;
     rungr->stksb = &mc->stksb;
@@ -613,6 +669,7 @@ void crn_sched_run_one(machine* mc, fiber* rungr) {
     rungr->savefrm = mc->savefrm;
     crn_fiber_run(rungr);
     gcurgrid__ = 0;
+    mc->curgr = nilptr;
 
     int curst = atomic_getint(&rungr->state);
     if (curst == waiting) {
@@ -653,12 +710,11 @@ static
 void* crn_procerx(void*arg) {
     machine* mc = (machine*)arg;
     GC_get_stack_base(&mc->stksb);
-    GC_register_my_thread(&mc->stksb);
+    // GC_register_my_thread(&mc->stksb);
     mc->gchandle = GC_get_my_stackbottom(&mc->stksb);
     if (crn_thread_createcb != 0) {
         crn_thread_createcb((void*)(uintptr_t)mc->id);
     }
-    crn_machine_init_crctx(mc);
 
     // linfo("%d %d\n", mc->id, gettid());
     crn_procer_setname(mc->id);
@@ -669,10 +725,8 @@ void* crn_procerx(void*arg) {
         // check global queue
         fiber* rungr = crn_sched_get_ready_one(mc);
         if (rungr != 0) {
-            mc->curgr = rungr;
             crn_sched_run_one(mc, rungr);
             crn_procer_yield_commit(mc, rungr);
-            mc->curgr = nilptr;
             continue;
         }
         if (rand() % 3 == 2) {
@@ -784,8 +838,7 @@ int crn_nxtid(corona* nr) {
 }
 
 static
-int
-__attribute__((no_instrument_function))
+int __attribute__((no_instrument_function))
 hashtable_cmp_int(const void *key1, const void *key2) {
     if (key1 == key2) return 0;
     else if((uintptr_t)(key1) > (uintptr_t)(key2)) return 1;
@@ -850,17 +903,16 @@ void crn_gc_on_collection_event(GC_EventType evty) {
     if (gnr__ == nilptr || (gnr__ != nilptr && gnr__->crninited == false)) {
         return;
     }
-
+    GC_alloc_unlock();
     // linfo2("%d=%s mcid=%d\n", evty, crn_gc_event_name(evty), gcurmcid__);
-    if (evty == GC_EVENT_POST_STOP_WORLD) {
-        // here call is equal to GC_set_push_other_roots() callback call
-        // seems not equal: when call push other roots1 here, seems gc collectc fine
-        // but if use GC_set_push_other_roots, seems gc collected shouldn't collect memory
-        // crn_gc_push_other_roots1();
-    } else if (evty == GC_EVENT_PRE_STOP_WORLD) {
+    if (evty == GC_EVENT_PRE_STOP_WORLD) {
         linfo2("%d %d\n", evty, gettid());
         for (int i = 3; i <= 5; i++ ) {
             machine* mc = crn_machine_get(i);
+            if (mc == 0) {
+                linfo2("mcssz = %d\n", hashtable_size(gnr__->mcs));
+                break;
+            }
             mc->stopworld = true;
         }
 
@@ -882,8 +934,17 @@ void crn_gc_on_collection_event(GC_EventType evty) {
         /*     } */
         /* } */
     } else if (evty == GC_EVENT_POST_STOP_WORLD) {
+        // here call is equal to GC_set_push_other_roots() callback call
+        // seems not equal: when call push other roots1 here, seems gc collectc fine
+        // but if use GC_set_push_other_roots, seems gc collected shouldn't collect memory
+        // crn_gc_push_other_roots1();
+
         for (int i = 3; i <= 5; i++ ) {
             machine* mc = crn_machine_get(i);
+            if (mc == 0) {
+                linfo2("mcssz = %d\n", hashtable_size(gnr__->mcs));
+                break;
+            }
             if (mc->parking == true) {
                 continue;
             }
@@ -896,9 +957,16 @@ void crn_gc_on_collection_event(GC_EventType evty) {
     } else if (evty == GC_EVENT_PRE_START_WORLD) {
         for (int i = 3; i <= 5; i++ ) {
             machine* mc = crn_machine_get(i);
+            if (mc == 0) {
+                linfo2("mcssz = %d\n", hashtable_size(gnr__->mcs));
+                break;
+            }
             mc->stopworld = false;
         }
+    } else if (evty == GC_EVENT_END) {
+        linfo2("gc finished %d\n", 0);
     }
+    GC_alloc_lock();
 }
 static
 void crn_gc_on_thread_event(GC_EventType evty, void* thid) {
@@ -920,8 +988,8 @@ void crn_init_intern() {
     // GC_set_all_interior_pointers(1);
     // TODO
     // GC_set_push_other_roots(crn_gc_push_other_roots1); // run in which threads?
-    // GC_set_start_callback(crn_gc_start_handler);
-    GC_set_on_collection_event(crn_gc_on_collection_event);
+    GC_set_start_callback(crn_gc_start_handler);
+    // GC_set_on_collection_event(crn_gc_on_collection_event);
     // GC_set_on_thread_event(crn_gc_on_thread_event);
     GC_INIT();
     GC_allow_register_threads();
@@ -960,6 +1028,7 @@ corona* crn_new() {
     nr->gridno = 1;
     nr->np = netpoller_new();
 
+    assert(gnr__ == nilptr);
     gnr__ = nr;
     return nr;
 }
@@ -971,9 +1040,11 @@ void crn_init(corona* nr) {
     for (int i = 5; i > 0; i --) {
         machine* mc = crn_machine_new(i);
         pthread_t* t = &mc->th;
+        pmutex_lock(&nr->mcsmu);
         int rv = hashtable_add(nr->mths, (void*)(uintptr_t)i, t);
         assert(rv == CC_OK);
         rv = hashtable_add(nr->mcs, (void*)(uintptr_t)i, mc);
+        pmutex_unlock(&nr->mcsmu);
         assert(rv == CC_OK);
         if (i == 1) {
             pthread_create(t, 0, crn_procer1, (void*)mc);
@@ -1006,6 +1077,7 @@ corona* crn_init_and_wait_done() {
         crn_wait_init_done(nr);
         linfo("wait signal done %d %d\n", nr->crninited, gettid());
         usleep(100*1000);
+        dumphtkeys(nr->mcs);
     }
     return nr;
 }

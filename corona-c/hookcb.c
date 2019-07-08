@@ -25,6 +25,7 @@ typedef struct fdcontext {
     int domain;
     int sockty; // tcp/udp...
     int protocol; //
+    time_t tm;
 } fdcontext;
 
 typedef struct hookcb {
@@ -32,11 +33,20 @@ typedef struct hookcb {
     pmutex_t mu;
 } hookcb;
 
+static void fdcontext_finalizer(void* ptr) {
+    fdcontext* fdctx = (fdcontext*)ptr;
+    time_t nowt = time(0);
+    linfo("fdctx dtor %p %d %ld\n", ptr, fdctx->fd, nowt - fdctx->tm);
+}
 fdcontext* fdcontext_new(int fd) {
     fdcontext* fdctx = (fdcontext*)crn_gc_malloc(sizeof(fdcontext));
     fdctx->fd = fd;
+    fdctx->tm = time(0);
+    assert(fd != 0);
+    crn_set_finalizer(fdctx,fdcontext_finalizer);
     return fdctx;
 }
+void fdcontext_free(fdcontext* fdctx) { crn_gc_free(fdctx); }
 
 typedef int(*fcntl_t)(int __fd, int __cmd, ...);
 extern fcntl_t fcntl_f;
@@ -87,9 +97,17 @@ static int hashtable_cmp_int(const void *key1, const void *key2) {
     else return -1;
 }
 
+static void hookcb_finalizer(void* ptr) {
+    linfo("hkcb dtor %p\n", ptr);
+}
+static void hookcbht_finalizer(void* ptr) {
+    linfo("hkcbht dtor %p\n", ptr);
+}
 hookcb* hookcb_new() {
     // so, this is live forever, not use GC_malloc
     hookcb* hkcb = (hookcb*)crn_gc_malloc(sizeof(hookcb));
+    crn_set_finalizer(hkcb->fdctxs, hookcb_finalizer);
+
     HashTableConf htconf;
     hashtable_conf_init(&htconf);
     htconf.hash = hashtable_hash_ptr;
@@ -100,6 +118,7 @@ hookcb* hookcb_new() {
     htconf.mem_calloc = crn_gc_calloc;
 
     hashtable_new_conf(&htconf, &hkcb->fdctxs);
+    crn_set_finalizer(hkcb->fdctxs, hookcbht_finalizer);
 
     return hkcb;
 }
@@ -148,11 +167,12 @@ void hookcb_oncreate(int fd, int fdty, bool isNonBlocking, int domain, int sockt
 
     fdcontext* oldfdctx = 0;
     pmutex_lock(&hkcb->mu);
-    hashtable_remove(hkcb->fdctxs, (void*)(uintptr_t)fd, (void**)&oldfdctx);
-    hashtable_add(hkcb->fdctxs, (void*)(uintptr_t)fd, (void*)fdctx);
+    int rv = hashtable_remove(hkcb->fdctxs, (void*)(uintptr_t)fd, (void**)&oldfdctx);
+    rv = hashtable_add(hkcb->fdctxs, (void*)(uintptr_t)fd, (void*)fdctx);
     pmutex_unlock(&hkcb->mu);
+    assert(rv == CC_OK);
     if (oldfdctx != nilptr) {
-        crn_gc_free(oldfdctx);
+        fdcontext_free(oldfdctx);
     }
 }
 
@@ -165,13 +185,13 @@ void hookcb_onclose(int fd) {
 
     fdcontext* fdctx = 0;
     pmutex_lock(&hkcb->mu);
-    hashtable_remove(hkcb->fdctxs, (void*)(uintptr_t)fd, (void**)&fdctx);
+    int rv = hashtable_remove(hkcb->fdctxs, (void*)(uintptr_t)fd, (void**)&fdctx);
     pmutex_unlock(&hkcb->mu);
     // maybe not found when just startup
     if (fdctx == 0) {
         linfo("fd not found in context %d\n", fd);
     }else{
-        crn_gc_free(fdctx);
+        fdcontext_free(fdctx);
     }
 }
 
@@ -181,12 +201,18 @@ void hookcb_ondup(int from, int to) {
 
     fdcontext* fdctx = 0;
     pmutex_lock(&hkcb->mu);
-    hashtable_get(hkcb->fdctxs, (void*)(uintptr_t)from, (void**)&fdctx);
+    int rv = hashtable_get(hkcb->fdctxs, (void*)(uintptr_t)from, (void**)&fdctx);
     pmutex_unlock(&hkcb->mu);
+    assert(rv == CC_OK);
     assert(fdctx != 0);
+
     fdcontext* tofdctx = fdcontext_new(to);
     memcpy(tofdctx, fdctx, sizeof(fdcontext));
     tofdctx->fd = to;
+    pmutex_lock(&hkcb->mu);
+    rv = hashtable_add(hkcb->fdctxs, (void*)(uintptr_t)to, tofdctx);
+    pmutex_unlock(&hkcb->mu);
+    assert(rv == CC_OK);
 }
 
 fdcontext* hookcb_get_fdcontext(int fd) {
@@ -195,7 +221,7 @@ fdcontext* hookcb_get_fdcontext(int fd) {
 
     fdcontext* fdctx = 0;
     pmutex_lock(&hkcb->mu);
-    hashtable_get(hkcb->fdctxs, (void*)(uintptr_t)fd, (void**)&fdctx);
+    int rv = hashtable_get(hkcb->fdctxs, (void*)(uintptr_t)fd, (void**)&fdctx);
     pmutex_unlock(&hkcb->mu);
     if (fdctx == 0) {
         // assert(fdctx != 0);
