@@ -37,7 +37,9 @@ void* crn_gc_calloc(size_t n, size_t size) {
     return GC_MALLOC(n*size);
 }
 
-static void crn_finalizer_fwd(void* ptr, void (*ufin)(void* ptr)) { ufin(ptr);}
+static void crn_finalizer_fwd(void* ptr, void* fnptr) {
+    ((void (*)(void*))fnptr)(ptr);
+}
 void crn_set_finalizer(void* ptr, void(*ufin)(void* ptr)) {
     if (ufin == NULL) {
         GC_REGISTER_FINALIZER(ptr, NULL, NULL, NULL, NULL);

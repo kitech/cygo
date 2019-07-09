@@ -6,6 +6,8 @@
 // core functions 有些是宏，所以就再包一下
 // 对于non threadsafe的函数，做了简单lock
 
+extern void* crn_gc_malloc(size_t size);
+
 coro_context* corowp_context_new() {
     coro_context* ctx = (coro_context*)crn_gc_malloc(sizeof(coro_context));
     return ctx;

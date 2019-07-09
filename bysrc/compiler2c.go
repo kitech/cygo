@@ -747,7 +747,7 @@ func (c *g2nc) genCallExprPrintln(scope *ast.Scope, te *ast.CallExpr) {
 	// c.genExpr(scope, te.Fun)
 	c.out("println2")
 	c.out("(")
-	c.out("__FILE__, __LINE__, __FUNCTION__", gopp.IfElseStr(len(te.Args) > 0, ",", ""))
+	c.out("__FILE__, __LINE__, __func__", gopp.IfElseStr(len(te.Args) > 0, ",", ""))
 	if len(te.Args) > 0 {
 		var tyfmts []string
 		for _, e1 := range te.Args {

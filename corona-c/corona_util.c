@@ -34,7 +34,7 @@ int (array_randcmp) (const void*a, const void*b) {
         const char* filename = __FILE__; char* fbname = strrchr(filename, '/'); \
         if (fbname != NULL) fbname ++;                                  \
         crn_loglock();                                                  \
-        fprintf(stderr, "%s:%d %s: ", fbname, __LINE__, __FUNCTION__);  \
+        fprintf(stderr, "%s:%d %s: ", fbname, __LINE__, __func__); \
         fprintf(stderr, fmt, __VA_ARGS__);                              \
         fflush(stderr); crn_logunlock();                                \
     }

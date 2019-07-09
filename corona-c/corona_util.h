@@ -47,21 +47,21 @@ void crn_simlog2(int level, const char *filename, int line, const char* funcname
 
 
 #define linfo(fmt, ...)                                                 \
-    if (SHOWLOG) { crn_simlog(LOGLVL_INFO, __FILE__, __LINE__, __FUNCTION__, fmt, __VA_ARGS__); }
+    if (SHOWLOG) { crn_simlog(LOGLVL_INFO, __FILE__, __LINE__, __func__, fmt, __VA_ARGS__); }
 #define linfo2(fmt, ...)                                                \
-    if (SHOWLOG) { crn_simlog2(LOGLVL_INFO, __FILE__, __LINE__, __FUNCTION__, fmt, __VA_ARGS__); }
+    if (SHOWLOG) { crn_simlog2(LOGLVL_INFO, __FILE__, __LINE__, __func__, fmt, __VA_ARGS__); }
 #define lfatal(fmt, ...)                                                \
-    if (SHOWLOG) { crn_simlog(LOGLVL_FATAL, __FILE__, __LINE__, __FUNCTION__, fmt, __VA_ARGS__); }
+    if (SHOWLOG) { crn_simlog(LOGLVL_FATAL, __FILE__, __LINE__, __func__, fmt, __VA_ARGS__); }
 #define lerror(fmt, ...)                                                \
-    if (SHOWLOG) { crn_simlog(LOGLVL_ERROR, __FILE__, __LINE__, __FUNCTION__, fmt, __VA_ARGS__); }
+    if (SHOWLOG) { crn_simlog(LOGLVL_ERROR, __FILE__, __LINE__, __func__, fmt, __VA_ARGS__); }
 #define lwarn(fmt, ...)                                                 \
-    if (SHOWLOG) { crn_simlog(LOGLVL_WARN, __FILE__, __LINE__, __FUNCTION__, fmt, __VA_ARGS__); }
+    if (SHOWLOG) { crn_simlog(LOGLVL_WARN, __FILE__, __LINE__, __func__, fmt, __VA_ARGS__); }
 #define ldebug(fmt, ...)                                                 \
-    if (SHOWLOG) { crn_simlog(LOGLVL_DEBUG, __FILE__, __LINE__, __FUNCTION__, fmt, __VA_ARGS__); }
+    if (SHOWLOG) { crn_simlog(LOGLVL_DEBUG, __FILE__, __LINE__, __func__, fmt, __VA_ARGS__); }
 #define lverb(fmt, ...)                                                 \
-    if (SHOWLOG) { crn_simlog(LOGLVL_VERBOSE, __FILE__, __LINE__, __FUNCTION__, fmt, __VA_ARGS__); }
+    if (SHOWLOG) { crn_simlog(LOGLVL_VERBOSE, __FILE__, __LINE__, __func__, fmt, __VA_ARGS__); }
 #define ltrace(fmt, ...)                                                 \
-    if (SHOWLOG) { crn_simlog(LOGLVL_TRACE, __FILE__, __LINE__, __FUNCTION__, fmt, __VA_ARGS__); }
+    if (SHOWLOG) { crn_simlog(LOGLVL_TRACE, __FILE__, __LINE__, __func__, fmt, __VA_ARGS__); }
 
 // depcreated
 #define linfo333(fmt, ...)                                                \
@@ -70,7 +70,7 @@ void crn_simlog2(int level, const char *filename, int line, const char* funcname
         if (fbname != NULL) fbname ++;                                  \
         struct timeval ltv = {0}; gettimeofday(&ltv, 0);                \
         loglock();                                                      \
-        fprintf(stderr, "%ld.%ld %s:%d %s: ", ltv.tv_sec, ltv.tv_usec, fbname, __LINE__, __FUNCTION__); \
+        fprintf(stderr, "%ld.%ld %s:%d %s: ", ltv.tv_sec, ltv.tv_usec, fbname, __LINE__, __func__); \
         fprintf(stderr, fmt, __VA_ARGS__);                              \
         fflush(stderr); logunlock();                                    \
     }

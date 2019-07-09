@@ -114,8 +114,8 @@ cxstring* cxstring_uint64(uint64_t v) {
 }
 cxstring* cxstring_uint(unsigned int v) { return cxstring_uint64(v); }
 
-static cxstring cxtruestr = (cxstring){.ptr="true", .len=4};
-static cxstring cxfalsestr = (cxstring){.ptr="false", .len=5};
+static cxstring cxtruestr = {.ptr="true", .len=4};
+static cxstring cxfalsestr = {.ptr="false", .len=5};
 cxstring* cxstring_bool(_Bool v) {
     return v == 1 ? &cxtruestr : &cxfalsestr;
 }

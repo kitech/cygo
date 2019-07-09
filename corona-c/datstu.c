@@ -114,6 +114,31 @@ void* crnmap_takeone(crnmap* table) {
 
     return val;
 }
+void* crnmap_findone(crnmap* table, bool(*chkfn)(void* v)) {
+    void* val = nilptr;
+    Array* arr = nilptr;
+
+    pmutex_lock(&table->mu);
+    int rv = hashtable_get_keys(table->ht, &arr);
+    assert(rv == CC_OK || rv == CC_ERR_INVALID_CAPACITY);
+    for (int i = 0; arr != 0 && i < array_size(arr); i ++) {
+        void* tval = 0;
+        void* key = 0;
+        rv = array_get_at(arr, i, &key);  assert(key != 0);
+        assert(rv == CC_OK);
+        rv = hashtable_get(table->ht, (void*)(uintptr_t)key, (void**)&tval);
+        assert(tval != 0);
+        assert(rv == CC_OK);
+        if (chkfn(tval)) {
+            val = tval;
+            break;
+        }
+    }
+    pmutex_unlock(&table->mu);
+    if (arr != nilptr) array_destroy(arr);
+
+    return val;
+}
 
 /////
 crnqueue* crnqueue_new() {

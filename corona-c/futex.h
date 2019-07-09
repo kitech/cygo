@@ -7,7 +7,7 @@
 typedef pthread_mutex_t pmutex_t;
 typedef pthread_mutexattr_t pmutexattr_t;
 typedef pthread_cond_t pcond_t;
-typedef pthread_cond_t pcondattr_t;
+typedef pthread_condattr_t pcondattr_t;
 
 int pmutex_lock(pmutex_t *mutex);
 int pmutex_trylock(pmutex_t *mutex);

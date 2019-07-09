@@ -17,6 +17,7 @@ size_t crnmap_capacity(crnmap *table);
 enum cc_stat crnmap_get_keys(crnmap *table, Array **out);
 enum cc_stat crnmap_get_values(crnmap *table, Array **out);
 void* crnmap_takeone(crnmap* table);
+void* crnmap_findone(crnmap* table, bool(*chkfn)(void* v));
 
 /////
 crnqueue* crnqueue_new();

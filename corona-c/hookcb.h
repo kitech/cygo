@@ -15,6 +15,7 @@ bool fdcontext_is_socket(fdcontext*fdctx);
 bool fdcontext_is_tcpsocket(fdcontext*fdctx);
 bool fdcontext_is_nonblocking(fdcontext*fdctx);
 bool fd_is_nonblocking(int fd);
+int hookcb_fd_set_nonblocking(int fd, bool isNonBlocking);
 
 hookcb* hookcb_get();
 void hookcb_oncreate(int fd, int fdty, bool isNonBlocking, int domain, int sockty, int protocol) ;

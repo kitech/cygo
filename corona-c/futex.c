@@ -44,7 +44,7 @@ int pcond_signal(pcond_t *cond)
 }
 int pcond_destroy(pcond_t *cond)
 {
-    return pthread_mutex_destroy(cond);
+    return pthread_cond_destroy(cond);
 }
 int pcond_init(pcond_t *cond, const pcondattr_t *attr)
 {

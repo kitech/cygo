@@ -106,6 +106,7 @@ int pipe2(int pipefd[2], int flags)
     return rv;
 }
 #endif
+
 int socket(int domain, int type, int protocol)
 {
     // if (!crn_in_procer()) return;
@@ -141,6 +142,7 @@ int connect(int fd, const struct sockaddr *addr, socklen_t addrlen)
     if (!connect_f) initHook();
     if (!crn_in_procer()) return connect_f(fd, addr, addrlen);
     // linfo("%d\n", fd);
+
     time_t btime = time(0);
     for (int i = 0;; i++) {
         int rv = connect_f(fd, addr, addrlen);
@@ -292,7 +294,7 @@ ssize_t recvmsg(int sockfd, struct msghdr *msg, int flags)
             }
 
             int optval = 0;
-            int optlen = 0;
+            socklen_t optlen = 0;
             int rv2 = getsockopt(sockfd, SOL_SOCKET, SO_ERROR, &optval, &optlen);
             // linfo("opt rv2=%d, len=%d val=%d\n", rv2, optlen, optval);
             int rv3 = getsockopt(sockfd, SOL_SOCKET, SO_RCVTIMEO, &optval, &optlen);
@@ -300,8 +302,8 @@ ssize_t recvmsg(int sockfd, struct msghdr *msg, int flags)
 
             long timeoms = optval > 0 ? optval : 5678;
             // default udp timeout 5s
-            long tfds[2] = {};
-            int ytypes[2] = {};
+            long tfds[2] = {0};
+            int ytypes[2] = {0};
             tfds[0] = sockfd;
             ytypes[0] = YIELD_TYPE_RECVMSG;
             tfds[1] = timeoms;

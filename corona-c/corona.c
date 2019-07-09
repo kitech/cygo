@@ -598,28 +598,12 @@ fiber* crn_sched_get_glob_one(machine*mc) {
     return gr;
 }
 // prepare new task
+static bool crn_fiber_runnable_filter(void* tmp) {
+    return crn_fiber_getstate((fiber*)tmp) == runnable;
+}
 static
 fiber* crn_sched_get_ready_one(machine*mc) {
-    Array* arr = 0;
-    int rv = crnmap_get_keys(mc->grs, &arr);
-    assert(rv == CC_OK || rv == CC_ERR_INVALID_CAPACITY);
-    fiber* rungr = 0;
-    for (int i = 0; arr != 0 && i < array_size(arr); i ++) {
-        fiber* gr = 0;
-        void* key = 0;
-        rv = array_get_at(arr, i, &key);  assert(key != 0);
-        assert(rv == CC_OK);
-        rv = crnmap_get(mc->grs, (uintptr_t)key, (void**)&gr);
-        assert(gr != 0);
-        assert(rv == CC_OK);
-        if (crn_fiber_getstate(gr) == runnable) {
-            // linfo("found a runnable job %d on %d\n", (uintptr_t)key, mc->id);
-            rungr = gr;
-            break;
-        }
-        // linfo("grid=%d mcid=%d, grstate=%d\n", gr->id, gr->mcid, atomic_getint(&gr->state));
-    }
-    if (arr != 0) { array_destroy(arr); }
+    fiber* rungr = (fiber*)crnmap_findone(mc->grs, crn_fiber_runnable_filter);
     return rungr;
 }
 static
@@ -1063,5 +1047,5 @@ corona* crn_init_and_wait_done() {
 void* crn_set_thread_createcb(void(*fn)(void*arg), void* arg) {
     void(*oldfn)(void*arg) = crn_thread_createcb;
     crn_thread_createcb = fn;
-    return oldfn;
+    return (void*)oldfn;
 }
