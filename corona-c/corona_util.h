@@ -8,12 +8,27 @@ pid_t gettid();
 
 int (array_randcmp) (const void*a, const void*b);
 
-void loglock();
-void logunlock();
+typedef struct rtsettings {
+    int loglevel;
+    int maxprocs;
+    int gcpercent;
+    int gctrace;
+    int dbggc;
+    int dbgsched;
+    int dbgchan;
+    int dbghook;
+    int dbgpoller;
+    int dbgthread;
+} rtsettings;
+extern rtsettings* rtsets;
+void crn_loglvl_forenv();
+
+
+void crn_loglock();
+void crn_logunlock();
 
 void crn_simlog(int level, const char *filename, int line, const char* funcname, const char *fmt, ...);
 void crn_simlog2(int level, const char *filename, int line, const char* funcname, const char *fmt, ...);
-void crn_loglvl_forenv();
 
 
 #define LOGLVL_FATAL 0

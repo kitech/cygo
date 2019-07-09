@@ -21,6 +21,7 @@ set(corona_c_srcs
 	${mydir}/corona-c/corona_util.c
 	${mydir}/corona-c/rxilog.c
 	${mydir}/corona-c/atomic.c
+	${mydir}/corona-c/datstu.c
 	${mydir}/corona-c/szqueue.c
 	${mydir}/corona-c/chan.c
 	${mydir}/corona-c/hchan.c

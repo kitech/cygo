@@ -118,7 +118,7 @@ void crn_fiber_new2(fiber*gr) {
     // corowp_create(&gr->coctx, gr->fnproc, gr->arg, gr->stack.sptr, dftstksz);
 }
 void crn_fiber_destroy(fiber* gr) {
-    GC_REGISTER_FINALIZER(gr, 0, 0, 0, 0);
+    crn_set_finalizer(gr,nilptr);
     assert(gr->state != executing);
     int grid = gr->id;
     int mcid = gr->mcid;
@@ -148,7 +148,7 @@ void crn_fiber_destroy(fiber* gr) {
     }
     void* optr = gr;
     crn_gc_free(gr); // malloc/calloc分配的不能用GC_FREE()释放
-    linfo("fiber freed %d-%d %p\n", grid, mcid, optr);
+    ldebug("fiber freed %d-%d %p\n", grid, mcid, optr);
 }
 
 // frame related for some frame based integeration

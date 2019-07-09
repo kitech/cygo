@@ -251,6 +251,13 @@ cxstring* cxstring_to_upper(cxstring* s) {
     return ns;
 }
 
+int cxstring_cmp(cxstring* s0, cxstring* s1) {
+    if (s0->len <= s1->len) {
+        return memcmp(s0->ptr, s1->ptr, s0->len);
+    }
+    return memcmp(s0->ptr, s1->ptr, s1->len);
+}
+
 bool cxstring_eq(cxstring* s0, cxstring* s1) {
     if (s0->len != s1->len) return false;
     return memcmp(s0->ptr, s1->ptr, s0->len) == 0;

@@ -26,6 +26,7 @@
 #define invlidptr ((void*)1234567)
 
 // project
+#include "datstu.h"
 #include "rxilog.h"
 #include "yieldtypes.h"
 #include "hookcb.h"

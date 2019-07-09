@@ -48,7 +48,7 @@ fdcontext* fdcontext_new(int fd) {
     return fdctx;
 }
 void fdcontext_free(fdcontext* fdctx) {
-    GC_REGISTER_FINALIZER(fdctx, 0, 0, 0, 0);
+    crn_set_finalizer(fdctx,nilptr);
     int fd = fdctx->fd;
     void* optr = fdctx;
     crn_gc_free(fdctx);

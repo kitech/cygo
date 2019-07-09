@@ -28,27 +28,15 @@ int (array_randcmp) (const void*a, const void*b) {
     return n-1;
 }
 
-static pmutex_t loglk;
-void
-__attribute__((no_instrument_function))
-loglock() {
-    // pmutex_lock(&loglk);
-}
-void
-__attribute__((no_instrument_function))
-logunlock() {
-    // pmutex_unlock(&loglk);
-    // pmutex_trylock(&loglk);
-}
-
+// used before inited
 #define lograw(fmt, ...)                                                \
     if (SHOWLOG) {                                                      \
         const char* filename = __FILE__; char* fbname = strrchr(filename, '/'); \
         if (fbname != NULL) fbname ++;                                  \
-        loglock();                                                      \
+        crn_loglock();                                                  \
         fprintf(stderr, "%s:%d %s: ", fbname, __LINE__, __FUNCTION__);  \
         fprintf(stderr, fmt, __VA_ARGS__);                              \
-        fflush(stderr); logunlock();                                    \
+        fflush(stderr); crn_logunlock();                                \
     }
 
 static int loglvl = LOGLVL_INFO;
@@ -107,8 +95,18 @@ void crn_loglvl_forenv() {
     free(ptr);
 }
 
-void
-__attribute__((no_instrument_function))
+static pmutex_t crn_loglk;
+void __attribute__((no_instrument_function))
+crn_loglock() {
+    // pmutex_lock(&loglk);
+}
+void __attribute__((no_instrument_function))
+crn_logunlock() {
+    // pmutex_unlock(&loglk);
+    // pmutex_trylock(&loglk);
+}
+
+void __attribute__((no_instrument_function))
 crn_simlog(int level, const char *filename, int line, const char* funcname, const char *fmt, ...) {
     if (level > loglvl) return;
     static __thread char obuf[612] = {0};
@@ -116,7 +114,7 @@ crn_simlog(int level, const char *filename, int line, const char* funcname, cons
     if (fbname != NULL) fbname ++;
     struct timeval ltv = {0};
     gettimeofday(&ltv, 0);
-    loglock();
+    crn_loglock();
     int len = snprintf(obuf, sizeof(obuf)-1, "%ld.%ld %s:%d %s: ",
                        ltv.tv_sec, ltv.tv_usec, fbname, line, funcname);
 
@@ -128,7 +126,7 @@ crn_simlog(int level, const char *filename, int line, const char* funcname, cons
     // fprintf(stderr, "%s", buf);
     // fflush(stderr);
     write(STDERR_FILENO, obuf, len);
-    logunlock();
+    crn_logunlock();
 }
 
 // nolock version, used when stopped the world

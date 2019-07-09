@@ -101,6 +101,7 @@ cxstring* GoString(char* s);
 cxstring* GoStringN(char* s, int n);
 cxstring* cxstring_new_char(char ch);
 cxstring* cxstring_dup(cxstring* s);
+int cxstring_cmp(cxstring* s0, cxstring* s1);
 void panic(cxstring* s);
 void panicln(cxstring*s);
 // cxstring end
