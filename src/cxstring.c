@@ -47,7 +47,7 @@ cxstring* cxstring_new_rune(rune ch) {
     cxstring* t = cxstring_new();
     t->ptr = cxmalloc(4);
     t->len = 3;
-    char* p = &ch;
+    char* p = (char*)&ch;
     t->ptr[0] = p[0];
     t->ptr[1] = p[1];
     t->ptr[2] = p[2];

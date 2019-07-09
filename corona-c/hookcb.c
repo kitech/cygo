@@ -37,6 +37,7 @@ static void fdcontext_finalizer(void* ptr) {
     fdcontext* fdctx = (fdcontext*)ptr;
     time_t nowt = time(0);
     linfo("fdctx dtor %p %d %ld\n", ptr, fdctx->fd, nowt - fdctx->tm);
+    // assert(1==2);
 }
 fdcontext* fdcontext_new(int fd) {
     fdcontext* fdctx = (fdcontext*)crn_gc_malloc(sizeof(fdcontext));
@@ -46,7 +47,14 @@ fdcontext* fdcontext_new(int fd) {
     crn_set_finalizer(fdctx,fdcontext_finalizer);
     return fdctx;
 }
-void fdcontext_free(fdcontext* fdctx) { crn_gc_free(fdctx); }
+void fdcontext_free(fdcontext* fdctx) {
+    GC_REGISTER_FINALIZER(fdctx, 0, 0, 0, 0);
+    int fd = fdctx->fd;
+    void* optr = fdctx;
+    crn_gc_free(fdctx);
+    // linfo("fdctx freed %d %p\n", fd, optr);
+    assert(fd >= 0 && fd < 60000);
+}
 
 typedef int(*fcntl_t)(int __fd, int __cmd, ...);
 extern fcntl_t fcntl_f;
@@ -102,6 +110,7 @@ static void hookcb_finalizer(void* ptr) {
 }
 static void hookcbht_finalizer(void* ptr) {
     linfo("hkcbht dtor %p\n", ptr);
+    assert(1==2);
 }
 hookcb* hookcb_new() {
     // so, this is live forever, not use GC_malloc
@@ -124,15 +133,17 @@ hookcb* hookcb_new() {
 }
 
 extern bool gcinited;
-
+static pmutex_t hkcbgetmu;
 hookcb* hookcb_get() {
     assert(gcinited == true);
     if (ghkcb__ == 0) {
-        hookcb* hkcb = hookcb_new();
-        // assert(ghkcb__ == 0);
+        pmutex_lock(&hkcbgetmu);
         if (ghkcb__ == 0) {
+            hookcb* hkcb = hookcb_new();
+            assert(ghkcb__ == 0);
             ghkcb__ = hkcb;
         }
+        pmutex_unlock(&hkcbgetmu);
     }
     assert (ghkcb__ != 0);
     return ghkcb__;

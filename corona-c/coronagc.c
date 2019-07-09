@@ -39,7 +39,11 @@ void* crn_gc_calloc(size_t n, size_t size) {
 
 static void crn_finalizer_fwd(void* ptr, void (*ufin)(void* ptr)) { ufin(ptr);}
 void crn_set_finalizer(void* ptr, void(*ufin)(void* ptr)) {
-    GC_REGISTER_FINALIZER(ptr, crn_finalizer_fwd, ufin, 0, 0);
+    if (ufin == nilptr) {
+        GC_REGISTER_FINALIZER(ptr, 0, 0, 0, 0);
+    }else{
+        GC_REGISTER_FINALIZER(ptr, crn_finalizer_fwd, ufin, 0, 0);
+    }
 }
 
 const char* crn_gc_event_name(GC_EventType evty) {

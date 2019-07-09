@@ -60,6 +60,8 @@ Thanks all the contributors.
     says that linfo/log has some where not safe point
     related with signal handler
 [ ] GC_clear_fl_marks infinite loop
+[ ] set finalizer to non-empty would cause crash at GC_is_marked()???
+   if manually GC_FREE(obj) it???
 
 ### Note
 * A program entering an infinite recursion or running out of space in the stack memory is known as a stack overflow

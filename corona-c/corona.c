@@ -77,6 +77,7 @@ int crn_nxtid(corona* nr);
 
 // 前置声明一些函数
 machine* crn_machine_get(int id);
+fiber* crn_machine_grget(machine* mc, int id);
 void crn_machine_grfree(machine* mc, int id);
 void crn_machine_signal(machine* mc);
 
@@ -84,6 +85,7 @@ void crn_machine_signal(machine* mc);
 static void fiber_finalizer(void* gr) {
     fiber* f = (fiber*)gr;
     linfo("fiber dtor %p %d\n", gr, f->id);
+    // assert(1==2);
 }
 fiber* crn_fiber_new(int id, coro_func fn, void* arg) {
     fiber* gr = (fiber*)crn_gc_malloc(sizeof(fiber));
@@ -110,22 +112,19 @@ void crn_fiber_new2(fiber*gr) {
     // gr->stack.sptr = calloc(1, dftstksz);
     gr->stack.ssze = dftstksz;
     gr->mystksb.mem_base = (void*)((uintptr_t)gr->stack.sptr + dftstksz);
-    atomic_setint(&gr->state, runnable);
+    crn_fiber_setstate(gr,runnable);
     // GC_add_roots(gr->stack.sptr, gr->stack.sptr+(gr->stack.ssze));
     // 这一句会让fnproc直接执行，但是可能需要的是创建与执行分开。原来是针对-DCORO_PTHREAD
     // corowp_create(&gr->coctx, gr->fnproc, gr->arg, gr->stack.sptr, dftstksz);
 }
 void crn_fiber_destroy(fiber* gr) {
+    GC_REGISTER_FINALIZER(gr, 0, 0, 0, 0);
     assert(gr->state != executing);
     int grid = gr->id;
     int mcid = gr->mcid;
     size_t ssze = gr->stack.ssze; // save temp value
 
-    atomic_setint(&gr->state, nostack);
-    if (gr->stack.sptr != 0) {
-        crn_gc_free2(gr->stack.sptr);
-        // free(gr->stack.sptr);
-    }
+    crn_fiber_setstate(gr,nostack);
     Array* specs = nilptr;
     int rv = hashtable_get_values(gr->specifics, &specs);
     if (rv != CC_OK && rv != 2) linfo("rv=%d sz=%d\n", rv, hashtable_size(gr->specifics));
@@ -133,7 +132,8 @@ void crn_fiber_destroy(fiber* gr) {
     if (specs != nilptr) {
         for (int i = 0; i < array_size(specs); i ++) {
             void* v = nilptr;
-            array_get_at(specs, i, &v);
+            int rv = array_get_at(specs, i, &v);
+            assert(rv == CC_OK);
             if (v != nilptr) crn_gc_free(v);
         }
         array_destroy(specs);
@@ -142,7 +142,13 @@ void crn_fiber_destroy(fiber* gr) {
     ssze += sizeof(fiber);
     // linfo("gr %d on %d, freed %d, %d\n", grid, mcid, ssze, sizeof(fiber));
     corowp_destroy(&gr->coctx);
+    if (gr->stack.sptr != 0) {
+        crn_gc_free2(gr->stack.sptr);
+        // free(gr->stack.sptr);
+    }
+    void* optr = gr;
     crn_gc_free(gr); // malloc/calloc分配的不能用GC_FREE()释放
+    linfo("fiber freed %d-%d %p\n", grid, mcid, optr);
 }
 
 // frame related for some frame based integeration
@@ -176,7 +182,7 @@ void crn_fiber_forward(void* arg) {
     // GC_call_with_alloc_lock(crn_gc_setbottom1, gr);
 
     gr->fnproc(gr->arg);
-    atomic_setint(&gr->state, finished);
+    crn_fiber_setstate(gr,finished);
     // linfo("coro end??? %d\n", 1);
     // TODO coro 结束，回收coro栈
 
@@ -196,7 +202,7 @@ void crn_fiber_run_first(fiber* gr) {
     // 对-DCORO_PTHREAD来说，这句是真正开始执行
     corowp_create(&gr->coctx, crn_fiber_forward, gr, gr->stack.sptr, gr->stack.ssze);
 
-    atomic_setint(&gr->state, executing);
+    crn_fiber_setstate(gr,executing);
     machine* mc = crn_machine_get(gr->mcid);
     fiber* curgr = mc->curgr;
     mc->curgr = gr;
@@ -211,10 +217,10 @@ void crn_fiber_run_first(fiber* gr) {
 // 由于需要考虑线程的问题，不能直接在netpoller线程调用
 void crn_fiber_resume(fiber* gr) {
     assert(gr->isresume == true);
-    grstate oldst = atomic_getint(&gr->state);
+    grstate oldst = crn_fiber_getstate(gr);
     assert(oldst != executing);
     assert(oldst != finished);
-    atomic_setint(&gr->state, executing);
+    crn_fiber_setstate(gr,executing);
 
     if (gr->myfrm != nilptr) crn_set_frame(gr->myfrm); // 恢复fiber的frame
     GC_call_with_alloc_lock(crn_gc_setbottom1, gr);
@@ -237,8 +243,7 @@ void crn_fiber_resume_same_thread(fiber* gr) {
     assert(gr->state != executing);
     assert(gr->state != finished);
 
-    // atomic_casint(&gr->state, waiting, runnable);
-    atomic_setint(&gr->state, runnable);
+    crn_fiber_setstate(gr,runnable);
 }
 void crn_fiber_resume_xthread(fiber* gr) {
     if (gr->id <= 0) {
@@ -247,22 +252,22 @@ void crn_fiber_resume_xthread(fiber* gr) {
         // maybe fiber already finished and deleted
         // TODO assert(gr != nilptr && gr->id > 0); // needed ???
     }
-    if (atomic_getint(&gr->state) == runnable) {
+    if (crn_fiber_getstate(gr) == runnable) {
         lverb("resume but runnable %d\n", gr->id);
         crn_machine_signal(crn_machine_get(gr->mcid));
         return;
     }
-    if (atomic_getint(&gr->state) == executing) {
+    if (crn_fiber_getstate(gr) == executing) {
         ldebug("resume but executing grid=%d, mcid=%d\n", gr->id, gr->mcid);
         return;
     }
-    if (atomic_getint(&gr->state) == finished) {
+    if (crn_fiber_getstate(gr) == finished) {
         linfo("resume but finished grid=%d, mcid=%d\n", gr->id, gr->mcid);
         return;
     }
 
     // atomic_casint(&gr->state, waiting, runnable);
-    atomic_setint(&gr->state, runnable);
+    crn_fiber_setstate(gr,runnable);
     if (gr->mcid > 100) { // TODO improve this hotfix
         linfo("mcid error %d\n", gr->mcid);
         return;
@@ -273,7 +278,7 @@ void crn_fiber_resume_xthread(fiber* gr) {
 void crn_fiber_suspend(fiber* gr) {
     gr->myfrm = crn_get_frame();
     crn_set_frame(gr->savefrm);
-    atomic_setint(&gr->state, waiting);
+    crn_fiber_setstate(gr,waiting);
     GC_call_with_alloc_lock(crn_gc_setbottom0, gr);
     corowp_transfer(&gr->coctx, gr->coctx0);
 }
@@ -281,6 +286,7 @@ void crn_fiber_suspend(fiber* gr) {
 // machine internal API
 static void machine_finalizer(void* mc) {
     linfo("machine dtor %p\n", mc);
+    assert(1==2); // long live object
 }
 static void queue_finalizer(void* mc) {
     linfo("machine dtor %p\n", mc);
@@ -650,7 +656,7 @@ fiber* crn_sched_get_ready_one(machine*mc) {
         assert(rv == CC_OK);
         rv = hashtable_get(mc->grs, key, (void**)&gr); assert(gr != 0);
         assert(rv == CC_OK);
-        if (atomic_getint(&gr->state) == runnable) {
+        if (crn_fiber_getstate(gr) == runnable) {
             // linfo("found a runnable job %d on %d\n", (uintptr_t)key, mc->id);
             rungr = gr;
             break;
@@ -675,7 +681,7 @@ void crn_sched_run_one(machine* mc, fiber* rungr) {
     gcurgrid__ = 0;
     mc->curgr = nilptr;
 
-    int curst = atomic_getint(&rungr->state);
+    int curst = crn_fiber_getstate(rungr);
     if (curst == waiting) {
         // 在这才解锁，用于确保rungr状态完全切换完成
         if (rungr->hclock != nilptr) {
@@ -994,6 +1000,8 @@ void crn_init_intern() {
     srand(time(0));
     crn_loglvl_forenv();
 
+    // GC_set_find_leak(1);
+    GC_set_finalize_on_demand(0);
     GC_set_free_space_divisor(50); // default 3
     GC_set_dont_precollect(1);
     GC_set_dont_expand(1);
@@ -1002,7 +1010,7 @@ void crn_init_intern() {
     // GC_set_all_interior_pointers(1);
     // TODO
     // GC_set_push_other_roots(crn_gc_push_other_roots1); // run in which threads?
-    GC_set_start_callback(crn_gc_start_handler);
+    // GC_set_start_callback(crn_gc_start_handler);
     GC_set_on_collection_event(crn_gc_on_collection_event2);
     // GC_set_on_thread_event(crn_gc_on_thread_event);
     GC_INIT();

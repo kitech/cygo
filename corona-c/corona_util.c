@@ -52,7 +52,7 @@ logunlock() {
     }
 
 static int loglvl = LOGLVL_INFO;
-// or CRNDEBUG="loglvl=3..."
+// or CRNDEBUG="loglvl=3,leakdt=1,gcpercent=30,gctrace=1,..."
 void crn_loglvl_forenv() {
     char sep = ',';
     char* CRNDEBUG = getenv("CRNDEBUG");
