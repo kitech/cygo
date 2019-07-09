@@ -26,8 +26,7 @@ typedef struct yieldinfo {
 } yieldinfo;
 typedef struct machine {
     int id;
-    Queue* ngrs; // fiber*  新任务，未分配栈
-    pmutex_t ngrsmu;
+    crnqueue* ngrs; // fiber*  新任务，未分配栈
     HashTable* grs;  // # grid => fiber*
     pmutex_t grsmu;
     fiber* curgr;   // 当前在执行的, 这好像得用栈结构吗？(应该不需要，fibers之间是并列关系)
@@ -298,14 +297,7 @@ machine* crn_machine_new(int id) {
     HashTableConf* htconf = crn_dft_htconf();
     ltrace("htconf=%p\n", htconf);
     hashtable_new_conf(htconf, &mc->grs);
-    QueueConf qconf = {0};
-    queue_conf_init(&qconf);
-    qconf.capacity = 1;
-    qconf.mem_alloc = htconf->mem_alloc;
-    qconf.mem_free = htconf->mem_free;
-    qconf.mem_calloc = htconf->mem_calloc;
-
-    queue_new_conf(&qconf, &mc->ngrs);
+    mc->ngrs = crnqueue_new();
     crn_set_finalizer(mc->ngrs, queue_finalizer);
     corowp_create(&mc->coctx0, 0, 0, 0, 0);
     return mc;
@@ -490,19 +482,17 @@ void crn_post(coro_func fn, void*arg) {
     // linfo("mc=%p, %d %p, %d\n", mc, mc->id, mc->ngrs, queue_size(mc->ngrs));
     if (mc != 0 && mc->id != 1) {
         // FIXME
-        linfo("nothing mc=%p, %d %p, %d\n", mc, mc->id, mc->ngrs, queue_size(mc->ngrs));
+        linfo("nothing mc=%p, %d %p, %d\n", mc, mc->id, mc->ngrs, crnqueue_size(mc->ngrs));
         return;
     }
 
     int id = crn_nxtid(gnr__);
     fiber* gr = crn_fiber_new(id, fn, arg);
     crn_fiber_new2(gr);
-    pmutex_lock(&mc->ngrsmu);
     assert(mc->ngrs != nilptr);
-    int rv = queue_enqueue(mc->ngrs, gr);
+    int rv = crnqueue_enqueue(mc->ngrs, gr);
     assert(rv == CC_OK);
-    int qsz = queue_size(mc->ngrs);
-    pmutex_unlock(&mc->ngrsmu);
+    int qsz = crnqueue_size(mc->ngrs);
     // dumphtkeys(gnr__->mcs);
     checkhtkeys(gnr__->mcs,&gnr__->mcsmu);
     if (qsz > 128) {
@@ -549,9 +539,7 @@ static void* crn_procer1(void*arg) {
     pcond_signal(&gnr__->crninitcd);
 
     for (;;) {
-        pmutex_lock(&mc->ngrsmu);
-        int newgn = queue_size(mc->ngrs);
-        pmutex_unlock(&mc->ngrsmu);
+        int newgn = crnqueue_size(mc->ngrs);
         if (newgn == 0) {
             mc->parking = true;
             pcond_wait(&mc->pkcd, &mc->pkmu);
@@ -561,9 +549,7 @@ static void* crn_procer1(void*arg) {
         // linfo("newgr %d\n", newgn);
         for (newgn = 0;;) {
             fiber* newgr = nilptr;
-            pmutex_lock(&mc->ngrsmu);
-            int rv = queue_poll(mc->ngrs, (void**)&newgr);
-            pmutex_unlock(&mc->ngrsmu);
+            int rv = crnqueue_poll(mc->ngrs, (void**)&newgr);
             assert(rv == CC_OK || rv == CC_ERR_OUT_OF_RANGE);
             if (newgr == nilptr) {
                 break;

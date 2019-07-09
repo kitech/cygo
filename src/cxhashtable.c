@@ -28,6 +28,18 @@ size_t cxhashtable_hash_cxstr(const void *key, int len, uint32_t seed) {
     return hashtable_hash_string(s->ptr, s->len, seed);
 }
 
+#define DEFAULT_CAPACITY 16
+#define DEFAULT_LOAD_FACTOR 0.75f
+HashTableConf cxdfthtconf = {.hash             = STRING_HASH,
+                             .key_compare      = cc_common_cmp_str,
+                             .initial_capacity = DEFAULT_CAPACITY,
+                             .load_factor      = DEFAULT_LOAD_FACTOR,
+                             .hash_seed        = 0,
+                             .key_length       = sizeof(void*),
+                             .mem_alloc        = cxmalloc,
+                             .mem_free         = cxfree,
+                             .mem_calloc       = cxcalloc };
+
 static
 HashTable* cxhashtable_new_conf(HashTableConf* htconf) {
     htconf->key_length = sizeof(void*);

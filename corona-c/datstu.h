@@ -18,5 +18,13 @@ size_t crnmap_capacity(crnmap *table);
 enum cc_stat crnmap_get_keys(crnmap *table, Array **out);
 enum cc_stat crnmap_get_values(crnmap *table, Array **out);
 
+/////
+crnqueue* crnqueue_new();
+void crnqueu_free(crnqueue* q);
+enum cc_stat crnqueue_peek(crnqueue* q, void **out);
+enum cc_stat crnqueue_poll(crnqueue* q, void **out);
+enum cc_stat crnqueue_enqueue(crnqueue* q, void *element);
+size_t crnqueue_size(crnqueue* q);
+
 
 #endif /* DATSTU_H */

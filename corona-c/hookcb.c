@@ -5,13 +5,8 @@
 #include <fcntl.h>
 #include <sys/socket.h>
 
-// #include <gc/gc.h>
-#include "collectc/hashtable.h"
-#include "collectc/array.h"
-
 #include "coronapriv.h"
 #include "hookcb.h"
-
 
 typedef struct fdcontext {
     int fd;
@@ -29,8 +24,7 @@ typedef struct fdcontext {
 } fdcontext;
 
 typedef struct hookcb {
-    HashTable* fdctxs; // fd => fdcontext*
-    pmutex_t mu;
+    crnmap *fdctxs;
 } hookcb;
 
 static void fdcontext_finalizer(void* ptr) {
@@ -117,16 +111,7 @@ hookcb* hookcb_new() {
     hookcb* hkcb = (hookcb*)crn_gc_malloc(sizeof(hookcb));
     crn_set_finalizer(hkcb->fdctxs, hookcb_finalizer);
 
-    HashTableConf htconf;
-    hashtable_conf_init(&htconf);
-    htconf.hash = hashtable_hash_ptr;
-    htconf.key_compare = hashtable_cmp_int;
-    htconf.key_length = sizeof(void*);
-    htconf.mem_alloc = crn_gc_malloc;
-    htconf.mem_free = crn_gc_free;
-    htconf.mem_calloc = crn_gc_calloc;
-
-    hashtable_new_conf(&htconf, &hkcb->fdctxs);
+    hkcb->fdctxs = crnmap_new_uintptr();
     crn_set_finalizer(hkcb->fdctxs, hookcbht_finalizer);
 
     return hkcb;
@@ -177,12 +162,9 @@ void hookcb_oncreate(int fd, int fdty, bool isNonBlocking, int domain, int sockt
         assert(fd_is_nonblocking(fd) == true);
     }
 
-
     fdcontext* oldfdctx = 0;
-    pmutex_lock(&hkcb->mu);
-    int rv = hashtable_remove(hkcb->fdctxs, (void*)(uintptr_t)fd, (void**)&oldfdctx);
-    rv = hashtable_add(hkcb->fdctxs, (void*)(uintptr_t)fd, (void*)fdctx);
-    pmutex_unlock(&hkcb->mu);
+    int rv = crnmap_remove(hkcb->fdctxs,(uintptr_t)fd,(void**)&oldfdctx);
+    rv = crnmap_add(hkcb->fdctxs,(uintptr_t)fd,(void*)fdctx);
     assert(rv == CC_OK);
     if (oldfdctx != nilptr) {
         fdcontext_free(oldfdctx);
@@ -197,9 +179,7 @@ void hookcb_onclose(int fd) {
     // linfo("fd closed %d\n", fd);
 
     fdcontext* fdctx = 0;
-    pmutex_lock(&hkcb->mu);
-    int rv = hashtable_remove(hkcb->fdctxs, (void*)(uintptr_t)fd, (void**)&fdctx);
-    pmutex_unlock(&hkcb->mu);
+    int rv = crnmap_remove(hkcb->fdctxs,(uintptr_t)fd,(void**)&fdctx);
     // maybe not found when just startup
     if (fdctx == 0) {
         linfo("fd not found in context %d\n", fd);
@@ -213,18 +193,14 @@ void hookcb_ondup(int from, int to) {
     if (hkcb == 0) return ;
 
     fdcontext* fdctx = 0;
-    pmutex_lock(&hkcb->mu);
-    int rv = hashtable_get(hkcb->fdctxs, (void*)(uintptr_t)from, (void**)&fdctx);
-    pmutex_unlock(&hkcb->mu);
+    int rv = crnmap_get(hkcb->fdctxs,(uintptr_t)from,(void**)&fdctx);
     assert(rv == CC_OK);
     assert(fdctx != 0);
 
     fdcontext* tofdctx = fdcontext_new(to);
     memcpy(tofdctx, fdctx, sizeof(fdcontext));
     tofdctx->fd = to;
-    pmutex_lock(&hkcb->mu);
-    rv = hashtable_add(hkcb->fdctxs, (void*)(uintptr_t)to, tofdctx);
-    pmutex_unlock(&hkcb->mu);
+    rv = crnmap_add(hkcb->fdctxs,(uintptr_t)to,tofdctx);
     assert(rv == CC_OK);
 }
 
@@ -233,9 +209,7 @@ fdcontext* hookcb_get_fdcontext(int fd) {
     if (hkcb == 0) return 0;
 
     fdcontext* fdctx = 0;
-    pmutex_lock(&hkcb->mu);
-    int rv = hashtable_get(hkcb->fdctxs, (void*)(uintptr_t)fd, (void**)&fdctx);
-    pmutex_unlock(&hkcb->mu);
+    int rv = crnmap_get(hkcb->fdctxs,(uintptr_t)fd,(void**)&fdctx);
     if (fdctx == 0) {
         // assert(fdctx != 0);
     }

@@ -20,7 +20,6 @@
 #include "coro.h"
 #include "collectc/hashtable.h"
 #include "collectc/array.h"
-#include "collectc/queue.h"
 
 #define nilptr ((void*)NULL)
 #define invlidptr ((void*)1234567)

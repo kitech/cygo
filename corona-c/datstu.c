@@ -5,7 +5,7 @@
 
 #include "coronapriv.h"
 
-// aim thread safe data struct
+// thread safe data struct
 
 typedef struct crnmap crnmap;
 struct crnmap {
@@ -23,6 +23,7 @@ struct crnqueue {
     pmutex_t mu;
 };
 
+// from cxrt
 extern HashTable* cxhashtable_new_uintptr();
 
 crnmap* crnmap_new_uintptr() {
@@ -34,6 +35,7 @@ crnmap* crnmap_new_uintptr() {
 void crnmap_free (crnmap *table) {
     pmutex_lock(&table->mu);
     hashtable_destroy(table->ht);
+    table->ht = 0;
     pmutex_unlock(&table->mu);
 }
 enum cc_stat crnmap_add (crnmap *table, uintptr_t key, void *val) {
@@ -93,3 +95,52 @@ enum cc_stat crnmap_get_values(crnmap *table, Array **out){
 }
 
 /////
+crnqueue* crnqueue_new() {
+    crnqueue* q = crn_gc_malloc(sizeof(crnqueue));
+
+    QueueConf qconf = {0};
+    queue_conf_init(&qconf);
+    qconf.mem_alloc = crn_gc_malloc;
+    qconf.mem_free = crn_gc_free;
+    qconf.mem_calloc = crn_gc_calloc;
+
+    int rv = queue_new_conf(&qconf, &q->qo);
+    assert(rv == CC_OK);
+    return q;
+}
+
+void crnqueu_free(crnqueue* q) {
+    pmutex_lock(&q->mu);
+    queue_destroy(q->qo);
+    q->qo = 0;
+    pmutex_unlock(&q->mu);
+}
+
+enum cc_stat crnqueue_peek(crnqueue* q, void **out) {
+    pmutex_lock(&q->mu);
+    enum cc_stat rv = queue_peek(q->qo, out);
+    pmutex_unlock(&q->mu);
+    return rv;
+}
+
+enum cc_stat crnqueue_poll(crnqueue *q, void **out){
+    pmutex_lock(&q->mu);
+    enum cc_stat rv = queue_poll(q->qo, out);
+    pmutex_unlock(&q->mu);
+    return rv;
+}
+
+enum cc_stat crnqueue_enqueue(crnqueue *q, void *element){
+    pmutex_lock(&q->mu);
+    enum cc_stat rv = queue_enqueue(q->qo, element);
+    pmutex_unlock(&q->mu);
+    return rv;
+}
+
+size_t crnqueue_size(crnqueue* q){
+    pmutex_lock(&q->mu);
+    enum cc_stat rv = queue_size(q->qo);
+    pmutex_unlock(&q->mu);
+    return rv;
+}
+

@@ -20,6 +20,14 @@ extern void* cxmalloc(size_t size);
 extern void* cxcalloc(size_t blocks, size_t size);
 extern void cxfree(void* ptr);
 
+#define DEFAULT_CAPACITY 8
+#define DEFAULT_EXPANSION_FACTOR 2
+ArrayConf cxdftarconf = {.exp_factor = DEFAULT_EXPANSION_FACTOR,
+                         .capacity   = DEFAULT_CAPACITY,
+                         .mem_alloc = cxmalloc,
+                         .mem_calloc = cxcalloc,
+                         .mem_free = cxfree};
+
 Array* cxarray_new() {
     Array* res = 0;
     ArrayConf arrconf = {0};

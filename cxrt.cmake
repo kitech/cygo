@@ -7,6 +7,7 @@ include_directories(${mydir}/src ${mydir}/include ${mydir}/bdwgc/include)
 add_library(cxrt STATIC  ${mydir}/src/cxrtbase.c
   ${mydir}/src/cxmemory.c ${mydir}/src/cxstring.c
   ${mydir}/src/cxhashtable.c ${mydir}/src/cxarray.c
+  ${mydir}/src/cxqueue.c
   ${mydir}/src/cxiface.c
 #  ${mydir}/src/cppminrt.cpp
   )
