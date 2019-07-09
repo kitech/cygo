@@ -9,7 +9,7 @@
 typedef struct corona corona;
 
 extern corona* crn_init_and_wait_done();
-extern void crn_post(void(*fn)(void*arg), void*arg);
+extern int crn_post(void(*fn)(void*arg), void*arg);
 /* extern void crn_sched(); */
 extern void crn_set_finalizer(void*ptr, void(*fn)(void*));
 /* typedef struct hchan hchan; */
@@ -58,7 +58,8 @@ static void cxrt_fiber_post_pth(void (*fn)(void*), void*arg) {
 }
 void cxrt_fiber_post(void (*fn)(void*), void*arg) {
     // cxrt_fiber_post_pth(fn, arg);
-    crn_post(fn, arg);
+    int id = crn_post(fn, arg);
+    assert(id > 0);
 }
 void cxrt_set_finalizer(void* ptr,void (*fn) (void*)) {
     crn_set_finalizer(ptr, fn);

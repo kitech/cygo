@@ -38,25 +38,23 @@ typedef struct machine {
     struct GC_stack_base stksb;
     void* gchandle;
     void* savefrm;
-    pthread_t th;
+    pthread_t thr;
     coro_context coctx0;
 } machine;
 
 typedef struct corona {
-    int gridno;
+    int gridno; // fiber id generate
+    crnmap* inuseids; // in use fiber ids, grid => nilptr
     HashTableConf htconf;
     HashTable* mths; // thno => pthread_t*
     HashTable* mcs; // thno => machine*
     pmutex_t mcsmu;
-    bool crninited;
-    pmutex_t crninitmu;
-    pcond_t crninitcd;
-    pmutex_t crninitmu2; // TODO
-    pcond_t crninitcd2; // TODO
+    bool inited;
+    pmutex_t initmu;
+    pcond_t initcd;
     coro_context coctx0;
     coro_context maincoctx;
 
-    int eph; // epoll handler
     netpoller* np;
 } corona;
 
@@ -476,14 +474,14 @@ void crn_fiber_setspec(void* spec, void* val) {
 }
 // int crn_num_fibers() { return atomic_getint(gnr__); }
 // procer internal API
-void crn_post(coro_func fn, void*arg) {
+int crn_post(coro_func fn, void*arg) {
     linfo("post fn=%p, arg=%p %d\n", fn, arg, gnr__->gridno);
     machine* mc = crn_machine_get(1);
     // linfo("mc=%p, %d %p, %d\n", mc, mc->id, mc->ngrs, queue_size(mc->ngrs));
     if (mc != 0 && mc->id != 1) {
         // FIXME
         linfo("nothing mc=%p, %d %p, %d\n", mc, mc->id, mc->ngrs, crnqueue_size(mc->ngrs));
-        return;
+        return -1;
     }
 
     int id = crn_nxtid(gnr__);
@@ -499,6 +497,7 @@ void crn_post(coro_func fn, void*arg) {
         linfo("wow so many ngrs %d\n", qsz);
     }
     pcond_signal(&mc->pkcd);
+    return id;
 }
 
 static
@@ -535,8 +534,8 @@ static void* crn_procer1(void*arg) {
     mc->gchandle = GC_get_my_stackbottom(&mc->stksb);
     // linfo("%d %d\n", mc->id, gettid());
     crn_procer_setname(mc->id);
-    gnr__->crninited = true;
-    pcond_signal(&gnr__->crninitcd);
+    gnr__->inited = true;
+    pcond_signal(&gnr__->initcd);
 
     for (;;) {
         int newgn = crnqueue_size(mc->ngrs);
@@ -834,8 +833,21 @@ void crn_sched() {
 
 HashTableConf* crn_dft_htconf() { return &gnr__->htconf; }
 int crn_nxtid(corona* nr) {
-    int id = atomic_addint(&nr->gridno, 1);
-    return id;
+    while(true) {
+        int id = atomic_addint(&nr->gridno, 1);
+        if (id <= 0) {
+            lwarn("gridno overflow %d\n", id);
+            atomic_casint(&nr->gridno, id, 0);
+            continue;
+        }
+        if (crnmap_contains_key(nr->inuseids, id)) {
+            continue;
+        }
+        // int rv = crnmap_add(nr->inuseids,(uintptr_t)id,(void*)(uintptr_t)1);
+        // assert(rv == CC_OK);
+        return id;
+    }
+    assert(1==2);
 }
 
 static
@@ -855,7 +867,7 @@ static
 void crn_gc_push_other_roots1() {
     corona* nr = crn_get();
     if (nr == nilptr) return;
-    if (nr != nilptr && nr->crninited == false) return;
+    if (nr != nilptr && nr->inited == false) return;
     // if (gcurmcid__ != 0) return;
 
     // linfo2("tid=%d mcid=%d\n", gettid(), gcurmcid__);
@@ -894,7 +906,7 @@ void crn_gc_push_other_roots1() {
 static
 void crn_gc_push_other_roots2() {
     corona* nr = crn_get();
-    if (nr != nilptr && nr->crninited == false) return;
+    if (nr != nilptr && nr->inited == false) return;
     // if (gcurmcid__ != 0) return;
 
     linfo2("tid=%d mcid=%d\n", gettid(), gcurmcid__);
@@ -904,7 +916,7 @@ void crn_gc_on_collection_event2(GC_EventType evty) {
 }
 static
 void crn_gc_on_collection_event(GC_EventType evty) {
-    if (gnr__ == nilptr || (gnr__ != nilptr && gnr__->crninited == false)) {
+    if (gnr__ == nilptr || (gnr__ != nilptr && gnr__->inited == false)) {
         return;
     }
     // GC_alloc_unlock();
@@ -1034,6 +1046,7 @@ corona* crn_new() {
     hashtable_new_conf(&nr->htconf, &nr->mcs);
 
     nr->gridno = 1;
+    nr->inuseids = crnmap_new_uintptr();
     nr->np = netpoller_new();
 
     assert(gnr__ == nilptr);
@@ -1047,7 +1060,7 @@ void crn_init(corona* nr) {
     // GC_disable();
     for (int i = 5; i > 0; i --) {
         machine* mc = crn_machine_new(i);
-        pthread_t* t = &mc->th;
+        pthread_t* t = &mc->thr;
         pmutex_lock(&nr->mcsmu);
         int rv = hashtable_add(nr->mths, (void*)(uintptr_t)i, t);
         assert(rv == CC_OK);
@@ -1069,24 +1082,21 @@ void crn_destroy(corona* lnr) {
     gnr__ = 0;
 }
 void crn_wait_init_done(corona* nr) {
-    ltrace("crninited? %d\n", nr->crninited);
-    if (nr->crninited) {
-        return;
-    }
-    pcond_wait(&nr->crninitcd, &nr->crninitmu);
+    ltrace("crninited? %d\n", nr->inited);
+    if (nr->inited) { return; }
+    pcond_wait(&nr->initcd, &nr->initmu);
 }
 
 corona* crn_init_and_wait_done() {
     corona* nr = crn_new();
     assert(nr != nilptr);
-    if (!nr->crninited) {
+    if (!nr->inited) {
         crn_init(nr);
-        linfo("wait signal...%d %d\n", nr->crninited, gettid());
+        linfo("wait signal...%d %d\n", nr->inited, gettid());
         crn_wait_init_done(nr);
-        linfo("wait signal done %d %d\n", nr->crninited, gettid());
-        usleep(100*1000);
+        linfo("wait signal done %d %d\n", nr->inited, gettid());
         // dumphtkeys(nr->mcs);
-        checkhtkeys(nr->mcs,&nr->mcsmu);
+        checkhtkeys(nr->mcs, &nr->mcsmu);
     }
     return nr;
 }

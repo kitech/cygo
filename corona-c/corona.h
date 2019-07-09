@@ -14,7 +14,7 @@ corona* crn_init_and_wait_done();
 // 在crn_init*之前调用，设置线程创建成功回调通知，做线程初始化
 void* crn_set_thread_createcb(void(*fn)(void*arg), void* arg);
 
-void crn_post(void(*fn)(void*arg), void*arg);
+int crn_post(void(*fn)(void*arg), void*arg);
 void crn_sched();
 int crn_num_fibers();
 
