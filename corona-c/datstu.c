@@ -94,6 +94,27 @@ enum cc_stat crnmap_get_values(crnmap *table, Array **out){
     return rv;
 }
 
+// 随机摘除一个元素
+void* crnmap_takeone(crnmap* table) {
+    void* val = nilptr;
+    Array* arr = nilptr;
+
+    pmutex_lock(&table->mu);
+    int rv = hashtable_get_keys(table->ht, &arr);
+    assert(rv == CC_OK || rv == 2);
+    if (arr != nilptr) {
+        void* key = nilptr;
+        rv = array_get_at(arr, 0, (void**)&key);
+        assert(rv == CC_OK);
+        rv = hashtable_remove(table->ht, key, (void**)&val);
+        assert(rv == CC_OK);
+    }
+    pmutex_unlock(&table->mu);
+    if (arr != nilptr) array_destroy(arr);
+
+    return val;
+}
+
 /////
 crnqueue* crnqueue_new() {
     crnqueue* q = crn_gc_malloc(sizeof(crnqueue));
