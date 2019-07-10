@@ -24,6 +24,9 @@ bool atomic_notbool(bool* v) {
     return atomic_compare_exchange_strong(v, v, !*v);
 }
 
+bool atomic_casbool(bool* v, bool oldval, bool newval) {
+    return atomic_compare_exchange_strong(v, &oldval, newval);
+}
 bool atomic_casint(int* v, int oldval, int newval) {
     return atomic_compare_exchange_strong(v, &oldval, newval);
 }

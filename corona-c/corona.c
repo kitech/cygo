@@ -32,7 +32,6 @@ typedef struct machine {
     pmutex_t pkmu; // pack lock
     pcond_t pkcd;
     bool parking;
-    bool stopworld;
     yieldinfo yinfo;
     struct GC_stack_base stksb;
     void* gchandle;
@@ -49,6 +48,7 @@ typedef struct corona {
     bool inited;
     pmutex_t initmu;
     pcond_t initcd;
+    bool stopworld;
     coro_context coctx0;
     coro_context maincoctx;
 
@@ -296,8 +296,9 @@ void crn_fiber_suspend(fiber* gr) {
 }
 
 // machine internal API
-static void machine_finalizer(void* mc) {
-    linfo("machine dtor %p\n", mc);
+static void machine_finalizer(void* vdmc) {
+    machine* mc = (machine*)vdmc;
+    linfo("machine dtor %p %d\n", mc, mc->id);
     assert(1==2); // long live object
 }
 static void queue_finalizer(void* mc) {
@@ -373,6 +374,18 @@ crn_machine_get(int id) {
         }
         assert(mc->id == id);
     }
+    return mc;
+}
+machine* __attribute__((no_instrument_function))
+    crn_machine_get_nolk(int id) {
+    if (id <= 0) {
+        linfo("Invalid mcid %d\n", id);
+        return nilptr;
+        assert(id > 0);
+    }
+    machine* mc = 0;
+    int rv = crnmap_get_nolk(gnr__->mchs, (uintptr_t)id, (void**)&mc);
+    assert(rv == CC_OK || rv == CC_ERR_KEY_NOT_FOUND);
     return mc;
 }
 
@@ -859,33 +872,113 @@ void crn_gc_push_other_roots1() {
     }
     // linfo2("tid=%d mchs=%d grs=%d runcnt=%d\n", gettid(), 3, grcnt, executing_cnt);
 }
-static
-void crn_gc_push_other_roots2() {
+static void crn_gc_push_other_roots2() {
     corona* nr = crn_get();
-    if (nr != nilptr && nr->inited == false) return;
+    if (nr == nilptr || (nr != nilptr && nr->inited == false)) return;
     // if (gcurmcid__ != 0) return;
 
     linfo2("tid=%d mcid=%d\n", gettid(), gcurmcid__);
 }
-static
-void crn_gc_on_collection_event2(GC_EventType evty) {
+
+static bool crn_machine_all_parking(int nochkid) {
+    bool allpark = true;
+    for (int i = 3; i <= 5; i++ ) {
+        if (i == nochkid) { continue; }
+        machine* mc = crn_machine_get_nolk(i);
+        // linfo2("mcid=%d mc=%p pk=%d\n", i, mc, mc->parking);
+        if (mc->parking == false) {
+            allpark = false;
+            break;
+        }
+    }
+    return allpark;
+}
+static void crn_gc_start_proc() {
+    linfo2("gc start %d\n", gettid());
+    corona* nr = crn_get();
+    if (nr == nilptr || (nr != nilptr && nr->inited == false)) return;
+    int rv = atomic_casbool(&nr->stopworld,false,true);
+    if (rv == false) {
+    }
+    assert(rv == true);
+    int nochkid = gcurmcid__;
+    if (nochkid != 0) {
+        linfo2("wow machine thread gc %d\n", nochkid);
+    }
+
+    // unlock here maybe cause another collect enter
+    // GC_alloc_unlock();
+    for (int i = 3; i <= 5; i++ ) {
+        if (i == nochkid) { continue; }
+        machine* mc = crn_machine_get_nolk(i);
+        if (mc == 0) {
+            linfo2("mchssz = %d\n", crnmap_size(nr->mchs));
+            assert(mc != nilptr);
+            break;
+        }
+    }
+
+    for(;;) {
+        bool allpark = crn_machine_all_parking(nochkid);
+        if (allpark) {
+            linfo2("allpark good %d\n", allpark);
+        }
+        break;
+    }
+
+    for (int i = 3; i <= 5; i++ ) {
+    }
+    // GC_alloc_lock();
+}
+static void crn_gc_stop_proc() {
+    linfo2("gc finished %d\n", gettid());
+    corona* nr = crn_get();
+    if (nr == nilptr || (nr != nilptr && nr->inited == false)) return;
+    int nochkid = gcurmcid__;
+
+    // GC_alloc_unlock();
+    for (int i = 3; i <= 5; i++ ) {
+        if (i == nochkid) { continue; }
+        machine* mc = crn_machine_get_nolk(i);
+        if (mc == 0) {
+            linfo2("mchssz = %d\n", crnmap_size(gnr__->mchs));
+            assert(mc != nilptr);
+            break;
+        }
+    }
+    // GC_alloc_lock();
+
+    int rv = atomic_casbool(&nr->stopworld,true,false);
+    assert(rv == true);
 }
 static
-void crn_gc_on_collection_event(GC_EventType evty) {
-    if (gnr__ == nilptr || (gnr__ != nilptr && gnr__->inited == false)) {
-        return;
-    }
-    // GC_alloc_unlock();
+void crn_gc_on_collection_event2(GC_EventType evty) {
     // linfo2("%d=%s mcid=%d\n", evty, crn_gc_event_name(evty), gcurmcid__);
+    corona* nr = crn_get();
+    if (nr == nilptr || (nr != nilptr && nr->inited == false)) return;
+
+    switch (evty) {
+    case GC_EVENT_END:
+        crn_gc_stop_proc();
+        break;
+    }
+}
+
+static
+void crn_gc_on_collection_event(GC_EventType evty) {
+    // linfo2("%d=%s mcid=%d\n", evty, crn_gc_event_name(evty), gcurmcid__);
+    corona* nr = crn_get();
+    if (nr == nilptr || (nr != nilptr && nr->inited == false)) return;
+
+    // GC_alloc_unlock();
     if (evty == GC_EVENT_PRE_STOP_WORLD) {
         linfo2("%d %d\n", evty, gettid());
         for (int i = 3; i <= 5; i++ ) {
             machine* mc = crn_machine_get(i);
             if (mc == 0) {
-                linfo2("mchssz = %d\n", crnmap_size(gnr__->mchs));
+                linfo2("mchssz = %d\n", crnmap_size(nr->mchs));
                 break;
             }
-            mc->stopworld = true;
         }
 
         bool allpark = true;
@@ -933,7 +1026,6 @@ void crn_gc_on_collection_event(GC_EventType evty) {
                 linfo2("mchssz = %d\n", crnmap_size(gnr__->mchs));
                 break;
             }
-            mc->stopworld = false;
         }
     } else if (evty == GC_EVENT_END) {
         linfo2("gc finished %d\n", 0);
@@ -943,9 +1035,8 @@ void crn_gc_on_collection_event(GC_EventType evty) {
 static
 void crn_gc_on_thread_event(GC_EventType evty, void* thid) {
     linfo2("%d=%s %p\n", evty, crn_gc_event_name(evty), thid);
-}
-static void crn_gc_start_handler() {
-    linfo2("gc start %d\n", 0);
+    corona* nr = crn_get();
+    if (nr == nilptr || (nr != nilptr && nr->inited == false)) return;
 }
 
 bool gcinited = false;
@@ -964,7 +1055,8 @@ void crn_init_intern() {
     // GC_set_all_interior_pointers(1);
     // TODO
     // GC_set_push_other_roots(crn_gc_push_other_roots1); // run in which threads?
-    // GC_set_start_callback(crn_gc_start_handler);
+    extern void GC_set_start_callback(void(*fn)());
+    GC_set_start_callback(crn_gc_start_proc);
     GC_set_on_collection_event(crn_gc_on_collection_event2);
     // GC_set_on_thread_event(crn_gc_on_thread_event);
     GC_INIT();

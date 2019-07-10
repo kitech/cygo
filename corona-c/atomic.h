@@ -10,8 +10,9 @@ uint32_t atomic_addu32(uint32_t* v, uint32_t delta);
 int32_t atomic_addi32(int32_t* v, int32_t delta) ;
 uint64_t atomic_addu64(uint64_t* v, uint64_t delta);
 int64_t atomic_addi64(int64_t* v, int64_t delta) ;
-bool atomic_notbool(bool* v) ;
 
+bool atomic_notbool(bool* v) ;
+bool atomic_casbool(bool* v, bool oldval, bool newval);
 bool atomic_casint(int* v, int oldval, int newval) ;
 bool atomic_casu32(uint32_t* v, uint32_t oldval, uint32_t newval) ;
 bool atomic_casu64(uint64_t* v, uint64_t oldval, uint64_t newval) ;

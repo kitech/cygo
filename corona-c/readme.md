@@ -64,6 +64,8 @@ Thanks all the contributors.
    if manually GC_FREE(obj) it???
 [ ] GC_mark_from crash
     maybe stack corrupt reason
+[ ] ==24352==WARNING: ASan doesn't fully support makecontext/swapcontext functions and may produce false positives in some cases!
+
 
 ### Note
 * A program entering an infinite recursion or running out of space in the stack memory is known as a stack overflow

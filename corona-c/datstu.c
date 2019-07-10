@@ -50,6 +50,10 @@ enum cc_stat crnmap_get(crnmap *table, uintptr_t key, void **out) {
     pmutex_unlock(&table->mu);
     return rv;
 }
+enum cc_stat crnmap_get_nolk(crnmap *table, uintptr_t key, void **out) {
+    enum cc_stat rv = hashtable_get(table->ht, (void*)key, out);
+    return rv;
+}
 enum cc_stat crnmap_remove(crnmap *table, uintptr_t key, void **out) {
     pmutex_lock(&table->mu);
     enum cc_stat rv = hashtable_remove(table->ht, (void*)key, out);
