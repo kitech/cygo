@@ -53,6 +53,7 @@ typedef struct corona {
     coro_context maincoctx;
 
     netpoller* np;
+    rtsettings* rtsets;
 } corona;
 
 
@@ -705,22 +706,33 @@ void* crn_procerx(void*arg) {
     mc->savefrm = crn_get_frame();
     for (;;) {
         // check global queue
-        fiber* rungr = crn_sched_get_ready_one(mc);
-        if (rungr != 0) {
-            crn_sched_run_one(mc, rungr);
-            crn_procer_yield_commit(mc, rungr);
-            continue;
+        bool stopworld = atomic_getbool(&gnr__->stopworld);
+        if (!stopworld) {
+            fiber* rungr = nilptr;
+            rungr = crn_sched_get_ready_one(mc);
+            if (rungr != 0) {
+                crn_sched_run_one(mc, rungr);
+                crn_procer_yield_commit(mc, rungr);
+                continue;
+            }
+            if (rand() % 3 == 2) {
+                rungr = crn_sched_get_glob_one(mc);
+                if (rungr != 0) {
+                    crn_machine_gradd(mc, rungr);
+                    continue;
+                }
+            }
         }
-        if (rand() % 3 == 2) {
-            rungr = crn_sched_get_glob_one(mc);
-        }
-        if (rungr != 0) {
-            crn_machine_gradd(mc, rungr);
-        } else {
-            mc->parking = true;
-            // linfo("no task, parking... %d\n", mc->id);
+        {
+            if (stopworld) {
+                linfo("no task, parking... %d by %d\n", mc->id, stopworld);
+            }
+            // linfo("no task, parking... %d by %d\n", mc->id, stopworld);
+            int rv = atomic_casbool(&mc->parking, false, true);
+            assert(rv == true);
             pcond_wait(&mc->pkcd, &mc->pkmu);
-            mc->parking = false;
+            rv = atomic_casbool(&mc->parking, true, false);
+            assert(rv == true);
         }
         // sleep(3);
     }
@@ -886,7 +898,7 @@ static bool crn_machine_all_parking(int nochkid) {
         if (i == nochkid) { continue; }
         machine* mc = crn_machine_get_nolk(i);
         // linfo2("mcid=%d mc=%p pk=%d\n", i, mc, mc->parking);
-        if (mc->parking == false) {
+        if (atomic_getbool(&mc->parking) == false) {
             allpark = false;
             break;
         }
@@ -918,12 +930,41 @@ static void crn_gc_start_proc() {
         }
     }
 
-    for(;;) {
+    time_t btime = time(0);
+    for(int i = 0;; i++) {
         bool allpark = crn_machine_all_parking(nochkid);
         if (allpark) {
-            linfo2("allpark good %d\n", allpark);
+            // linfo2("allpark good %d\n", allpark);
+        }else{
+            if (i == 0) {
+                linfo2("not allpark bad %d\n", allpark);
+            }
         }
-        break;
+        if (!allpark) {
+            if (i > 9) {
+                linfo2("go on gc anyway %d\n", i);
+                break;
+            }
+
+            time_t nowt = time(0);
+            if (nowt-btime >= 3) {
+                // maybe in calling GC_malloc, which has mutex lock
+                linfo2("wait too long for all parking %d %d %d\n", nochkid, nowt-btime, i);
+                assert(1==2);
+                break;
+            }
+            extern int (*usleep_f)(useconds_t usec);
+            usleep_f(1000*10); // 10ms
+            continue;
+        }
+
+        if (allpark) {
+            if (i > 0) {
+                linfo2("waited parking %d\n", i);
+            }
+            break;
+        }
+        // break;
     }
 
     for (int i = 3; i <= 5; i++ ) {

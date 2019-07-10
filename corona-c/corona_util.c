@@ -39,9 +39,11 @@ int (array_randcmp) (const void*a, const void*b) {
         fflush(stderr); crn_logunlock();                                \
     }
 
+static rtsettings rtsetsobj = {.loglevel = LOGLVL_INFO,};
+rtsettings* rtsets = &rtsetsobj;
 static int loglvl = LOGLVL_INFO;
 // or CRNDEBUG="loglvl=3,leakdt=1,gcpercent=30,gctrace=1,..."
-void crn_loglvl_forenv() {
+static void crn_loglvl_forenv_CRNDEBUG() {
     char sep = ',';
     char* CRNDEBUG = getenv("CRNDEBUG");
     if (CRNDEBUG == 0 || strlen(CRNDEBUG) == 0) return;
@@ -93,6 +95,12 @@ void crn_loglvl_forenv() {
         }
     }
     free(ptr);
+}
+void crn_loglvl_forenv() {
+    crn_loglvl_forenv_CRNDEBUG();
+    rtsets->loglevel = loglvl;
+    rtsets->maxprocs = 3; // TODO CPU thread count + 1
+    rtsets->gcpercent = 100;
 }
 
 static pmutex_t crn_loglk;
