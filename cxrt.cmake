@@ -37,7 +37,10 @@ add_library(crn STATIC ${corona_c_srcs})
 #add_executable(corona ${corona_c_srcs} corona-c/main.c)
 set(CMAKE_C_FLAGS "-g -O0 -std=c11 -D_GNU_SOURCE ")
 #set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -pedantic") # non ISO C warning
+set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -ggdb3 -fsanitize=address -fno-omit-frame-pointer") # stack corrupt
+set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -fstack-protector -fstack-protector-all")
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -DGC_THREADS")
+#set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -DGC_DEBUG")
 set(corona_c_flags "-DNRDEBUG -DCORO_STACKALLOC -DCORO_UCONTEXT -DHAVE_UCONTEXT_H -DHAVE_SETJMP_H -DHAVE_SIGALTSTACK -fstack-usage")
 set(CMAKE_CXX_FLAGS "-nostdlib -fno-rtti -fno-rtti -fno-exceptions")
 #set(CMAKE_CXX_COMPILER "cc")

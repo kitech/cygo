@@ -62,6 +62,8 @@ Thanks all the contributors.
 [ ] GC_clear_fl_marks infinite loop
 [ ] set finalizer to non-empty would cause crash at GC_is_marked()???
    if manually GC_FREE(obj) it???
+[ ] GC_mark_from crash
+    maybe stack corrupt reason
 
 ### Note
 * A program entering an infinite recursion or running out of space in the stack memory is known as a stack overflow

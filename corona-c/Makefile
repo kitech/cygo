@@ -38,6 +38,14 @@ clean:
 
 # some tricks
 # gdb: handle SIGXCPU SIG33 SIG35 SIGPWR nostop noprint
+# gdb> up/down // call stack up/down
+# watch var
+# step/next/continue/delete
+# list
 
 # https://github.com/ivmai/bdwgc/issues/154#issuecomment-293088265
-# ./configure --enable-static=no --enable-shared=yes --enable-cplusplus --disable-thread-local --enable-gc-debug --enable-gc-assertion --disable-parallel-mark
+# ./configure --enable-static=no --enable-shared=yes --enable-cplusplus --enable-gc-debug --enable-gc-assertion --disable-parallel-mark
+
+# real stack corrupt debug process blog
+# https://blogs.unity3d.com/2016/04/25/debugging-memory-corruption-who-the-hell-writes-2-into-my-stack-2/
+
