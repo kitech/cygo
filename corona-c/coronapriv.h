@@ -72,7 +72,7 @@ struct fiber {
     int  mcid;
     void* savefrm; // upper frame
     void* myfrm; // my frame when yield
-    // really crnmap*
+    // this should not access multiple thread, so just use non-lock hashtable
     HashTable* specifics; // like thread specific // int* => void*, value can pass to free()
 };
 

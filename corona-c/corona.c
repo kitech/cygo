@@ -66,8 +66,6 @@ extern int gettid();
 
 static corona* gnr__ = 0;
 static void(*crn_thread_createcb)(void* arg) = 0;
-HashTableConf* crn_dft_htconf();
-int crn_nxtid(corona* nr);
 
 // 前置声明一些函数
 machine* crn_machine_get(int id);
@@ -75,11 +73,29 @@ fiber* crn_machine_grget(machine* mc, int id);
 void crn_machine_grfree(machine* mc, int id);
 void crn_machine_signal(machine* mc);
 
+static int crn_nxtid(corona* nr) {
+    while(true) {
+        int id = atomic_addint(&nr->gridno, 1);
+        if (id <= 0) {
+            lwarn("gridno overflow %d\n", id);
+            atomic_casint(&nr->gridno, id, 0);
+            continue;
+        }
+        if (crnmap_contains_key(nr->inuseids, id)) {
+            continue;
+        }
+        // int rv = crnmap_add(nr->inuseids,(uintptr_t)id,(void*)(uintptr_t)1);
+        // assert(rv == CC_OK);
+        return id;
+    }
+    assert(1==2);
+}
+
 // fiber internal API
 static void fiber_finalizer(void* gr) {
     fiber* f = (fiber*)gr;
     linfo("fiber dtor %p %d\n", gr, f->id);
-    // assert(1==2);
+    assert(1==2);
 }
 fiber* crn_fiber_new(int id, coro_func fn, void* arg) {
     fiber* gr = (fiber*)crn_gc_malloc(sizeof(fiber));
@@ -88,7 +104,8 @@ fiber* crn_fiber_new(int id, coro_func fn, void* arg) {
     gr->fnproc = fn;
     gr->arg = arg;
     gr->hcelem = invlidptr;
-    gr->specifics = (HashTable*)crnmap_new_uintptr();
+    extern HashTable* cxhashtable_new_uintptr();
+    gr->specifics = cxhashtable_new_uintptr();
     return gr;
 }
 static void crn_fiber_setstate(fiber* gr, grstate state) {
@@ -133,7 +150,7 @@ void crn_fiber_destroy(fiber* gr) {
         }
         array_destroy(specs);
     }
-    crnmap_free((crnmap*)gr->specifics);
+    hashtable_destroy(gr->specifics);
     ssze += sizeof(fiber);
     // linfo("gr %d on %d, freed %d, %d\n", grid, mcid, ssze, sizeof(fiber));
     corowp_destroy(&gr->coctx);
@@ -441,14 +458,17 @@ void crn_fiber_setspec(void* spec, void* val) {
     void* oldv = nilptr;
     int rv = hashtable_remove(gr->specifics, spec, &oldv);
     assert(rv == CC_OK);
-    if (oldv != nilptr) { crn_gc_free(oldv);  }
     rv = hashtable_add(gr->specifics, spec, val);
     assert(rv == CC_OK);
+    if (oldv != nilptr) {
+        lwarn("Override key %p=%p\n", spec, oldv);
+        crn_gc_free(oldv);
+    }
 }
 // int crn_num_fibers() { return atomic_getint(gnr__); }
 // procer internal API
 int crn_post(coro_func fn, void*arg) {
-    linfo("post fn=%p, arg=%p %d\n", fn, arg, gnr__->gridno);
+    linfo("fn=%p, arg=%p %d\n", fn, arg, gnr__->gridno+1);
     machine* mc = crn_machine_get(1);
     // linfo("mc=%p, %d %p, %d\n", mc, mc->id, mc->ngrs, queue_size(mc->ngrs));
     if (mc != 0 && mc->id != 1) {
@@ -783,24 +803,6 @@ void crn_procer_resume_one(void* gr_, int ytype, int grid, int mcid) {
 }
 void crn_sched() {
     crn_procer_yield(1000, YIELD_TYPE_NANOSLEEP);
-}
-
-int crn_nxtid(corona* nr) {
-    while(true) {
-        int id = atomic_addint(&nr->gridno, 1);
-        if (id <= 0) {
-            lwarn("gridno overflow %d\n", id);
-            atomic_casint(&nr->gridno, id, 0);
-            continue;
-        }
-        if (crnmap_contains_key(nr->inuseids, id)) {
-            continue;
-        }
-        // int rv = crnmap_add(nr->inuseids,(uintptr_t)id,(void*)(uintptr_t)1);
-        // assert(rv == CC_OK);
-        return id;
-    }
-    assert(1==2);
 }
 
 static
