@@ -1,7 +1,10 @@
+#include <assert.h>
 #include <pthread.h>
 
 #include "hook.h"
 #include "futex.h"
+#include "coronagc.h"
+#include "coronapriv.h"
 
 extern void crn_pre_gclock_proc();
 extern void crn_post_gclock_proc();
@@ -63,3 +66,101 @@ int pcond_init(pcond_t *cond, const pcondattr_t *attr)
     return pthread_cond_init(cond, attr);
 }
 
+// for pub usage, will yield but not block thread/fiber
+static void crn_mutex_finalzier(void* mu) {
+}
+crn_mutex* crn_mutex_new() {
+    crn_mutex* mup = (crn_mutex*)crn_gc_malloc(sizeof(crn_mutex));
+    int rv = pthread_mutex_init(&mup->lock, 0);
+    assert(rv == 0);
+    mup->waitq = crnqueue_new();
+    return mup;
+}
+int crn_mutex_lock(crn_mutex *mutex)
+{
+    fiber* mygr = crn_fiber_getcur();
+    assert(mygr != nilptr);
+
+    bool bv = atomic_casptr((void**)&mutex->holder, nilptr, mygr);
+    if (bv) {
+    }else{
+        int rv = crnqueue_enqueue(mutex->waitq, mygr);
+        assert(rv == CC_OK);
+        crn_procer_yield(-1, YIELD_TYPE_LOCK);
+    }
+    crn_pre_gclock_proc();
+    int rv = pthread_mutex_lock(&mutex->lock);
+    assert(rv == 0);
+    crn_post_gclock_proc();
+    return rv;
+}
+int crn_mutex_trylock(crn_mutex *mutex)
+{
+    crn_pre_gclock_proc();
+    int rv = pthread_mutex_trylock(&mutex->lock);
+    crn_post_gclock_proc();
+    return rv;
+}
+int crn_mutex_unlock(crn_mutex *mutex)
+{
+    fiber* mygr = crn_fiber_getcur();
+    assert(mygr != nilptr);
+
+    assert(atomic_getptr((void**)&mutex->holder) == mygr);
+    crn_pre_gclock_proc();
+    int rv = pthread_mutex_unlock(&mutex->lock);
+    crn_post_gclock_proc();
+    assert(rv == 0);
+
+    bool bv = atomic_casptr((void**)&mutex->holder, mygr, nilptr);
+    assert(bv == true);
+
+    void* wtgr = nilptr;
+    int rv2 = crnqueue_poll(mutex->waitq, &wtgr);
+    assert(rv2 == CC_OK);
+    if (wtgr != nilptr) {
+        crn_procer_resume_one(wtgr, 0, mygr->id, mygr->mcid);
+    }
+
+    return rv;
+}
+int crn_mutex_destroy(crn_mutex *mutex)
+{
+    int rv = pthread_mutex_destroy(&mutex->lock);
+    crn_gc_free(mutex);
+    return rv;
+}
+
+static void crn_cond_finalizer(void* cd) {
+}
+crn_cond* crn_cond_new(crn_mutex* mutex) {
+    crn_cond* cdp = (crn_cond*)crn_gc_malloc(sizeof(crn_cond));
+    int rv = pthread_cond_init(&cdp->cd, 0);
+    assert(rv == 0);
+    assert(mutex != 0);
+    cdp->mutex = mutex;
+    cdp->waitq = crnqueue_new();
+    return cdp;
+}
+int crn_cond_timedwait(crn_cond * cond, const struct timespec * abstime)
+{
+    return pthread_cond_timedwait(&cond->cd, &cond->mutex->lock, abstime);
+}
+int crn_cond_wait(crn_cond * cond)
+{
+    return pthread_cond_wait(&cond->cd, &cond->mutex->lock);
+}
+int crn_cond_broadcast(crn_cond *cond)
+{
+    return pthread_cond_broadcast(&cond->cd);
+}
+int crn_cond_signal(crn_cond *cond)
+{
+    return pthread_cond_signal(&cond->cd);
+}
+int crn_cond_destroy(crn_cond *cond)
+{
+    int rv = pthread_cond_destroy(&cond->cd);
+    crn_gc_free(cond);
+    return rv;
+}

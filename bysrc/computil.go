@@ -92,10 +92,16 @@ func typesty2str(typ types.Type) string {
 	return ret
 }
 
+// used only when cannot found a valid types.Type
 func iscsel(e ast.Expr) bool {
-	idt, ok := e.(*ast.Ident)
-	if ok {
-		return idt.Name == "C"
+	// log.Println(e, reflect.TypeOf(e))
+	switch te := e.(type) {
+	case *ast.StarExpr:
+		return iscsel(te.X)
+	case *ast.SelectorExpr:
+		return iscsel(te.X)
+	case *ast.Ident:
+		return te.Name == "C"
 	}
 	return false
 }
@@ -148,13 +154,16 @@ func funcistypedep(idt ast.Expr) bool {
 	return false
 }
 
+/////
 type basecomp struct {
 	psctx    *ParserContext
 	strtypes map[string]types.TypeAndValue
+	tmpvars  map[ast.Expr]*ast.Ident
 }
 
 func newbasecomp(psctx *ParserContext) *basecomp {
-	bc := &basecomp{strtypes: map[string]types.TypeAndValue{}}
+	bc := &basecomp{strtypes: map[string]types.TypeAndValue{},
+		tmpvars: map[ast.Expr]*ast.Ident{}}
 	bc.psctx = psctx
 	bc.initbc()
 	return bc

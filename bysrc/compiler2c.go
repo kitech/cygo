@@ -196,6 +196,12 @@ func (this *g2nc) genBlockStmt(scope *ast.Scope, stmt *ast.BlockStmt) {
 // clause index?
 func (this *g2nc) genStmt(scope *ast.Scope, stmt ast.Stmt, idx int) {
 	// log.Println(stmt, reflect.TypeOf(stmt))
+	this.out("//", this.exprpos(stmt).String()).outnl()
+	this.out("// temporary vars begin").outnl()
+	this.genStmtTmps(scope, stmt)
+	this.out("// temporary vars end").outnl()
+	defer this.outnl()
+
 	addfh := true
 	switch t := stmt.(type) {
 	case *ast.AssignStmt:
@@ -228,7 +234,7 @@ func (this *g2nc) genStmt(scope *ast.Scope, stmt ast.Stmt, idx int) {
 	case *ast.ReturnStmt:
 		this.genReturnStmt(scope, t)
 	default:
-		if stmt == nil { // for {}
+		if stmt == nil { // empty block {}
 		} else {
 			log.Println("unknown", reflect.TypeOf(stmt), t)
 		}
@@ -237,6 +243,52 @@ func (this *g2nc) genStmt(scope *ast.Scope, stmt ast.Stmt, idx int) {
 		this.outfh().outnl()
 	}
 }
+func (c *g2nc) genStmtTmps(scope *ast.Scope, stmt ast.Stmt) {
+	c.out("// hehehhehe").outnl()
+
+	switch t := stmt.(type) {
+	case *ast.AssignStmt:
+		for _, re := range t.Rhs {
+			c.genExprTmps(scope, re)
+		}
+	case *ast.ExprStmt:
+		c.genExprTmps(scope, t.X)
+	case *ast.GoStmt:
+
+	case *ast.ForStmt:
+
+	case *ast.RangeStmt:
+
+	case *ast.IncDecStmt:
+
+	case *ast.BranchStmt:
+
+	case *ast.DeclStmt:
+
+	case *ast.IfStmt:
+
+	case *ast.BlockStmt:
+
+	case *ast.SwitchStmt:
+
+	case *ast.CaseClause:
+		// addfh = false
+
+	case *ast.SendStmt:
+
+	case *ast.ReturnStmt:
+
+	default:
+		if stmt == nil { // empty block {}
+		} else {
+			log.Println("unknown", reflect.TypeOf(stmt), t)
+		}
+	}
+}
+func (c *g2nc) genExprTmps(scope *ast.Scope, expr ast.Expr) {
+	c.out("// hehehhehe").outsp().out(tmpvarname()).outnl()
+}
+
 func (c *g2nc) genAssignStmt(scope *ast.Scope, s *ast.AssignStmt) {
 	// log.Println(s.Tok.String(), s.Tok.Precedence(), s.Tok.IsOperator(), s.Tok.IsLiteral(), s.Lhs)
 	for i := 0; i < len(s.Rhs); i++ {
@@ -386,16 +438,18 @@ func (c *g2nc) genRangeStmt(scope *ast.Scope, s *ast.RangeStmt) {
 	case *types.Slice:
 		keyidstr := fmt.Sprintf("%v", s.Key)
 		keyidstr = gopp.IfElseStr(keyidstr == "_", "idx", keyidstr)
-		valtystr := c.exprTypeName(scope, s.Value)
 
 		c.out("{").outnl()
 		c.outf("  for (int %s = 0; %s < array_size(%v); %s++) {",
 			keyidstr, keyidstr, s.X, keyidstr).outnl()
-		c.outf("     %s %v = {0}", valtystr, s.Value).outfh().outnl()
-		var tmpvar = tmpvarname()
-		c.outf("    void* %s = {0}", tmpvar).outfh().outnl()
-		c.outf("    int rv = array_get_at(%v, %s, (void**)&%s)", s.X, keyidstr, tmpvar).outfh().outnl()
-		c.outf("    %v = (%v)(uintptr_t)%s", s.Value, valtystr, tmpvar).outfh().outnl()
+		if s.Value != nil {
+			valtystr := c.exprTypeName(scope, s.Value)
+			c.outf("     %s %v = {0}", valtystr, s.Value).outfh().outnl()
+			var tmpvar = tmpvarname()
+			c.outf("    void* %s = {0}", tmpvar).outfh().outnl()
+			c.outf("    int rv = array_get_at(%v, %s, (void**)&%s)", s.X, keyidstr, tmpvar).outfh().outnl()
+			c.outf("    %v = (%v)(uintptr_t)%s", s.Value, valtystr, tmpvar).outfh().outnl()
+		}
 		c.genBlockStmt(scope, s.Body)
 		c.out("  }").outnl()
 		c.out("// TODO gc safepoint code").outnl()
@@ -1071,9 +1125,21 @@ func (this *g2nc) genExpr2(scope *ast.Scope, e ast.Expr) {
 				}
 			}
 		case *ast.ArrayType:
-			this.outf("cxarray_new()").outfh().outnl()
+
 			var vo = scope.Lookup("varname")
+			if vo == nil {
+				gotyval := this.info.Types[te]
+				log.Println("temp var?", vo, this.exprpos(te), gotyval)
+			}
+			if vo == nil {
+				tmpname := tmpvarname()
+				this.out("Array*").outsp().out(tmpname).outeq().out("{0}").outfh().outnl()
+				vo = ast.NewObj(ast.Var, tmpname)
+				vo.Data = newIdent(tmpname)
+			}
+			this.outf("cxarray_new()").outfh().outnl()
 			for idx, ex := range te.Elts {
+				log.Println(vo == nil, ex, idx, this.exprpos(ex))
 				this.genCxarrAdd(scope, vo.Data, ex, idx)
 				this.outfh().outnl()
 			}
@@ -1376,9 +1442,21 @@ func (this *g2nc) exprTypeNameImpl(scope *ast.Scope, e ast.Expr) string {
 	}
 
 	goty := this.info.TypeOf(e)
-	return this.exprTypeNameImpl2(scope, goty)
+	if goty == nil {
+		log.Panicln(e, this.exprpos(e))
+	}
+	val := this.exprTypeNameImpl2(scope, goty, e)
+	if isinvalidty(val) {
+
+		val = this.exprstr(e)
+		val = strings.Replace(val, "C.", "", 1)
+		log.Println(val)
+		// log.Panicln(e, iscsel(e), this.exprpos(e), this.exprstr(e), sign2rety(val))
+		return sign2rety(val)
+	}
+	return val
 }
-func (this *g2nc) exprTypeNameImpl2(scope *ast.Scope, ety types.Type) string {
+func (this *g2nc) exprTypeNameImpl2(scope *ast.Scope, ety types.Type, e ast.Expr) string {
 
 	{
 		// return "unknownty"
@@ -1396,13 +1474,15 @@ func (this *g2nc) exprTypeNameImpl2(scope *ast.Scope, ety types.Type) string {
 			if strings.Contains(te.Name(), "string") {
 				log.Println(te.Name())
 			}
+			log.Println(te, reflect.TypeOf(e))
 			return te.Name()
 		}
 	case *types.Named:
 		return te.Obj().Name()
 		// return sign2rety(te.String())
 	case *types.Pointer:
-		tystr := this.exprTypeNameImpl2(scope, te.Elem())
+		tystr := this.exprTypeNameImpl2(scope, te.Elem(), e)
+		log.Println(tystr)
 		return tystr + "*"
 	case *types.Slice, *types.Array:
 		return "Array*"
