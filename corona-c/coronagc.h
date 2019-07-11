@@ -17,6 +17,7 @@ void crn_gc_free(void* ptr);
 void crn_gc_free2(void* ptr);
 void* crn_gc_calloc(size_t n, size_t size);
 void crn_set_finalizer(void* ptr, void(*fn)(void* ptr));
+void crn_call_with_alloc_lock(void*(*fnptr)(void* arg1), void* arg);
 
 #endif
 

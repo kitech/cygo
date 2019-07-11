@@ -16,36 +16,67 @@
 
 #ifdef USE_BDWGC
 
+void (*crn_pre_gclock_fn)() = 0;
+void (*crn_post_gclock_fn)() = 0;
+
+static void crn_pre_gclock() {
+    assert(crn_pre_gclock_fn != 0);
+    crn_pre_gclock_fn();
+}
+static void crn_post_gclock() {
+    assert(crn_post_gclock_fn != 0);
+    crn_post_gclock_fn();
+}
 static void crn_gc_finalizer(void*ptr, void*clientdata) {
     printf("ptr dtor %p\n", ptr);
 }
 void* crn_gc_malloc(size_t size) {
+    crn_pre_gclock();
     void* ptr = GC_MALLOC(size);
+    crn_post_gclock();
     // GC_register_finalizer(ptr, crn_gc_finalizer, 0, 0, 0);
     return ptr;
 }
 void* crn_gc_realloc(void* ptr, size_t size) {
-    return GC_REALLOC(ptr, size);
+    crn_pre_gclock();
+    void* newptr = GC_REALLOC(ptr, size);
+    crn_post_gclock();
+    return newptr;
 }
 void crn_gc_free(void* ptr) {
+    crn_pre_gclock();
     GC_FREE(ptr);
+    crn_post_gclock();
 }
 void crn_gc_free2(void* ptr) {
+    crn_pre_gclock();
     GC_FREE(ptr);
+    crn_post_gclock();
 }
 void* crn_gc_calloc(size_t n, size_t size) {
-    return GC_MALLOC(n*size);
+    crn_pre_gclock();
+    void* ptr = GC_MALLOC(n*size);
+    crn_post_gclock();
+    return ptr;
+}
+
+void crn_call_with_alloc_lock(void*(*fnptr)(void* arg1), void* arg) {
+    crn_pre_gclock();
+    GC_call_with_alloc_lock(fnptr, arg);
+    crn_post_gclock();
 }
 
 static void crn_finalizer_fwd(void* ptr, void* fnptr) {
     ((void (*)(void*))fnptr)(ptr);
 }
 void crn_set_finalizer(void* ptr, void(*ufin)(void* ptr)) {
+    crn_pre_gclock();
     if (ufin == NULL) {
         GC_REGISTER_FINALIZER(ptr, NULL, NULL, NULL, NULL);
     }else{
         GC_REGISTER_FINALIZER(ptr, crn_finalizer_fwd, ufin, NULL, NULL);
     }
+    crn_post_gclock();
 }
 
 const char* crn_gc_event_name(GC_EventType evty) {

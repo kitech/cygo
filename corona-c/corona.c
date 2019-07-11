@@ -32,6 +32,7 @@ typedef struct machine {
     pmutex_t pkmu; // pack lock
     pcond_t pkcd;
     bool parking;
+    bool wantgclock;
     yieldinfo yinfo;
     struct GC_stack_base stksb;
     void* gchandle;
@@ -192,7 +193,7 @@ void* crn_gc_setbottom1(void*arg) {
 
 void crn_fiber_forward(void* arg) {
     fiber* gr = (fiber*)arg;
-    // GC_call_with_alloc_lock(crn_gc_setbottom1, gr);
+    // crn_call_with_alloc_lock(crn_gc_setbottom1, gr);
 
     gr->fnproc(gr->arg);
     crn_fiber_setstate(gr,finished);
@@ -200,7 +201,7 @@ void crn_fiber_forward(void* arg) {
     // TODO coro 结束，回收coro栈
 
     // 好像应该在外层处理
-    GC_call_with_alloc_lock(crn_gc_setbottom0, gr);
+    crn_call_with_alloc_lock(crn_gc_setbottom0, gr);
 
     // 这个跳回ctx应该是不对的，有可能要跳到其他的gr而不是默认gr？
     corowp_transfer(&gr->coctx, gr->coctx0); // 这句要写在函数fnproc退出之前？
@@ -221,7 +222,7 @@ void crn_fiber_run_first(fiber* gr) {
     mc->curgr = gr;
     coro_context* curcoctx = curgr == 0? gr->coctx0 : &curgr->coctx; // 暂时无用
 
-    GC_call_with_alloc_lock(crn_gc_setbottom1, gr);
+    crn_call_with_alloc_lock(crn_gc_setbottom1, gr);
     // 对-DCORO_UCONTEXT/-DCORO_ASM等来说，这句是真正开始执行
     corowp_transfer(gr->coctx0, &gr->coctx);
     // corowp_transfer(&gr->coctx, gr->coctx0); // 这句要写在函数fnproc退出之前？
@@ -236,7 +237,7 @@ void crn_fiber_resume(fiber* gr) {
     crn_fiber_setstate(gr,executing);
 
     if (gr->myfrm != nilptr) crn_set_frame(gr->myfrm); // 恢复fiber的frame
-    GC_call_with_alloc_lock(crn_gc_setbottom1, gr);
+    crn_call_with_alloc_lock(crn_gc_setbottom1, gr);
     // 对-DCORO_UCONTEXT/-DCORO_ASM等来说，这句是真正开始执行
     corowp_transfer(gr->coctx0, &gr->coctx);
 }
@@ -292,7 +293,7 @@ void crn_fiber_suspend(fiber* gr) {
     gr->myfrm = crn_get_frame();
     crn_set_frame(gr->savefrm);
     crn_fiber_setstate(gr,waiting);
-    GC_call_with_alloc_lock(crn_gc_setbottom0, gr);
+    crn_call_with_alloc_lock(crn_gc_setbottom0, gr);
     corowp_transfer(&gr->coctx, gr->coctx0);
 }
 
@@ -432,6 +433,7 @@ void crn_machine_signal(machine* mc) {
 
 static __thread int gcurmcid__ = 0; // thread local
 static __thread int gcurgrid__ = 0; // thread local
+static __thread machine* gcurmcobj = 0; // thread local
 int __attribute__((no_instrument_function))
 crn_get_goid() { return gcurgrid__; }
 fiber* __attribute__((no_instrument_function))
@@ -516,6 +518,7 @@ void crn_procer_setname(int id) {
 static
 void* crn_procer_netpoller(void*arg) {
     machine* mc = (machine*)arg;
+    gcurmcobj = mc;
     struct GC_stack_base stksb = {};
     GC_get_stack_base(&stksb);
     // GC_register_my_thread(&stksb);
@@ -535,6 +538,7 @@ void* crn_procer_netpoller(void*arg) {
 
 static void* crn_procer1(void*arg) {
     machine* mc = (machine*)arg;
+    gcurmcobj = mc;
     struct GC_stack_base stksb = {};
     GC_get_stack_base(&stksb);
     // GC_register_my_thread(&stksb);
@@ -577,7 +581,7 @@ static void* crn_procer1(void*arg) {
         for (;arr2 != nilptr;) {
             fiber* gr = crn_machine_grtake(mc);
             if (gr == nilptr) {
-                linfo("why nil %d\n", crnmap_size(mc->grs));
+                linfo("why nil %d %d\n", crnmap_size(mc->grs), arr2sz);
                 break;
             }
 
@@ -650,7 +654,7 @@ void crn_sched_run_one(machine* mc, fiber* rungr) {
     rungr->mcid = mc->id;
     rungr->savefrm = mc->savefrm;
     crn_fiber_run(rungr);
-    // GC_call_with_alloc_lock(crn_gc_setbottom0, rungr);
+    // crn_call_with_alloc_lock(crn_gc_setbottom0, rungr);
     gcurgrid__ = 0;
     mc->curgr = nilptr;
 
@@ -689,9 +693,9 @@ void crn_procer_yield_commit(machine* mc, fiber* gr) {
     }
     memset(yinfo, 0, sizeof(yieldinfo));
 }
-static
-void* crn_procerx(void*arg) {
+static void* crn_procerx(void*arg) {
     machine* mc = (machine*)arg;
+    gcurmcobj = mc;
     GC_get_stack_base(&mc->stksb);
     // GC_register_my_thread(&mc->stksb);
     mc->gchandle = GC_get_my_stackbottom(&mc->stksb);
@@ -898,7 +902,12 @@ static bool crn_machine_all_parking(int nochkid) {
         if (i == nochkid) { continue; }
         machine* mc = crn_machine_get_nolk(i);
         // linfo2("mcid=%d mc=%p pk=%d\n", i, mc, mc->parking);
-        if (atomic_getbool(&mc->parking) == false) {
+        if (atomic_getbool(&mc->parking) == true) {
+            continue;
+        }
+        if (atomic_getbool(&mc->wantgclock) == true) {
+            linfo2("wantgclock, as safepoint %d\n", i);
+        }else{
             allpark = false;
             break;
         }
@@ -940,13 +949,12 @@ static void crn_gc_start_proc() {
                 linfo2("not allpark bad %d\n", allpark);
             }
         }
+        time_t nowt = time(0);
         if (!allpark) {
-            if (i > 9) {
-                linfo2("go on gc anyway %d\n", i);
-                break;
-            }
-
-            time_t nowt = time(0);
+            /* if (i > 9) { */
+            /*     linfo2("go on gc anyway %d\n", i); */
+            /*     break; */
+            /* } */
             if (nowt-btime >= 3) {
                 // maybe in calling GC_malloc, which has mutex lock
                 linfo2("wait too long for all parking %d %d %d\n", nochkid, nowt-btime, i);
@@ -960,7 +968,7 @@ static void crn_gc_start_proc() {
 
         if (allpark) {
             if (i > 0) {
-                linfo2("waited parking %d\n", i);
+                linfo2("finally waited parking %d %d\n", i, nowt-btime);
             }
             break;
         }
@@ -1080,11 +1088,30 @@ void crn_gc_on_thread_event(GC_EventType evty, void* thid) {
     if (nr == nilptr || (nr != nilptr && nr->inited == false)) return;
 }
 
+void crn_pre_gclock_proc() {
+    // linfo("hohoo %d\n", gcurmcid__);
+    if (gcurmcobj == nilptr) return;
+
+    int rv = atomic_casbool(&gcurmcobj->wantgclock, false, true);
+    assert(rv == true);
+}
+void crn_post_gclock_proc() {
+    // linfo("hohoo %d\n", gcurmcid__);
+    if (gcurmcobj == nilptr) return;
+
+    int rv = atomic_casbool(&gcurmcobj->wantgclock, true, false);
+    assert(rv == true);
+}
+
 bool gcinited = false;
 static
 void crn_init_intern() {
     srand(time(0));
     crn_loglvl_forenv();
+    extern void (*crn_pre_gclock_fn)();
+    extern void (*crn_post_gclock_fn)();
+    crn_pre_gclock_fn = crn_pre_gclock_proc;
+    crn_post_gclock_fn = crn_post_gclock_proc;
 
     // GC_set_find_leak(1);
     GC_set_finalize_on_demand(0);

@@ -1,18 +1,23 @@
 
 #include "cxrtbase.h"
 
+extern void* crn_gc_malloc(size_t size);
+extern void* crn_gc_realloc(void* ptr, size_t size);
+extern void crn_gc_free(void* ptr);
+extern void crn_gc_free2(void* ptr);
+
 void* cxmalloc(size_t size) {
-    void* ptr = GC_MALLOC(size);
+    void* ptr = crn_gc_malloc(size);
     return ptr;
 }
 void* cxrealloc(void*ptr, size_t size) {
-    return GC_REALLOC(ptr, size);
+    return crn_gc_realloc(ptr, size);
 }
 void cxfree(void* ptr) {
-    GC_FREE(ptr);
+    crn_gc_free(ptr);
 }
 void* cxcalloc(size_t blocks, size_t size) {
-    return cxmalloc(blocks*size);
+    return crn_gc_malloc(blocks*size);
 }
 
 char* cxstrdup(const char* str) {

@@ -65,7 +65,11 @@ Thanks all the contributors.
 [ ] GC_mark_from crash
     maybe stack corrupt reason
 [ ] ==24352==WARNING: ASan doesn't fully support makecontext/swapcontext functions and may produce false positives in some cases!
-
+[ ] https://blog.csdn.net/fyyyr/article/details/79389272
+   安全点的选定基本上是以“是否具有让程序长时间执行的特征”为标准进行选定的  https://www.jianshu.com/p/952fc6c4501c
+   1. 循环的末尾
+   2. 方法临返回前 / 调用方法的call指令后
+   3. 可能抛异常的位置   
 
 ### Note
 * A program entering an infinite recursion or running out of space in the stack memory is known as a stack overflow

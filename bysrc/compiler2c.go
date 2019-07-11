@@ -359,6 +359,7 @@ func (c *g2nc) genForStmt(scope *ast.Scope, s *ast.ForStmt) {
 	c.out("{")
 	c.genBlockStmt(scope, s.Body)
 	c.genStmt(scope, s.Post, 2) // Post move to real post, to resolve ';' problem
+	c.out("// TODO gc safepoint code").outnl()
 	c.out("}")
 }
 func (c *g2nc) genRangeStmt(scope *ast.Scope, s *ast.RangeStmt) {
@@ -380,6 +381,7 @@ func (c *g2nc) genRangeStmt(scope *ast.Scope, s *ast.RangeStmt) {
 		c.outf("    %s %v = entry->value", valtystr, s.Value).outfh().outnl()
 		c.genBlockStmt(scope, s.Body)
 		c.out("  }").outnl()
+		c.out("// TODO gc safepoint code").outnl()
 		c.out("}").outnl()
 	case *types.Slice:
 		keyidstr := fmt.Sprintf("%v", s.Key)
@@ -396,6 +398,7 @@ func (c *g2nc) genRangeStmt(scope *ast.Scope, s *ast.RangeStmt) {
 		c.outf("    %v = (%v)(uintptr_t)%s", s.Value, valtystr, tmpvar).outfh().outnl()
 		c.genBlockStmt(scope, s.Body)
 		c.out("  }").outnl()
+		c.out("// TODO gc safepoint code").outnl()
 		c.out("}").outnl()
 		if be == nil {
 		}
@@ -413,6 +416,7 @@ func (c *g2nc) genRangeStmt(scope *ast.Scope, s *ast.RangeStmt) {
 			c.outf("    %v = (%v->ptr)[%s]", s.Value, s.X, keyidstr).outfh().outnl()
 			c.genBlockStmt(scope, s.Body)
 			c.out("  }").outnl()
+			c.out("// TODO gc safepoint code").outnl()
 			c.out("}").outnl()
 		} else {
 			log.Println("todo", s.Key, s.Value, s.X, varty)

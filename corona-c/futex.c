@@ -3,18 +3,30 @@
 #include "hook.h"
 #include "futex.h"
 
+extern void crn_pre_gclock_proc();
+extern void crn_post_gclock_proc();
+
 // for some internal use, cannot let thread yield
 int pmutex_lock(pmutex_t *mutex)
 {
-    return pmutex_lock_f(mutex);
+    crn_pre_gclock_proc();
+    int rv = pmutex_lock_f(mutex);
+    crn_post_gclock_proc();
+    return rv;
 }
 int pmutex_trylock(pmutex_t *mutex)
 {
-    return pmutex_trylock_f(mutex);
+    crn_pre_gclock_proc();
+    int rv = pmutex_trylock_f(mutex);
+    crn_post_gclock_proc();
+    return rv;
 }
 int pmutex_unlock(pmutex_t *mutex)
 {
-    return pmutex_unlock_f(mutex);
+    crn_pre_gclock_proc();
+    int rv = pmutex_unlock_f(mutex);
+    crn_post_gclock_proc();
+    return rv;
 }
 int pmutex_init(pmutex_t *mutex, const pmutexattr_t *attr)
 {
