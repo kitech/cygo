@@ -32,7 +32,7 @@ typedef struct machine {
     pmutex_t pkmu; // pack lock
     pcond_t pkcd;
     bool parking;
-    bool wantgclock;
+    int wantgclock;
     yieldinfo yinfo;
     struct GC_stack_base stksb;
     void* gchandle;
@@ -509,21 +509,6 @@ int crn_post(coro_func fn, void*arg) {
     return id;
 }
 
-void crn_pre_gclock_proc() {
-    // linfo("hohoo %d\n", gcurmcid__);
-    if (gcurmcobj == nilptr) return;
-
-    int rv = atomic_casbool(&gcurmcobj->wantgclock, false, true);
-    // assert(rv == true);
-}
-void crn_post_gclock_proc() {
-    // linfo("hohoo %d\n", gcurmcid__);
-    if (gcurmcobj == nilptr) return;
-
-    int rv = atomic_casbool(&gcurmcobj->wantgclock, true, false);
-    // assert(rv == true);
-}
-
 static
 void crn_procer_setname(int id) {
     char buf[32] = {0};
@@ -686,6 +671,7 @@ void crn_sched_run_one(machine* mc, fiber* rungr) {
         // linfo("finished gr %d\n", rungr->id);
         crn_machine_grfree(mc, rungr->id);
     }else{
+        // is break from fiber when not waiting or finished an error? not
         linfo("break from gr %d, state=%d pkreason=%d(%s)\n",
               rungr->id, curst, rungr->pkreason, yield_type_name(rungr->pkreason));
     }
@@ -920,8 +906,9 @@ static bool crn_machine_all_parking(int nochkid) {
         if (atomic_getbool(&mc->parking) == true) {
             continue;
         }
-        if (atomic_getbool(&mc->wantgclock) == true) {
-            linfo2("wantgclock, as safepoint %d\n", i);
+        int lkcnt = atomic_getint(&mc->wantgclock);
+        if (lkcnt > 0) {
+            linfo2("wantgclock, as safepoint %d %d\n", i, lkcnt);
         }else{
             allpark = false;
             break;
@@ -930,7 +917,7 @@ static bool crn_machine_all_parking(int nochkid) {
     return allpark;
 }
 static void crn_gc_start_proc() {
-    linfo2("gc start %d\n", gettid());
+    // linfo2("gc start %d\n", gettid());
     corona* nr = crn_get();
     if (nr == nilptr || (nr != nilptr && nr->inited == false)) return;
     int rv = atomic_casbool(&nr->stopworld,false,true);
@@ -939,7 +926,7 @@ static void crn_gc_start_proc() {
     assert(rv == true);
     int nochkid = gcurmcid__;
     if (nochkid != 0) {
-        linfo2("wow machine thread gc %d\n", nochkid);
+        // linfo2("wow machine thread gc %d\n", nochkid);
     }
 
     // unlock here maybe cause another collect enter
@@ -995,7 +982,7 @@ static void crn_gc_start_proc() {
     // GC_alloc_lock();
 }
 static void crn_gc_stop_proc() {
-    linfo2("gc finished %d\n", gettid());
+    // linfo2("gc finished %d\n", gettid());
     corona* nr = crn_get();
     if (nr == nilptr || (nr != nilptr && nr->inited == false)) return;
     int nochkid = gcurmcid__;
@@ -1101,6 +1088,41 @@ void crn_gc_on_thread_event(GC_EventType evty, void* thid) {
     linfo2("%d=%s %p\n", evty, crn_gc_event_name(evty), thid);
     corona* nr = crn_get();
     if (nr == nilptr || (nr != nilptr && nr->inited == false)) return;
+}
+
+void crn_pre_gclock_proc() {
+    // linfo("hohoo %d\n", gcurmcid__);
+    if (gcurmcobj == nilptr) return;
+
+    for(int i = 0; ; i++) {
+        int v = atomic_getint(&gcurmcobj->wantgclock);
+        assert(v >= 0);
+        int rv = atomic_casint(&gcurmcobj->wantgclock, v, v+1);
+        if (rv == false && i > 9) {
+            assert(rv == true);
+        }
+        if (rv == true) break;
+    }
+
+    // int rv = atomic_casbool(&gcurmcobj->wantgclock, false, true);
+    // assert(rv == true);
+}
+void crn_post_gclock_proc() {
+    // linfo("hohoo %d\n", gcurmcid__);
+    if (gcurmcobj == nilptr) return;
+
+    for(int i = 0; ; i++) {
+        int v = atomic_getint(&gcurmcobj->wantgclock);
+        assert(v > 0);
+        int rv = atomic_casint(&gcurmcobj->wantgclock, v, v-1);
+        if (rv == false && i > 9) {
+            assert(rv == true);
+        }
+        if (rv == true) break;
+    }
+
+    // int rv = atomic_casbool(&gcurmcobj->wantgclock, true, false);
+    // assert(rv == true);
 }
 
 bool gcinited = false;

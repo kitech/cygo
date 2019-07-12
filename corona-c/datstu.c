@@ -145,6 +145,7 @@ void* crnmap_takeone(crnmap* table) {
 
     return val;
 }
+// dont call oother crnmap_ in chkfn, or deadlock
 void* crnmap_findone(crnmap* table, bool(*chkfn)(void* v)) {
     void* val = nilptr;
     Array* arr = nilptr;

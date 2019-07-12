@@ -40,7 +40,7 @@ func (this *g2nc) genpkgs() {
 		this.pkgo = pkg
 
 		this.genpkg(pname, pkg)
-
+		this.genGostmtTypes(pkg.Scope, pkg)
 		this.genFuncs(pkg)
 	}
 
@@ -89,7 +89,14 @@ func (this *g2nc) genfile(scope *ast.Scope, name string, f *ast.File) {
 	// 	this.genDecl(scope, d)
 	// }
 }
-
+func (c *g2nc) genGostmtTypes(scope *ast.Scope, pkg *ast.Package) {
+	c.out("// gostmt types", fmt.Sprintf("%d", len(c.psctx.gostmts))).outnl()
+	for idx, gostmt := range c.psctx.gostmts {
+		c.outf("// %d %v %v", idx, gostmt.Call.Fun, gostmt.Call.Args).outnl()
+		c.genFiberStargs(scope, gostmt.Call)
+		c.outnl()
+	}
+}
 func (this *g2nc) genFuncs(pkg *ast.Package) {
 	scope := pkg.Scope
 	// ordered funcDeclsv
@@ -107,6 +114,7 @@ func (this *g2nc) genDecl(scope *ast.Scope, d ast.Decl) {
 	case *ast.FuncDecl:
 		this.genPreFuncDecl(scope, td)
 		this.genFuncDecl(scope, td)
+		this.genPostFuncDecl(scope, td)
 	case *ast.GenDecl:
 		this.genGenDecl(scope, td)
 	default:
@@ -114,28 +122,34 @@ func (this *g2nc) genDecl(scope *ast.Scope, d ast.Decl) {
 	}
 }
 func (this *g2nc) genPreFuncDecl(scope *ast.Scope, d *ast.FuncDecl) {
-	// gofibers struct and functions wrapper
-	var gostmts []*ast.GoStmt
 	var sdstmts []*ast.SendStmt
 	// var rvstmts []* UnaryExpr
 	astutil.Apply(d, func(c *astutil.Cursor) bool {
 		switch t := c.Node().(type) {
-		case *ast.GoStmt:
-			gostmts = append(gostmts, t)
 		case *ast.SendStmt:
 			sdstmts = append(sdstmts, t)
 		}
 		return true
 	}, nil)
-	if len(gostmts) > 0 {
-		log.Println("found gostmts", d.Name.Name, len(gostmts))
-	}
-	for _, stmt := range gostmts {
-		this.genFiberStargs(scope, stmt.Call)
-		this.genFiberStwrap(scope, stmt.Call)
-	}
 	for _, stmt := range sdstmts {
 		this.genChanStargs(scope, stmt.Chan) // chan structure args
+	}
+}
+func (c *g2nc) genPostFuncDecl(scope *ast.Scope, d *ast.FuncDecl) {
+	// gen fiber wrapper funcs
+	for _, gostmt := range c.psctx.gostmts {
+		// how compare called func is current func
+		fe := gostmt.Call.Fun
+		mat := false
+		switch te := fe.(type) {
+		case *ast.Ident:
+			mat = te.Name == d.Name.Name
+		default:
+			log.Println("todo", fe, reflect.TypeOf(fe))
+		}
+		if mat {
+			c.genFiberStwrap(scope, gostmt.Call)
+		}
 	}
 }
 func (this *g2nc) genFuncDecl(scope *ast.Scope, fd *ast.FuncDecl) {
@@ -196,10 +210,11 @@ func (this *g2nc) genBlockStmt(scope *ast.Scope, stmt *ast.BlockStmt) {
 // clause index?
 func (this *g2nc) genStmt(scope *ast.Scope, stmt ast.Stmt, idx int) {
 	// log.Println(stmt, reflect.TypeOf(stmt))
-	this.out("//", this.exprpos(stmt).String()).outnl()
-	this.out("// temporary vars begin").outnl()
-	this.genStmtTmps(scope, stmt)
-	this.out("// temporary vars end").outnl()
+	if stmt != nil {
+		posinfo := this.exprpos(stmt).String()
+		this.out("// ", posinfo).outnl()
+		this.genStmtTmps(scope, stmt)
+	}
 	defer this.outnl()
 
 	addfh := true
@@ -244,8 +259,8 @@ func (this *g2nc) genStmt(scope *ast.Scope, stmt ast.Stmt, idx int) {
 	}
 }
 func (c *g2nc) genStmtTmps(scope *ast.Scope, stmt ast.Stmt) {
-	c.out("// hehehhehe").outnl()
 	if nodes, ok := c.psctx.tmpvars[stmt]; ok {
+		c.outf("// temporary vars %v", len(nodes)).outnl()
 		for _, n := range nodes {
 			switch en := n.(type) {
 			case ast.Stmt:
@@ -255,47 +270,6 @@ func (c *g2nc) genStmtTmps(scope *ast.Scope, stmt ast.Stmt) {
 			}
 		}
 	}
-	switch t := stmt.(type) {
-	case *ast.AssignStmt:
-		for _, re := range t.Rhs {
-			c.genExprTmps(scope, re)
-		}
-	case *ast.ExprStmt:
-		c.genExprTmps(scope, t.X)
-	case *ast.GoStmt:
-
-	case *ast.ForStmt:
-
-	case *ast.RangeStmt:
-
-	case *ast.IncDecStmt:
-
-	case *ast.BranchStmt:
-
-	case *ast.DeclStmt:
-
-	case *ast.IfStmt:
-
-	case *ast.BlockStmt:
-
-	case *ast.SwitchStmt:
-
-	case *ast.CaseClause:
-		// addfh = false
-
-	case *ast.SendStmt:
-
-	case *ast.ReturnStmt:
-
-	default:
-		if stmt == nil { // empty block {}
-		} else {
-			log.Println("unknown", reflect.TypeOf(stmt), t)
-		}
-	}
-}
-func (c *g2nc) genExprTmps(scope *ast.Scope, expr ast.Expr) {
-	c.out("// hehehhehe").outsp().out(tmpvarname()).outnl()
 }
 
 func (c *g2nc) genAssignStmt(scope *ast.Scope, s *ast.AssignStmt) {
@@ -814,7 +788,7 @@ func (c *g2nc) genCallExprPrintln(scope *ast.Scope, te *ast.CallExpr) {
 	// c.genExpr(scope, te.Fun)
 	c.out("println2")
 	c.out("(")
-	c.out("__FILE__, __LINE__, __func__", gopp.IfElseStr(len(te.Args) > 0, ",", ""))
+	c.out("__FILE__, __LINE__, __func__", gopp.IfElseStr(len(te.Args) > 0, ",", "")).outnl()
 	if len(te.Args) > 0 {
 		var tyfmts []string
 		for _, e1 := range te.Args {
@@ -1038,7 +1012,7 @@ func (this *g2nc) genFieldList(scope *ast.Scope, flds *ast.FieldList,
 
 	for idx, fld := range flds.List {
 		_, _ = idx, fld
-		log.Println(this.exprTypeName(scope, fld.Type))
+		// log.Println(this.exprTypeName(scope, fld.Type))
 		this.genTypeExpr(scope, fld.Type)
 		this.outsp()
 		if withname && len(fld.Names) > 0 {
@@ -1134,7 +1108,6 @@ func (this *g2nc) genExpr2(scope *ast.Scope, e ast.Expr) {
 				}
 			}
 		case *ast.ArrayType:
-
 			var vo = scope.Lookup("varname")
 			if vo == nil {
 				gotyval := this.info.Types[te]
@@ -1147,6 +1120,13 @@ func (this *g2nc) genExpr2(scope *ast.Scope, e ast.Expr) {
 				this.outfh().outnl()
 			}
 			if be == nil {
+			}
+		case *ast.Ident: // TODO
+			var vo = scope.Lookup("varname")
+			this.outf("%v_new_zero()", this.exprTypeName(scope, be)).outfh().outnl()
+			for _, ex := range te.Elts {
+				this.outf("%v->%v = %v", vo, "aaa", ex)
+				this.outfh().outnl()
 			}
 		default:
 			log.Println("todo", te.Type, reflect.TypeOf(te.Type))
@@ -1444,7 +1424,7 @@ func (this *g2nc) exprTypeNameImpl(scope *ast.Scope, e ast.Expr) string {
 
 	goty := this.info.TypeOf(e)
 	if goty == nil {
-		log.Panicln(e, this.exprpos(e))
+		log.Panicln(e, this.exprpos(e), reflect.TypeOf(e))
 	}
 	val := this.exprTypeNameImpl2(scope, goty, e)
 	if isinvalidty(val) {
@@ -1465,7 +1445,7 @@ func (this *g2nc) exprTypeNameImpl2(scope *ast.Scope, ety types.Type, e ast.Expr
 
 	goty := ety
 	tyval, isudty := this.strtypes[goty.String()]
-	log.Println(goty, reflect.TypeOf(goty))
+	// log.Println(goty, reflect.TypeOf(goty))
 
 	switch te := goty.(type) {
 	case *types.Basic:
@@ -1483,8 +1463,9 @@ func (this *g2nc) exprTypeNameImpl2(scope *ast.Scope, ety types.Type, e ast.Expr
 		// return sign2rety(te.String())
 	case *types.Pointer:
 		tystr := this.exprTypeNameImpl2(scope, te.Elem(), e)
-		log.Println(tystr)
-		return tystr + "*"
+		tystr += "*"
+		// log.Println(tystr)
+		return tystr
 	case *types.Slice, *types.Array:
 		return "Array*"
 	case *types.Chan:
@@ -1500,6 +1481,10 @@ func (this *g2nc) exprTypeNameImpl2(scope *ast.Scope, ety types.Type, e ast.Expr
 }
 func (this *g2nc) exprTypeFmt(scope *ast.Scope, e ast.Expr) string {
 	goty := this.info.TypeOf(e)
+	if goty == nil {
+		// maybe not exist func? like c function?
+		return "d-nilty"
+	}
 	tyval, isudty := this.strtypes[goty.String()]
 
 	switch te := goty.(type) {

@@ -186,8 +186,5 @@ func (bc *basecomp) funcistype(idt ast.Expr) bool {
 func (bc *basecomp) exprstr(e ast.Expr) string { return types.ExprString(e) }
 
 func (c *basecomp) exprpos(e ast.Node) token.Position {
-	if e == nil {
-		return token.Position{}
-	}
-	return c.psctx.fset.Position(e.Pos())
+	return exprpos(c.psctx, e)
 }
