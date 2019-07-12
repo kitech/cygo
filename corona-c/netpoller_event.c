@@ -126,6 +126,9 @@ void netpoller_evwatcher_cb(evutil_socket_t fd, short events, void* arg) {
     crn_procer_resume_one(dd, ytype, grid, mcid);
 }
 
+extern void crn_pre_gclock_proc();
+extern void crn_post_gclock_proc();
+
 static
 void netpoller_readfd(int fd, int ytype, fiber* gr) {
     netpoller* np = gnpl__;
@@ -137,7 +140,9 @@ void netpoller_readfd(int fd, int ytype, fiber* gr) {
 
     struct event* evt = event_new(np->loop, fd, EV_READ|EV_CLOSED, netpoller_evwatcher_cb, d);
     d->evt = evt;
+    crn_pre_gclock_proc();
     int rv = event_add(evt, 0);
+    crn_post_gclock_proc();
     if (rv != 0) {
         // [warn] Epoll ADD(8193) on fd 18 failed. Old events were 0; read change was 1 (add); write change was 0 (none); close change was 1 (add): Bad file descriptor
         lwarn("add error %d %d %d\n", rv, fd, gr->id);
@@ -165,7 +170,9 @@ void netpoller_writefd(int fd, int ytype, fiber* gr) {
 
     struct event* evt = event_new(np->loop, fd, EV_WRITE|EV_CLOSED, netpoller_evwatcher_cb, d);
     d->evt = evt;
+    crn_pre_gclock_proc();
     int rv = event_add(evt, 0);
+    crn_post_gclock_proc();
     if (rv != 0) {
         lwarn("add error %d %d %d\n", rv, fd, gr->id);
         event_free(evt);
@@ -192,7 +199,9 @@ void netpoller_timer(long ns, int ytype, fiber* gr) {
     struct event* tmer = evtimer_new(np->loop, netpoller_evwatcher_cb, d);
     // struct event* tmer = event_new(np->loop, -1, 0, netpoller_evwatcher_cb, d);
     d->evt = tmer;
+    crn_pre_gclock_proc();
     int rv = evtimer_add(tmer, &d->tv);
+    crn_post_gclock_proc();
     if (rv != 0) {
         lwarn("add error %d %ld %d\n", rv, ns, gr->id);
         event_free(tmer);

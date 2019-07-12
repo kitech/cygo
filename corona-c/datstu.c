@@ -23,12 +23,39 @@ struct crnqueue {
     pmutex_t mu;
 };
 
-// from cxrt
-extern HashTable* cxhashtable_new_uintptr();
+static
+int __attribute__((no_instrument_function))
+crnhashtable_cmp_uintptr(const void *key1, const void *key2) {
+    if (key1 == key2) return 0;
+    else if((uintptr_t)(key1) > (uintptr_t)(key2)) return 1;
+    else return -1;
+}
+
+static
+HashTable* crnhashtable_new_conf(HashTableConf* htconf) {
+    htconf->key_length = sizeof(void*);
+    htconf->mem_alloc = crn_gc_malloc;
+    htconf->mem_calloc = crn_gc_calloc;
+    htconf->mem_free = crn_gc_free;
+
+    HashTable* out = 0;
+    int rv = hashtable_new_conf(htconf, &out);
+    assert(rv == CC_OK);
+    return out;
+}
+
+HashTable* crnhashtable_new_uintptr() {
+    HashTableConf htconf = {0};
+    hashtable_conf_init(&htconf);
+    htconf.hash = hashtable_hash_ptr;
+    htconf.key_compare = crnhashtable_cmp_uintptr;
+
+    return crnhashtable_new_conf(&htconf);
+}
 
 crnmap* crnmap_new_uintptr() {
     crnmap* mp = (crnmap*)crn_gc_malloc(sizeof(crnmap));
-    mp->ht = cxhashtable_new_uintptr();
+    mp->ht = crnhashtable_new_uintptr();
     return mp;
 }
 

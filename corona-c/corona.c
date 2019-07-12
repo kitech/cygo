@@ -106,8 +106,8 @@ fiber* crn_fiber_new(int id, coro_func fn, void* arg) {
     gr->fnproc = fn;
     gr->arg = arg;
     gr->hcelem = invlidptr;
-    extern HashTable* cxhashtable_new_uintptr();
-    gr->specifics = cxhashtable_new_uintptr();
+    extern HashTable* crnhashtable_new_uintptr();
+    gr->specifics = crnhashtable_new_uintptr();
     return gr;
 }
 static void crn_fiber_setstate(fiber* gr, grstate state) {
@@ -507,6 +507,21 @@ int crn_post(coro_func fn, void*arg) {
     }
     pcond_signal(&mc->pkcd);
     return id;
+}
+
+void crn_pre_gclock_proc() {
+    // linfo("hohoo %d\n", gcurmcid__);
+    if (gcurmcobj == nilptr) return;
+
+    int rv = atomic_casbool(&gcurmcobj->wantgclock, false, true);
+    // assert(rv == true);
+}
+void crn_post_gclock_proc() {
+    // linfo("hohoo %d\n", gcurmcid__);
+    if (gcurmcobj == nilptr) return;
+
+    int rv = atomic_casbool(&gcurmcobj->wantgclock, true, false);
+    // assert(rv == true);
 }
 
 static
@@ -1086,21 +1101,6 @@ void crn_gc_on_thread_event(GC_EventType evty, void* thid) {
     linfo2("%d=%s %p\n", evty, crn_gc_event_name(evty), thid);
     corona* nr = crn_get();
     if (nr == nilptr || (nr != nilptr && nr->inited == false)) return;
-}
-
-void crn_pre_gclock_proc() {
-    // linfo("hohoo %d\n", gcurmcid__);
-    if (gcurmcobj == nilptr) return;
-
-    int rv = atomic_casbool(&gcurmcobj->wantgclock, false, true);
-    assert(rv == true);
-}
-void crn_post_gclock_proc() {
-    // linfo("hohoo %d\n", gcurmcid__);
-    if (gcurmcobj == nilptr) return;
-
-    int rv = atomic_casbool(&gcurmcobj->wantgclock, true, false);
-    assert(rv == true);
 }
 
 bool gcinited = false;

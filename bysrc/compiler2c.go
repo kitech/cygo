@@ -245,7 +245,16 @@ func (this *g2nc) genStmt(scope *ast.Scope, stmt ast.Stmt, idx int) {
 }
 func (c *g2nc) genStmtTmps(scope *ast.Scope, stmt ast.Stmt) {
 	c.out("// hehehhehe").outnl()
-
+	if nodes, ok := c.psctx.tmpvars[stmt]; ok {
+		for _, n := range nodes {
+			switch en := n.(type) {
+			case ast.Stmt:
+				c.genStmt(scope, en, 0)
+			case *ast.ValueSpec:
+				c.genValueSpec(scope, en, 0)
+			}
+		}
+	}
 	switch t := stmt.(type) {
 	case *ast.AssignStmt:
 		for _, re := range t.Rhs {
@@ -1131,12 +1140,6 @@ func (this *g2nc) genExpr2(scope *ast.Scope, e ast.Expr) {
 				gotyval := this.info.Types[te]
 				log.Println("temp var?", vo, this.exprpos(te), gotyval)
 			}
-			if vo == nil {
-				tmpname := tmpvarname()
-				this.out("Array*").outsp().out(tmpname).outeq().out("{0}").outfh().outnl()
-				vo = ast.NewObj(ast.Var, tmpname)
-				vo.Data = newIdent(tmpname)
-			}
 			this.outf("cxarray_new()").outfh().outnl()
 			for idx, ex := range te.Elts {
 				log.Println(vo == nil, ex, idx, this.exprpos(ex))
@@ -1324,16 +1327,15 @@ func (c *g2nc) genCxmapAddkv(scope *ast.Scope, vnamex interface{}, ke ast.Expr, 
 	case *ast.BasicLit:
 		switch be.Kind {
 		case token.STRING:
-			// keystr = fmt.Sprintf("cxhashtable_hash_str(%s)", be.Value)
 			keystr = fmt.Sprintf("cxstring_new_cstr(%s)", be.Value)
 		default:
-			log.Println("unknown index key kind", be.Kind)
+			// log.Println("unknown index key kind", be.Kind)
+			keystr = fmt.Sprintf("%v", be.Value)
 		}
 	case *ast.Ident:
 		varty := c.info.TypeOf(ke)
 		switch varty.String() {
 		case "string":
-			// keystr = fmt.Sprintf("cxhashtable_hash_str2(%s->ptr, %s->len)", be.Name, be.Name)
 			keystr = be.Name
 		default:
 			log.Println("unknown", varty, ke)
@@ -1343,7 +1345,6 @@ func (c *g2nc) genCxmapAddkv(scope *ast.Scope, vnamex interface{}, ke ast.Expr, 
 		switch varty.String() {
 		case "string":
 			sym := fmt.Sprintf("%v->%v", be.X, be.Sel)
-			// keystr = fmt.Sprintf("cxhashtable_hash_str2((%s)->ptr, (%s)->len)", sym, sym)
 			keystr = sym
 		default:
 			log.Println("unknown", varty, ke)

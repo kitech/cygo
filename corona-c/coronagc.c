@@ -43,9 +43,16 @@ void* crn_gc_realloc(void* ptr, size_t size) {
     crn_post_gclock();
     return newptr;
 }
+static void* crn_gc_free_block(void* ptr) {
+    // crn_pre_gclock();
+    GC_FREE(ptr);
+    // crn_post_gclock();
+    return 0;
+}
 void crn_gc_free(void* ptr) {
     crn_pre_gclock();
-    GC_FREE(ptr);
+    // GC_FREE(ptr);
+    GC_do_blocking(crn_gc_free_block, ptr);
     crn_post_gclock();
 }
 void crn_gc_free2(void* ptr) {
@@ -62,7 +69,9 @@ void* crn_gc_calloc(size_t n, size_t size) {
 
 void crn_call_with_alloc_lock(void*(*fnptr)(void* arg1), void* arg) {
     crn_pre_gclock();
-    GC_call_with_alloc_lock(fnptr, arg);
+    // GC_call_with_alloc_lock(fnptr, arg);
+    // GC_do_blocking(fnptr, arg);
+    GC_call_with_gc_active(fnptr, arg);
     crn_post_gclock();
 }
 

@@ -36,6 +36,7 @@ type ParserContext struct {
 	funcDeclsm    map[string]*ast.FuncDecl
 	funcDeclsv    []*ast.FuncDecl
 	funcdeclNodes map[string]graph.Node
+	tmpvars       map[ast.Stmt][]ast.Node
 
 	gb     *graph.Graph
 	bdpkgs *build.Package
@@ -75,7 +76,7 @@ func (this *ParserContext) Init() error {
 	this.pkgs = pkgs
 
 	this.ccode = this.pickCCode()
-	this.walkpass0()
+	this.walkpass_valid_files()
 	files := this.files
 
 	this.conf.DisableUnusedImportCheck = true
@@ -89,30 +90,12 @@ func (this *ParserContext) Init() error {
 
 	this.typkgs, err = this.conf.Check(this.path, this.fset, files, &this.info)
 
-	this.walkpass1()
+	this.walkpass_flat_cursors()
+	this.walkpass_func_deps()
 	log.Println("pkgs", this.typkgs.Name(), "types:", len(this.info.Types),
 		"typedefs", len(this.typeDeclsm), "funcdefs", len(this.funcDeclsm))
 
-	nodes := this.gb.TopologicalSort()
-	for _, node := range nodes {
-		this.funcDeclsv = append(this.funcDeclsv, this.funcDeclsm[(*node.Value).(string)])
-	}
-	// unused decls
-	for _, d := range this.funcDeclsm {
-		if _, ok := builtinfns[d.Name.Name]; ok {
-			continue
-		}
-		invec := false
-		for _, d1 := range this.funcDeclsv {
-			if d1 == d {
-				invec = true
-				break
-			}
-		}
-		if !invec {
-			this.funcDeclsv = append(this.funcDeclsv, d)
-		}
-	}
+	this.walkpass_tmpvars()
 
 	return err
 }
@@ -201,7 +184,7 @@ func (this *ParserContext) findFileobj(fbname string) *ast.File {
 	return nil
 }
 
-func (pc *ParserContext) walkpass0() {
+func (pc *ParserContext) walkpass_valid_files() {
 	this := pc
 	pkgs := pc.pkgs
 
@@ -217,16 +200,17 @@ func (pc *ParserContext) walkpass0() {
 	this.files = files
 }
 
-func (pc *ParserContext) walkpass1() {
+func (pc *ParserContext) walkpass_func_deps() {
+	pc.walkpass_func_deps1()
+	pc.walkpass_func_deps2()
+}
+func (pc *ParserContext) walkpass_func_deps1() {
 	this := pc
 	pkgs := pc.pkgs
 
 	for _, pkg := range pkgs {
-
 		var curfds []string // stack, current func decls
 		astutil.Apply(pkg, func(c *astutil.Cursor) bool {
-			tc := *c
-			this.cursors[c.Node()] = &tc
 			switch te := c.Node().(type) {
 			case *ast.TypeSpec:
 				// log.Println("typedef", t.Name.Name)
@@ -309,6 +293,131 @@ func (pc *ParserContext) walkpass1() {
 			return true
 		})
 	}
+}
+func (pc *ParserContext) walkpass_func_deps2() {
+	nodes := pc.gb.TopologicalSort()
+	for _, node := range nodes {
+		pc.funcDeclsv = append(pc.funcDeclsv, pc.funcDeclsm[(*node.Value).(string)])
+	}
+	// unused decls
+	for _, d := range pc.funcDeclsm {
+		if _, ok := builtinfns[d.Name.Name]; ok {
+			continue
+		}
+		invec := false
+		for _, d1 := range pc.funcDeclsv {
+			if d1 == d {
+				invec = true
+				break
+			}
+		}
+		if !invec {
+			pc.funcDeclsv = append(pc.funcDeclsv, d)
+		}
+	}
+}
+
+func (pc *ParserContext) walkpass_flat_cursors() {
+	pkgs := pc.pkgs
+	for _, pkg := range pkgs {
+		astutil.Apply(pkg, func(c *astutil.Cursor) bool {
+			tc := *c
+			pc.cursors[c.Node()] = &tc
+			switch te := c.Node().(type) {
+			default:
+				gopp.G_USED(te)
+			}
+			return true
+		}, func(c *astutil.Cursor) bool {
+			switch te := c.Node().(type) {
+			default:
+				gopp.G_USED(te)
+			}
+			return true
+		})
+	}
+}
+
+func (pc *ParserContext) walkpass_tmpl_proc() {
+	pkgs := pc.pkgs
+	for _, pkg := range pkgs {
+		astutil.Apply(pkg, func(c *astutil.Cursor) bool {
+			tc := *c
+			pc.cursors[c.Node()] = &tc
+			switch te := c.Node().(type) {
+			default:
+				gopp.G_USED(te)
+			}
+			return true
+		}, func(c *astutil.Cursor) bool {
+			switch te := c.Node().(type) {
+			default:
+				gopp.G_USED(te)
+			}
+			return true
+		})
+	}
+}
+
+func (pc *ParserContext) dumpup(cs *astutil.Cursor, no int) {
+	if cs == nil {
+		return
+	}
+	log.Println(no, cs.Name(), reflect.TypeOf(cs.Node()))
+	pn := cs.Parent()
+	pcs := pc.cursors[pn]
+	pc.dumpup(pcs, no+1)
+}
+
+func upfindstmt(pc *ParserContext, cs *astutil.Cursor, no int) ast.Stmt {
+	if cs == nil {
+		return nil
+	}
+	pn := cs.Parent()
+	pcs := pc.cursors[pn]
+	if stmt, ok := pn.(ast.Stmt); ok {
+		return stmt
+	} else {
+		return upfindstmt(pc, pcs, no+1)
+	}
+}
+
+// 一句表达不了的表达式临时变量
+func (pc *ParserContext) walkpass_tmpvars() {
+	pkgs := pc.pkgs
+	var tmpvars = map[ast.Stmt][]ast.Node{} // => tmpvarname
+	gopp.G_USED(tmpvars)
+
+	for _, pkg := range pkgs {
+		astutil.Apply(pkg, func(c *astutil.Cursor) bool {
+			switch te := c.Node().(type) {
+			default:
+				estr := ""
+				if c.Node() != nil {
+					estr = pc.exprpos(c.Node()).String()
+				}
+				log.Println(c.Name(), reflect.TypeOf(c.Node()), estr)
+				gopp.G_USED(te)
+			}
+			return true
+		}, func(c *astutil.Cursor) bool {
+			switch te := c.Node().(type) {
+			case *ast.CompositeLit:
+				vsp2 := &ast.AssignStmt{}
+				vsp2.Lhs = []ast.Expr{newIdent(tmpvarname())}
+				vsp2.Rhs = []ast.Expr{c.Node().(ast.Expr)}
+				vsp2.Tok = token.DEFINE
+				c.Replace(vsp2.Lhs[0])
+				stmt := upfindstmt(pc, c, 0)
+				tmpvars[stmt] = append(tmpvars[stmt], vsp2)
+			default:
+				gopp.G_USED(te)
+			}
+			return true
+		})
+	}
+	log.Println(len(tmpvars))
+	pc.tmpvars = tmpvars
 }
 
 func (pc *ParserContext) putTyperefDependcy(funame, tyname string) {
