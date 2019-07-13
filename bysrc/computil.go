@@ -158,12 +158,13 @@ func funcistypedep(idt ast.Expr) bool {
 type basecomp struct {
 	psctx    *ParserContext
 	strtypes map[string]types.TypeAndValue
-	tmpvars  map[ast.Expr]*ast.Ident
+	closidx  map[*ast.FuncLit]*closinfo
 }
 
 func newbasecomp(psctx *ParserContext) *basecomp {
-	bc := &basecomp{strtypes: map[string]types.TypeAndValue{},
-		tmpvars: map[ast.Expr]*ast.Ident{}}
+	bc := &basecomp{
+		strtypes: map[string]types.TypeAndValue{},
+		closidx:  map[*ast.FuncLit]*closinfo{}}
 	bc.psctx = psctx
 	bc.initbc()
 	return bc
@@ -187,4 +188,27 @@ func (bc *basecomp) exprstr(e ast.Expr) string { return types.ExprString(e) }
 
 func (c *basecomp) exprpos(e ast.Node) token.Position {
 	return exprpos(c.psctx, e)
+}
+
+type closinfo struct {
+	idx       int
+	fd        *ast.FuncDecl
+	fntype    string
+	fnname    string
+	argtyname string
+}
+
+func (bc *basecomp) newclosinfo(fd *ast.FuncDecl, idx int) *closinfo {
+	clos := &closinfo{}
+	clos.idx = idx
+	clos.fd = fd
+	clos.fntype = fmt.Sprintf("%s_closure_type_%d", fd.Name.Name, idx)
+	clos.fnname = fmt.Sprintf("%s_closure_%d", fd.Name.Name, idx)
+	clos.argtyname = fmt.Sprintf("%s_closure_arg_%d", fd.Name.Name, idx)
+	return clos
+}
+
+func (bc *basecomp) getclosinfo(fnlit *ast.FuncLit) *closinfo {
+	closi := bc.closidx[fnlit]
+	return closi
 }

@@ -135,7 +135,48 @@ func (this *g2nc) genDecl(scope *ast.Scope, d ast.Decl) {
 		log.Println("unimplemented", reflect.TypeOf(d))
 	}
 }
-func (this *g2nc) genPreFuncDecl(scope *ast.Scope, d *ast.FuncDecl) {
+func (c *g2nc) genPreFuncDecl(scope *ast.Scope, d *ast.FuncDecl) {
+	cnter := 0
+	for _, clos := range c.psctx.closures {
+		fd2 := upfindFuncDeclAst(c.psctx, clos, 0)
+		if fd2 != d {
+			continue
+		}
+
+		cnter++
+		closi := c.newclosinfo(d, cnter)
+		c.closidx[clos] = closi
+
+		c.outf("// %v", clos).outnl()
+		c.out("typedef").outsp()
+		c.out("struct").outsp()
+		c.outf("%s_closure_arg_%d", d.Name.Name, cnter).outsp()
+		c.outf("%s_closure_arg_%d", d.Name.Name, cnter).outfh().outnl()
+		c.out("struct").outsp()
+		c.outf("%s_closure_arg_%d", d.Name.Name, cnter).outsp()
+		c.out("{").outnl()
+		c.out("}").outfh().outnl()
+
+		c.out("typedef").outsp()
+		c.genFieldList(scope, clos.Type.Results, true, false, "", true)
+		c.outf("(*%s_closure_type_%d)(", d.Name.Name, cnter)
+		c.genFieldList(scope, clos.Type.Params, false, false, ",", false)
+		c.outf("%s_closure_arg_%d*", d.Name.Name, cnter).outsp()
+		c.out(")")
+		c.outfh().outnl()
+
+		c.out("static").outsp()
+		c.genFieldList(scope, clos.Type.Results, true, false, "", true)
+		c.outsp()
+		c.outf("%s_closure_%d(", d.Name.Name, cnter)
+		c.genFieldList(scope, clos.Type.Params, false, true, ",", false)
+		// c.genFieldList(scope *ast.Scope, flds *ast.FieldList, keepvoid bool, withname bool, linebrk string, skiplast bool)
+		c.outf("%s_closure_arg_%d*", d.Name.Name, cnter).outsp()
+		c.out("clos")
+		c.out(")")
+		c.genBlockStmt(scope, clos.Body)
+		c.outnl()
+	}
 }
 func (c *g2nc) genPostFuncDecl(scope *ast.Scope, d *ast.FuncDecl) {
 	// gen fiber wrapper funcs
@@ -1309,6 +1350,9 @@ func (this *g2nc) genExpr2(scope *ast.Scope, e ast.Expr) {
 		this.out("(")
 		this.genExpr(scope, te.X)
 		this.out(")")
+	case *ast.FuncLit:
+		closi := this.getclosinfo(te)
+		this.out(closi.fnname).outfh().outnl()
 	default:
 		log.Println("unknown", reflect.TypeOf(e), e, te)
 	}
@@ -1484,12 +1528,19 @@ func (this *g2nc) exprTypeNameImpl2(scope *ast.Scope, ety types.Type, e ast.Expr
 		return "voidptr"
 	case *types.Map:
 		return "HashTable*"
+	case *types.Signature:
+		if closi, ok := this.closidx[e.(*ast.FuncLit)]; ok {
+			return closi.fntype
+		} else {
+			log.Println("todo", goty, reflect.TypeOf(goty), isudty, tyval, te)
+		}
+		return te.String()
 	default:
 		log.Println("todo", goty, reflect.TypeOf(goty), isudty, tyval, te)
 		return te.String()
 	}
 
-	panic("Not reachable")
+	panic("unreachable")
 }
 func (this *g2nc) exprTypeFmt(scope *ast.Scope, e ast.Expr) string {
 	goty := this.info.TypeOf(e)
@@ -1519,7 +1570,7 @@ func (this *g2nc) exprTypeFmt(scope *ast.Scope, e ast.Expr) string {
 		return "d-wt"
 	}
 
-	panic("Not reachable")
+	panic("unreachable")
 }
 
 func (this *g2nc) genGenDecl(scope *ast.Scope, d *ast.GenDecl) {
