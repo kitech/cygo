@@ -13,10 +13,10 @@ import os
 # absolute path in cflags and ldflags
 const abssrcdir = currentSourcePath().splitFile()[0]
 const abscflags = "-I " & abssrcdir & "/../corona-c " &
-    " -I " & abssrcdir & "/../corona-c/include" &
-    " -I " & abssrcdir & "/../corona-c/cltc/include"
+    " -I " & abssrcdir & "/../bdwgc/include" &
+    " -I " & abssrcdir & "/../cltc/include"
 const absldflags = "-L " & abssrcdir & "/../bdwgc/.libs" &
-    " -L " & abssrcdir & "/../corona-c/cltc/lib"
+    " -L " & abssrcdir & "/../cltc/lib"
 {.passc: abscflags .}
 {.passl: absldflags .}
 {.passc:"-DGC_THREADS".}
@@ -25,6 +25,7 @@ const absldflags = "-L " & abssrcdir & "/../bdwgc/.libs" &
 {.compile:"../corona-c/corona.c".}
 {.compile:"../corona-c/coronagc.c".}
 {.compile:"../corona-c/corona_util.c".}
+{.compile:"../corona-c/datstu.c".}
 
 {.compile:"../corona-c/rxilog.c".}
 {.compile:"../corona-c/futex.c".}

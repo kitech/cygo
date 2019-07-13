@@ -24,6 +24,7 @@ void crn_call_with_alloc_lock(void*(*fnptr)(void* arg1), void* arg);
 /* void* crn_raw_malloc(size_t size); */
 /* void* crn_raw_realloc(void* ptr, size_t size); */
 /* void crn_raw_free(void* ptr); */
+/* void* crn_raw_calloc(size_t n, size_t size); */
 
 #define crn_malloc_st(/*typedesc*/st) (st*)crn_gc_malloc(sizeof(st))
 #define convto(/*typedesc*/ st, /*var*/ var) (st*)(var)

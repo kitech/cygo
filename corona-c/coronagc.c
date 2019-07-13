@@ -1,6 +1,7 @@
 #include <assert.h>
 #include <stdlib.h>
 #include <stdio.h>
+#include <stdbool.h>
 
 #include "coronagc.h"
 
@@ -12,6 +13,9 @@
 /* } */
 /* void crn_raw_free(void* ptr) { */
 /*     return free(ptr); */
+/* } */
+/* void* crn_raw_calloc(size_t n, size_t size) { */
+/*     return calloc(n, size); */
 /* } */
 
 #ifdef USE_BDWGC

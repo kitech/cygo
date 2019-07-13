@@ -38,6 +38,7 @@ type ParserContext struct {
 	funcdeclNodes map[string]graph.Node
 	tmpvars       map[ast.Stmt][]ast.Node
 	gostmts       []*ast.GoStmt
+	chanops       []ast.Expr // *ast.SendStmt
 
 	gb     *graph.Graph
 	bdpkgs *build.Package
@@ -95,6 +96,7 @@ func (this *ParserContext) Init() error {
 
 	this.walkpass_tmpvars()
 	this.walkpass_gostmt()
+	this.walkpass_chan_send_recv()
 
 	return err
 }
@@ -501,7 +503,6 @@ func (pc *ParserContext) walkpass_gostmt() {
 		}, func(c *astutil.Cursor) bool {
 			switch te := c.Node().(type) {
 			case *ast.GoStmt:
-				log.Println(te.Call.Fun, te.Call.Args)
 				gostmts = append(gostmts, te)
 			default:
 				gopp.G_USED(te)
@@ -511,6 +512,36 @@ func (pc *ParserContext) walkpass_gostmt() {
 	}
 	log.Println("gostmts", len(gostmts))
 	pc.gostmts = gostmts
+}
+
+func (pc *ParserContext) walkpass_chan_send_recv() {
+	var chanops = []ast.Expr{}
+	_ = chanops
+
+	pkgs := pc.pkgs
+	for _, pkg := range pkgs {
+		astutil.Apply(pkg, func(c *astutil.Cursor) bool {
+			switch te := c.Node().(type) {
+			default:
+				gopp.G_USED(te)
+			}
+			return true
+		}, func(c *astutil.Cursor) bool {
+			switch te := c.Node().(type) {
+			case *ast.SendStmt:
+				chanops = append(chanops, te.Chan)
+			case *ast.UnaryExpr:
+				if te.Op == token.ARROW {
+					chanops = append(chanops, te.X)
+				}
+			default:
+				gopp.G_USED(te)
+			}
+			return true
+		})
+	}
+	log.Println("chanops", len(chanops))
+	pc.chanops = chanops
 }
 
 // todo

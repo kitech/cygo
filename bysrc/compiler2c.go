@@ -10,8 +10,6 @@ import (
 	"reflect"
 	"runtime/debug"
 	"strings"
-
-	"golang.org/x/tools/go/ast/astutil"
 )
 
 func init() {
@@ -41,6 +39,7 @@ func (this *g2nc) genpkgs() {
 
 		this.genpkg(pname, pkg)
 		this.genGostmtTypes(pkg.Scope, pkg)
+		this.genChanTypes(pkg.Scope, pkg)
 		this.genFuncs(pkg)
 	}
 
@@ -97,6 +96,21 @@ func (c *g2nc) genGostmtTypes(scope *ast.Scope, pkg *ast.Package) {
 		c.outnl()
 	}
 }
+func (c *g2nc) genChanTypes(scope *ast.Scope, pkg *ast.Package) {
+	c.out("// chan types", fmt.Sprintf("%d", len(c.psctx.chanops))).outnl()
+	gottys := map[string]bool{}
+	// te: ast.SendStmt.Chan/ast.UnaryExpr.X
+	for _, te := range c.psctx.chanops {
+		goty := c.info.TypeOf(te)
+		gopp.Assert(ischanty2(goty), "")
+		if _, ok := gottys[goty.String()]; ok {
+			continue
+		}
+		c.genChanStargs(scope, te) // chan structure args
+		gottys[goty.String()] = true
+		c.outnl()
+	}
+}
 func (this *g2nc) genFuncs(pkg *ast.Package) {
 	scope := pkg.Scope
 	// ordered funcDeclsv
@@ -122,18 +136,6 @@ func (this *g2nc) genDecl(scope *ast.Scope, d ast.Decl) {
 	}
 }
 func (this *g2nc) genPreFuncDecl(scope *ast.Scope, d *ast.FuncDecl) {
-	var sdstmts []*ast.SendStmt
-	// var rvstmts []* UnaryExpr
-	astutil.Apply(d, func(c *astutil.Cursor) bool {
-		switch t := c.Node().(type) {
-		case *ast.SendStmt:
-			sdstmts = append(sdstmts, t)
-		}
-		return true
-	}, nil)
-	for _, stmt := range sdstmts {
-		this.genChanStargs(scope, stmt.Chan) // chan structure args
-	}
 }
 func (c *g2nc) genPostFuncDecl(scope *ast.Scope, d *ast.FuncDecl) {
 	// gen fiber wrapper funcs
@@ -290,7 +292,7 @@ func (c *g2nc) genAssignStmt(scope *ast.Scope, s *ast.AssignStmt) {
 
 		if ischrv {
 			if s.Tok.String() == ":=" {
-				c.out(c.chanElemTypeName(chexpr)).outsp()
+				c.out(c.chanElemTypeName(chexpr, false)).outsp()
 				c.genExpr(scope, s.Lhs[i])
 				// c.outfh().outnl()
 			}
@@ -921,13 +923,15 @@ func (c *g2nc) genFuncArgs(scope *ast.Scope, args []ast.Expr) {
 
 // chan structure args
 func (c *g2nc) genChanStargs(scope *ast.Scope, e ast.Expr) {
-	var elemtyname = c.chanElemTypeName(e)
+	var elemtyname = c.chanElemTypeName(e, false)
+	var elemtyname2 = c.chanElemTypeName(e, true)
 	// typedef struct { int  elem; } chan_arg_int;
-	c.out("typedef struct {", elemtyname, " elem;} chan_arg_"+elemtyname).outfh().outnl()
+	c.out("typedef struct {", elemtyname, " elem;} chan_arg_"+elemtyname2).outfh().outnl()
 }
 func (c *g2nc) genSendStmt(scope *ast.Scope, s *ast.SendStmt) {
-	var elemtyname = c.chanElemTypeName(s.Chan)
-	var chanargname = "chan_arg_" + elemtyname
+	// var elemtyname = c.chanElemTypeName(s.Chan, false)
+	var elemtyname2 = c.chanElemTypeName(s.Chan, true)
+	var chanargname = "chan_arg_" + elemtyname2
 	c.out("{").outnl()
 	c.outf("%s* args = (%s*)cxmalloc(sizeof(%s))",
 		chanargname, chanargname, chanargname).outfh().outnl()
@@ -940,8 +944,9 @@ func (c *g2nc) genSendStmt(scope *ast.Scope, s *ast.SendStmt) {
 	c.out("}").outnl()
 }
 func (c *g2nc) genRecvStmt(scope *ast.Scope, e ast.Expr) {
-	var elemtyname = c.chanElemTypeName(e)
-	var chanargname = "chan_arg_" + elemtyname
+	var elemtyname = c.chanElemTypeName(e, false)
+	var elemtyname2 = c.chanElemTypeName(e, true)
+	var chanargname = "chan_arg_" + elemtyname2
 
 	varobj := scope.Lookup("varname")
 	if varobj != nil {
@@ -962,7 +967,7 @@ func (c *g2nc) genRecvStmt(scope *ast.Scope, e ast.Expr) {
 
 	c.out("}").outnl()
 }
-func (c *g2nc) chanElemTypeName(e ast.Expr) string {
+func (c *g2nc) chanElemTypeName(e ast.Expr, trimstar bool) string {
 	var elemtyname = ""
 	chtyx := c.info.TypeOf(e)
 	switch t := chtyx.(type) {
@@ -975,8 +980,14 @@ func (c *g2nc) chanElemTypeName(e ast.Expr) string {
 			default:
 				log.Println("unknown", te, te.Kind())
 			}
+		case *types.Pointer:
+			tystr := c.exprTypeNameImpl2(nil, te, e)
+			if trimstar {
+				tystr = strings.Replace(tystr, "*", "p", -1)
+			}
+			return tystr
 		default:
-			log.Println("unknown", t)
+			log.Println("unknown", t, reflect.TypeOf(t.Elem()))
 		}
 	default:
 		log.Println("unknown", chtyx)
@@ -1548,6 +1559,9 @@ func (this *g2nc) genTypeSpec(scope *ast.Scope, spec *ast.TypeSpec) {
 					this.outf("obj->%s = cxarray_new()", fldname.Name).outfh().outnl()
 				} else if ismapty2(fldty) {
 					this.outf("obj->%s = cxhashtable_new()", fldname.Name).outfh().outnl()
+				} else if ischanty2(fldty) {
+					log.Println("how to", fld.Type.(*ast.ChanType).Value)
+					this.outf("obj->%s = cxrt_chan_new(0)", fldname.Name).outfh().outnl()
 				}
 			}
 		}

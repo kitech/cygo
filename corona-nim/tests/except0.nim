@@ -2,7 +2,7 @@ import os
 
 proc test_exc0() =
     linfo "hehehehhe"
-    raise newexc("test exc msg")
+    raise newException(OSError, "test exc msg")
 
 proc test_exc1() =
     try:

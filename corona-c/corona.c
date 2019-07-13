@@ -462,7 +462,7 @@ void* crn_fiber_getspec(void* spec) {
     }
     void* v = nilptr;
     int rv = hashtable_get(gr->specifics, spec, &v);
-    assert(rv == CC_OK);
+    assert(rv == CC_OK || rv == CC_ERR_KEY_NOT_FOUND);
     return v;
 }
 void crn_fiber_setspec(void* spec, void* val) {
@@ -473,7 +473,7 @@ void crn_fiber_setspec(void* spec, void* val) {
     }
     void* oldv = nilptr;
     int rv = hashtable_remove(gr->specifics, spec, &oldv);
-    assert(rv == CC_OK);
+    assert(rv == CC_OK || rv == CC_ERR_KEY_NOT_FOUND);
     rv = hashtable_add(gr->specifics, spec, val);
     assert(rv == CC_OK);
     if (oldv != nilptr) {
