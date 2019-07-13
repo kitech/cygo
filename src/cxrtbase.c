@@ -12,12 +12,12 @@ extern corona* crn_init_and_wait_done();
 extern int crn_post(void(*fn)(void*arg), void*arg);
 /* extern void crn_sched(); */
 extern void crn_set_finalizer(void*ptr, void(*fn)(void*));
-/* typedef struct hchan hchan; */
-/* extern hchan* hchan_new(int cap); */
-/* extern int hchan_cap(hchan* hc); */
-/* extern int hchan_len(hchan* hc); */
-/* extern int hchan_send(hchan* hc, void* data); */
-/* extern int hchan_recv(hchan* hc, void** pdata); */
+typedef struct hchan hchan;
+extern hchan* hchan_new(int cap);
+extern int hchan_cap(hchan* hc);
+extern int hchan_len(hchan* hc);
+extern int hchan_send(hchan* hc, void* data);
+extern int hchan_recv(hchan* hc, void** pdata);
 
 
 extern void GC_allow_register_threads();
@@ -65,22 +65,22 @@ void cxrt_set_finalizer(void* ptr,void (*fn) (void*)) {
     crn_set_finalizer(ptr, fn);
 }
 void* cxrt_chan_new(int sz) {
-    /* void* ch = hchan_new(sz); */
-    /* assert(ch != nilptr); */
-    /* printf("cxrt_chan_new, %p\n", ch); */
-    /* return ch; */
-    return nilptr;
+    // return nilptr;
+    void* ch = hchan_new(sz);
+    assert(ch != nilptr);
+    printf("cxrt_chan_new, %p\n", ch);
+    return ch;
 }
 void cxrt_chan_send(void*ch, void*arg) {
     assert(ch != nilptr);
-    // hchan_send(ch, arg);
+    hchan_send(ch, arg);
 }
 void* cxrt_chan_recv(void*ch) {
+    // return nilptr;
     assert(ch != nilptr);
-    // void* data = nilptr;
-    // hchan_recv(ch, &data);
-    // return data;
-    return nilptr;
+    void* data = nilptr;
+    hchan_recv(ch, &data);
+    return data;
 }
 
 /////

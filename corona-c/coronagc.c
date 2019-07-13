@@ -70,6 +70,12 @@ void* crn_gc_calloc(size_t n, size_t size) {
     crn_post_gclock();
     return ptr;
 }
+void* crn_gc_malloc_uncollectable(size_t size) {
+    crn_pre_gclock();
+    void* ptr = GC_MALLOC_UNCOLLECTABLE(size);
+    crn_post_gclock();
+    return ptr;
+}
 
 void crn_call_with_alloc_lock(void*(*fnptr)(void* arg1), void* arg) {
     crn_pre_gclock();

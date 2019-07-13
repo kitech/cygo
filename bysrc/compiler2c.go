@@ -350,6 +350,7 @@ func (c *g2nc) genFiberStwrap(scope *ast.Scope, e *ast.CallExpr) {
 	c.psctx.grstargs[funame] = true
 
 	stname := funame + "_fiber_args"
+	c.out("static").outsp()
 	c.out("void").outsp()
 	c.out(funame+"_fiber", "(void* vpargs)").outnl()
 	c.out("{").outnl()
@@ -1547,6 +1548,7 @@ func (this *g2nc) genTypeSpec(scope *ast.Scope, spec *ast.TypeSpec) {
 		this.genExpr(scope, spec.Type)
 		this.out("}").outfh().outnl()
 		this.outnl()
+		this.out("static").outsp()
 		this.outf("%s* %s_new_zero() {", spec.Name.Name, spec.Name.Name).outnl()
 		this.outf("  %s* obj = (%s*)cxmalloc(sizeof(%s))",
 			spec.Name.Name, spec.Name.Name, spec.Name.Name).outfh().outnl()
@@ -1650,6 +1652,7 @@ func (c *g2nc) genValueSpec(scope *ast.Scope, spec *ast.ValueSpec, validx int) {
 		}
 
 		isconst := false
+		c.out(gopp.IfElseStr(isglobvar, "static", "")).outsp()
 		if strings.HasPrefix(varty.String(), "untyped ") {
 			isconst = true
 			c.out("/*const*/").outsp()

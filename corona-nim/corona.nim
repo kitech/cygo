@@ -23,7 +23,7 @@ var coronah : pointer
 proc crn_set_thread_createcb(fnptr:pointer, args:pointer) {.importc.}
 proc crn_set_frame_funcs(getter, setter : pointer) {.importc.}
 proc crn_init_and_wait_done():pointer {.importc.}
-proc crn_get_goid():cint {.importc.}
+proc crn_goid():cint {.importc.}
 proc crn_post(fnptr:pointer, args:pointer) {.importc.}
 proc crn_sched() {.importc.}
 proc crn_malloc(size:csize) : pointer {.importc.}
@@ -49,7 +49,7 @@ linfo "corona inited done"
 
 proc goid*():int =
     ## get current fiber id
-    crn_get_goid()
+    crn_goid()
 
 proc gosched*() =
     ## Gosched yields the processor, allowing other goroutines to run. It does not

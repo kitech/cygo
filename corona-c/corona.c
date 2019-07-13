@@ -119,13 +119,13 @@ static grstate crn_fiber_getstate(fiber* gr) {
     return atomic_getint((int*)(&gr->state));
 }
 // alloc stack and context
-void crn_fiber_new2(fiber*gr) {
-    // corowp_stack_alloc(&gr->stack, dftstkusz);
-    gr->stack.sptr = GC_malloc_uncollectable(dftstksz);
-    // gr->stack.sptr = calloc(1, dftstksz);
-    gr->stack.ssze = dftstksz;
-    gr->mystksb.mem_base = (void*)((uintptr_t)gr->stack.sptr + dftstksz);
-    crn_fiber_setstate(gr,runnable);
+void crn_fiber_new2(fiber*gr, size_t stksz) {
+    // corowp_stack_alloc(&gr->stack, stksz);
+    gr->stack.sptr = crn_gc_malloc_uncollectable(stksz);
+    // gr->stack.sptr = calloc(1, stksz);
+    gr->stack.ssze = stksz;
+    gr->mystksb.mem_base = (void*)((uintptr_t)gr->stack.sptr + stksz);
+    crn_fiber_setstate(gr, runnable);
     // GC_add_roots(gr->stack.sptr, gr->stack.sptr+(gr->stack.ssze));
     // 这一句会让fnproc直接执行，但是可能需要的是创建与执行分开。原来是针对-DCORO_PTHREAD
     // corowp_create(&gr->coctx, gr->fnproc, gr->arg, gr->stack.sptr, dftstksz);
@@ -435,7 +435,7 @@ static __thread int gcurmcid__ = 0; // thread local
 static __thread int gcurgrid__ = 0; // thread local
 static __thread machine* gcurmcobj = 0; // thread local
 int __attribute__((no_instrument_function))
-crn_get_goid() { return gcurgrid__; }
+crn_goid() { return gcurgrid__; }
 fiber* __attribute__((no_instrument_function))
 crn_fiber_getcur() {
     int grid = gcurgrid__;
@@ -483,7 +483,8 @@ void crn_fiber_setspec(void* spec, void* val) {
 }
 // int crn_num_fibers() { return atomic_getint(gnr__); }
 // procer internal API
-int crn_post(coro_func fn, void*arg) {
+static
+int crn_post_sized(coro_func fn, void*arg, size_t stksz) {
     linfo("fn=%p, arg=%p %d\n", fn, arg, gnr__->gridno+1);
     machine* mc = crn_machine_get(1);
     // linfo("mc=%p, %d %p, %d\n", mc, mc->id, mc->ngrs, queue_size(mc->ngrs));
@@ -495,7 +496,7 @@ int crn_post(coro_func fn, void*arg) {
 
     int id = crn_nxtid(gnr__);
     fiber* gr = crn_fiber_new(id, fn, arg);
-    crn_fiber_new2(gr);
+    crn_fiber_new2(gr, stksz);
     assert(mc->ngrs != nilptr);
     int rv = crnqueue_enqueue(mc->ngrs, gr);
     assert(rv == CC_OK);
@@ -507,6 +508,9 @@ int crn_post(coro_func fn, void*arg) {
     }
     pcond_signal(&mc->pkcd);
     return id;
+}
+int crn_post(coro_func fn, void*arg) {
+    return crn_post_sized(fn, arg, dftstksz);
 }
 
 static
@@ -1104,8 +1108,6 @@ void crn_pre_gclock_proc() {
         if (rv == true) break;
     }
 
-    // int rv = atomic_casbool(&gcurmcobj->wantgclock, false, true);
-    // assert(rv == true);
 }
 void crn_post_gclock_proc() {
     // linfo("hohoo %d\n", gcurmcid__);
@@ -1121,8 +1123,6 @@ void crn_post_gclock_proc() {
         if (rv == true) break;
     }
 
-    // int rv = atomic_casbool(&gcurmcobj->wantgclock, true, false);
-    // assert(rv == true);
 }
 
 bool gcinited = false;
