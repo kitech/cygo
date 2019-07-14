@@ -11,6 +11,8 @@ import (
 	"unicode"
 
 	"gopp"
+
+	"golang.org/x/tools/go/ast/astutil"
 )
 
 // compile line context
@@ -193,19 +195,50 @@ func (c *basecomp) exprpos(e ast.Node) token.Position {
 type closinfo struct {
 	idx       int
 	fd        *ast.FuncDecl
+	fnlit     *ast.FuncLit
 	fntype    string
 	fnname    string
 	argtyname string
+	idents    []*ast.Ident // refered identifier
 }
 
-func (bc *basecomp) newclosinfo(fd *ast.FuncDecl, idx int) *closinfo {
+func (bc *basecomp) newclosinfo(fd *ast.FuncDecl, fnlit *ast.FuncLit, idx int) *closinfo {
 	clos := &closinfo{}
 	clos.idx = idx
 	clos.fd = fd
+	clos.fnlit = fnlit
 	clos.fntype = fmt.Sprintf("%s_closure_type_%d", fd.Name.Name, idx)
 	clos.fnname = fmt.Sprintf("%s_closure_%d", fd.Name.Name, idx)
 	clos.argtyname = fmt.Sprintf("%s_closure_arg_%d", fd.Name.Name, idx)
+
+	bc.fillclosidents(clos)
 	return clos
+}
+
+func (bc *basecomp) fillclosidents(clos *closinfo) {
+	fnlit := clos.fnlit
+	myids := map[*ast.Ident]bool{}
+	_ = myids
+
+	// TODO proper closure ident filter
+	// not arg ident
+	// not self def ident
+	// not other global funcs
+	astutil.Apply(fnlit, nil, func(c *astutil.Cursor) bool {
+		switch te := c.Node().(type) {
+		case *ast.Ident:
+			gotyx := bc.psctx.info.TypeOf(te)
+			switch goty := gotyx.(type) {
+			case *types.Signature:
+			default:
+				gopp.G_USED(goty)
+				clos.idents = append(clos.idents, te)
+			}
+		default:
+			gopp.G_USED(te)
+		}
+		return true
+	})
 }
 
 func (bc *basecomp) getclosinfo(fnlit *ast.FuncLit) *closinfo {

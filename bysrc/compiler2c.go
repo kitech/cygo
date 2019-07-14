@@ -137,17 +137,17 @@ func (this *g2nc) genDecl(scope *ast.Scope, d ast.Decl) {
 }
 func (c *g2nc) genPreFuncDecl(scope *ast.Scope, d *ast.FuncDecl) {
 	cnter := 0
-	for _, clos := range c.psctx.closures {
-		fd2 := upfindFuncDeclAst(c.psctx, clos, 0)
+	for _, fnlit := range c.psctx.closures {
+		fd2 := upfindFuncDeclAst(c.psctx, fnlit, 0)
 		if fd2 != d {
 			continue
 		}
 
 		cnter++
-		closi := c.newclosinfo(d, cnter)
-		c.closidx[clos] = closi
+		closi := c.newclosinfo(d, fnlit, cnter)
+		c.closidx[fnlit] = closi
 
-		c.outf("// %v", clos).outnl()
+		c.outf("// %v", fnlit).outnl()
 		c.out("typedef").outsp()
 		c.out("struct").outsp()
 		c.outf("%s_closure_arg_%d", d.Name.Name, cnter).outsp()
@@ -155,26 +155,38 @@ func (c *g2nc) genPreFuncDecl(scope *ast.Scope, d *ast.FuncDecl) {
 		c.out("struct").outsp()
 		c.outf("%s_closure_arg_%d", d.Name.Name, cnter).outsp()
 		c.out("{").outnl()
+		for _, ido := range closi.idents {
+			c.out(c.exprTypeName(scope, ido)).outsp()
+			c.out(ido.Name).outfh().outnl()
+		}
 		c.out("}").outfh().outnl()
 
 		c.out("typedef").outsp()
-		c.genFieldList(scope, clos.Type.Results, true, false, "", true)
+		c.genFieldList(scope, fnlit.Type.Results, true, false, "", true)
 		c.outf("(*%s_closure_type_%d)(", d.Name.Name, cnter)
-		c.genFieldList(scope, clos.Type.Params, false, false, ",", false)
+		c.genFieldList(scope, fnlit.Type.Params, false, false, ",", false)
 		c.outf("%s_closure_arg_%d*", d.Name.Name, cnter).outsp()
 		c.out(")")
 		c.outfh().outnl()
 
 		c.out("static").outsp()
-		c.genFieldList(scope, clos.Type.Results, true, false, "", true)
+		c.genFieldList(scope, fnlit.Type.Results, true, false, "", true)
 		c.outsp()
 		c.outf("%s_closure_%d(", d.Name.Name, cnter)
-		c.genFieldList(scope, clos.Type.Params, false, true, ",", false)
+		c.genFieldList(scope, fnlit.Type.Params, false, true, ",", false)
 		// c.genFieldList(scope *ast.Scope, flds *ast.FieldList, keepvoid bool, withname bool, linebrk string, skiplast bool)
 		c.outf("%s_closure_arg_%d*", d.Name.Name, cnter).outsp()
 		c.out("clos")
 		c.out(")")
-		c.genBlockStmt(scope, clos.Body)
+		c.out("{").outnl()
+		for _, ido := range closi.idents {
+			c.out(c.exprTypeName(scope, ido)).outsp()
+			c.out(ido.Name).outeq()
+			c.out("clos", "->", ido.Name)
+			c.outfh().outnl()
+		}
+		c.genBlockStmt(scope, fnlit.Body)
+		c.out("}").outnl()
 		c.outnl()
 	}
 }
@@ -318,6 +330,12 @@ func (c *g2nc) genStmtTmps(scope *ast.Scope, stmt ast.Stmt) {
 func (c *g2nc) genAssignStmt(scope *ast.Scope, s *ast.AssignStmt) {
 	// log.Println(s.Tok.String(), s.Tok.Precedence(), s.Tok.IsOperator(), s.Tok.IsLiteral(), s.Lhs)
 	for i := 0; i < len(s.Rhs); i++ {
+		switch te := s.Lhs[i].(type) {
+		case *ast.Ident:
+			obj := ast.NewObj(ast.Var, te.Name)
+			obj.Data = s.Rhs[i]
+			scope.Insert(obj)
+		}
 		var ischrv = false
 		var chexpr ast.Expr
 		switch e := s.Rhs[i].(type) {
@@ -633,6 +651,7 @@ func (c *g2nc) genCaseClauseIf(scope *ast.Scope, s *ast.CaseClause, idx int) {
 }
 
 func (c *g2nc) genCallExpr(scope *ast.Scope, te *ast.CallExpr) {
+	log.Println(te, te.Fun, reflect.TypeOf(te.Fun))
 	scope = putscope(scope, ast.Fun, "infncall", te.Fun)
 	switch be := te.Fun.(type) {
 	case *ast.Ident:
@@ -653,7 +672,38 @@ func (c *g2nc) genCallExpr(scope *ast.Scope, te *ast.CallExpr) {
 		} else if c.funcistype(be) {
 			c.genTypeCtor(scope, te)
 		} else {
-			c.genCallExprNorm(scope, te)
+			var upfindsym func(s *ast.Scope, id *ast.Ident, lvl int) interface{}
+			upfindsym = func(s *ast.Scope, id *ast.Ident, lvl int) interface{} {
+				if s == nil {
+					return nil
+				}
+				obj := s.Lookup(id.Name)
+				if obj != nil {
+					switch id2 := obj.Data.(type) {
+					case *ast.Ident:
+						return upfindsym(s, id2, 0)
+					}
+					return obj.Data
+				}
+				return upfindsym(s.Outer, id, lvl+1)
+			}
+			isclos := false
+			var fnlit *ast.FuncLit
+			gotyx := c.info.TypeOf(te.Fun)
+			switch gotyx.(type) {
+			case *types.Signature:
+				symve := upfindsym(scope, be, 0)
+				isclos = symve != nil
+				if isclos {
+					fnlit = symve.(*ast.FuncLit)
+				}
+			}
+			if isclos {
+				log.Println("gen clos call")
+				c.genCallExprClosure(scope, te, fnlit)
+			} else {
+				c.genCallExprNorm(scope, te)
+			}
 		}
 	case *ast.SelectorExpr:
 		if c.funcistype(te.Fun) {
@@ -960,6 +1010,61 @@ func (c *g2nc) genFuncArgs(scope *ast.Scope, args []ast.Expr) {
 		if idx+1 < len(args) {
 			c.out(",")
 		}
+	}
+}
+func (c *g2nc) genCallExprClosure(scope *ast.Scope, te *ast.CallExpr, fnlit *ast.FuncLit) {
+	// funame := te.Fun.(*ast.Ident).Name
+	selfn, isselfn := te.Fun.(*ast.SelectorExpr)
+	isidt := false
+	iscfn := false
+	ispkgsel := false
+	if isselfn {
+		var selidt *ast.Ident
+		selidt, isidt = selfn.X.(*ast.Ident)
+		iscfn = isidt && selidt.Name == "C"
+		selty := c.info.TypeOf(selfn.X)
+		ispkgsel = isinvalidty2(selty)
+	}
+
+	closi := c.getclosinfo(fnlit)
+	argtv := tmpvarname()
+	c.out(closi.argtyname).outstar().outsp().out(argtv).outeq()
+	c.outf("(%s*)cxmalloc(sizeof(%s))", closi.argtyname, closi.argtyname).outfh().outnl()
+	for _, ido := range closi.idents {
+		c.out(argtv, "->", ido.Name).outeq()
+		c.out(ido.Name).outfh().outnl()
+	}
+
+	if isselfn {
+		if iscfn {
+			c.genExpr(scope, selfn.Sel)
+		} else {
+			vartystr := c.exprTypeName(scope, selfn.X)
+			vartystr = strings.TrimRight(vartystr, "*")
+			c.out(vartystr + "_" + selfn.Sel.Name)
+		}
+	} else {
+
+		c.genExpr(scope, te.Fun)
+	}
+
+	c.out("(")
+	if isselfn && !iscfn && !ispkgsel {
+		c.genExpr(scope, selfn.X)
+		c.out(gopp.IfElseStr(len(te.Args) > 0, ",", ""))
+	}
+	for idx, e1 := range te.Args {
+		c.genExpr(scope, e1)
+		c.out(gopp.IfElseStr(idx == len(te.Args)-1, "", ", "))
+	}
+	c.out(gopp.IfElseStr(len(te.Args) > 0, ",", ""))
+	c.out(argtv)
+	c.out(")")
+
+	// check if real need, ;\n
+	cs := c.psctx.cursors[te]
+	if cs.Name() != "Args" {
+		// c.outfh().outnl()
 	}
 }
 
@@ -1529,10 +1634,15 @@ func (this *g2nc) exprTypeNameImpl2(scope *ast.Scope, ety types.Type, e ast.Expr
 	case *types.Map:
 		return "HashTable*"
 	case *types.Signature:
-		if closi, ok := this.closidx[e.(*ast.FuncLit)]; ok {
-			return closi.fntype
-		} else {
-			log.Println("todo", goty, reflect.TypeOf(goty), isudty, tyval, te)
+		switch fe := e.(type) {
+		case *ast.FuncLit:
+			if closi, ok := this.closidx[fe]; ok {
+				return closi.fntype
+			} else {
+				log.Println("todo", goty, reflect.TypeOf(goty), isudty, tyval, te)
+			}
+		case *ast.Ident:
+			return te.String()
 		}
 		return te.String()
 	default:
@@ -1555,7 +1665,12 @@ func (this *g2nc) exprTypeFmt(scope *ast.Scope, e ast.Expr) string {
 		if isstrty(te.Name()) {
 			return ".*s"
 		} else {
-			return "d"
+			switch te.Kind() {
+			case types.Float32, types.Float64:
+				return "f"
+			default:
+				return "d"
+			}
 		}
 	case *types.Named:
 		return "p"
