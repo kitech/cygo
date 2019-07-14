@@ -330,6 +330,7 @@ func (c *g2nc) genStmtTmps(scope *ast.Scope, stmt ast.Stmt) {
 func (c *g2nc) genAssignStmt(scope *ast.Scope, s *ast.AssignStmt) {
 	// log.Println(s.Tok.String(), s.Tok.Precedence(), s.Tok.IsOperator(), s.Tok.IsLiteral(), s.Lhs)
 	for i := 0; i < len(s.Rhs); i++ {
+		c.valnames[s.Rhs[i]] = s.Lhs[i]
 		switch te := s.Lhs[i].(type) {
 		case *ast.Ident:
 			obj := ast.NewObj(ast.Var, te.Name)
@@ -720,6 +721,8 @@ func (c *g2nc) genCallExpr(scope *ast.Scope, te *ast.CallExpr) {
 		c.out("(")
 		c.genExpr(scope, te.Args[0])
 		c.out(")")
+	case *ast.FuncLit:
+		c.genCallExprClosure(scope, te, be)
 	default:
 		log.Println("todo", be, reflect.TypeOf(be))
 	}
@@ -1014,7 +1017,9 @@ func (c *g2nc) genFuncArgs(scope *ast.Scope, args []ast.Expr) {
 }
 func (c *g2nc) genCallExprClosure(scope *ast.Scope, te *ast.CallExpr, fnlit *ast.FuncLit) {
 	// funame := te.Fun.(*ast.Ident).Name
+	lefte := c.valnames[te]
 	selfn, isselfn := te.Fun.(*ast.SelectorExpr)
+	_, isfnlit := te.Fun.(*ast.FuncLit)
 	isidt := false
 	iscfn := false
 	ispkgsel := false
@@ -1026,6 +1031,10 @@ func (c *g2nc) genCallExprClosure(scope *ast.Scope, te *ast.CallExpr, fnlit *ast
 		ispkgsel = isinvalidty2(selty)
 	}
 
+	if lefte != nil {
+		c.out("{0}").outfh().outnl()
+	}
+
 	closi := c.getclosinfo(fnlit)
 	argtv := tmpvarname()
 	c.out(closi.argtyname).outstar().outsp().out(argtv).outeq()
@@ -1033,6 +1042,11 @@ func (c *g2nc) genCallExprClosure(scope *ast.Scope, te *ast.CallExpr, fnlit *ast
 	for _, ido := range closi.idents {
 		c.out(argtv, "->", ido.Name).outeq()
 		c.out(ido.Name).outfh().outnl()
+	}
+
+	if lefte != nil {
+		c.genExpr(scope, lefte)
+		c.outeq()
 	}
 
 	if isselfn {
@@ -1043,8 +1057,10 @@ func (c *g2nc) genCallExprClosure(scope *ast.Scope, te *ast.CallExpr, fnlit *ast
 			vartystr = strings.TrimRight(vartystr, "*")
 			c.out(vartystr + "_" + selfn.Sel.Name)
 		}
+	} else if isfnlit {
+		closi := c.getclosinfo(fnlit)
+		c.out(closi.fnname)
 	} else {
-
 		c.genExpr(scope, te.Fun)
 	}
 

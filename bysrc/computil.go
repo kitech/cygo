@@ -159,12 +159,14 @@ func funcistypedep(idt ast.Expr) bool {
 /////
 type basecomp struct {
 	psctx    *ParserContext
+	valnames map[ast.Expr]ast.Expr // rvalue => lname
 	strtypes map[string]types.TypeAndValue
 	closidx  map[*ast.FuncLit]*closinfo
 }
 
 func newbasecomp(psctx *ParserContext) *basecomp {
 	bc := &basecomp{
+		valnames: map[ast.Expr]ast.Expr{},
 		strtypes: map[string]types.TypeAndValue{},
 		closidx:  map[*ast.FuncLit]*closinfo{}}
 	bc.psctx = psctx
@@ -218,13 +220,23 @@ func (bc *basecomp) newclosinfo(fd *ast.FuncDecl, fnlit *ast.FuncLit, idx int) *
 func (bc *basecomp) fillclosidents(clos *closinfo) {
 	fnlit := clos.fnlit
 	myids := map[*ast.Ident]bool{}
+	myids2 := map[string]bool{}
 	_ = myids
+	_ = myids2
+
+	argids := map[string]bool{}
+	_ = argids
+	for _, prmx := range clos.fnlit.Type.Params.List {
+		for _, name := range prmx.Names {
+			argids[name.Name] = true
+		}
+	}
 
 	// TODO proper closure ident filter
 	// not arg ident
 	// not self def ident
 	// not other global funcs
-	astutil.Apply(fnlit, nil, func(c *astutil.Cursor) bool {
+	astutil.Apply(fnlit, func(c *astutil.Cursor) bool {
 		switch te := c.Node().(type) {
 		case *ast.Ident:
 			gotyx := bc.psctx.info.TypeOf(te)
@@ -232,13 +244,30 @@ func (bc *basecomp) fillclosidents(clos *closinfo) {
 			case *types.Signature:
 			default:
 				gopp.G_USED(goty)
-				clos.idents = append(clos.idents, te)
+				if _, ok := argids[te.Name]; ok {
+				} else if _, ok := myids2[te.Name]; ok {
+					// log.Println("self ident", te)
+				} else {
+					if te.Obj == nil {
+						// maybe builtin, like false/true/...
+					} else {
+						clos.idents = append(clos.idents, te)
+					}
+				}
+			}
+		case *ast.AssignStmt:
+			for _, lvex := range te.Lhs {
+				switch lve := lvex.(type) {
+				case *ast.Ident:
+					myids[lve] = true
+					myids2[lve.Name] = true
+				}
 			}
 		default:
 			gopp.G_USED(te)
 		}
 		return true
-	})
+	}, nil)
 }
 
 func (bc *basecomp) getclosinfo(fnlit *ast.FuncLit) *closinfo {
