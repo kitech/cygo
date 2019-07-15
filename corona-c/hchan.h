@@ -21,6 +21,11 @@ typedef struct hcdata  {
     fiber* gr;
     void* sdelem;
     void** rvelem;
+    int wokeby_grid;
+    int wokeby_mcid;
+    int wokecase; // caseSend/caseRecv
+    fiber* wokeby; //
+    void* wokehc; // hchan*
 } hcdata;
 
 int hchan_is_closed(hchan* hc);

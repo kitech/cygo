@@ -53,6 +53,7 @@ extern const char* grstate2str(grstate s);
 // 每个fiber 同时只能属于某一个machine
 struct fiber {
     int id;
+    int  mcid;
     coro_func fnproc;
     void* arg;
     coro_stack stack;
@@ -61,15 +62,10 @@ struct fiber {
     coro_context *coctx0; // ref to machine.coctx0
     grstate state;
     bool isresume;
-    // void* hcelem;
     pmutex_t* hclock; // hchan.lock
     int pkreason;
-    fiber* wokeby; //
-    void* wokehc; // hchan*
-    int wokecase; // caseSend/caseRecv
     struct GC_stack_base* stksb; // machine's
     void* gchandle;
-    int  mcid;
     void* savefrm; // upper frame
     void* myfrm; // my frame when yield
     // this should not access multiple thread, so just use non-lock hashtable

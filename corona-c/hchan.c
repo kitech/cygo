@@ -13,7 +13,21 @@ hcdata* hcdata_new(fiber* gr) {
     return d;
 }
 void hcdata_free(hcdata* d) {
+    d->rvelem = nilptr;
     crn_gc_free(d);
+}
+void hcdata_woke_set(hcdata*d, fiber* wkgr, hchan* hc, int wkcase, void* elem) {
+    d->wokeby = wkgr;
+    d->wokeby_grid = wkgr->id;
+    d->wokeby_mcid = wkgr->mcid;
+    d->wokehc = hc;
+    d->wokecase = wkcase;
+    if (wkcase == caseSend) {
+        d->sdelem = elem;
+    }else if (wkcase == caseRecv) {
+        // *d->rvelem = elem;
+    }else{
+    }
 }
 
 static void hchan_finalizer(void* hc) {
@@ -49,28 +63,34 @@ int hchan_close(hchan* hc) {
     qsz = hc->recvq->size;
     if (qsz > 0) { linfo("discard recvq %d\n", qsz); }
     while (hc->recvq != nilptr) {
-        fiber* gr = (fiber*)szqueue_remove(hc->recvq);
+        hcdata* hcdt = (hcdata*)szqueue_remove(hc->recvq);
+        fiber* gr = hcdt->gr;
         if (gr == nilptr) {
             break;
         }
-        gr->wokeby = mygr;
-        gr->wokehc = hc;
-        gr->wokecase = caseClose;
-        crn_procer_resume_one(gr, 0, gr->id, gr->mcid);
+        /* gr->wokeby = mygr; */
+        /* gr->wokehc = hc; */
+        /* gr->wokecase = caseClose; */
+        hcdata_woke_set(hcdt, mygr, hc, caseClose, nilptr);
+        crn_procer_resume_one(gr, 0, hcdt->grid, hcdt->mcid);
+        // hcdata_free(hcdt);
     }
     if (hc->recvq != nilptr) szqueue_dispose(hc->recvq);
 
     qsz = hc->sendq->size;
     if (qsz > 0) { linfo("discard sendq %d\n", qsz); }
     while(hc->sendq != nilptr) {
-        fiber* gr = (fiber*)szqueue_remove(hc->sendq);
+        hcdata* hcdt = (hcdata*)szqueue_remove(hc->sendq);
+        fiber* gr = hcdt->gr;
         if (gr == nilptr) {
             break;
         }
-        gr->wokeby = mygr;
-        gr->wokehc = hc;
-        gr->wokecase = caseClose;
-        crn_procer_resume_one(gr, 0, gr->id, gr->mcid);
+        /* gr->wokeby = mygr; */
+        /* gr->wokehc = hc; */
+        /* gr->wokecase = caseClose; */
+        hcdata_woke_set(hcdt, mygr, hc, caseClose, nilptr);
+        crn_procer_resume_one(gr, 0, hcdt->grid, hcdt->mcid);
+        // hcdata_free(hcdt);
     }
     if (hc->sendq != nilptr) szqueue_dispose(hc->sendq);
 
@@ -79,7 +99,7 @@ int hchan_close(hchan* hc) {
     chan_dispose(hc->c);
     hc->c = nilptr;
     bzero(hc, sizeof(hchan));
-    free(hc);
+    crn_gc_free(hc);
     pmutex_unlock(&hc->lock);
     return true;
 }
@@ -104,11 +124,12 @@ int hchan_send(hchan* hc, void* data) {
         if (hcdt != nilptr) {
             fiber* gr = hcdt->gr;
             // assert(gr->id == hcdt->grid);
-            *hcdt->rvelem = data;
+            hcdata_woke_set(hcdt, mygr, hc, caseRecv, data);
+            // *hcdt->rvelem = data;
             linfo("resume recver %d/%d by %d/%d\n", hcdt->grid, hcdt->mcid, mygr->id, mygr->mcid);
-            gr->wokeby = mygr;
-            gr->wokehc = hc;
-            gr->wokecase = caseRecv;
+            /* gr->wokeby = mygr; */
+            /* gr->wokehc = hc; */
+            /* gr->wokecase = caseRecv; */
             pmutex_unlock(&hc->lock);
             crn_procer_resume_one(gr, 0, hcdt->grid, hcdt->mcid);
             return 1;
@@ -137,7 +158,8 @@ int hchan_send(hchan* hc, void* data) {
             // fiber* gr = (fiber*)szqueue_remove(hc->recvq);
             if (gr != nilptr) {
                 assert(gr->id == hcdt->grid);
-                gr->wokeby = mygr;
+                hcdata_woke_set(hcdt, mygr, hc, caseRecv, data);
+                // gr->wokeby = mygr;
                 crn_procer_resume_one(gr, 0, hcdt->grid, hcdt->mcid);
             }
             pmutex_unlock(&hc->lock);
@@ -149,7 +171,8 @@ int hchan_send(hchan* hc, void* data) {
             fiber* gr = hcdt->gr;
             if (gr != nilptr) {
                 // assert(gr->id == hcdt->grid);
-                *hcdt->rvelem = data;
+                hcdata_woke_set(hcdt, mygr, hc, caseRecv, data);
+                // *hcdt->rvelem = data;
                 crn_procer_resume_one(gr, 0, hcdt->grid, hcdt->mcid);
                 pmutex_unlock(&hc->lock);
                 return 1;
@@ -181,11 +204,12 @@ int hchan_recv(hchan* hc, void** pdata) {
         if (hcdt != nilptr) {
             fiber* gr = hcdt->gr;
             // assert(gr->id == hcdt->grid);
-            *pdata = hcdt->sdelem;
+            hcdata_woke_set(hcdt, mygr, hc, caseSend, (void**)hcdt->rvelem);
+            // *pdata = hcdt->sdelem;
             linfo("resume sender %d/%d by %d/%d\n", hcdt->grid, hcdt->mcid, mygr->id, mygr->mcid);
-            gr->wokeby = mygr;
-            gr->wokehc = hc;
-            gr->wokecase = caseSend;
+            /* gr->wokeby = mygr; */
+            /* gr->wokehc = hc; */
+            /* gr->wokecase = caseSend; */
             pmutex_unlock(&hc->lock);
             crn_procer_resume_one(gr, 0, hcdt->grid, hcdt->mcid);
             return 1;
@@ -220,7 +244,8 @@ int hchan_recv(hchan* hc, void** pdata) {
         if (gr != nilptr) {
             // assert(gr->id == hcdt->grid);
             *pdata = hcdt->sdelem;
-            gr->wokeby = mygr;
+            hcdata_woke_set(hcdt, mygr, hc, caseSend, (void**)hcdt->rvelem);
+            // gr->wokeby = mygr;
             pmutex_unlock(&hc->lock);
             crn_procer_resume_one(gr, 0, hcdt->grid, hcdt->mcid);
             return 1;
