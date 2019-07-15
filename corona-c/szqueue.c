@@ -98,6 +98,7 @@ void* szqueue_remove(szqueue_t* queue)
     if (queue->size > 0)
     {
         value = queue->data[queue->next];
+        queue->data[queue->next] = 0;
         queue->next++;
         queue->size--;
         if (queue->next >= queue->capacity)

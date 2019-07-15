@@ -105,7 +105,7 @@ fiber* crn_fiber_new(int id, coro_func fn, void* arg) {
     gr->id = id;
     gr->fnproc = fn;
     gr->arg = arg;
-    gr->hcelem = invlidptr;
+    // gr->hcelem = invlidptr;
     extern HashTable* crnhashtable_new_uintptr();
     gr->specifics = crnhashtable_new_uintptr();
     return gr;

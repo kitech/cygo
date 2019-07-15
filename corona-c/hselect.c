@@ -4,11 +4,32 @@
 
 typedef struct scase {
     hchan* hc;
-    void* hcelem;
     uint16_t kind;
+    void* hcelem;
+    hcdata* hcdt;
     uintptr_t pc;
     int64_t reltime;
 } scase;
+
+scase* scase_new(hchan* hc, uint16_t kind, void* elem) {
+    scase* cas = (scase*)crn_gc_malloc(sizeof(scase));
+    fiber* mygr = crn_fiber_getcur();
+    hcdata* hcdt= hcdata_new(mygr);
+    if (kind == caseRecv) {
+        cas->hcelem = elem;
+        hcdt->rvelem = (void**)elem;
+    }else if(kind == caseSend){
+        cas->hcelem = elem;
+        hcdt->sdelem = elem;
+    }else{
+    }
+    cas->hcdt = hcdt;
+    return cas;
+}
+void scase_free(scase* cas) {
+    crn_gc_free(cas->hcdt);
+    crn_gc_free(cas);
+}
 
 static
 void sellock(scase** cas0, uint16_t* lockorder, int ncases) {
@@ -39,6 +60,7 @@ bool selectgo(int* rcasi, scase** cas0, uint16_t* order0, int ncases) {
     linfo("rcasi=%d cas0=%p order0=%p ncases=%d\n", *rcasi, cas0, order0, ncases);
     hchan* hc = nilptr;
     scase* sk = nilptr;
+    hcdata* hcdt = nilptr;
     fiber* gr = nilptr;
     fiber* wkgr = nilptr;
     int casewk = 0;
@@ -64,7 +86,9 @@ bool selectgo(int* rcasi, scase** cas0, uint16_t* order0, int ncases) {
         case caseNil:
             assert(1==2); break;
         case caseRecv:
-            gr = szqueue_remove(hc->sendq);
+            hcdt = szqueue_remove(hc->sendq);
+            gr = hcdt->gr;
+            if (gr != nilptr) { assert(gr->id == hcdt->grid); }
             if (gr != nilptr) goto recv;
             if (hchan_len(hc)>0) goto bufrecv;
             if (hchan_is_closed(hc)) goto rclose;
@@ -72,7 +96,9 @@ bool selectgo(int* rcasi, scase** cas0, uint16_t* order0, int ncases) {
 
         case caseSend:
             if (hchan_is_closed(hc)) goto sclose;
-            gr = szqueue_remove(hc->recvq);
+            hcdt = szqueue_remove(hc->recvq);
+            gr = hcdt->gr;
+            if (gr != nilptr) { assert(gr->id == hcdt->grid); }
             if (gr != nilptr) goto send;
             if (hchan_len(hc) < hchan_cap(hc)) goto bufsend;
             break;
@@ -102,10 +128,18 @@ bool selectgo(int* rcasi, scase** cas0, uint16_t* order0, int ncases) {
 
         switch (cas->kind) {
         case caseRecv:
-            szqueue_add(hc->recvq, mygr);
+            hcdt = hcdata_new(mygr);
+            hcdt->rvelem = cas->hcelem;
+            cas->hcdt = hcdt;
+            szqueue_add(hc->recvq, hcdt);
+            hcdt = nilptr;
             break;
         case caseSend:
-            szqueue_add(hc->sendq, mygr);
+            hcdt = hcdata_new(mygr);
+            hcdt->sdelem = cas->hcelem;
+            cas->hcdt = hcdt;
+            szqueue_add(hc->sendq, hcdt);
+            hcdt = nilptr;
             break;
         default:
             assert(1==2); break;
@@ -134,18 +168,26 @@ bool selectgo(int* rcasi, scase** cas0, uint16_t* order0, int ncases) {
         if (casewk == sk->kind && sk->hc == wkhc) {
             casi = i;
             cas = sk;
-            sk->hcelem = mygr->hcelem;
-            linfo("case woke i=%d direction=%d by=%p val=%p\n", i, casewk, wkgr, mygr->hcelem);
+            if (sk->kind == caseSend) {
+            }else{
+                sk->hcelem = *(cas->hcdt->rvelem);
+            }
+            // sk->hcelem = mygr->hcelem;
+            linfo("case woke i=%d direction=%d by=%p val=%p\n", i, casewk, wkgr, sk->hcelem);
+            // mygr->hcelem);
         }
         else{
             hc = sk->hc;
             if (sk->kind == caseSend) {
-                gr = szqueue_remove(hc->sendq);
+                hcdt = szqueue_remove(hc->sendq);
             }else{
-                gr = szqueue_remove(hc->recvq);
+                hcdt = szqueue_remove(hc->recvq);
             }
+            assert(hcdt != nilptr);
+            gr = hcdt->gr;
             assert(gr == mygr);
             gr = nilptr;
+            hcdt = nilptr;
         }
     }
 
@@ -178,9 +220,10 @@ bool selectgo(int* rcasi, scase** cas0, uint16_t* order0, int ncases) {
     goto retc;
 
  recv:
-    cas->hcelem = gr->hcelem;
+    cas->hcelem = hcdt->sdelem;
+    // cas->hcelem = gr->hcelem;
     selunlock(cas0, order0, ncases);
-    crn_procer_resume_one(gr, 0, gr->id, gr->mcid);
+    crn_procer_resume_one(gr, 0, hcdt->grid, hcdt->mcid);
     linfo("syncrecv: cas0=%p hc=%p val=%p\n", cas0, hc, cas->hcelem);
     recvok = true;
     retline = __LINE__;
@@ -193,7 +236,8 @@ bool selectgo(int* rcasi, scase** cas0, uint16_t* order0, int ncases) {
     goto retc;
 
  send:
-    gr->hcelem = cas->hcelem;
+    *hcdt->rvelem = cas->hcelem;
+    // gr->hcelem = cas->hcelem;
     selunlock(cas0, order0, ncases);
     linfo("syncsend: cas0=%p hc=%p val=%p\n", cas0, hc, cas->hcelem);
     retline = __LINE__;

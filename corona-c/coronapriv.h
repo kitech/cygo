@@ -61,7 +61,7 @@ struct fiber {
     coro_context *coctx0; // ref to machine.coctx0
     grstate state;
     bool isresume;
-    void* hcelem;
+    // void* hcelem;
     pmutex_t* hclock; // hchan.lock
     int pkreason;
     fiber* wokeby; //

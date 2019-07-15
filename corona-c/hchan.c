@@ -5,6 +5,17 @@
 
 // wrapper chan_t with fiber integeration
 
+hcdata* hcdata_new(fiber* gr) {
+    hcdata* d = (hcdata*)crn_gc_malloc(sizeof(hcdata));
+    d->gr = gr;
+    d->grid = gr->id;
+    d->mcid = gr->mcid;
+    return d;
+}
+void hcdata_free(hcdata* d) {
+    crn_gc_free(d);
+}
+
 static void hchan_finalizer(void* hc) {
     linfo("hchan dtor %p %d\n", hc, gettid());
     // assert(1==2);
@@ -89,29 +100,26 @@ int hchan_send(hchan* hc, void* data) {
         // if any fiber waiting, put data to it elem and then wakeup
         // else put self to sendq and then parking self
 
-        fiber* gr = (fiber*)szqueue_remove(hc->recvq);
-        if (gr != nilptr) {
-            bool swaped = atomic_casptr(&gr->hcelem, invlidptr, data);
-            if (swaped) {
-                linfo("resume recver %d on %d/%d\n", gr->id, mygr->id, mygr->mcid);
-                gr->wokeby = mygr;
-                gr->wokehc = hc;
-                gr->wokecase = caseRecv;
-                pmutex_unlock(&hc->lock);
-                crn_procer_resume_one(gr, 0, gr->id, gr->mcid);
-                return 1;
-            } else {
-                linfo("wtf, cannot set rcvg hcelem %d, swaped %d elem %p\n",
-                      gr->id, swaped, gr->hcelem);
-                // assert(swaped == true);
-            }
+        hcdata* hcdt = (hcdata*)szqueue_remove(hc->recvq);
+        if (hcdt != nilptr) {
+            fiber* gr = hcdt->gr;
+            // assert(gr->id == hcdt->grid);
+            *hcdt->rvelem = data;
+            linfo("resume recver %d/%d by %d/%d\n", hcdt->grid, hcdt->mcid, mygr->id, mygr->mcid);
+            gr->wokeby = mygr;
+            gr->wokehc = hc;
+            gr->wokecase = caseRecv;
+            pmutex_unlock(&hc->lock);
+            crn_procer_resume_one(gr, 0, hcdt->grid, hcdt->mcid);
+            return 1;
         }
 
         // cannot send directly
         {
             // put data to my hcelem, put self to sendq, then parking self
-            atomic_setptr(&mygr->hcelem, data);
-            szqueue_add(hc->sendq, mygr);
+            hcdata* hcdt = hcdata_new(mygr);
+            hcdt->sdelem = data;
+            szqueue_add(hc->sendq, hcdt);
             linfo("yield me sender %d/%d\n", mygr->id, mygr->mcid);
             mygr->hclock = &hc->lock;
             // pmutex_unlock(&hc->lock);
@@ -124,26 +132,32 @@ int hchan_send(hchan* hc, void* data) {
         int bufsz = chan_size(hc->c);
         if (bufsz < hc->cap) {
             chan_send(hc->c, data);
-            fiber* gr = (fiber*)szqueue_remove(hc->recvq);
+            hcdata* hcdt = (hcdata*)szqueue_remove(hc->recvq);
+            fiber* gr = hcdt->gr;
+            // fiber* gr = (fiber*)szqueue_remove(hc->recvq);
             if (gr != nilptr) {
+                assert(gr->id == hcdt->grid);
                 gr->wokeby = mygr;
-                crn_procer_resume_one(gr, 0, gr->id, gr->mcid);
+                crn_procer_resume_one(gr, 0, hcdt->grid, hcdt->mcid);
             }
             pmutex_unlock(&hc->lock);
             return 1;
         }else{
             // if has recvq, put to peer hcelem, wakeup peer and return
             // put data to my hcelem, put self to sendq, then parking self
-            fiber* gr = (fiber*)szqueue_remove(hc->recvq);
+            hcdata* hcdt = (hcdata*)szqueue_remove(hc->recvq);
+            fiber* gr = hcdt->gr;
             if (gr != nilptr) {
-                gr->hcelem = data;
-                crn_procer_resume_one(gr, 0, gr->id, gr->mcid);
+                // assert(gr->id == hcdt->grid);
+                *hcdt->rvelem = data;
+                crn_procer_resume_one(gr, 0, hcdt->grid, hcdt->mcid);
                 pmutex_unlock(&hc->lock);
                 return 1;
             }
 
-            atomic_setptr(&mygr->hcelem, data);
-            szqueue_add(hc->sendq, mygr);
+            hcdt = hcdata_new(mygr);
+            hcdt->sdelem = data;
+            szqueue_add(hc->sendq, hcdt);
 
             pmutex_unlock(&hc->lock);
             crn_procer_yield(-1, YIELD_TYPE_CHAN_SEND);
@@ -163,42 +177,31 @@ int hchan_recv(hchan* hc, void** pdata) {
         // else if any sendq, wakeup them,
         // else parking
 
-        fiber* gr = (fiber*)szqueue_remove(hc->sendq);
-        if (gr != nilptr) {
-            void* oldptr = atomic_getptr(&gr->hcelem);
-            bool swaped = atomic_casptr(&gr->hcelem, oldptr, invlidptr);
-            if (swaped && oldptr != invlidptr) {
-                *pdata = oldptr;
-                linfo("resume sender %d on %d/%d\n", gr->id, mygr->id, mygr->mcid);
-                gr->wokeby = mygr;
-                gr->wokehc = hc;
-                gr->wokecase = caseSend;
-                pmutex_unlock(&hc->lock);
-                crn_procer_resume_one(gr, 0, gr->id, gr->mcid);
-                return 1;
-            } else {
-                linfo("wtf, cannot set sndg hcelem %d, swaped %d elem %p\n",
-                      gr->id, swaped, oldptr);
-                // assert(swaped == true);
-            }
+        hcdata* hcdt = (hcdata*)szqueue_remove(hc->sendq);
+        if (hcdt != nilptr) {
+            fiber* gr = hcdt->gr;
+            // assert(gr->id == hcdt->grid);
+            *pdata = hcdt->sdelem;
+            linfo("resume sender %d/%d by %d/%d\n", hcdt->grid, hcdt->mcid, mygr->id, mygr->mcid);
+            gr->wokeby = mygr;
+            gr->wokehc = hc;
+            gr->wokecase = caseSend;
+            pmutex_unlock(&hc->lock);
+            crn_procer_resume_one(gr, 0, hcdt->grid, hcdt->mcid);
+            return 1;
         }
 
         // cannot recv directly
         {
-            szqueue_add(hc->recvq, mygr);
+            hcdata* hcdt = hcdata_new(mygr);
+            hcdt->rvelem = pdata;
+            szqueue_add(hc->recvq, hcdt);
             // linfo("chan recv %d\n", mygr->id);
-            linfo("yield me recver %d/%d, qc %d\n", mygr->id, mygr->mcid, hc->recvq->size);
+            linfo("yield me recver %d/%d, qc %d ch=%p\n", mygr->id, mygr->mcid, hc->recvq->size, hc);
             mygr->hclock = &hc->lock;
             // pmutex_unlock(&hc->lock);
             crn_procer_yield(-1, YIELD_TYPE_CHAN_RECV);
-            pmutex_lock(&hc->lock);
-            void* oldptr = atomic_getptr(&mygr->hcelem);
-            // assert(oldptr != invlidptr);
-            bool swaped = atomic_casptr(&mygr->hcelem, oldptr, invlidptr);
-            assert(swaped == true);
-            *pdata = oldptr;
             assert(*pdata != invlidptr);
-            pmutex_unlock(&hc->lock);
             return 1;
         }
     }else{
@@ -212,20 +215,22 @@ int hchan_recv(hchan* hc, void** pdata) {
             return 1;
         }
 
-        fiber* gr = szqueue_remove(hc->sendq);
+        hcdata* hcdt = (hcdata*)szqueue_remove(hc->sendq);
+        fiber* gr = hcdt->gr;
         if (gr != nilptr) {
-            *pdata = gr->hcelem;
-            gr->hcelem = nilptr;
+            // assert(gr->id == hcdt->grid);
+            *pdata = hcdt->sdelem;
             gr->wokeby = mygr;
             pmutex_unlock(&hc->lock);
-            crn_procer_resume_one(gr, 0, gr->id, gr->mcid);
+            crn_procer_resume_one(gr, 0, hcdt->grid, hcdt->mcid);
             return 1;
         }
 
-        szqueue_add(hc->recvq, mygr);
+        hcdt = hcdata_new(mygr);
+        hcdt->rvelem = pdata;
+        szqueue_add(hc->recvq, hcdt);
         pmutex_unlock(&hc->lock);
         crn_procer_yield(-1, YIELD_TYPE_CHAN_RECV);
-        *pdata = mygr->hcelem;
         return 1;
     }
 }
