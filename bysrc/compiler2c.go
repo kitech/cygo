@@ -10,6 +10,8 @@ import (
 	"reflect"
 	"runtime/debug"
 	"strings"
+
+	"github.com/thoas/go-funk"
 )
 
 func init() {
@@ -993,6 +995,8 @@ func (c *g2nc) genCallExprNorm(scope *ast.Scope, te *ast.CallExpr) {
 		selty := c.info.TypeOf(selfn.X)
 		ispkgsel = isinvalidty2(selty)
 	}
+	if !isselfn && isidt {
+	}
 
 	if isselfn {
 		if iscfn {
@@ -1087,9 +1091,12 @@ func (c *g2nc) genCallExprClosure(scope *ast.Scope, te *ast.CallExpr, fnlit *ast
 		selty := c.info.TypeOf(selfn.X)
 		ispkgsel = isinvalidty2(selty)
 	}
+	if !isselfn && isidt {
+	}
 
 	if lefte != nil {
-		c.out("{0}").outfh().outnl()
+		// {0} 只能用于初始化
+		c.out("0").outfh().outnl()
 	}
 
 	closi := c.getclosinfo(fnlit)
@@ -1364,6 +1371,12 @@ func (this *g2nc) genExpr2(scope *ast.Scope, e ast.Expr) {
 		}
 
 	case *ast.CallExpr:
+		if idto, ok := te.Fun.(*ast.Ident); ok {
+			funame := idto.Name
+			if funk.Contains([]string{"_cgoCheckPointer"}, funame) {
+				this.out("//").outsp()
+			}
+		}
 		this.genCallExpr(scope, te)
 	case *ast.BasicLit:
 		ety := this.info.TypeOf(e)
@@ -1933,8 +1946,9 @@ func (c *g2nc) genValueSpec(scope *ast.Scope, spec *ast.ValueSpec, validx int) {
 		c.outsp().outeq().outsp()
 
 		if idx < len(spec.Values) {
-			var ns = putscope(scope, ast.Var, "varname", varname)
-			c.genExpr(ns, spec.Values[idx])
+			c.valnames[spec.Values[idx]] = varname
+			scope = putscope(scope, ast.Var, "varname", varname)
+			c.genExpr(scope, spec.Values[idx])
 		} else {
 			if isconst {
 				c.out("(")
@@ -1999,9 +2013,15 @@ func (this *g2nc) outf(format string, args ...interface{}) *g2nc {
 
 // TODO fix by typedef order
 func (this *g2nc) genPrecgodefs() string {
-	precgodefs := `typedef int32 _Ctype_int;
+	precgodefs := `
+typedef void _Ctype_void;
+typedef int32 _Ctype_int;
 typedef int64 _Ctype_long;
+typedef uint64 _Ctype_ulong;
 typedef uint32 _Ctype_uint;
+typedef int8 _Ctype_char;
+typedef float32 _Ctype_float;
+typedef _Ctype_long _Ctype_ptrdiff_t;
 `
 	return precgodefs
 }

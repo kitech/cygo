@@ -119,6 +119,10 @@ func sign2rety(v string) string {
 	if pos > 0 {
 		retstr = retstr[pos+2:]
 	}
+	pos = strings.LastIndex(retstr, ".")
+	if pos > 0 {
+		retstr = retstr[pos+1:]
+	}
 	if isstrty(retstr) {
 		return "cxstring*"
 	}
@@ -277,6 +281,11 @@ func (bc *basecomp) fillclosidents(clos *closinfo) {
 					myids[lve] = true
 					myids2[lve.Name] = true
 				}
+			}
+		case *ast.ValueSpec:
+			for _, name := range te.Names {
+				myids[name] = true
+				myids2[name.Name] = true
 			}
 		default:
 			gopp.G_USED(te)

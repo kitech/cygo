@@ -152,6 +152,9 @@ func (pc *ParserContext) walkpass_cgo_processor() {
 		if len(allout) > 0 {
 			log.Println(string(allout))
 		}
+		if err != nil {
+			os.Exit(-1)
+		}
 	}
 
 	// copy orignal source to wkdir
@@ -641,7 +644,8 @@ func (pc *ParserContext) walkpass_closures() {
 func (pc *ParserContext) walkpass_clean_cgodecl() {
 	pkgs := pc.pkgs
 	skipfds := []string{"_cgo_runtime_cgocallback", "_cgoCheckResult", "_cgoCheckPointer",
-		"_Cgo_use", "_cgo_runtime_cgocall", "_Cgo_ptr"}
+		"_Cgo_use", "_cgo_runtime_cgocall", "_Cgo_ptr", "_cgo_cmalloc", "runtime_throw",
+		"_cgo_runtime_gostringn", "_cgo_runtime_gostring"}
 
 	for _, pkg := range pkgs {
 		astutil.Apply(pkg, func(c *astutil.Cursor) bool {
@@ -654,7 +658,8 @@ func (pc *ParserContext) walkpass_clean_cgodecl() {
 				}
 			case *ast.ValueSpec:
 				name := te.Names[0].Name
-				if strings.HasPrefix(name, "__cgofn__cgo_") || strings.HasPrefix(name, "_cgo_") {
+				if strings.HasPrefix(name, "__cgofn__cgo_") || strings.HasPrefix(name, "_cgo_") ||
+					strings.HasPrefix(name, "_Ciconst_") || strings.HasPrefix(name, "_Cfpvar_") {
 					c.Delete()
 					break
 				}
@@ -663,7 +668,22 @@ func (pc *ParserContext) walkpass_clean_cgodecl() {
 					c.Delete()
 					break
 				}
-
+			case *ast.CallExpr:
+				if fe, ok := te.Fun.(*ast.Ident); ok {
+					if fe.Name == "_Cgo_ptr" {
+						c.Replace(newIdent(te.Args[0].(*ast.Ident).Name[11:]))
+						break
+					}
+					if fe.Name == "_cgoCheckPointer" {
+						// panic: Delete node not contained in slice
+						// c.Delete()
+						// break
+					}
+				}
+			case *ast.Ident:
+				if strings.HasPrefix(te.Name, "_Ciconst_") {
+					c.Replace(newIdent(te.Name[9:]))
+				}
 			default:
 				gopp.G_USED(te)
 			}
