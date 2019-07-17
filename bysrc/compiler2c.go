@@ -38,6 +38,7 @@ func (this *g2nc) genpkgs() {
 		this.pkgo = pkg
 
 		this.genpkg(pname, pkg)
+		this.calcClosureInfo(pkg.Scope, pkg)
 		this.genGostmtTypes(pkg.Scope, pkg)
 		this.genChanTypes(pkg.Scope, pkg)
 		this.genFuncs(pkg)
@@ -88,6 +89,24 @@ func (this *g2nc) genfile(scope *ast.Scope, name string, f *ast.File) {
 	// 	this.genDecl(scope, d)
 	// }
 }
+func (c *g2nc) calcClosureInfo(scope *ast.Scope, pkg *ast.Package) {
+	fds := map[*ast.FuncDecl]int{}
+	for _, fnlit := range c.psctx.closures {
+		fd := upfindFuncDeclAst(c.psctx, fnlit, 0)
+		if fd == nil {
+			// maybe global
+		}
+		if _, ok := fds[fd]; !ok {
+			fds[fd] = 1
+		} else {
+			fds[fd] += 1
+		}
+		cnter := fds[fd]
+		closi := c.newclosinfo(fd, fnlit, cnter)
+		c.closidx[fnlit] = closi
+	}
+
+}
 func (c *g2nc) genGostmtTypes(scope *ast.Scope, pkg *ast.Package) {
 	c.out("// gostmt types", fmt.Sprintf("%d", len(c.psctx.gostmts))).outnl()
 	for idx, gostmt := range c.psctx.gostmts {
@@ -136,16 +155,15 @@ func (this *g2nc) genDecl(scope *ast.Scope, d ast.Decl) {
 	}
 }
 func (c *g2nc) genPreFuncDecl(scope *ast.Scope, d *ast.FuncDecl) {
-	cnter := 0
 	for _, fnlit := range c.psctx.closures {
 		fd2 := upfindFuncDeclAst(c.psctx, fnlit, 0)
 		if fd2 != d {
 			continue
 		}
 
-		cnter++
-		closi := c.newclosinfo(d, fnlit, cnter)
+		closi := c.getclosinfo(fnlit)
 		c.closidx[fnlit] = closi
+		cnter := closi.idx
 
 		c.outf("// %v", fnlit).outnl()
 		c.out("typedef").outsp()
@@ -268,6 +286,10 @@ func (this *g2nc) genStmt(scope *ast.Scope, stmt ast.Stmt, idx int) {
 	if stmt != nil {
 		posinfo := this.exprpos(stmt).String()
 		this.out("// ", posinfo).outnl()
+		stmtstr := this.prtnode(stmt)
+		if !strings.ContainsAny(strings.TrimSpace(stmtstr), "\n") {
+			this.out("// ").outnl()
+		}
 		this.genStmtTmps(scope, stmt)
 	}
 	defer this.outnl()
@@ -388,16 +410,25 @@ func (this *g2nc) genGoStmt(scope *ast.Scope, stmt *ast.GoStmt) {
 	this.genFiberWcall(scope, stmt.Call)
 }
 func (c *g2nc) genFiberStargs(scope *ast.Scope, e *ast.CallExpr) {
-	funame := e.Fun.(*ast.Ident).Name
-	if _, ok := c.psctx.grstargs[funame]; ok {
-		return
+	var funame string
+	switch te := e.Fun.(type) {
+	case *ast.Ident:
+		funame = e.Fun.(*ast.Ident).Name
+		if _, ok := c.psctx.grstargs[funame]; ok {
+			return
+		}
+	case *ast.FuncLit:
+		closi := c.getclosinfo(te)
+		funame = closi.fnname
+	default:
+		log.Println("todo", e, reflect.TypeOf(e.Fun))
 	}
 
 	c.out("typedef struct {")
 	for idx, ae := range e.Args {
 		fldname := fmt.Sprintf("a%d", idx)
 		fldtype := c.exprTypeName(scope, ae)
-		log.Println(funame, fldtype, fldname, reflect.TypeOf(ae))
+		// log.Println(funame, fldtype, fldname, reflect.TypeOf(ae))
 		c.out(fldtype).outsp().out(fldname).outfh().outnl()
 	}
 	c.out("}", funame+"_fiber_args").outfh().outnl()
@@ -719,7 +750,13 @@ func (c *g2nc) genCallExpr(scope *ast.Scope, te *ast.CallExpr) {
 		c.genExpr(scope, be.X)
 		c.out(")")
 		c.out("(")
-		c.genExpr(scope, te.Args[0])
+		log.Println(c.exprstr(te))
+		for idx, arge := range te.Args {
+			c.genExpr(scope, arge)
+			if idx < len(te.Args)-1 {
+				c.out(",")
+			}
+		}
 		c.out(")")
 	case *ast.FuncLit:
 		c.genCallExprClosure(scope, te, be)
@@ -1601,6 +1638,7 @@ func (this *g2nc) exprTypeNameImpl(scope *ast.Scope, e ast.Expr) string {
 
 	goty := this.info.TypeOf(e)
 	if goty == nil {
+		log.Println(this.exprstr(e))
 		log.Panicln(e, this.exprpos(e), reflect.TypeOf(e))
 	}
 	val := this.exprTypeNameImpl2(scope, goty, e)
@@ -1927,7 +1965,7 @@ func (this *g2nc) outf(format string, args ...interface{}) *g2nc {
 
 func (this *g2nc) code() (string, string) {
 	code := ""
-	code += fmt.Sprintf("// %s\n", this.psctx.bdpkgs.Dir)
+	code += fmt.Sprintf("// %s of %s\n", this.psctx.bdpkgs.Dir, this.psctx.wkdir)
 	code += this.psctx.ccode
 	code += "#include <cxrtbase.h>\n\n"
 	code += this.sb.String()

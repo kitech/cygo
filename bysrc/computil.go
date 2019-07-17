@@ -1,8 +1,10 @@
 package main
 
 import (
+	"bytes"
 	"fmt"
 	"go/ast"
+	"go/printer"
 	"go/token"
 	"go/types"
 	"log"
@@ -193,6 +195,11 @@ func (bc *basecomp) exprstr(e ast.Expr) string { return types.ExprString(e) }
 func (c *basecomp) exprpos(e ast.Node) token.Position {
 	return exprpos(c.psctx, e)
 }
+func (c *basecomp) prtnode(n ast.Node) string {
+	buf := bytes.NewBuffer(nil)
+	printer.Fprint(buf, c.psctx.fset, n)
+	return string(buf.Bytes())
+}
 
 type closinfo struct {
 	idx       int
@@ -209,9 +216,16 @@ func (bc *basecomp) newclosinfo(fd *ast.FuncDecl, fnlit *ast.FuncLit, idx int) *
 	clos.idx = idx
 	clos.fd = fd
 	clos.fnlit = fnlit
-	clos.fntype = fmt.Sprintf("%s_closure_type_%d", fd.Name.Name, idx)
-	clos.fnname = fmt.Sprintf("%s_closure_%d", fd.Name.Name, idx)
-	clos.argtyname = fmt.Sprintf("%s_closure_arg_%d", fd.Name.Name, idx)
+
+	funame := ""
+	if fd == nil {
+		funame = tmpvarname()
+	} else {
+		funame = fd.Name.Name
+	}
+	clos.fntype = fmt.Sprintf("%s_closure_type_%d", funame, idx)
+	clos.fnname = fmt.Sprintf("%s_closure_%d", funame, idx)
+	clos.argtyname = fmt.Sprintf("%s_closure_arg_%d", funame, idx)
 
 	bc.fillclosidents(clos)
 	return clos

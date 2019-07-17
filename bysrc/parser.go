@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"go/ast"
 	"go/build"
 	"go/importer"
@@ -10,17 +11,20 @@ import (
 	"gopp"
 	"log"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"reflect"
 	"strings"
 
 	"golang.org/x/tools/go/ast/astutil"
 
+	"github.com/thoas/go-funk"
 	"github.com/twmb/algoimpl/go/graph"
 )
 
 type ParserContext struct {
 	path      string
+	wkdir     string // for cgo
 	pkgrename string
 	fset      *token.FileSet
 	pkgs      map[string]*ast.Package
@@ -73,6 +77,16 @@ func (this *ParserContext) Init() error {
 	}
 	// TODO use go-clang to resolve c function signature
 	// TODO extract c code from bdpkgs.CgoFiles
+	this.walkpass_cgopp()
+	// replace codebase dir
+	this.path, this.wkdir = this.wkdir, this.path
+	bdpkgs, err = build.ImportDir(this.path, build.ImportComment)
+	gopp.ErrPrint(err)
+	this.bdpkgs = bdpkgs
+	if len(bdpkgs.InvalidGoFiles) > 0 {
+		log.Fatalln("Have InvalidGoFiles", bdpkgs.InvalidGoFiles)
+	}
+	log.Println(bdpkgs.GoFiles)
 
 	this.fset = token.NewFileSet()
 	pkgs, err := parser.ParseDir(this.fset, this.path, this.dirFilter, 0|parser.AllErrors|parser.ParseComments)
@@ -102,6 +116,45 @@ func (this *ParserContext) Init() error {
 	this.walkpass_closures()
 
 	return err
+}
+
+// cgo preprocessor
+func (pc *ParserContext) walkpass_cgopp() {
+	pc.wkdir = "_obj"
+	{
+		err := os.RemoveAll(pc.wkdir + "/")
+		gopp.ErrPrint(err, pc.wkdir)
+		os.Mkdir(pc.wkdir, 0755)
+	}
+	cmdfld := []string{"/opt/go/bin/go", "tool", "cgo", "-objdir", pc.wkdir}
+	bdpkgs := pc.bdpkgs
+	for _, cgofile := range bdpkgs.CgoFiles {
+		cgofile = bdpkgs.Dir + "/" + cgofile
+		cmdfld = append(cmdfld, cgofile)
+	}
+	log.Println(cmdfld)
+	if len(bdpkgs.CgoFiles) > 0 {
+		cmdo := exec.Command(cmdfld[0], cmdfld[1:]...)
+		allout, err := cmdo.CombinedOutput()
+		gopp.ErrPrint(err, cmdfld)
+		allout = bytes.TrimSpace(allout)
+		if len(allout) > 0 {
+			log.Println(string(allout))
+		}
+	}
+
+	// copy orignal source to wkdir
+	// remove cgofile from wkdir
+	files, err := filepath.Glob(bdpkgs.Dir + "/*")
+	gopp.ErrPrint(err)
+	for _, file := range files {
+		if funk.Contains(bdpkgs.CgoFiles, filepath.Base(file)) {
+			continue
+		}
+		err = gopp.CopyFile(file, pc.wkdir+"/"+filepath.Base(file))
+		gopp.ErrPrint(err, file)
+	}
+	os.Rename(pc.wkdir+"/_cgo_gotypes.go", pc.wkdir+"/cxuse_cgo_gotypes.go")
 }
 
 func (pc *ParserContext) walkpass_check() {

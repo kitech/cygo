@@ -50,6 +50,11 @@ func main() {
 
 		for _, imppath := range psctx.bdpkgs.Imports {
 			log.Println(imppath, psctx.bdpkgs.Dir)
+			if imppath == "runtime" || imppath == "atomic" ||
+				imppath == "runtime/cgo" ||
+				imppath == "syscall" || imppath == "syscall/js" {
+				continue
+			}
 			for _, gopath1 := range gopaths {
 				impdir := gopath1 + "/src/" + imppath
 				if gopp.FileExist(impdir) {
