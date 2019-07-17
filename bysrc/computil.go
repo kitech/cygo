@@ -64,6 +64,7 @@ func isstructty(tystr string) bool     { return strings.Contains(tystr, "/.") } 
 func isstructty2(typ types.Type) bool  { return isstructty(typ.String()) }
 func isinvalidty(tystr string) bool    { return strings.HasPrefix(tystr, "invalid ") }
 func isinvalidty2(typ types.Type) bool { return isinvalidty(typ.String()) }
+func iswrapcfunc(name string) bool     { return strings.HasPrefix(name, "_Cfunc") }
 
 func newLitInt(v int) *ast.BasicLit {
 	return &ast.BasicLit{Kind: token.INT, Value: fmt.Sprintf("%d", v)}

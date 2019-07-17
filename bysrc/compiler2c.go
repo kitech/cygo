@@ -234,6 +234,8 @@ func (this *g2nc) genFuncDecl(scope *ast.Scope, fd *ast.FuncDecl) {
 		this.out("extern").outsp()
 		// return
 	}
+	// _Cfunc_xxx
+	iswcfn := iswrapcfunc(this.exprstr(fd.Name))
 
 	pkgpfx := this.pkgpfx()
 	this.genFieldList(scope, fd.Type.Results, true, false, "", false)
@@ -257,7 +259,24 @@ func (this *g2nc) genFuncDecl(scope *ast.Scope, fd *ast.FuncDecl) {
 	}
 	this.genFieldList(scope, fd.Type.Params, false, true, ",", true)
 	this.out(")").outnl()
-	if fd.Body != nil {
+	if iswcfn {
+		this.out("{").outnl()
+		if fd.Type.Results.NumFields() > 0 {
+			this.out("return").outsp()
+		}
+		this.outf("%s(", fd.Name.Name[7:])
+		for idx1, arge := range fd.Type.Params.List {
+			for idx2, name := range arge.Names {
+				this.outf("%s", name.Name)
+				if idx1 == fd.Type.Params.NumFields()-1 && idx2 == len(arge.Names)-1 {
+				} else {
+					this.out(",")
+				}
+			}
+		}
+		this.out(")").outfh().outnl()
+		this.out("}").outnl()
+	} else if fd.Body != nil {
 		scope = ast.NewScope(scope)
 		scope.Insert(ast.NewObj(ast.Fun, fd.Name.Name))
 		this.genBlockStmt(scope, fd.Body)
@@ -265,6 +284,8 @@ func (this *g2nc) genFuncDecl(scope *ast.Scope, fd *ast.FuncDecl) {
 		this.outfh()
 	}
 	this.outnl()
+}
+func (this *g2nc) genWrapCFuncDecl(scope *ast.Scope, fd *ast.FuncDecl) {
 }
 
 func (this *g2nc) genBlockStmt(scope *ast.Scope, stmt *ast.BlockStmt) {
@@ -750,7 +771,6 @@ func (c *g2nc) genCallExpr(scope *ast.Scope, te *ast.CallExpr) {
 		c.genExpr(scope, be.X)
 		c.out(")")
 		c.out("(")
-		log.Println(c.exprstr(te))
 		for idx, arge := range te.Args {
 			c.genExpr(scope, arge)
 			if idx < len(te.Args)-1 {
@@ -1963,11 +1983,21 @@ func (this *g2nc) outf(format string, args ...interface{}) *g2nc {
 	return this
 }
 
+// TODO fix by typedef order
+func (this *g2nc) genPrecgodefs() string {
+	precgodefs := `typedef int32 _Ctype_int;
+typedef int64 _Ctype_long;
+typedef uint32 _Ctype_uint;
+`
+	return precgodefs
+}
+
 func (this *g2nc) code() (string, string) {
 	code := ""
 	code += fmt.Sprintf("// %s of %s\n", this.psctx.bdpkgs.Dir, this.psctx.wkdir)
 	code += this.psctx.ccode
 	code += "#include <cxrtbase.h>\n\n"
+	code += this.genPrecgodefs() + "\n"
 	code += this.sb.String()
 	return code, "c"
 }
