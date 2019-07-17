@@ -75,9 +75,18 @@ func (this *ParserContext) Init() error {
 	if len(bdpkgs.InvalidGoFiles) > 0 {
 		log.Fatalln("Have InvalidGoFiles", bdpkgs.InvalidGoFiles)
 	}
-	// TODO use go-clang to resolve c function signature
-	// TODO extract c code from bdpkgs.CgoFiles
-	this.walkpass_cgopp()
+	// use go-clang to resolve c function signature
+	// extract c code from bdpkgs.CgoFiles
+	// parser step 1, got raw cgo c code
+	{
+		this.fset = token.NewFileSet()
+		pkgs, err := parser.ParseDir(this.fset, this.path, this.dirFilter, 0|parser.AllErrors|parser.ParseComments)
+		gopp.ErrPrint(err)
+		this.pkgs = pkgs
+		this.ccode = this.pickCCode()
+	}
+
+	this.walkpass_cgo_processor()
 	// replace codebase dir
 	this.path, this.wkdir = this.wkdir, this.path
 	bdpkgs, err = build.ImportDir(this.path, build.ImportComment)
@@ -88,12 +97,13 @@ func (this *ParserContext) Init() error {
 	}
 	log.Println(bdpkgs.GoFiles)
 
+	// parser step 2, got ast/types
 	this.fset = token.NewFileSet()
 	pkgs, err := parser.ParseDir(this.fset, this.path, this.dirFilter, 0|parser.AllErrors|parser.ParseComments)
 	gopp.ErrPrint(err)
 	this.pkgs = pkgs
 
-	this.ccode = this.pickCCode()
+	// this.ccode = this.pickCCode()
 	this.walkpass_valid_files()
 
 	this.conf.DisableUnusedImportCheck = true
@@ -105,6 +115,7 @@ func (this *ParserContext) Init() error {
 
 	this.walkpass_check()
 
+	this.walkpass_clean_cgodecl()
 	this.walkpass_flat_cursors()
 	this.walkpass_func_deps()
 	log.Println("pkgs", this.typkgs.Name(), "types:", len(this.info.Types),
@@ -119,7 +130,7 @@ func (this *ParserContext) Init() error {
 }
 
 // cgo preprocessor
-func (pc *ParserContext) walkpass_cgopp() {
+func (pc *ParserContext) walkpass_cgo_processor() {
 	pc.wkdir = "_obj"
 	{
 		err := os.RemoveAll(pc.wkdir + "/")
@@ -624,6 +635,47 @@ func (pc *ParserContext) walkpass_closures() {
 	}
 	log.Println("closures", len(closures))
 	pc.closures = closures
+}
+
+//
+func (pc *ParserContext) walkpass_clean_cgodecl() {
+	pkgs := pc.pkgs
+	skipfds := []string{"_cgo_runtime_cgocallback", "_cgoCheckResult", "_cgoCheckPointer",
+		"_Cgo_use", "_cgo_runtime_cgocall", "_Cgo_ptr"}
+
+	for _, pkg := range pkgs {
+		astutil.Apply(pkg, func(c *astutil.Cursor) bool {
+
+			switch te := c.Node().(type) {
+			case *ast.FuncDecl:
+
+				if funk.Contains(skipfds, te.Name.Name) {
+					c.Delete()
+				}
+			case *ast.ValueSpec:
+				name := te.Names[0].Name
+				if strings.HasPrefix(name, "__cgofn__cgo_") || strings.HasPrefix(name, "_cgo_") {
+					c.Delete()
+					break
+				}
+				tystr := types.ExprString(te.Type)
+				if tystr == "syscall.Errno" || te.Names[0].Name == "_" {
+					c.Delete()
+					break
+				}
+
+			default:
+				gopp.G_USED(te)
+			}
+			return true
+		}, func(c *astutil.Cursor) bool {
+			switch te := c.Node().(type) {
+			default:
+				gopp.G_USED(te)
+			}
+			return true
+		})
+	}
 }
 
 // todo

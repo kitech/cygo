@@ -1643,7 +1643,7 @@ func (c *g2nc) genCxarrGet(scope *ast.Scope, vname ast.Expr, vidx ast.Expr) {
 	c.outf("cxarray_get_at(%v, %v)", vname, idxstr)
 }
 func (this *g2nc) exprTypeName(scope *ast.Scope, e ast.Expr) string {
-	log.Println(e, reflect.TypeOf(e))
+	// log.Println(e, reflect.TypeOf(e))
 	tyname := this.exprTypeNameImpl(scope, e)
 	if tyname == "unknownty" {
 		// log.Panicln(tyname, e, reflect.TypeOf(e), this.exprpos(e))
@@ -1719,6 +1719,8 @@ func (this *g2nc) exprTypeNameImpl2(scope *ast.Scope, ety types.Type, e ast.Expr
 			return te.String()
 		}
 		return te.String()
+	case *types.Interface:
+		return "cxeface*"
 	default:
 		log.Println("todo", goty, reflect.TypeOf(goty), isudty, tyval, te)
 		return te.String()
@@ -1733,6 +1735,7 @@ func (this *g2nc) exprTypeFmt(scope *ast.Scope, e ast.Expr) string {
 		return "d-nilty"
 	}
 	tyval, isudty := this.strtypes[goty.String()]
+	// log.Println(goty, reflect.TypeOf(goty), tyval, isudty, e, reflect.TypeOf(e))
 
 	switch te := goty.(type) {
 	case *types.Basic:
@@ -1747,6 +1750,17 @@ func (this *g2nc) exprTypeFmt(scope *ast.Scope, e ast.Expr) string {
 			}
 		}
 	case *types.Named:
+		segs := strings.Split(te.String(), "._Ctype_")
+		if len(segs) == 2 {
+			switch segs[1] {
+			case "int", "int32", "int64":
+				return "d"
+			case "float", "double":
+				return "f"
+			default:
+				log.Println("todo", segs)
+			}
+		}
 		return "p"
 	case *types.Pointer:
 		return "p"

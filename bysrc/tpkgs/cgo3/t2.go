@@ -6,5 +6,5 @@ package main
 import "C"
 
 func mytime() {
-	tm := C.time(0)
+	tm := C.time(nil)
 }
