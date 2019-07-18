@@ -111,6 +111,10 @@ void println2(const char* filename, int lineno, const char* funcname, const char
     write(STDERR_FILENO, obuf, len);
 }
 
+void println3(const char* origfilename, int origlineno, const char* filename, int lineno,
+              const char* funcname, const char* fmt, ...) {
+}
+
 #define MAX_STACK_LEVELS  50
 void panic(cxstring*s) {
     if (s != nilptr) {

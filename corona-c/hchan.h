@@ -12,7 +12,7 @@ typedef struct hchan {
     pmutex_t lock;
     szqueue_t* recvq; // fiber*
     szqueue_t* sendq; // fiber*
-    bool closed;
+    int closed;
 } hchan;
 
 typedef struct hcdata  {
