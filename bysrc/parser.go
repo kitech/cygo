@@ -41,10 +41,11 @@ type ParserContext struct {
 	funcDeclsv    []*ast.FuncDecl
 	funcdeclNodes map[string]graph.Node
 
-	tmpvars  map[ast.Stmt][]ast.Node
-	gostmts  []*ast.GoStmt
-	chanops  []ast.Expr // *ast.SendStmt
-	closures []*ast.FuncLit
+	tmpvars   map[ast.Stmt][]ast.Node
+	gostmts   []*ast.GoStmt
+	chanops   []ast.Expr // *ast.SendStmt
+	closures  []*ast.FuncLit
+	multirets []*ast.FuncDecl
 
 	gb     *graph.Graph
 	bdpkgs *build.Package
@@ -125,6 +126,7 @@ func (this *ParserContext) Init() error {
 	this.walkpass_gostmt()
 	this.walkpass_chan_send_recv()
 	this.walkpass_closures()
+	this.walkpass_multiret()
 
 	return err
 }
@@ -479,6 +481,10 @@ func upfindstmt(pc *ParserContext, cs *astutil.Cursor, no int) ast.Stmt {
 	}
 }
 
+func upfindFuncDeclNode(pc *ParserContext, n ast.Node, no int) *ast.FuncDecl {
+	cs := pc.cursors[n]
+	return upfindFuncDecl(pc, cs, no)
+}
 func upfindFuncDeclAst(pc *ParserContext, e ast.Expr, no int) *ast.FuncDecl {
 	cs := pc.cursors[e]
 	return upfindFuncDecl(pc, cs, no)
@@ -494,6 +500,38 @@ func upfindFuncDecl(pc *ParserContext, cs *astutil.Cursor, no int) *ast.FuncDecl
 	} else {
 		return upfindFuncDecl(pc, pcs, no+1)
 	}
+}
+
+func (pc *ParserContext) walkpass_multiret() {
+	multirets := []*ast.FuncDecl{}
+	pkgs := pc.pkgs
+	for _, pkg := range pkgs {
+		astutil.Apply(pkg, func(c *astutil.Cursor) bool {
+			switch te := c.Node().(type) {
+			default:
+				gopp.G_USED(te)
+			}
+			return true
+		}, func(c *astutil.Cursor) bool {
+			switch te := c.Node().(type) {
+			case *ast.FuncDecl:
+				if te.Type.Results.NumFields() < 2 {
+					break
+				}
+				for idx, fld := range te.Type.Results.List {
+					if len(fld.Names) == 0 {
+						fld.Names = append(fld.Names, newIdent(tmpvarname2(idx)))
+					}
+				}
+				multirets = append(multirets, te)
+			default:
+				gopp.G_USED(te)
+			}
+			return true
+		})
+	}
+	log.Println("multirets", len(multirets))
+	pc.multirets = multirets
 }
 
 // 一句表达不了的表达式临时变量

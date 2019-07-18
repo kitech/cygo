@@ -65,6 +65,7 @@ func isstructty2(typ types.Type) bool  { return isstructty(typ.String()) }
 func isinvalidty(tystr string) bool    { return strings.HasPrefix(tystr, "invalid ") }
 func isinvalidty2(typ types.Type) bool { return isinvalidty(typ.String()) }
 func iswrapcfunc(name string) bool     { return strings.HasPrefix(name, "_Cfunc") }
+func istuple(tystr string) bool        { return strings.Contains(tystr, "_multiret_") }
 
 func newLitInt(v int) *ast.BasicLit {
 	return &ast.BasicLit{Kind: token.INT, Value: fmt.Sprintf("%d", v)}
@@ -142,6 +143,9 @@ func tmpvarname() string {
 	tmpvarno++
 	return fmt.Sprintf("gxtv%d", tmpvarno)
 }
+func tmpvarname2(idx int) string {
+	return fmt.Sprintf("gxtv%d", idx)
+}
 
 // idt is ast.CallExpr.Fun
 func funcistypedep(idt ast.Expr) bool {
@@ -165,17 +169,19 @@ func funcistypedep(idt ast.Expr) bool {
 
 /////
 type basecomp struct {
-	psctx    *ParserContext
-	valnames map[ast.Expr]ast.Expr // rvalue => lname
-	strtypes map[string]types.TypeAndValue
-	closidx  map[*ast.FuncLit]*closinfo
+	psctx     *ParserContext
+	valnames  map[ast.Expr]ast.Expr // rvalue => lname
+	strtypes  map[string]types.TypeAndValue
+	closidx   map[*ast.FuncLit]*closinfo
+	multirets map[*ast.FuncDecl]*ast.Ident
 }
 
 func newbasecomp(psctx *ParserContext) *basecomp {
 	bc := &basecomp{
-		valnames: map[ast.Expr]ast.Expr{},
-		strtypes: map[string]types.TypeAndValue{},
-		closidx:  map[*ast.FuncLit]*closinfo{}}
+		valnames:  map[ast.Expr]ast.Expr{},
+		strtypes:  map[string]types.TypeAndValue{},
+		closidx:   map[*ast.FuncLit]*closinfo{},
+		multirets: map[*ast.FuncDecl]*ast.Ident{}}
 	bc.psctx = psctx
 	bc.initbc()
 	return bc
@@ -214,6 +220,7 @@ type closinfo struct {
 	fnname    string
 	argtyname string
 	idents    []*ast.Ident // refered identifier
+
 }
 
 func (bc *basecomp) newclosinfo(fd *ast.FuncDecl, fnlit *ast.FuncLit, idx int) *closinfo {

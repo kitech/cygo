@@ -43,6 +43,7 @@ func (this *g2nc) genpkgs() {
 		this.calcClosureInfo(pkg.Scope, pkg)
 		this.genGostmtTypes(pkg.Scope, pkg)
 		this.genChanTypes(pkg.Scope, pkg)
+		this.genMultiretTypes(pkg.Scope, pkg)
 		this.genFuncs(pkg)
 	}
 
@@ -132,6 +133,19 @@ func (c *g2nc) genChanTypes(scope *ast.Scope, pkg *ast.Package) {
 		c.outnl()
 	}
 }
+func (c *g2nc) genMultiretTypes(scope *ast.Scope, pkg *ast.Package) {
+	c.out("// multirets types", fmt.Sprintf("%d", len(c.psctx.gostmts))).outnl()
+	for idx, fd := range c.psctx.multirets {
+		c.outf("// %d %v %v", idx, fd.Name, fd.Type.Results.NumFields()).outnl()
+		c.outf("typedef struct %s_multiret_arg %s_multiret_arg", fd.Name.Name, fd.Name.Name).outfh().outnl()
+		c.outf("struct %s_multiret_arg {", fd.Name.Name)
+
+		c.genFieldList(scope, fd.Type.Results, false, true, ";", false)
+		c.out("}").outfh().outnl()
+		c.outnl()
+	}
+}
+
 func (this *g2nc) genFuncs(pkg *ast.Package) {
 	scope := pkg.Scope
 	// ordered funcDeclsv
@@ -238,9 +252,14 @@ func (this *g2nc) genFuncDecl(scope *ast.Scope, fd *ast.FuncDecl) {
 	}
 	// _Cfunc_xxx
 	iswcfn := iswrapcfunc(this.exprstr(fd.Name))
+	ismret := fd.Type.Results.NumFields() >= 2
 
 	pkgpfx := this.pkgpfx()
-	this.genFieldList(scope, fd.Type.Results, true, false, "", false)
+	if ismret {
+		this.outf("%s_multiret_arg*", fd.Name.Name)
+	} else {
+		this.genFieldList(scope, fd.Type.Results, true, false, "", false)
+	}
 	this.outsp()
 	if fd.Recv != nil {
 		recvtystr := this.exprTypeName(scope, fd.Recv.List[0].Type)
@@ -281,7 +300,21 @@ func (this *g2nc) genFuncDecl(scope *ast.Scope, fd *ast.FuncDecl) {
 	} else if fd.Body != nil {
 		scope = ast.NewScope(scope)
 		scope.Insert(ast.NewObj(ast.Fun, fd.Name.Name))
-		this.genBlockStmt(scope, fd.Body)
+		if ismret {
+			tvname := tmpvarname()
+			tvidt := newIdent(tvname)
+			this.multirets[fd] = tvidt
+			this.out("{").outnl()
+			this.outf("%s_multiret_arg*", fd.Name.Name).outsp().out(tvname)
+			this.outeq().outsp()
+			this.outf("cxmalloc(sizeof(%s_multiret_arg))", fd.Name.Name).outfh().outnl()
+			this.genBlockStmt(scope, fd.Body)
+			this.out("labmret:").outnl()
+			this.out("return").outsp().out(tvname).outfh().outnl()
+			this.out("}").outnl()
+		} else {
+			this.genBlockStmt(scope, fd.Body)
+		}
 	} else {
 		this.outfh()
 	}
@@ -410,6 +443,19 @@ func (c *g2nc) genAssignStmt(scope *ast.Scope, s *ast.AssignStmt) {
 			}
 			var ns = putscope(scope, ast.Var, "varval", s.Rhs[i])
 			c.genExpr(ns, s.Lhs[i])
+		} else if istuple(c.exprTypeName(scope, s.Rhs[i])) {
+			tvname := tmpvarname()
+			var ns = putscope(scope, ast.Var, "varname", newIdent(tvname))
+			c.out(c.exprTypeName(scope, s.Rhs[i]))
+			c.out(tvname).outeq()
+			c.genExpr(ns, s.Rhs[i])
+			c.outfh().outnl()
+			for idx, te := range s.Lhs {
+				c.out(c.exprTypeName(scope, te)).outsp()
+				c.out(te.(*ast.Ident).Name).outeq()
+				c.out(tvname).out("->").out(tmpvarname2(idx)).outfh().outnl()
+			}
+			log.Println(c.exprTypeName(scope, s.Rhs[i]), s.Lhs)
 		} else {
 			if s.Tok.String() == ":=" {
 				c.out(c.exprTypeName(scope, s.Rhs[i])).outsp()
@@ -1225,11 +1271,31 @@ func (c *g2nc) chanElemTypeName(e ast.Expr, trimstar bool) string {
 	return elemtyname
 }
 func (c *g2nc) genReturnStmt(scope *ast.Scope, e *ast.ReturnStmt) {
-	c.out("return").outsp()
-	for idx, ae := range e.Results {
-		c.genExpr(scope, ae)
-		if idx < len(e.Results)-1 {
-			c.out(",") // TODO
+	fd := upfindFuncDeclNode(c.psctx, e, 0)
+	ismret := fd.Type.Results.NumFields() >= 2
+
+	if ismret {
+		rtvname := c.multirets[fd]
+		names := []*ast.Ident{}
+		for _, fld := range fd.Type.Results.List {
+			for _, name := range fld.Names {
+				names = append(names, name)
+			}
+		}
+		for idx, re := range e.Results {
+			c.outf("%s->%s", rtvname.Name, names[idx].Name)
+			c.outeq()
+			c.genExpr(scope, re)
+			c.outfh().outnl()
+		}
+		c.out("goto labmret").outfh().outnl()
+	} else {
+		c.out("return").outsp()
+		for idx, ae := range e.Results {
+			c.genExpr(scope, ae)
+			if idx < len(e.Results)-1 {
+				c.out(",") // TODO
+			}
 		}
 	}
 	// c.outfh().outnl().outnl()
@@ -1734,6 +1800,14 @@ func (this *g2nc) exprTypeNameImpl2(scope *ast.Scope, ety types.Type, e ast.Expr
 		return te.String()
 	case *types.Interface:
 		return "cxeface*"
+	case *types.Tuple:
+		log.Println(e, reflect.TypeOf(e))
+		switch ce := e.(type) {
+		case *ast.CallExpr:
+			return fmt.Sprintf("%v_multiret_arg*", ce.Fun)
+		default:
+			log.Println("todo", goty, reflect.TypeOf(goty), isudty, tyval, te)
+		}
 	default:
 		log.Println("todo", goty, reflect.TypeOf(goty), isudty, tyval, te)
 		return te.String()
