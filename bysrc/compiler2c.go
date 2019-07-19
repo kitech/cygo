@@ -1039,15 +1039,8 @@ func (c *g2nc) genCallExprPrintln(scope *ast.Scope, te *ast.CallExpr) {
 	for idx, e1 := range te.Args {
 		tety := c.info.TypeOf(e1)
 		if isstrty2(tety) {
-			c.out("(")
-			c.out(tmpnames[idx])
-			// c.genExpr(scope, e1)
-			c.out(")->len,")
-
-			c.out("(")
-			c.out(tmpnames[idx])
-			// c.genExpr(scope, e1)
-			c.out(")->ptr")
+			c.outf("(%s)->len,", tmpnames[idx])
+			c.outf("(%s)->ptr", tmpnames[idx])
 		} else if iseface2(tety) {
 			c.genExpr(scope, e1)
 			c.out(".data")
@@ -1358,7 +1351,7 @@ func (c *g2nc) genDeferStmt(scope *ast.Scope, e *ast.ReturnStmt) {
 		}
 		defers = append(defers, defero)
 	}
-	log.Println("got defered return", len(defers))
+	// log.Println("got defered return", len(defers))
 	if len(defers) == 0 {
 		return
 	}
