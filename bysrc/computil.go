@@ -54,6 +54,8 @@ func isarrayty(tystr string) bool {
 func isarrayty2(typ types.Type) bool   { return isarrayty(typ.String()) }
 func iseface(tystr string) bool        { return strings.HasPrefix(tystr, "interface{}") }
 func iseface2(typ types.Type) bool     { return typ != nil && iseface(typ.String()) }
+func isiface(tystr string) bool        { return strings.HasPrefix(tystr, "interface{") }
+func isiface2(typ types.Type) bool     { return typ != nil && isiface(typ.String()) }
 func istypety(tystr string) bool       { return strings.HasPrefix(tystr, "type ") }
 func istypety2(typ types.Type) bool    { return istypety(typ.String()) }
 func ischanty(tystr string) bool       { return strings.HasPrefix(tystr, "chan ") }
@@ -64,6 +66,8 @@ func isstructty(tystr string) bool     { return strings.Contains(tystr, "/.") } 
 func isstructty2(typ types.Type) bool  { return isstructty(typ.String()) }
 func isinvalidty(tystr string) bool    { return strings.HasPrefix(tystr, "invalid ") }
 func isinvalidty2(typ types.Type) bool { return isinvalidty(typ.String()) }
+func isuntypedty(tystr string) bool    { return strings.HasPrefix(tystr, "untyped ") }
+func isuntypedty2(typ types.Type) bool { return isuntypedty(typ.String()) }
 func iswrapcfunc(name string) bool     { return strings.HasPrefix(name, "_Cfunc") }
 func istuple(tystr string) bool        { return strings.Contains(tystr, "_multiret_") }
 

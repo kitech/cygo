@@ -378,6 +378,24 @@ func (pc *ParserContext) walkpass_func_deps1() {
 				case *types.Func:
 					this.putFuncCallDependcy(curfd, te.Name)
 				}
+			case *ast.ReturnStmt:
+			case *ast.CompositeLit:
+				var curfd = curfds[len(curfds)-1]
+				goty := pc.info.TypeOf(te.Type)
+				for funame, fd := range pc.funcDeclsm {
+					if fd.Recv.NumFields() == 0 {
+						continue
+					}
+					rcv0 := fd.Recv.List[0]
+					rcvty := pc.info.TypeOf(rcv0.Type)
+					samety := rcvty == goty
+					if ptrty, ok := rcvty.(*types.Pointer); ok && !samety {
+						samety = ptrty.Elem() == goty
+					}
+					if samety {
+						this.putFuncCallDependcy(curfd, funame)
+					}
+				}
 			}
 			return true
 		}, func(c *astutil.Cursor) bool {

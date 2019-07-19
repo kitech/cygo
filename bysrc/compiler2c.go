@@ -1063,18 +1063,27 @@ func (c *g2nc) genCallExprNorm(scope *ast.Scope, te *ast.CallExpr) {
 	isidt := false
 	iscfn := false
 	ispkgsel := false
+	isifacesel := false
 	if isselfn {
 		var selidt *ast.Ident
 		selidt, isidt = selfn.X.(*ast.Ident)
 		iscfn = isidt && selidt.Name == "C"
 		selty := c.info.TypeOf(selfn.X)
 		ispkgsel = isinvalidty2(selty)
-	}
-	if !isselfn && isidt {
+
+		selxty := c.info.TypeOf(selfn.X)
+		switch ne := selxty.(type) {
+		case *types.Named:
+			isifacesel = isiface2(ne.Underlying())
+		}
 	}
 
 	if isselfn {
 		if iscfn {
+			c.genExpr(scope, selfn.Sel)
+		} else if isifacesel {
+			c.genExpr(scope, selfn.X)
+			c.out("->")
 			c.genExpr(scope, selfn.Sel)
 		} else {
 			vartystr := c.exprTypeName(scope, selfn.X)
@@ -1089,6 +1098,7 @@ func (c *g2nc) genCallExprNorm(scope *ast.Scope, te *ast.CallExpr) {
 	c.out("(")
 	if isselfn && !iscfn && !ispkgsel {
 		c.genExpr(scope, selfn.X)
+		c.out(gopp.IfElseStr(isifacesel, "->value", ""))
 		c.out(gopp.IfElseStr(len(te.Args) > 0, ",", ""))
 	}
 	for idx, e1 := range te.Args {
@@ -1327,12 +1337,44 @@ func (c *g2nc) genReturnStmt(scope *ast.Scope, e *ast.ReturnStmt) {
 		c.out("goto labmret").outfh().outnl()
 	} else {
 		c.genDeferStmt(scope, e)
-		c.out("return").outsp()
+		reses := []ast.Expr{}
 		for idx, ae := range e.Results {
-			c.genExpr(scope, ae)
-			if idx < len(e.Results)-1 {
-				c.out(",") // TODO
+			sigty := c.info.TypeOf(fd.Type.Results.List[idx].Type)
+			resty := c.info.TypeOf(ae)
+			reset := false
+			switch ne := sigty.(type) {
+			case *types.Named:
+				if sigty != resty && isiface2(ne.Underlying()) {
+					reset = true
+					idt := newIdent(tmpvarname())
+					reses = append(reses, idt)
+					tystr := c.exprTypeName(scope, fd.Type.Results.List[idx].Type)
+					c.out(tystr).outsp()
+					c.genExpr(scope, idt)
+					c.outeq()
+					c.outf("%s_new_zero()", strings.Trim(tystr, "*")).outfh().outnl()
+					undty := ne.Underlying().(*types.Interface)
+					log.Println(undty, reflect.TypeOf(undty))
+					log.Println(resty, reflect.TypeOf(resty))
+					log.Println(resty, reflect.TypeOf(resty.(*types.Pointer).Elem()))
+					for i := 0; i < undty.NumMethods(); i++ {
+						c.outf("%s->%s = (__typeof__(%s->%s))%s_%s", idt.Name, undty.Method(i).Name(),
+							idt.Name, undty.Method(i).Name(),
+							strings.Trim(c.exprTypeName(scope, ae), "*"), undty.Method(i).Name())
+						c.outfh().outnl()
+					}
+				}
 			}
+			if reset {
+				// reses = append(reses, ae)
+			} else {
+				reses = append(reses, ae)
+			}
+		}
+		c.out("return").outsp()
+		for idx, _ := range e.Results {
+			c.genExpr(scope, reses[idx])
+			c.out(gopp.IfElseStr(idx < len(e.Results)-1, ",", ""))
 		}
 	}
 	// c.outfh().outnl().outnl()
@@ -1843,10 +1885,17 @@ func (this *g2nc) exprTypeNameImpl2(scope *ast.Scope, ety types.Type, e ast.Expr
 			if strings.Contains(te.Name(), "string") {
 				log.Println(te.Name())
 			}
-			log.Println(te, reflect.TypeOf(e))
+			// log.Println(te, reflect.TypeOf(e))
 			return te.Name()
 		}
 	case *types.Named:
+		undty := te.Underlying()
+		switch ne := undty.(type) {
+		case *types.Interface:
+			return te.Obj().Name() + "*"
+		default:
+			gopp.G_USED(ne)
+		}
 		return te.Obj().Name()
 		// return sign2rety(te.String())
 	case *types.Pointer:
@@ -2036,7 +2085,12 @@ func (this *g2nc) genTypeSpec(scope *ast.Scope, spec *ast.TypeSpec) {
 				this.out(")").outfh().outnl()
 			}
 		}
-		this.out("}").outfh().outnl().outnl()
+		this.out("}").outfh().outnl()
+		this.outf("%s* %s_new_zero() {", spec.Name.Name, spec.Name.Name)
+		this.outf("return").outsp()
+		this.outf("(%s*)cxmalloc(sizeof(%s))", spec.Name.Name, spec.Name.Name)
+		this.outfh().outnl()
+		this.out("}").outnl().outnl()
 	default:
 		log.Println("todo", spec.Name, spec.Type, reflect.TypeOf(spec.Type), te)
 	}
@@ -2099,6 +2153,11 @@ func (c *g2nc) genValueSpec(scope *ast.Scope, spec *ast.ValueSpec, validx int) {
 				c.out("voidptr")
 			} else {
 				c.out(sign2rety(varty.String()))
+				if ne, ok := varty.(*types.Named); ok {
+					if _, ok := ne.Underlying().(*types.Interface); ok {
+						c.out("*")
+					}
+				}
 			}
 			c.outsp()
 		}
