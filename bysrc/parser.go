@@ -46,6 +46,7 @@ type ParserContext struct {
 	chanops   []ast.Expr // *ast.SendStmt
 	closures  []*ast.FuncLit
 	multirets []*ast.FuncDecl
+	defers    []*ast.DeferStmt
 
 	gb     *graph.Graph
 	bdpkgs *build.Package
@@ -127,6 +128,7 @@ func (this *ParserContext) Init() error {
 	this.walkpass_chan_send_recv()
 	this.walkpass_closures()
 	this.walkpass_multiret()
+	this.walkpass_defers()
 
 	return err
 }
@@ -742,6 +744,44 @@ func (pc *ParserContext) walkpass_nested_func() {
 
 // todo
 func (pc *ParserContext) walkpass_nested_type() {
+}
+
+func (pc *ParserContext) walkpass_defers() {
+	defers := []*ast.DeferStmt{}
+
+	pkgs := pc.pkgs
+	for _, pkg := range pkgs {
+		astutil.Apply(pkg, func(c *astutil.Cursor) bool {
+			switch te := c.Node().(type) {
+			default:
+				gopp.G_USED(te)
+			}
+			return true
+		}, func(c *astutil.Cursor) bool {
+			switch te := c.Node().(type) {
+			case *ast.DeferStmt:
+				defers = append(defers, te)
+			case *ast.FuncDecl:
+				if te.Type.Results.NumFields() == 0 {
+					// if len(te.Body.List) == 0 {
+					// 	retstmt := &ast.ReturnStmt{}
+					// 	retstmt.Results = []ast.Expr{}
+					// 	// retstmt.Return = te.Pos()
+					// 	te.Body.List = append(te.Body.List, retstmt)
+					// } else {
+					// 	log.Println("hhh")
+					// 	laststmt := te.Body.List[len(te.Body.List)-1]
+					// 	log.Println(laststmt)
+					// }
+				}
+			default:
+				gopp.G_USED(te)
+			}
+			return true
+		})
+	}
+	log.Println("defers", len(defers))
+	pc.defers = defers
 }
 
 func (pc *ParserContext) putTyperefDependcy(funame, tyname string) {

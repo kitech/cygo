@@ -175,6 +175,7 @@ type basecomp struct {
 	strtypes  map[string]types.TypeAndValue
 	closidx   map[*ast.FuncLit]*closinfo
 	multirets map[*ast.FuncDecl]*ast.Ident
+	deferidx  map[*ast.DeferStmt]*deferinfo
 }
 
 func newbasecomp(psctx *ParserContext) *basecomp {
@@ -183,7 +184,8 @@ func newbasecomp(psctx *ParserContext) *basecomp {
 		valnames:  map[ast.Expr]ast.Expr{},
 		strtypes:  map[string]types.TypeAndValue{},
 		closidx:   map[*ast.FuncLit]*closinfo{},
-		multirets: map[*ast.FuncDecl]*ast.Ident{}}
+		multirets: map[*ast.FuncDecl]*ast.Ident{},
+		deferidx:  map[*ast.DeferStmt]*deferinfo{}}
 	bc.psctx = psctx
 	bc.initbc()
 	return bc
@@ -306,4 +308,21 @@ func (bc *basecomp) fillclosidents(clos *closinfo) {
 func (bc *basecomp) getclosinfo(fnlit *ast.FuncLit) *closinfo {
 	closi := bc.closidx[fnlit]
 	return closi
+}
+
+type deferinfo struct {
+	idx    int
+	defero *ast.DeferStmt
+	fd     *ast.FuncDecl
+	fnlit  *ast.FuncLit
+}
+
+func newdeferinfo(defero *ast.DeferStmt, idx int) *deferinfo {
+	deferi := &deferinfo{}
+	deferi.idx = idx
+	return deferi
+}
+func (bc *basecomp) getdeferinfo(defero *ast.DeferStmt) *deferinfo {
+	deferi := bc.deferidx[defero]
+	return deferi
 }

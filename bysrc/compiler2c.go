@@ -41,6 +41,7 @@ func (this *g2nc) genpkgs() {
 
 		this.genpkg(pname, pkg)
 		this.calcClosureInfo(pkg.Scope, pkg)
+		this.calcDeferInfo(pkg.Scope, pkg)
 		this.genGostmtTypes(pkg.Scope, pkg)
 		this.genChanTypes(pkg.Scope, pkg)
 		this.genMultiretTypes(pkg.Scope, pkg)
@@ -109,6 +110,17 @@ func (c *g2nc) calcClosureInfo(scope *ast.Scope, pkg *ast.Package) {
 		c.closidx[fnlit] = closi
 	}
 
+}
+func (c *g2nc) calcDeferInfo(scope *ast.Scope, pkg *ast.Package) {
+	defers := map[*ast.FuncDecl][]*ast.DeferStmt{}
+	for _, defero := range c.psctx.defers {
+		tmpfd := upfindFuncDeclNode(c.psctx, defero, 0)
+		idx := len(defers[tmpfd])
+		defers[tmpfd] = append(defers[tmpfd], defero)
+		deferi := newdeferinfo(defero, idx)
+		deferi.fd = tmpfd
+		c.deferidx[defero] = deferi
+	}
 }
 func (c *g2nc) genGostmtTypes(scope *ast.Scope, pkg *ast.Package) {
 	c.out("// gostmt types", fmt.Sprintf("%d", len(c.psctx.gostmts))).outnl()
@@ -306,6 +318,10 @@ func (this *g2nc) genFuncDecl(scope *ast.Scope, fd *ast.FuncDecl) {
 		this.out(")").outfh().outnl()
 		this.out("}").outnl()
 	} else if fd.Body != nil {
+		gendeferprep := func() {
+			this.out("// int array").outnl()
+			this.out("Array* deferarr = cxarray_new()").outfh().outnl()
+		}
 		scope = ast.NewScope(scope)
 		scope.Insert(ast.NewObj(ast.Fun, fd.Name.Name))
 		if ismret {
@@ -322,12 +338,16 @@ func (this *g2nc) genFuncDecl(scope *ast.Scope, fd *ast.FuncDecl) {
 			this.outf("%s_multiret_arg*", fd.Name.Name).outsp().out(tvname)
 			this.outeq().outsp()
 			this.outf("cxmalloc(sizeof(%s_multiret_arg))", fd.Name.Name).outfh().outnl()
+			gendeferprep()
 			this.genBlockStmt(scope, fd.Body)
 			this.out("labmret:").outnl()
 			this.out("return").outsp().out(tvname).outfh().outnl()
 			this.out("}").outnl()
 		} else {
+			this.out("{").outnl()
+			gendeferprep()
 			this.genBlockStmt(scope, fd.Body)
+			this.out("}").outnl()
 		}
 	} else {
 		this.outfh()
@@ -395,6 +415,8 @@ func (this *g2nc) genStmt(scope *ast.Scope, stmt ast.Stmt, idx int) {
 		this.genSendStmt(scope, t)
 	case *ast.ReturnStmt:
 		this.genReturnStmt(scope, t)
+	case *ast.DeferStmt:
+		this.genDeferStmtSet(scope, t)
 	default:
 		if stmt == nil { // empty block {}
 		} else {
@@ -1311,6 +1333,7 @@ func (c *g2nc) genReturnStmt(scope *ast.Scope, e *ast.ReturnStmt) {
 		}
 		c.out("goto labmret").outfh().outnl()
 	} else {
+		c.genDeferStmt(scope, e)
 		c.out("return").outsp()
 		for idx, ae := range e.Results {
 			c.genExpr(scope, ae)
@@ -1320,6 +1343,43 @@ func (c *g2nc) genReturnStmt(scope *ast.Scope, e *ast.ReturnStmt) {
 		}
 	}
 	// c.outfh().outnl().outnl()
+}
+func (c *g2nc) genDeferStmtSet(scope *ast.Scope, e *ast.DeferStmt) {
+	deferi := c.getdeferinfo(e)
+	c.outf("cxarray_append(deferarr, (void*)%d)", deferi.idx)
+}
+func (c *g2nc) genDeferStmt(scope *ast.Scope, e *ast.ReturnStmt) {
+	dstfd := upfindFuncDeclNode(c.psctx, e, 0)
+	defers := []*ast.DeferStmt{}
+	for _, defero := range c.psctx.defers {
+		tmpfd := upfindFuncDeclNode(c.psctx, defero, 0)
+		if tmpfd != dstfd {
+			continue
+		}
+		defers = append(defers, defero)
+	}
+	log.Println("got defered return", len(defers))
+	if len(defers) == 0 {
+		return
+	}
+	c.out("// defer section").outnl()
+	c.out("{").outnl()
+	c.out("int deferarrsz = array_size(deferarr)").outfh().outnl()
+	c.out("for (int deferarri = deferarrsz-1; deferarri>=0; deferarri--)")
+	c.out("{").outnl()
+	c.out("uintptr_t deferarrn = 0").outfh().outnl()
+	c.out("array_get_at(deferarr, deferarri, (void**)&deferarrn)").outfh().outnl()
+	for i := 0; i < len(defers); i++ {
+		defero := defers[i]
+		c.out(gopp.IfElseStr(i > 0, "else", "")).outsp()
+		c.outf("if (deferarrn == %d)", i)
+		c.out("{").outnl()
+		c.genExpr(scope, defero.Call)
+		c.outfh().outnl()
+		c.out("}").outnl()
+	}
+	c.out("}").outnl()
+	c.out("}").outnl()
 }
 
 // keepvoid
