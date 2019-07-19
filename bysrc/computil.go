@@ -170,6 +170,7 @@ func funcistypedep(idt ast.Expr) bool {
 /////
 type basecomp struct {
 	psctx     *ParserContext
+	assignkvs map[ast.Expr]ast.Expr // assign stmt left <-> right
 	valnames  map[ast.Expr]ast.Expr // rvalue => lname
 	strtypes  map[string]types.TypeAndValue
 	closidx   map[*ast.FuncLit]*closinfo
@@ -178,6 +179,7 @@ type basecomp struct {
 
 func newbasecomp(psctx *ParserContext) *basecomp {
 	bc := &basecomp{
+		assignkvs: map[ast.Expr]ast.Expr{},
 		valnames:  map[ast.Expr]ast.Expr{},
 		strtypes:  map[string]types.TypeAndValue{},
 		closidx:   map[*ast.FuncLit]*closinfo{},

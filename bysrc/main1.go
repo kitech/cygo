@@ -18,6 +18,14 @@ func main() {
 		log.Fatalln("must specify a go source file to tranpiler")
 	}
 	fname = os.Args[1]
+	fio, err := os.Lstat(fname)
+	gopp.ErrPrint(err)
+	if err != nil {
+		return
+	}
+	if !fio.IsDir() {
+		log.Fatalln("Not a dir", fname)
+	}
 
 	pkgpaths := []string{fname}
 	psctxs := []*ParserContext{}

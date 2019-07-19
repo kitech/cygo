@@ -140,7 +140,15 @@ func (c *g2nc) genMultiretTypes(scope *ast.Scope, pkg *ast.Package) {
 		c.outf("typedef struct %s_multiret_arg %s_multiret_arg", fd.Name.Name, fd.Name.Name).outfh().outnl()
 		c.outf("struct %s_multiret_arg {", fd.Name.Name)
 
-		c.genFieldList(scope, fd.Type.Results, false, true, ";", false)
+		cnter := 0
+		for _, fld := range fd.Type.Results.List {
+			for _, _ = range fld.Names {
+				c.out(c.exprTypeName(scope, fld.Type)).outsp()
+				c.out(tmpvarname2(cnter)).outfh().outnl()
+				cnter++
+			}
+		}
+		// c.genFieldList(scope, fd.Type.Results, false, true, ";", false)
 		c.out("}").outfh().outnl()
 		c.outnl()
 	}
@@ -305,6 +313,12 @@ func (this *g2nc) genFuncDecl(scope *ast.Scope, fd *ast.FuncDecl) {
 			tvidt := newIdent(tvname)
 			this.multirets[fd] = tvidt
 			this.out("{").outnl()
+			for _, fld := range fd.Type.Results.List {
+				for _, name := range fld.Names {
+					this.out(this.exprTypeName(scope, fld.Type)).outsp()
+					this.out(name.Name).outeq().out("{0}").outfh().outnl()
+				}
+			}
 			this.outf("%s_multiret_arg*", fd.Name.Name).outsp().out(tvname)
 			this.outeq().outsp()
 			this.outf("cxmalloc(sizeof(%s_multiret_arg))", fd.Name.Name).outfh().outnl()
@@ -455,7 +469,7 @@ func (c *g2nc) genAssignStmt(scope *ast.Scope, s *ast.AssignStmt) {
 				c.out(te.(*ast.Ident).Name).outeq()
 				c.out(tvname).out("->").out(tmpvarname2(idx)).outfh().outnl()
 			}
-			log.Println(c.exprTypeName(scope, s.Rhs[i]), s.Lhs)
+			c.outf("cxfree(%s)", tvname).outfh().outnl()
 		} else {
 			if s.Tok.String() == ":=" {
 				c.out(c.exprTypeName(scope, s.Rhs[i])).outsp()
@@ -1283,10 +1297,17 @@ func (c *g2nc) genReturnStmt(scope *ast.Scope, e *ast.ReturnStmt) {
 			}
 		}
 		for idx, re := range e.Results {
-			c.outf("%s->%s", rtvname.Name, names[idx].Name)
+			c.outf("%s->%s", rtvname.Name, tmpvarname2(idx))
 			c.outeq()
 			c.genExpr(scope, re)
 			c.outfh().outnl()
+		}
+		if len(e.Results) == 0 {
+			for idx, name := range names {
+				c.outf("%s->%s", rtvname.Name, tmpvarname2(idx))
+				c.outeq().out(name.Name)
+				c.outfh().outnl()
+			}
 		}
 		c.out("goto labmret").outfh().outnl()
 	} else {
