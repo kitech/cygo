@@ -2022,6 +2022,21 @@ func (this *g2nc) genTypeSpec(scope *ast.Scope, spec *ast.TypeSpec) {
 			this.out(this.pkgpfx() + spec.Name.Name)
 			this.outfh().outnl()
 		}
+	case *ast.InterfaceType:
+		this.outf("typedef struct %s %s", spec.Name, spec.Name).outfh().outnl()
+		this.outf("struct %s {", spec.Name).outnl()
+		this.out("voidptr value").outfh().outnl()
+		for _, fld := range te.Methods.List {
+			fldty := fld.Type.(*ast.FuncType)
+			for _, name := range fld.Names {
+				this.genFieldList(scope, fldty.Results, true, false, "", true)
+				this.outf("(*%s)(voidptr", name.Name)
+				this.out(gopp.IfElseStr(fldty.Params.NumFields() > 0, ",", ""))
+				this.genFieldList(scope, fldty.Params, false, false, "", true)
+				this.out(")").outfh().outnl()
+			}
+		}
+		this.out("}").outfh().outnl().outnl()
 	default:
 		log.Println("todo", spec.Name, spec.Type, reflect.TypeOf(spec.Type), te)
 	}
