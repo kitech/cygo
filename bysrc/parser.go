@@ -309,6 +309,7 @@ func (pc *ParserContext) walkpass_func_deps1() {
 	this := pc
 	pkgs := pc.pkgs
 
+	pc.putFuncCallDependcy("main", "main_go")
 	for _, pkg := range pkgs {
 		var curfds []string // stack, current func decls
 		astutil.Apply(pkg, func(c *astutil.Cursor) bool {
@@ -806,6 +807,8 @@ func (pc *ParserContext) putTyperefDependcy(funame, tyname string) {
 
 }
 
+// name0: caller
+// name1: callee
 func (pc *ParserContext) putFuncCallDependcy(name0, name1 string) {
 	if name0 == name1 {
 		return

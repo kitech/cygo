@@ -176,6 +176,10 @@ func (this *g2nc) genFuncs(pkg *ast.Package) {
 		}
 		this.genDecl(scope, d)
 	}
+
+	if pkg.Name == "main" {
+		this.genMainFunc(scope)
+	}
 }
 
 func (this *g2nc) genDecl(scope *ast.Scope, d ast.Decl) {
@@ -274,6 +278,7 @@ func (this *g2nc) genFuncDecl(scope *ast.Scope, fd *ast.FuncDecl) {
 	iswcfn := iswrapcfunc(this.exprstr(fd.Name))
 	ismret := fd.Type.Results.NumFields() >= 2
 
+	fdname := gopp.IfElseStr(fd.Name.Name == "main", "main_go", fd.Name.Name)
 	pkgpfx := this.pkgpfx()
 	if ismret {
 		this.outf("%s_multiret_arg*", fd.Name.Name)
@@ -286,7 +291,7 @@ func (this *g2nc) genFuncDecl(scope *ast.Scope, fd *ast.FuncDecl) {
 		recvtystr = strings.TrimRight(recvtystr, "*")
 		this.out(pkgpfx + recvtystr + "_" + fd.Name.String())
 	} else {
-		this.out(pkgpfx + fd.Name.String())
+		this.out(pkgpfx + fdname)
 	}
 	this.out("(")
 	if fd.Recv != nil {
@@ -295,9 +300,7 @@ func (this *g2nc) genFuncDecl(scope *ast.Scope, fd *ast.FuncDecl) {
 			this.out(",")
 		}
 	}
-	if fd.Name.Name == "main" {
-		this.out("int argc, char**argv")
-	}
+
 	this.genFieldList(scope, fd.Type.Params, false, true, ",", true)
 	this.out(")").outnl()
 	if iswcfn {
@@ -354,15 +357,19 @@ func (this *g2nc) genFuncDecl(scope *ast.Scope, fd *ast.FuncDecl) {
 	}
 	this.outnl()
 }
-func (this *g2nc) genWrapCFuncDecl(scope *ast.Scope, fd *ast.FuncDecl) {
+func (c *g2nc) genMainFunc(scope *ast.Scope) {
+	c.out("int main(int argc, char**argv) {").outnl()
+	c.out("cxrt_init_env()").outfh().outnl()
+	c.out("// TODO arguments populate").outnl()
+	c.out("// TODO globvars populate").outnl()
+	c.out("// all func init()").outnl()
+	c.out("main_go()").outfh().outnl()
+	c.out("return 0").outfh().outnl()
+	c.out("}").outnl()
 }
 
 func (this *g2nc) genBlockStmt(scope *ast.Scope, stmt *ast.BlockStmt) {
 	this.out("{").outnl()
-	if scope.Lookup("main") != nil {
-		this.out("{ cxrt_init_env(); }").outnl()
-		this.out("{ \n // func init() \n }").outnl()
-	}
 	scope = ast.NewScope(scope)
 	for idx, s := range stmt.List {
 		this.genStmt(scope, s, idx)
