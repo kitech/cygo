@@ -571,12 +571,17 @@ func (c *g2nc) genFiberStwrap(scope *ast.Scope, e *ast.CallExpr) {
 	}
 	c.psctx.grstargs[funame] = true
 
+	fnobj := c.info.ObjectOf(e.Fun.(*ast.Ident))
+	pkgo := fnobj.Pkg()
+
 	stname := funame + "_fiber_args"
 	c.out("static").outsp()
 	c.out("void").outsp()
+	c.out(gopp.IfElseStr(pkgo == nil, "", pkgo.Name()+"_"))
 	c.out(funame+"_fiber", "(void* vpargs)").outnl()
 	c.out("{").outnl()
 	c.out(stname, "*args = (", stname, "*)vpargs").outfh().outnl()
+	c.out(gopp.IfElseStr(pkgo == nil, "", pkgo.Name()+"_"))
 	c.out(funame, "(")
 	for idx, _ := range e.Args {
 		fldname := fmt.Sprintf("args->a%d", idx)
@@ -591,6 +596,9 @@ func (c *g2nc) genFiberWcall(scope *ast.Scope, e *ast.CallExpr) {
 	wfname := funame + "_fiber"
 	stname := funame + "_fiber_args"
 
+	fnobj := c.info.ObjectOf(e.Fun.(*ast.Ident))
+	pkgo := fnobj.Pkg()
+
 	c.out("// gogorun", funame).outnl()
 	c.out("{")
 	c.outf("%s* args = (%s*)cxmalloc(sizeof(%s))", stname, stname, stname).outfh().outnl()
@@ -599,7 +607,8 @@ func (c *g2nc) genFiberWcall(scope *ast.Scope, e *ast.CallExpr) {
 		c.genExpr(scope, arg)
 		c.outfh().outnl()
 	}
-	c.outf("cxrt_fiber_post(%s, args)", wfname).outfh().outnl()
+	pkgpfx := gopp.IfElseStr(pkgo == nil, "", pkgo.Name())
+	c.outf("cxrt_fiber_post(%s_%s, args)", pkgpfx, wfname).outfh().outnl()
 	c.out("}").outnl()
 }
 
@@ -877,6 +886,7 @@ func (c *g2nc) genCallExpr(scope *ast.Scope, te *ast.CallExpr) {
 		c.genTypeCtor(scope, te)
 	case *ast.ParenExpr:
 		c.out("(")
+		log.Println(be.X, reflect.TypeOf(be.X))
 		c.genExpr(scope, be.X)
 		c.out(")")
 		c.out("(")
@@ -1116,7 +1126,11 @@ func (c *g2nc) genCallExprNorm(scope *ast.Scope, te *ast.CallExpr) {
 			c.out(vartystr + "_" + selfn.Sel.Name)
 		}
 	} else {
-
+		fnobj := c.info.ObjectOf(te.Fun.(*ast.Ident))
+		pkgo := fnobj.Pkg()
+		if pkgo != nil && fnobj.Pkg() != nil {
+			// c.out(fnobj.Pkg().Name(), "_")
+		}
 		c.genExpr(scope, te.Fun)
 	}
 
@@ -1364,6 +1378,15 @@ func (c *g2nc) genReturnStmt(scope *ast.Scope, e *ast.ReturnStmt) {
 		c.genDeferStmt(scope, e)
 		reses := []ast.Expr{}
 		for idx, ae := range e.Results {
+			log.Println(idx, ae, c.exprpos(ae))
+			log.Println(fd.Type)
+			log.Println(fd.Type.Results)
+			if fd.Type.Results == nil {
+				continue
+			}
+			log.Println(fd.Type.Results.List)
+			log.Println(fd.Type.Results.List[idx])
+			log.Println(fd.Type.Results.List[idx].Type)
 			sigty := c.info.TypeOf(fd.Type.Results.List[idx].Type)
 			resty := c.info.TypeOf(ae)
 			reset := false
@@ -1400,7 +1423,11 @@ func (c *g2nc) genReturnStmt(scope *ast.Scope, e *ast.ReturnStmt) {
 			}
 		}
 		c.out("return").outsp()
+		log.Println(len(reses), len(e.Results))
 		for idx, _ := range e.Results {
+			if idx >= len(reses) {
+				break
+			}
 			c.genExpr(scope, reses[idx])
 			c.out(gopp.IfElseStr(idx < len(e.Results)-1, ",", ""))
 		}
@@ -1460,7 +1487,7 @@ func (this *g2nc) genFieldList(scope *ast.Scope, flds *ast.FieldList,
 
 	for idx, fld := range flds.List {
 		_, _ = idx, fld
-		// log.Println(this.exprTypeName(scope, fld.Type))
+		log.Println(fld.Type, this.exprTypeName(scope, fld.Type))
 		this.genTypeExpr(scope, fld.Type)
 		this.outsp()
 		if withname && len(fld.Names) > 0 {
@@ -1512,9 +1539,26 @@ func (this *g2nc) genExpr2(scope *ast.Scope, e ast.Expr) {
 		idname := te.Name
 		idname = gopp.IfElseStr(idname == "nil", "nilptr", idname)
 		idname = gopp.IfElseStr(idname == "string", "cxstring*", idname)
+		eobj := this.info.ObjectOf(te)
+		log.Println(e, eobj, this.isglobalid(te))
+		if eobj != nil {
+			pkgo := eobj.Pkg()
+			if pkgo != nil {
+				// this.out(pkgo.Name())
+			}
+		}
+		if strings.HasPrefix(idname, "_Cfunc_") || this.isglobalid(te) {
+			this.out(this.pkgpfx())
+		}
 		this.out(idname, "")
 	case *ast.ArrayType:
-		log.Println("unimplemented", te, reflect.TypeOf(e), e.Pos())
+		tystr := this.exprstr(te)
+		if tystr == "[0]byte" {
+			this.out("void")
+			break
+		}
+		log.Println("todo", te, reflect.TypeOf(e), e.Pos())
+		this.out(tystr)
 	case *ast.StructType:
 		this.genFieldList(scope, te.Fields, false, true, ";\n", false)
 	case *ast.UnaryExpr:
@@ -1903,7 +1947,7 @@ func (this *g2nc) exprTypeNameImpl2(scope *ast.Scope, ety types.Type, e ast.Expr
 
 	goty := ety
 	tyval, isudty := this.strtypes[goty.String()]
-	// log.Println(goty, reflect.TypeOf(goty))
+	// log.Println(goty, reflect.TypeOf(goty), e, reflect.TypeOf(e))
 
 	switch te := goty.(type) {
 	case *types.Basic:
@@ -1913,13 +1957,15 @@ func (this *g2nc) exprTypeNameImpl2(scope *ast.Scope, ety types.Type, e ast.Expr
 			if strings.Contains(te.Name(), "string") {
 				log.Println(te.Name())
 			}
-			// log.Println(te, reflect.TypeOf(e))
+			// log.Println(te, reflect.TypeOf(e), te.Info(), te.Name(), te.Underlying(), reflect.TypeOf(te.Underlying()))
+			return strings.Replace(te.String(), ".", "_", 1)
 			return te.Name()
 		}
 	case *types.Named:
 		teobj := te.Obj()
 		pkgo := teobj.Pkg()
 		undty := te.Underlying()
+		// log.Println(teobj, pkgo, undty)
 		switch ne := undty.(type) {
 		case *types.Interface:
 			if pkgo == nil { // builtin???
@@ -1927,10 +1973,26 @@ func (this *g2nc) exprTypeNameImpl2(scope *ast.Scope, ety types.Type, e ast.Expr
 			}
 			return fmt.Sprintf("%s_%s", pkgo.Name(), teobj.Name())
 		case *types.Struct:
+			tyname := teobj.Name()
+			if strings.HasPrefix(tyname, "_Ctype_") {
+				return fmt.Sprintf("%s_%s", pkgo.Name(), tyname[7:])
+			}
 			return fmt.Sprintf("%s_%s", pkgo.Name(), teobj.Name())
+		case *types.Basic:
+			tyname := teobj.Name()
+			if strings.HasPrefix(tyname, "_Ctype_") {
+				return tyname[7:]
+			}
+			return fmt.Sprintf("%s_%s", pkgo.Name(), teobj.Name())
+		case *types.Array:
+			tyname := teobj.Name()
+			if strings.HasPrefix(tyname, "_Ctype_") {
+				return tyname[7:]
+			}
 		default:
 			gopp.G_USED(ne)
 		}
+		log.Println("todo", teobj.Name(), reflect.TypeOf(undty), goty)
 		return "todo" + teobj.Name()
 		// return sign2rety(te.String())
 	case *types.Pointer:
@@ -1939,6 +2001,10 @@ func (this *g2nc) exprTypeNameImpl2(scope *ast.Scope, ety types.Type, e ast.Expr
 		// log.Println(tystr)
 		return tystr
 	case *types.Slice, *types.Array:
+		tystr := te.String()
+		if tystr == "[0]byte" {
+			return "void"
+		}
 		return "Array*"
 	case *types.Chan:
 		return "voidptr"
@@ -2039,22 +2105,24 @@ func (this *g2nc) genGenDecl(scope *ast.Scope, d *ast.GenDecl) {
 	}
 }
 func (this *g2nc) genTypeSpec(scope *ast.Scope, spec *ast.TypeSpec) {
+	log.Println(spec.Type, reflect.TypeOf(spec.Type), spec.Name)
 	this.outf("// %s", this.exprpos(spec).String()).outnl()
 	switch te := spec.Type.(type) {
 	case *ast.StructType:
+		specname := trimCtype(spec.Name.Name)
 		this.outf("typedef struct %s%s %s%s",
-			this.pkgpfx(), spec.Name.Name, this.pkgpfx(), spec.Name.Name).outfh().outnl()
-		this.outf("struct %s%s {", this.pkgpfx(), spec.Name.Name)
+			this.pkgpfx(), specname, this.pkgpfx(), specname).outfh().outnl()
+		this.outf("struct %s%s {", this.pkgpfx(), specname)
 		this.outnl()
-		this.genExpr(scope, spec.Type)
+		this.genFieldList(scope, te.Fields, false, true, ";", false)
 		this.out("}").outfh().outnl()
 		this.outnl()
 		this.out("static").outsp()
 		this.outf("%s%s* %s%s_new_zero() {",
-			this.pkgpfx(), spec.Name.Name, this.pkgpfx(), spec.Name.Name).outnl()
+			this.pkgpfx(), specname, this.pkgpfx(), specname).outnl()
 		this.outf("  %s%s* obj = (%s%s*)cxmalloc(sizeof(%s%s))",
-			this.pkgpfx(), spec.Name.Name, this.pkgpfx(), spec.Name.Name,
-			this.pkgpfx(), spec.Name.Name).outfh().outnl()
+			this.pkgpfx(), specname, this.pkgpfx(), specname,
+			this.pkgpfx(), specname).outfh().outnl()
 		for _, fld := range te.Fields.List {
 			fldty := this.info.TypeOf(fld.Type)
 			for _, fldname := range fld.Names {
@@ -2074,12 +2142,20 @@ func (this *g2nc) genTypeSpec(scope *ast.Scope, spec *ast.TypeSpec) {
 		this.out("}").outnl()
 		this.outnl()
 	case *ast.Ident:
-		this.outf("typedef %v %s%v", spec.Type, this.pkgpfx(), spec.Name.Name).outfh().outnl()
+		log.Println(spec.Type, reflect.TypeOf(spec.Type), te)
+		tystr := this.exprTypeName(scope, spec.Type)
+		specname := trimCtype(spec.Name.Name)
+		this.outf("typedef %v %s%v", tystr, this.pkgpfx(), specname).outfh().outnl()
+		// this.outf("typedef %v %s%v", spec.Type, this.pkgpfx(), spec.Name.Name).outfh().outnl()
 	case *ast.StarExpr:
+		log.Println(spec.Type, reflect.TypeOf(spec.Type), te.X, reflect.TypeOf(te.X), spec.Name)
 		this.out("typedef").outsp()
-		this.genExpr(scope, te.X)
+		// this.out(this.pkgpfx())
+		// this.genExpr(scope, te.X)
+		this.out(this.exprTypeName(scope, te.X))
 		this.out("*").outsp()
-		this.out(this.pkgpfx() + spec.Name.Name)
+		specname := trimCtype(spec.Name.Name)
+		this.out(this.pkgpfx() + specname)
 		this.outfh().outnl()
 	case *ast.SelectorExpr:
 		this.out("typedef").outsp()
@@ -2087,7 +2163,8 @@ func (this *g2nc) genTypeSpec(scope *ast.Scope, spec *ast.TypeSpec) {
 		this.out("_")
 		this.genExpr(scope, te.Sel)
 		this.outsp()
-		this.out(this.pkgpfx() + spec.Name.Name)
+		specname := trimCtype(spec.Name.Name)
+		this.out(this.pkgpfx() + specname)
 		this.outfh().outnl()
 	case *ast.InterfaceType:
 		this.outf("typedef struct %s%s %s%s", this.pkgpfx(), spec.Name,
@@ -2110,6 +2187,16 @@ func (this *g2nc) genTypeSpec(scope *ast.Scope, spec *ast.TypeSpec) {
 		this.outf("(%s%s*)cxmalloc(sizeof(%s%s))", this.pkgpfx(), spec.Name.Name, this.pkgpfx(), spec.Name.Name)
 		this.outfh().outnl()
 		this.out("}").outnl().outnl()
+	case *ast.ArrayType:
+		log.Println("todo", spec.Name, spec.Type, reflect.TypeOf(spec.Type), te)
+		log.Println("todo", te.Elt, te.Len, this.exprstr(te))
+		tystr := this.exprstr(te)
+		if tystr == "[0]byte" {
+			log.Println("todo", "hehe")
+			// this.out("void...")
+			break
+		}
+		this.out("todo", tystr)
 	default:
 		log.Println("todo", spec.Name, spec.Type, reflect.TypeOf(spec.Type), te)
 	}
@@ -2154,6 +2241,7 @@ func (c *g2nc) genValueSpec(scope *ast.Scope, spec *ast.ValueSpec, validx int) {
 			vp1stidx = validx
 		}
 
+		log.Println(varty, varname, reflect.TypeOf(varty))
 		vartystr := c.exprTypeNameImpl2(scope, varty, varname)
 		isconst := false
 		c.out(gopp.IfElseStr(isglobvar, "static", "")).outsp()

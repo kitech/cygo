@@ -102,6 +102,13 @@ func typesty2str(typ types.Type) string {
 	return ret
 }
 
+func trimCtype(s string) string {
+	if strings.HasPrefix(s, "_Ctype_") {
+		return s[7:]
+	}
+	return s
+}
+
 // used only when cannot found a valid types.Type
 func iscsel(e ast.Expr) bool {
 	// log.Println(e, reflect.TypeOf(e))
@@ -329,4 +336,23 @@ func newdeferinfo(defero *ast.DeferStmt, idx int) *deferinfo {
 func (bc *basecomp) getdeferinfo(defero *ast.DeferStmt) *deferinfo {
 	deferi := bc.deferidx[defero]
 	return deferi
+}
+
+func (bc *basecomp) isglobalid(idt *ast.Ident) bool {
+	info := bc.psctx.info
+	eobj := info.ObjectOf(idt)
+	if eobj != nil {
+		// log.Println(eobj, eobj.Pkg(), eobj.Parent())
+		if eobj.Parent() != nil {
+			// log.Println(eobj, eobj.Pkg(), eobj.Parent().String(), eobj.Parent().Parent())
+			scope := eobj.Parent().Parent()
+			if scope != nil {
+				tobj := scope.Lookup("append")
+				if tobj != nil && tobj.String() == "builtin append" {
+					return true
+				}
+			}
+		}
+	}
+	return false
 }
