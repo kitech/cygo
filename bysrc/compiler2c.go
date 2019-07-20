@@ -52,6 +52,7 @@ func (this *g2nc) genpkgs() {
 func (c *g2nc) pkgpfx() string {
 	pfx := ""
 	if c.curpkg == "main" {
+		pfx = c.curpkg + "_"
 	} else {
 		if c.psctx.pkgrename != "" {
 			pfx = c.psctx.pkgrename
@@ -282,7 +283,7 @@ func (this *g2nc) genFuncDecl(scope *ast.Scope, fd *ast.FuncDecl) {
 	iswcfn := iswrapcfunc(this.exprstr(fd.Name))
 	ismret := fd.Type.Results.NumFields() >= 2
 
-	fdname := gopp.IfElseStr(fd.Name.Name == "main", "main_go", fd.Name.Name)
+	fdname := fd.Name.Name
 	pkgpfx := this.pkgpfx()
 	if ismret {
 		this.outf("%s_multiret_arg*", fd.Name.Name)
@@ -293,7 +294,7 @@ func (this *g2nc) genFuncDecl(scope *ast.Scope, fd *ast.FuncDecl) {
 	if fd.Recv != nil {
 		recvtystr := this.exprTypeName(scope, fd.Recv.List[0].Type)
 		recvtystr = strings.TrimRight(recvtystr, "*")
-		this.out(pkgpfx + recvtystr + "_" + fd.Name.String())
+		this.out(recvtystr + "_" + fd.Name.String())
 	} else {
 		this.out(pkgpfx + fdname)
 	}
@@ -368,7 +369,7 @@ func (c *g2nc) genMainFunc(scope *ast.Scope) {
 	c.out("// TODO globvars populate").outnl()
 	c.out("// all func init()").outnl()
 	c.outf("%sinit()", c.pkgpfx()).outfh().outnl()
-	c.out("main_go()").outfh().outnl()
+	c.out("main_main()").outfh().outnl()
 	c.out("return 0").outfh().outnl()
 	c.out("}").outnl()
 }
@@ -813,7 +814,7 @@ func (c *g2nc) genCaseClauseIf(scope *ast.Scope, s *ast.CaseClause, idx int) {
 }
 
 func (c *g2nc) genCallExpr(scope *ast.Scope, te *ast.CallExpr) {
-	log.Println(te, te.Fun, reflect.TypeOf(te.Fun))
+	// log.Println(te, te.Fun, reflect.TypeOf(te.Fun))
 	scope = putscope(scope, ast.Fun, "infncall", te.Fun)
 	switch be := te.Fun.(type) {
 	case *ast.Ident:
@@ -861,7 +862,6 @@ func (c *g2nc) genCallExpr(scope *ast.Scope, te *ast.CallExpr) {
 				}
 			}
 			if isclos {
-				log.Println("gen clos call")
 				c.genCallExprClosure(scope, te, fnlit)
 			} else {
 				c.genCallExprNorm(scope, te)
@@ -1386,8 +1386,8 @@ func (c *g2nc) genReturnStmt(scope *ast.Scope, e *ast.ReturnStmt) {
 					c.genExpr(scope, ae)
 					c.outfh().outnl()
 					for i := 0; i < undty.NumMethods(); i++ {
-						c.outf("%s->%s = (__typeof__(%s->%s))%s%s_%s", idt.Name, undty.Method(i).Name(),
-							idt.Name, undty.Method(i).Name(), c.pkgpfx(),
+						c.outf("%s->%s = (__typeof__(%s->%s))%s_%s", idt.Name, undty.Method(i).Name(),
+							idt.Name, undty.Method(i).Name(),
 							strings.Trim(c.exprTypeName(scope, ae), "*"), undty.Method(i).Name())
 						c.outfh().outnl()
 					}
@@ -1529,8 +1529,8 @@ func (this *g2nc) genExpr2(scope *ast.Scope, e ast.Expr) {
 		keepop := true
 		switch t2 := te.X.(type) {
 		case *ast.CompositeLit:
-			// this.out(fmt.Sprintf("(%v*)cxmalloc(sizeof(%v))", t2.Type, t2.Type)) //.outnl()
-			this.outf("%v_new_zero()", t2.Type) //.outnl()
+			tystr := this.exprTypeName(scope, t2.Type)
+			this.outf("%s_new_zero()", tystr) //.outnl()
 			keepop = false
 		case *ast.UnaryExpr:
 			log.Println(t2, t2.X, t2.Op)
@@ -1886,7 +1886,7 @@ func (this *g2nc) exprTypeNameImpl(scope *ast.Scope, e ast.Expr) string {
 	}
 	val := this.exprTypeNameImpl2(scope, goty, e)
 	if isinvalidty(val) {
-
+		// log.Panicln("unreachable")
 		val = this.exprstr(e)
 		val = strings.Replace(val, "C.", "", 1)
 		log.Println(val)
@@ -1917,14 +1917,21 @@ func (this *g2nc) exprTypeNameImpl2(scope *ast.Scope, ety types.Type, e ast.Expr
 			return te.Name()
 		}
 	case *types.Named:
+		teobj := te.Obj()
+		pkgo := teobj.Pkg()
 		undty := te.Underlying()
 		switch ne := undty.(type) {
 		case *types.Interface:
-			return te.Obj().Name() + "*"
+			if pkgo == nil { // builtin???
+				return teobj.Name() + "*"
+			}
+			return fmt.Sprintf("%s_%s", pkgo.Name(), teobj.Name())
+		case *types.Struct:
+			return fmt.Sprintf("%s_%s", pkgo.Name(), teobj.Name())
 		default:
 			gopp.G_USED(ne)
 		}
-		return te.Obj().Name()
+		return "todo" + teobj.Name()
 		// return sign2rety(te.String())
 	case *types.Pointer:
 		tystr := this.exprTypeNameImpl2(scope, te.Elem(), e)
@@ -2032,18 +2039,22 @@ func (this *g2nc) genGenDecl(scope *ast.Scope, d *ast.GenDecl) {
 	}
 }
 func (this *g2nc) genTypeSpec(scope *ast.Scope, spec *ast.TypeSpec) {
+	this.outf("// %s", this.exprpos(spec).String()).outnl()
 	switch te := spec.Type.(type) {
 	case *ast.StructType:
-		this.outf("typedef struct %s %s", spec.Name.Name, spec.Name.Name).outfh().outnl()
-		this.outf("struct %s {", spec.Name.Name)
+		this.outf("typedef struct %s%s %s%s",
+			this.pkgpfx(), spec.Name.Name, this.pkgpfx(), spec.Name.Name).outfh().outnl()
+		this.outf("struct %s%s {", this.pkgpfx(), spec.Name.Name)
 		this.outnl()
 		this.genExpr(scope, spec.Type)
 		this.out("}").outfh().outnl()
 		this.outnl()
 		this.out("static").outsp()
-		this.outf("%s* %s_new_zero() {", spec.Name.Name, spec.Name.Name).outnl()
-		this.outf("  %s* obj = (%s*)cxmalloc(sizeof(%s))",
-			spec.Name.Name, spec.Name.Name, spec.Name.Name).outfh().outnl()
+		this.outf("%s%s* %s%s_new_zero() {",
+			this.pkgpfx(), spec.Name.Name, this.pkgpfx(), spec.Name.Name).outnl()
+		this.outf("  %s%s* obj = (%s%s*)cxmalloc(sizeof(%s%s))",
+			this.pkgpfx(), spec.Name.Name, this.pkgpfx(), spec.Name.Name,
+			this.pkgpfx(), spec.Name.Name).outfh().outnl()
 		for _, fld := range te.Fields.List {
 			fldty := this.info.TypeOf(fld.Type)
 			for _, fldname := range fld.Names {
@@ -2063,45 +2074,25 @@ func (this *g2nc) genTypeSpec(scope *ast.Scope, spec *ast.TypeSpec) {
 		this.out("}").outnl()
 		this.outnl()
 	case *ast.Ident:
-		this.outf("typedef %v %v", spec.Type, spec.Name.Name).outfh().outnl()
-		if this.pkgpfx() != "" {
-			this.outf("typedef %v %s%v", spec.Type, this.pkgpfx(), spec.Name.Name).outfh().outnl()
-		}
+		this.outf("typedef %v %s%v", spec.Type, this.pkgpfx(), spec.Name.Name).outfh().outnl()
 	case *ast.StarExpr:
 		this.out("typedef").outsp()
 		this.genExpr(scope, te.X)
 		this.out("*").outsp()
-		this.out(spec.Name.Name)
+		this.out(this.pkgpfx() + spec.Name.Name)
 		this.outfh().outnl()
-
-		if this.pkgpfx() != "" {
-			this.out("typedef").outsp()
-			this.genExpr(scope, te.X)
-			this.out("*").outsp()
-			this.out(this.pkgpfx() + spec.Name.Name)
-			this.outfh().outnl()
-		}
 	case *ast.SelectorExpr:
 		this.out("typedef").outsp()
 		this.genExpr(scope, te.X)
 		this.out("_")
 		this.genExpr(scope, te.Sel)
 		this.outsp()
-		this.out(spec.Name.Name)
+		this.out(this.pkgpfx() + spec.Name.Name)
 		this.outfh().outnl()
-
-		if this.pkgpfx() != "" {
-			this.out("typedef").outsp()
-			this.genExpr(scope, te.X)
-			this.out("_")
-			this.genExpr(scope, te.Sel)
-			this.outsp()
-			this.out(this.pkgpfx() + spec.Name.Name)
-			this.outfh().outnl()
-		}
 	case *ast.InterfaceType:
-		this.outf("typedef struct %s %s", spec.Name, spec.Name).outfh().outnl()
-		this.outf("struct %s {", spec.Name).outnl()
+		this.outf("typedef struct %s%s %s%s", this.pkgpfx(), spec.Name,
+			this.pkgpfx(), spec.Name).outfh().outnl()
+		this.outf("struct %s%s {", this.pkgpfx(), spec.Name).outnl()
 		this.out("voidptr value").outfh().outnl()
 		for _, fld := range te.Methods.List {
 			fldty := fld.Type.(*ast.FuncType)
@@ -2114,9 +2105,9 @@ func (this *g2nc) genTypeSpec(scope *ast.Scope, spec *ast.TypeSpec) {
 			}
 		}
 		this.out("}").outfh().outnl()
-		this.outf("%s* %s_new_zero() {", spec.Name.Name, spec.Name.Name)
+		this.outf("%s%s* %s%s_new_zero() {", this.pkgpfx(), spec.Name.Name, this.pkgpfx(), spec.Name.Name)
 		this.outf("return").outsp()
-		this.outf("(%s*)cxmalloc(sizeof(%s))", spec.Name.Name, spec.Name.Name)
+		this.outf("(%s%s*)cxmalloc(sizeof(%s%s))", this.pkgpfx(), spec.Name.Name, this.pkgpfx(), spec.Name.Name)
 		this.outfh().outnl()
 		this.out("}").outnl().outnl()
 	default:
@@ -2163,6 +2154,7 @@ func (c *g2nc) genValueSpec(scope *ast.Scope, spec *ast.ValueSpec, validx int) {
 			vp1stidx = validx
 		}
 
+		vartystr := c.exprTypeNameImpl2(scope, varty, varname)
 		isconst := false
 		c.out(gopp.IfElseStr(isglobvar, "static", "")).outsp()
 		if strings.HasPrefix(varty.String(), "untyped ") {
@@ -2180,18 +2172,14 @@ func (c *g2nc) genValueSpec(scope *ast.Scope, spec *ast.ValueSpec, validx int) {
 			} else if ischanty2(varty) {
 				c.out("voidptr")
 			} else {
-				c.out(sign2rety(varty.String()))
-				if ne, ok := varty.(*types.Named); ok {
-					if _, ok := ne.Underlying().(*types.Interface); ok {
-						c.out("*")
-					}
-				}
+				c.out(vartystr)
 			}
 			c.outsp()
 		}
 		if isglobvar && isstrty2(varty) {
 			log.Println("not supported global string/struct value", varname)
 		}
+		c.out(gopp.IfElseStr(isglobvar, c.pkgpfx(), ""))
 		c.out(varname.Name)
 		c.outsp().outeq().outsp()
 
