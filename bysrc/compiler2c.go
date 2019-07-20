@@ -169,14 +169,18 @@ func (c *g2nc) genMultiretTypes(scope *ast.Scope, pkg *ast.Package) {
 func (this *g2nc) genFuncs(pkg *ast.Package) {
 	scope := pkg.Scope
 	// ordered funcDeclsv
-	for _, d := range this.psctx.funcDeclsv {
-		if d == nil {
-			log.Println("wtf", d)
+	for _, fd := range this.psctx.funcDeclsv {
+		if fd == nil {
+			log.Println("wtf", fd)
 			continue
 		}
-		this.genDecl(scope, d)
+		if fd.Name.Name == "init" {
+			continue
+		}
+		this.genDecl(scope, fd)
 	}
 
+	this.genInitFuncs(scope, pkg)
 	if pkg.Name == "main" {
 		this.genMainFunc(scope)
 	}
@@ -363,9 +367,23 @@ func (c *g2nc) genMainFunc(scope *ast.Scope) {
 	c.out("// TODO arguments populate").outnl()
 	c.out("// TODO globvars populate").outnl()
 	c.out("// all func init()").outnl()
+	c.outf("%sinit()", c.pkgpfx()).outfh().outnl()
 	c.out("main_go()").outfh().outnl()
 	c.out("return 0").outfh().outnl()
 	c.out("}").outnl()
+}
+func (c *g2nc) genInitFuncs(scope *ast.Scope, pkg *ast.Package) {
+	for idx, fd := range c.psctx.initFuncs {
+		c.outf("// %s", c.exprpos(fd).String()).outnl()
+		c.out("static").outsp()
+		c.outf("void %sinit_%d()", c.pkgpfx(), idx)
+		c.genBlockStmt(scope, fd.Body)
+	}
+	c.outf("void %sinit(){", c.pkgpfx()).outnl()
+	for idx, _ := range c.psctx.initFuncs {
+		c.outf("%sinit_%d()", c.pkgpfx(), idx).outfh().outnl()
+	}
+	c.out("}").outnl().outnl()
 }
 
 func (this *g2nc) genBlockStmt(scope *ast.Scope, stmt *ast.BlockStmt) {

@@ -40,6 +40,7 @@ type ParserContext struct {
 	funcDeclsm    map[string]*ast.FuncDecl
 	funcDeclsv    []*ast.FuncDecl
 	funcdeclNodes map[string]graph.Node
+	initFuncs     []*ast.FuncDecl
 
 	tmpvars   map[ast.Stmt][]ast.Node
 	gostmts   []*ast.GoStmt
@@ -65,6 +66,7 @@ func NewParserContext(path string, pkgrename string) *ParserContext {
 	this.typeDeclsm = make(map[string]*ast.TypeSpec)
 	this.funcDeclsm = make(map[string]*ast.FuncDecl)
 	this.funcdeclNodes = make(map[string]graph.Node)
+	this.initFuncs = make([]*ast.FuncDecl, 0)
 	this.gb = graph.New(graph.Directed)
 
 	return this
@@ -335,6 +337,9 @@ func (pc *ParserContext) walkpass_func_deps1() {
 						log.Println("todo", varty, reflect.TypeOf(te.Recv.List[0]))
 					}
 				} else {
+					if te.Name.Name == "init" {
+						this.initFuncs = append(this.initFuncs, te)
+					}
 					this.funcDeclsm[te.Name.Name] = te
 					curfds = append(curfds, te.Name.Name)
 				}
