@@ -84,6 +84,9 @@ void* cxrt_chan_recv(void*ch) {
 }
 
 /////
+error* error_new_zero() {
+    return (error*)cxmalloc(sizeof(error));
+}
 void printlndep(const char* fmt, ...) {
     va_list arg;
     int done;

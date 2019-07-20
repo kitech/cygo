@@ -1357,9 +1357,12 @@ func (c *g2nc) genReturnStmt(scope *ast.Scope, e *ast.ReturnStmt) {
 					log.Println(undty, reflect.TypeOf(undty))
 					log.Println(resty, reflect.TypeOf(resty))
 					log.Println(resty, reflect.TypeOf(resty.(*types.Pointer).Elem()))
+					c.outf("%s->value =", idt.Name)
+					c.genExpr(scope, ae)
+					c.outfh().outnl()
 					for i := 0; i < undty.NumMethods(); i++ {
-						c.outf("%s->%s = (__typeof__(%s->%s))%s_%s", idt.Name, undty.Method(i).Name(),
-							idt.Name, undty.Method(i).Name(),
+						c.outf("%s->%s = (__typeof__(%s->%s))%s%s_%s", idt.Name, undty.Method(i).Name(),
+							idt.Name, undty.Method(i).Name(), c.pkgpfx(),
 							strings.Trim(c.exprTypeName(scope, ae), "*"), undty.Method(i).Name())
 						c.outfh().outnl()
 					}

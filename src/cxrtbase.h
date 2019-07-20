@@ -31,7 +31,7 @@ typedef float float32;
 typedef double float64;
 typedef uintptr_t uintptr;
 typedef unsigned int uint;
-typedef void* error;
+// typedef void* error;
 typedef void* voidptr;
 typedef int C_int;
 typedef unsigned int C_uint;
@@ -107,6 +107,12 @@ int cxstring_cmp(cxstring* s0, cxstring* s1);
 void panic(cxstring* s);
 void panicln(cxstring*s);
 // cxstring end
+
+typedef struct error {
+    void* value;
+    cxstring*(*Error)();
+} error;
+error* error_new_zero();
 
 // cxhashtable begin
 HashTable* cxhashtable_new();
