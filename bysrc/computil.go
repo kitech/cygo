@@ -338,8 +338,21 @@ func (bc *basecomp) getdeferinfo(defero *ast.DeferStmt) *deferinfo {
 	return deferi
 }
 
-func (bc *basecomp) isglobalid(idt *ast.Ident) bool {
-	info := bc.psctx.info
+func (psctx *ParserContext) isglobal(e ast.Node) bool {
+	// log.Println(e, reflect.TypeOf(e))
+	switch te := e.(type) {
+	case *ast.File:
+		return true
+	case *ast.FuncDecl:
+		return false
+	default:
+		gopp.G_USED(te)
+		return psctx.isglobal(psctx.cursors[e].Parent())
+	}
+}
+
+func isglobalid(pc *ParserContext, idt *ast.Ident) bool {
+	info := pc.info
 	eobj := info.ObjectOf(idt)
 	if eobj != nil {
 		// log.Println(eobj, eobj.Pkg(), eobj.Parent())

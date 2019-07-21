@@ -42,12 +42,13 @@ type ParserContext struct {
 	funcdeclNodes map[string]graph.Node
 	initFuncs     []*ast.FuncDecl
 
-	tmpvars   map[ast.Stmt][]ast.Node
+	tmpvars   map[ast.Stmt][]ast.Node // => value node
 	gostmts   []*ast.GoStmt
 	chanops   []ast.Expr // *ast.SendStmt
 	closures  []*ast.FuncLit
 	multirets []*ast.FuncDecl
 	defers    []*ast.DeferStmt
+	globvars  []ast.Node // => ValueSpec node
 
 	gb     *graph.Graph
 	bdpkgs *build.Package
@@ -131,6 +132,7 @@ func (this *ParserContext) Init() error {
 	this.walkpass_closures()
 	this.walkpass_multiret()
 	this.walkpass_defers()
+	this.walkpass_globvars()
 
 	return err
 }
@@ -810,6 +812,34 @@ func (pc *ParserContext) walkpass_defers() {
 	}
 	log.Println("defers", len(defers))
 	pc.defers = defers
+}
+
+func (pc *ParserContext) walkpass_globvars() {
+	globvars := []ast.Node{}
+	pkgs := pc.pkgs
+	for _, pkg := range pkgs {
+		astutil.Apply(pkg, func(c *astutil.Cursor) bool {
+			switch te := c.Node().(type) {
+			case *ast.ValueSpec:
+				for _, name := range te.Names {
+					if isglobalid(pc, name) {
+						globvars = append(globvars, te)
+					}
+				}
+			default:
+				gopp.G_USED(te)
+			}
+			return true
+		}, func(c *astutil.Cursor) bool {
+			switch te := c.Node().(type) {
+			default:
+				gopp.G_USED(te)
+			}
+			return true
+		})
+	}
+	log.Println("globvars", len(globvars))
+	pc.globvars = globvars
 }
 
 func (pc *ParserContext) putTyperefDependcy(funame, tyname string) {

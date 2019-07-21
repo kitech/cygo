@@ -181,6 +181,8 @@ func (this *g2nc) genFuncs(pkg *ast.Package) {
 		this.genDecl(scope, fd)
 	}
 
+	this.genInitGlobvars(pkg.Scope, pkg)
+
 	this.genInitFuncs(scope, pkg)
 	if pkg.Name == "main" {
 		this.genMainFunc(scope)
@@ -367,6 +369,7 @@ func (c *g2nc) genMainFunc(scope *ast.Scope) {
 	c.out("cxrt_init_env()").outfh().outnl()
 	c.out("// TODO arguments populate").outnl()
 	c.out("// TODO globvars populate").outnl()
+	c.outf("%sglobvars_init()", c.pkgpfx()).outfh().outnl()
 	c.out("// all func init()").outnl()
 	c.outf("%sinit()", c.pkgpfx()).outfh().outnl()
 	c.out("main_main()").outfh().outnl()
@@ -1537,14 +1540,14 @@ func (this *g2nc) genExpr2(scope *ast.Scope, e ast.Expr) {
 		idname = gopp.IfElseStr(idname == "nil", "nilptr", idname)
 		idname = gopp.IfElseStr(idname == "string", "cxstring*", idname)
 		eobj := this.info.ObjectOf(te)
-		log.Println(e, eobj, this.isglobalid(te))
+		log.Println(e, eobj, isglobalid(this.psctx, te))
 		if eobj != nil {
 			pkgo := eobj.Pkg()
 			if pkgo != nil {
 				// this.out(pkgo.Name())
 			}
 		}
-		if strings.HasPrefix(idname, "_Cfunc_") || this.isglobalid(te) {
+		if strings.HasPrefix(idname, "_Cfunc_") || isglobalid(this.psctx, te) {
 			this.out(this.pkgpfx())
 		}
 		this.out(idname, "")
@@ -1890,7 +1893,9 @@ func (c *g2nc) genCxarrAdd(scope *ast.Scope, vnamex interface{}, ve ast.Expr, id
 		log.Println("unknown", ve, reflect.TypeOf(ve))
 	}
 
-	c.outf("array_add(%v, (void*)(uintptr_t)%v)",
+	varobj := c.info.ObjectOf(vnamex.(*ast.Ident))
+	pkgpfx := gopp.IfElseStr(isglobalid(c.psctx, vnamex.(*ast.Ident)), varobj.Pkg().Name(), "")
+	c.outf("array_add(%s_%v, (void*)(uintptr_t)%v)", pkgpfx,
 		vnamex.(*ast.Ident).Name, valstr) // .outfh().outnl()
 }
 func (c *g2nc) genCxarrSet(scope *ast.Scope, vname ast.Expr, vidx ast.Expr, elem interface{}) {
@@ -2072,7 +2077,8 @@ func (this *g2nc) exprTypeFmt(scope *ast.Scope, e ast.Expr) string {
 		} else {
 			switch te.Kind() {
 			case types.Float32, types.Float64:
-				return "f"
+				return "g" // wow
+				// return "f"
 			default:
 				return "d"
 			}
@@ -2084,7 +2090,8 @@ func (this *g2nc) exprTypeFmt(scope *ast.Scope, e ast.Expr) string {
 			case "int", "int32", "int64":
 				return "d"
 			case "float", "double":
-				return "f"
+				return "g"
+				// return "f"
 			default:
 				log.Println("todo", segs)
 			}
@@ -2281,9 +2288,6 @@ func (c *g2nc) genValueSpec(scope *ast.Scope, spec *ast.ValueSpec, validx int) {
 			}
 			c.outsp()
 		}
-		if isglobvar && isstrty2(varty) {
-			log.Println("not supported global string/struct value", varname)
-		}
 		c.out(gopp.IfElseStr(isglobvar, c.pkgpfx(), ""))
 		c.out(varname.Name)
 		c.outsp().outeq().outsp()
@@ -2291,7 +2295,12 @@ func (c *g2nc) genValueSpec(scope *ast.Scope, spec *ast.ValueSpec, validx int) {
 		if idx < len(spec.Values) {
 			c.valnames[spec.Values[idx]] = varname
 			scope = putscope(scope, ast.Var, "varname", varname)
-			c.genExpr(scope, spec.Values[idx])
+			if isglobvar && (isstrty2(varty) || isslicety2(varty) ||
+				isarrayty2(varty) || isstructty2(varty) || ismapty2(varty)) {
+				c.out("{0}")
+			} else {
+				c.genExpr(scope, spec.Values[idx])
+			}
 		} else {
 			if isconst {
 				c.out("(")
@@ -2323,17 +2332,39 @@ func (c *g2nc) genValueSpec(scope *ast.Scope, spec *ast.ValueSpec, validx int) {
 
 }
 
-func (psctx *ParserContext) isglobal(e ast.Node) bool {
-	// log.Println(e, reflect.TypeOf(e))
-	switch te := e.(type) {
-	case *ast.File:
-		return true
-	case *ast.FuncDecl:
-		return false
-	default:
-		gopp.G_USED(te)
-		return psctx.isglobal(psctx.cursors[e].Parent())
+func (c *g2nc) genInitGlobvars(scope *ast.Scope, pkg *ast.Package) {
+	c.outf("void %sglobvars_init() {", c.pkgpfx()).outnl()
+	for _, varx := range c.psctx.globvars {
+		varo := varx.(*ast.ValueSpec)
+		log.Println(varo.Type, reflect.TypeOf(varo.Type))
+		for idx, name := range varo.Names {
+			_ = idx
+			keepon := false
+			gotyx := c.info.TypeOf(name)
+			log.Println(gotyx)
+			switch goty := gotyx.(type) {
+			case *types.Basic:
+				if isstrty2(goty) {
+					keepon = true
+				}
+			case *types.Array, *types.Slice, *types.Map:
+				keepon = true
+			default:
+				gopp.G_USED(goty)
+			}
+			if !keepon {
+				continue
+			}
+			c.out("//", c.exprpos(name).String()).outnl()
+			assigno := &ast.AssignStmt{}
+			assigno.Tok = token.EQL
+			assigno.Lhs = []ast.Expr{name}
+			assigno.Rhs = []ast.Expr{varo.Values[idx]}
+			c.genAssignStmt(scope, assigno)
+			c.outfh().outnl()
+		}
 	}
+	c.out("}")
 }
 
 func (this *g2nc) outsp() *g2nc   { return this.out(" ") }
