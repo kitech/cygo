@@ -1402,9 +1402,6 @@ func (c *g2nc) genReturnStmt(scope *ast.Scope, e *ast.ReturnStmt) {
 					c.outeq()
 					c.outf("%s_new_zero()", strings.Trim(tystr, "*")).outfh().outnl()
 					undty := ne.Underlying().(*types.Interface)
-					log.Println(undty, reflect.TypeOf(undty))
-					log.Println(resty, reflect.TypeOf(resty))
-					log.Println(resty, reflect.TypeOf(resty.(*types.Pointer).Elem()))
 					c.outf("%s->value =", idt.Name)
 					c.genExpr(scope, ae)
 					c.outfh().outnl()
@@ -1575,7 +1572,27 @@ func (this *g2nc) genExpr2(scope *ast.Scope, e ast.Expr) {
 		case *ast.CompositeLit:
 			tystr := this.exprTypeName(scope, t2.Type)
 			this.outf("%s_new_zero()", tystr) //.outnl()
+			this.outfh().outnl()
 			keepop = false
+			varname := scope.Lookup("varname")
+			tyobj := this.info.ObjectOf(t2.Type.(*ast.Ident))
+			goty := tyobj.Type().(*types.Named).Underlying().(*types.Struct)
+			for idx, elmx := range t2.Elts {
+				// log.Println(elmx, goty, goty.Field(idx), reflect.TypeOf(elmx))
+				switch elme := elmx.(type) {
+				case *ast.KeyValueExpr:
+					this.outf("%s->%s", varname.Data, elme.Key)
+					this.outeq()
+					this.genExpr(scope, elme.Value)
+					this.outfh().outnl()
+				default:
+					fld := goty.Field(idx)
+					this.outf("%s->%s", varname.Data, fld.Name())
+					this.outeq()
+					this.genExpr(scope, elmx)
+					this.outfh().outnl()
+				}
+			}
 		case *ast.UnaryExpr:
 			log.Println(t2, t2.X, t2.Op)
 		default:
@@ -2030,10 +2047,10 @@ func (this *g2nc) exprTypeNameImpl2(scope *ast.Scope, ety types.Type, e ast.Expr
 		case *ast.CallExpr:
 			return fmt.Sprintf("%v_multiret_arg*", ce.Fun)
 		default:
-			log.Println("todo", goty, reflect.TypeOf(goty), isudty, tyval, te)
+			log.Println("todo", goty, reflect.TypeOf(goty), isudty, tyval, te, this.exprpos(e))
 		}
 	default:
-		log.Println("todo", goty, reflect.TypeOf(goty), isudty, tyval, te)
+		log.Println("todo", goty, reflect.TypeOf(goty), isudty, tyval, te, this.exprpos(e))
 		return te.String()
 	}
 

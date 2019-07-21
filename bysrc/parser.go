@@ -386,6 +386,10 @@ func (pc *ParserContext) walkpass_func_deps1() {
 				}
 			case *ast.ReturnStmt:
 			case *ast.CompositeLit:
+				if len(curfds) == 0 {
+					log.Println("todo globvar", exprpos(pc, c.Node()))
+					break
+				}
 				var curfd = curfds[len(curfds)-1]
 				goty := pc.info.TypeOf(te.Type)
 				for funame, fd := range pc.funcDeclsm {
