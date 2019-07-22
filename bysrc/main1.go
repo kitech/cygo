@@ -58,9 +58,11 @@ func main() {
 
 		for _, imppath := range psctx.bdpkgs.Imports {
 			log.Println(imppath, psctx.bdpkgs.Dir)
-			if imppath == "runtime" || imppath == "atomic" ||
+			if imppath == "runtime" ||
+				imppath == "atomic" ||
 				imppath == "runtime/cgo" ||
-				imppath == "syscall" || imppath == "syscall/js" {
+				imppath == "syscall" || imppath == "syscall/js" ||
+				imppath == "internal/race" {
 				continue
 			}
 			for _, gopath1 := range gopaths {

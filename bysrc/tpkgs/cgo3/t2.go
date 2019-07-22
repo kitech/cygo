@@ -5,6 +5,7 @@ package main
 */
 import "C"
 
-func mytime() {
+func mytime() C.time_t {
 	tm := C.time(nil)
+	return tm
 }

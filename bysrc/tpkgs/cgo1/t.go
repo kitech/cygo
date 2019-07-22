@@ -20,7 +20,7 @@ func main() {
 	C.sleep(1)
 	var fd int = C.socket(C.AF_INET, C.SOCK_STREAM, 0)
 	println(fd)
-	println(C.errno)
+	// println(C.errno)
 	var pid int = C.getpid()
 	println(pid)
 

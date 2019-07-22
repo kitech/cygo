@@ -72,6 +72,9 @@ func iswrapcfunc(name string) bool     { return strings.HasPrefix(name, "_Cfunc"
 func istuple(tystr string) bool        { return strings.Contains(tystr, "_multiret_") }
 
 func iserrorty2(typ types.Type) bool {
+	if typ == nil {
+		return false
+	}
 	segs := strings.Split(typ.String(), ".")
 	if len(segs) == 1 {
 		return segs[0] == "error"

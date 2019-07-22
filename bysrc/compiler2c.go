@@ -660,7 +660,7 @@ func (c *g2nc) genRangeStmt(scope *ast.Scope, s *ast.RangeStmt) {
 		c.out("  TableEntry *entry").outfh().outnl()
 		c.out("  while (hashtable_iter_next(&htiter, &entry) != CC_ITER_END) {").outnl()
 		c.outf("    %s %v = entry->key", keytystr, s.Key).outfh().outnl()
-		c.outf("    %s %v = entry->data", valtystr, s.Value).outfh().outnl()
+		c.outf("    %s %v = entry->value", valtystr, s.Value).outfh().outnl()
 		c.genBlockStmt(scope, s.Body)
 		c.out("  }").outnl()
 		c.out("// TODO gc safepoint code").outnl()
@@ -1391,16 +1391,15 @@ func (c *g2nc) genReturnStmt(scope *ast.Scope, e *ast.ReturnStmt) {
 		c.genDeferStmt(scope, e)
 		reses := []ast.Expr{}
 		for idx, ae := range e.Results {
-			log.Println(idx, ae, c.exprpos(ae))
-			log.Println(fd.Type)
-			log.Println(fd.Type.Results)
 			if fd.Type.Results == nil {
+				reses = append(reses, ae)
 				continue
 			}
 
 			sigty := c.info.TypeOf(fd.Type.Results.List[idx].Type)
 			resty := c.info.TypeOf(ae)
 			reset := false
+
 			switch ne := sigty.(type) {
 			case *types.Named:
 				if sigty != resty && isiface2(ne.Underlying()) {
@@ -1423,6 +1422,8 @@ func (c *g2nc) genReturnStmt(scope *ast.Scope, e *ast.ReturnStmt) {
 						c.outfh().outnl()
 					}
 				}
+			default:
+				log.Println("todo", reflect.TypeOf(sigty))
 			}
 			if reset {
 				// reses = append(reses, ae)
@@ -1430,12 +1431,16 @@ func (c *g2nc) genReturnStmt(scope *ast.Scope, e *ast.ReturnStmt) {
 				reses = append(reses, ae)
 			}
 		}
+		if len(reses) < len(e.Results) {
+			log.Println("todo", len(reses), len(e.Results), e.Results[0])
+		}
 		c.out("return").outsp()
-		log.Println(len(reses), len(e.Results))
+		// log.Println(len(reses), len(e.Results), e.Results[0])
 		for idx, _ := range e.Results {
 			if idx >= len(reses) {
 				break
 			}
+
 			c.genExpr(scope, reses[idx])
 			c.out(gopp.IfElseStr(idx < len(e.Results)-1, ",", ""))
 		}
@@ -1518,7 +1523,7 @@ func (this *g2nc) genExpr(scope *ast.Scope, e ast.Expr) {
 	varname := scope.Lookup("varname")
 	if varname != nil {
 		vartyp := this.info.TypeOf(varname.Data.(ast.Expr))
-		log.Println(vartyp, varname, iserrorty2(vartyp))
+		log.Println(vartyp, varname)
 		if iseface2(vartyp) {
 			_, iscallexpr := e.(*ast.CallExpr)
 			_, isidt := e.(*ast.Ident)
@@ -1537,8 +1542,6 @@ func (this *g2nc) genExpr(scope *ast.Scope, e ast.Expr) {
 				this.outf("cxeface_new_of2((void*)&%s, sizeof(%s))", tmpvar, tmpvar)
 				return
 			}
-		}
-		if iserrorty2(vartyp) {
 		}
 	}
 	this.genExpr2(scope, e)
@@ -1907,7 +1910,8 @@ func (c *g2nc) genCxarrAdd(scope *ast.Scope, vnamex interface{}, ve ast.Expr, id
 
 	varobj := c.info.ObjectOf(vnamex.(*ast.Ident))
 	pkgpfx := gopp.IfElseStr(isglobalid(c.psctx, vnamex.(*ast.Ident)), varobj.Pkg().Name(), "")
-	c.outf("array_add(%s_%v, (void*)(uintptr_t)%v)", pkgpfx,
+	pkgpfx = gopp.IfElseStr(pkgpfx == "", "", pkgpfx+"_")
+	c.outf("array_add(%s%v, (void*)(uintptr_t)%v)", pkgpfx,
 		vnamex.(*ast.Ident).Name, valstr) // .outfh().outnl()
 }
 func (c *g2nc) genCxarrSet(scope *ast.Scope, vname ast.Expr, vidx ast.Expr, elem interface{}) {
@@ -2063,6 +2067,8 @@ func (this *g2nc) exprTypeNameImpl2(scope *ast.Scope, ety types.Type, e ast.Expr
 		switch ce := e.(type) {
 		case *ast.CallExpr:
 			return fmt.Sprintf("%v_multiret_arg*", ce.Fun)
+		case *ast.TypeAssertExpr:
+			return fmt.Sprintf("%v_multiret_arg*", "aaa")
 		default:
 			log.Println("todo", goty, reflect.TypeOf(goty), isudty, tyval, te, this.exprpos(e))
 		}
@@ -2208,13 +2214,17 @@ func (this *g2nc) genTypeSpec(scope *ast.Scope, spec *ast.TypeSpec) {
 		this.outf("struct %s%s {", this.pkgpfx(), spec.Name).outnl()
 		this.out("voidptr value").outfh().outnl()
 		for _, fld := range te.Methods.List {
-			fldty := fld.Type.(*ast.FuncType)
-			for _, name := range fld.Names {
-				this.genFieldList(scope, fldty.Results, true, false, "", true)
-				this.outf("(*%s)(voidptr", name.Name)
-				this.out(gopp.IfElseStr(fldty.Params.NumFields() > 0, ",", ""))
-				this.genFieldList(scope, fldty.Params, false, false, "", true)
-				this.out(")").outfh().outnl()
+			switch fldty := fld.Type.(type) {
+			case *ast.FuncType:
+				for _, name := range fld.Names {
+					this.genFieldList(scope, fldty.Results, true, false, "", true)
+					this.outf("(*%s)(voidptr", name.Name)
+					this.out(gopp.IfElseStr(fldty.Params.NumFields() > 0, ",", ""))
+					this.genFieldList(scope, fldty.Params, false, false, "", true)
+					this.out(")").outfh().outnl()
+				}
+			default:
+				log.Println("todo", fld.Type, reflect.TypeOf(fld.Type))
 			}
 		}
 		this.out("}").outfh().outnl()
