@@ -71,6 +71,14 @@ func isuntypedty2(typ types.Type) bool { return isuntypedty(typ.String()) }
 func iswrapcfunc(name string) bool     { return strings.HasPrefix(name, "_Cfunc") }
 func istuple(tystr string) bool        { return strings.Contains(tystr, "_multiret_") }
 
+func iserrorty2(typ types.Type) bool {
+	segs := strings.Split(typ.String(), ".")
+	if len(segs) == 1 {
+		return segs[0] == "error"
+	}
+	return segs[len(segs)-1] == "error"
+}
+
 func newLitInt(v int) *ast.BasicLit {
 	return &ast.BasicLit{Kind: token.INT, Value: fmt.Sprintf("%d", v)}
 }

@@ -109,7 +109,7 @@ void panicln(cxstring*s);
 // cxstring end
 
 typedef struct error {
-    void* value;
+    void* data;
     cxstring*(*Error)();
 } error;
 error* error_new_zero();

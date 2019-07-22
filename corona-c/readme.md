@@ -42,6 +42,7 @@ Thanks all the contributors.
 * rixlog
 * libgc >= 8.2.0
 * libevent >= 2.1
+* libelf/plthook
 
 ### BUGS
 

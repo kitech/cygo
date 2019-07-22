@@ -521,6 +521,16 @@ func (c *g2nc) genAssignStmt(scope *ast.Scope, s *ast.AssignStmt) {
 				c.out(tvname).out("->").out(tmpvarname2(idx)).outfh().outnl()
 			}
 			c.outf("cxfree(%s)", tvname).outfh().outnl()
+		} else if iserrorty2(c.info.TypeOf(s.Lhs[i])) {
+			c.genExpr(scope, s.Lhs[i])
+			c.outeq().out("error_new_zero()").outfh().outnl()
+			c.genExpr(scope, s.Lhs[i])
+			c.outf("->data").outeq()
+			c.genExpr(scope, s.Rhs[i])
+			c.outfh().outnl()
+			c.genExpr(scope, s.Lhs[i])
+			c.outf("->Error").outeq()
+			c.outf("%s_Error", strings.Trim(c.exprTypeName(scope, s.Rhs[i]), "*"))
 		} else {
 			if s.Tok.String() == ":=" {
 				c.out(c.exprTypeName(scope, s.Rhs[i])).outsp()
@@ -650,7 +660,7 @@ func (c *g2nc) genRangeStmt(scope *ast.Scope, s *ast.RangeStmt) {
 		c.out("  TableEntry *entry").outfh().outnl()
 		c.out("  while (hashtable_iter_next(&htiter, &entry) != CC_ITER_END) {").outnl()
 		c.outf("    %s %v = entry->key", keytystr, s.Key).outfh().outnl()
-		c.outf("    %s %v = entry->value", valtystr, s.Value).outfh().outnl()
+		c.outf("    %s %v = entry->data", valtystr, s.Value).outfh().outnl()
 		c.genBlockStmt(scope, s.Body)
 		c.out("  }").outnl()
 		c.out("// TODO gc safepoint code").outnl()
@@ -1140,7 +1150,7 @@ func (c *g2nc) genCallExprNorm(scope *ast.Scope, te *ast.CallExpr) {
 	c.out("(")
 	if isselfn && !iscfn && !ispkgsel {
 		c.genExpr(scope, selfn.X)
-		c.out(gopp.IfElseStr(isifacesel, "->value", ""))
+		c.out(gopp.IfElseStr(isifacesel, "->data", ""))
 		c.out(gopp.IfElseStr(len(te.Args) > 0, ",", ""))
 	}
 	for idx, e1 := range te.Args {
@@ -1387,9 +1397,7 @@ func (c *g2nc) genReturnStmt(scope *ast.Scope, e *ast.ReturnStmt) {
 			if fd.Type.Results == nil {
 				continue
 			}
-			log.Println(fd.Type.Results.List)
-			log.Println(fd.Type.Results.List[idx])
-			log.Println(fd.Type.Results.List[idx].Type)
+
 			sigty := c.info.TypeOf(fd.Type.Results.List[idx].Type)
 			resty := c.info.TypeOf(ae)
 			reset := false
@@ -1405,7 +1413,7 @@ func (c *g2nc) genReturnStmt(scope *ast.Scope, e *ast.ReturnStmt) {
 					c.outeq()
 					c.outf("%s_new_zero()", strings.Trim(tystr, "*")).outfh().outnl()
 					undty := ne.Underlying().(*types.Interface)
-					c.outf("%s->value =", idt.Name)
+					c.outf("%s->data =", idt.Name)
 					c.genExpr(scope, ae)
 					c.outfh().outnl()
 					for i := 0; i < undty.NumMethods(); i++ {
@@ -1510,6 +1518,7 @@ func (this *g2nc) genExpr(scope *ast.Scope, e ast.Expr) {
 	varname := scope.Lookup("varname")
 	if varname != nil {
 		vartyp := this.info.TypeOf(varname.Data.(ast.Expr))
+		log.Println(vartyp, varname, iserrorty2(vartyp))
 		if iseface2(vartyp) {
 			_, iscallexpr := e.(*ast.CallExpr)
 			_, isidt := e.(*ast.Ident)
@@ -1528,6 +1537,8 @@ func (this *g2nc) genExpr(scope *ast.Scope, e ast.Expr) {
 				this.outf("cxeface_new_of2((void*)&%s, sizeof(%s))", tmpvar, tmpvar)
 				return
 			}
+		}
+		if iserrorty2(vartyp) {
 		}
 	}
 	this.genExpr2(scope, e)
@@ -1808,9 +1819,10 @@ func (this *g2nc) genExpr2(scope *ast.Scope, e ast.Expr) {
 			this.out("cxeface")
 		}
 	case *ast.TypeAssertExpr:
-		this.outf("(%s)(*(void**)(", this.exprTypeName(scope, te.Type))
+		tystr := this.exprTypeName(scope, te.Type)
+		this.outf("(%s)(", tystr)
 		this.genExpr(scope, te.X)
-		this.out(".data))")
+		this.out("->data)")
 	case *ast.ParenExpr:
 		this.out("(")
 		this.genExpr(scope, te.X)
