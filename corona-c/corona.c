@@ -1135,6 +1135,7 @@ void crn_init_intern() {
     crn_pre_gclock_fn = crn_pre_gclock_proc;
     crn_post_gclock_fn = crn_post_gclock_proc;
 
+    crn_gc_set_nprocs(1);
     // GC_set_find_leak(1);
     GC_set_finalize_on_demand(0);
     GC_set_free_space_divisor(50); // default 3

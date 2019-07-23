@@ -10,6 +10,7 @@ extern void GC_push_all_eager(void*, void*);
 extern void GC_set_push_other_roots(void*);
 
 const char* crn_gc_event_name(GC_EventType evty);
+void crn_gc_set_nprocs(int n);
 
 void* crn_gc_malloc(size_t size);
 void* crn_gc_realloc(void* ptr, size_t size);

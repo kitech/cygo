@@ -98,6 +98,13 @@ void crn_set_finalizer(void* ptr, void(*ufin)(void* ptr)) {
     crn_post_gclock();
 }
 
+void crn_gc_set_nprocs(int n) {
+    char strn[32] = {0};
+    snprintf(strn, sizeof(strn)-1, "%d", n);
+    setenv("GC_NPROCS", strn, false);
+    // bdwgc default is NCPU-1
+}
+
 const char* crn_gc_event_name(GC_EventType evty) {
     switch (evty) {
     case GC_EVENT_START: /* COLLECTION */

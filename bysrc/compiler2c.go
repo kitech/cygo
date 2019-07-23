@@ -368,7 +368,7 @@ func (c *g2nc) genMainFunc(scope *ast.Scope) {
 	c.out("int main(int argc, char**argv) {").outnl()
 	c.out("cxrt_init_env()").outfh().outnl()
 	c.out("// TODO arguments populate").outnl()
-	c.out("// TODO globvars populate").outnl()
+	c.out("// globvars populate").outnl()
 	c.outf("%sglobvars_init()", c.pkgpfx()).outfh().outnl()
 	c.out("// all func init()").outnl()
 	c.outf("%sinit()", c.pkgpfx()).outfh().outnl()
@@ -2105,7 +2105,7 @@ func (this *g2nc) exprTypeFmt(scope *ast.Scope, e ast.Expr) string {
 		segs := strings.Split(te.String(), "._Ctype_")
 		if len(segs) == 2 {
 			switch segs[1] {
-			case "int", "int32", "int64":
+			case "int", "int32", "int64", "long", "short":
 				return "d"
 			case "float", "double":
 				return "g"
