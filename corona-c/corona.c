@@ -553,27 +553,28 @@ static void* crn_procer1(void*arg) {
 
     for (;;) {
         int newgn = crnqueue_size(mc->ngrs);
-        if (newgn == 0) {
+        int oldgn = crnmap_size(mc->grs);
+        if (newgn == 0 && oldgn == 0) {
             mc->parking = true;
             pcond_wait(&mc->pkcd, &mc->pkmu);
             mc->parking = false;
         }
 
         // linfo("newgr %d\n", newgn);
-        for (newgn = 0;;) {
+        for (int cnt = 0; newgn > 0; cnt++) {
             fiber* newgr = nilptr;
             int rv = crnqueue_poll(mc->ngrs, (void**)&newgr);
             assert(rv == CC_OK || rv == CC_ERR_OUT_OF_RANGE);
             if (newgr == nilptr) {
+                assert(cnt >= newgn);
                 break;
             }
             // dumphtkeys(gnr__->mchs);
             crn_machine_gradd(mc, newgr);
-            newgn ++;
             // dumphtkeys(gnr__->mchs);
             checkhtkeys(gnr__->mchs);
         }
-        if (newgn == 0) continue;
+        if (newgn == 0 && oldgn == 0) continue;
 
         // TODO 应该放到schedule中
         // find free machine and runnable fiber
