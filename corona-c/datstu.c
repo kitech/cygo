@@ -171,6 +171,7 @@ void* crnmap_findone(crnmap* table, bool(*chkfn)(void* v)) {
 
     return val;
 }
+HashTable* crnmap_getraw(crnmap* table)  { return table->ht; }
 
 /////
 crnqueue* crnqueue_new() {

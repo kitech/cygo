@@ -1125,6 +1125,34 @@ void crn_post_gclock_proc() {
 
 }
 
+void crn_dump_fibers() {
+    linfo2("aaa %d\n", 0);
+    extern HashTable* crnmap_getraw(crnmap* table);
+    int grcnt = 0;
+    for (int i = 1; i <= 5; i++ ) {
+        if (i == 2) { continue; }
+        machine* mc = crn_machine_get(i);
+        if (mc == 0) {
+            linfo2("mchssz = %d\n", crnmap_size(gnr__->mchs));
+            break;
+        }
+
+        HashTable* ht = crnmap_getraw(mc->grs);
+
+        TableEntry* entry;
+        HashTableIter hashtable_iter_53d46d2a04458e7b;
+        hashtable_iter_init(&hashtable_iter_53d46d2a04458e7b, ht);
+        while (hashtable_iter_next(&hashtable_iter_53d46d2a04458e7b, &entry) != CC_ITER_END) {
+            grcnt ++;
+            fiber* gr = entry->value;
+            linfo2("mc/gr=%d/%d pk=%d state=%d(%s) pkreason=%d(%s)\n",
+                   i, gr->id, mc->parking, gr->state, grstate2str(gr->state),
+                   gr->pkreason, yield_type_name(gr->pkreason));
+        }
+    }
+    linfo2("grcnt=%d\n", grcnt);
+}
+
 bool gcinited = false;
 static
 void crn_init_intern() {
