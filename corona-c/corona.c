@@ -1,4 +1,4 @@
-
+#include <sys/mman.h>
 #include <unistd.h>
 #include <stdio.h>
 #include <assert.h>
@@ -11,7 +11,7 @@
 #include <corona.h>
 #include <coronapriv.h>
 
-const int dftstksz = 128*1024;
+const int dftstksz = 64*1024;
 const int dftstkusz = dftstksz/8; // unit size by sizeof(void*)
 
 typedef struct yieldinfo {
@@ -122,18 +122,48 @@ static grstate crn_fiber_getstate(fiber* gr) {
 }
 // alloc stack and context
 void crn_fiber_new2(fiber*gr, size_t stksz) {
+    void *stkptr = nilptr;
     // corowp_stack_alloc(&gr->stack, stksz);
-    gr->stack.sptr = crn_gc_malloc_uncollectable(stksz);
+    stkptr = crn_gc_malloc_uncollectable(stksz);
     // gr->stack.sptr = calloc(1, stksz);
-    gr->stack.ssze = stksz;
+    gr->stkptr = stkptr;
+    gr->stack.sptr = (void*)((uintptr_t)stkptr + 4096);
+    gr->stack.ssze = stksz - 4096;
+    memset(stkptr, 123, 4096);
+    gr->stkmid = (void*)((uintptr_t)stkptr + stksz/2 - 2048);
+    memset(gr->stkmid, 123, 4096);
+    int rv = mprotect(stkptr, 4096, PROT_READ);
+    assert(rv == 0);
+    for (int i = 4000; i < 10000; i++) {
+    }
     gr->mystksb.mem_base = (void*)((uintptr_t)gr->stack.sptr + stksz);
     crn_fiber_setstate(gr, runnable);
     // GC_add_roots(gr->stack.sptr, gr->stack.sptr+(gr->stack.ssze));
     // 这一句会让fnproc直接执行，但是可能需要的是创建与执行分开。原来是针对-DCORO_PTHREAD
     // corowp_create(&gr->coctx, gr->fnproc, gr->arg, gr->stack.sptr, dftstksz);
 }
+static int memchanged(void* ptr, int c, size_t n) {
+    char* p = (char*)ptr;
+    for (int i = 0; i < n; i++) {
+        if (p[i] != c) { return i; }
+    }
+    return -1;
+}
+static void crn_fiber_checkstk(fiber* gr) {
+    int grid = gr->id;
+    int changedmid = memchanged(gr->stkmid, 123, 4096);
+    if (changedmid >= 0) {
+        linfo("changedmid gr=%d pos=%d %d\n", grid, changedmid, ((char*)gr->stkmid)[changedmid]);
+    }
+    int changed = memchanged(gr->stkptr, 123, 4096);
+    if (changed >= 0) {
+        linfo("changed gr=%d pos=%d %d\n", grid, changed, ((char*)gr->stkptr)[changed]);
+    }
+    assert(changed == -1);
+}
 void crn_fiber_destroy(fiber* gr) {
-    crn_set_finalizer(gr,nilptr);
+    crn_fiber_checkstk(gr);
+    crn_set_finalizer(gr, nilptr);
     int state = crn_fiber_getstate(gr);
     assert(state != executing );
     int grid = gr->id;
@@ -159,7 +189,9 @@ void crn_fiber_destroy(fiber* gr) {
     // linfo("gr %d on %d, freed %d, %d\n", grid, mcid, ssze, sizeof(fiber));
     corowp_destroy(&gr->coctx);
     if (gr->stack.sptr != 0) {
-        crn_gc_free2(gr->stack.sptr);
+        int rv = mprotect(gr->stkptr, 4096, PROT_READ|PROT_WRITE);
+        assert(rv == 0);
+        crn_gc_free2(gr->stkptr);
         // free(gr->stack.sptr);
     }
     void* optr = gr;

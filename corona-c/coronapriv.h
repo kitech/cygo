@@ -57,6 +57,8 @@ struct fiber {
     coro_func fnproc;
     void* arg;
     coro_stack stack;
+    void* stkptr;
+    void* stkmid;
     struct GC_stack_base mystksb; // mine for GC
     coro_context coctx;
     coro_context *coctx0; // ref to machine.coctx0
