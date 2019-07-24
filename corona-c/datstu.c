@@ -22,6 +22,12 @@ struct crnqueue {
     Queue* qo;
     pmutex_t mu;
 };
+typedef struct crnunique crnunique;
+struct crnunique {
+    HashTable* ht;
+    Queue* qo;
+    pmutex_t mu;
+};
 
 static
 int __attribute__((no_instrument_function))
@@ -174,21 +180,26 @@ void* crnmap_findone(crnmap* table, bool(*chkfn)(void* v)) {
 HashTable* crnmap_getraw(crnmap* table)  { return table->ht; }
 
 /////
+static Queue* crnqueue_new_conf(QueueConf *qconf) {
+    qconf->mem_alloc = crn_gc_malloc;
+    qconf->mem_free = crn_gc_free;
+    qconf->mem_calloc = crn_gc_calloc;
+
+    Queue* q = nilptr;
+    int rv = queue_new_conf(qconf, &q);
+    assert(rv == CC_OK);
+    return q;
+}
 crnqueue* crnqueue_new() {
     crnqueue* q = crn_gc_malloc(sizeof(crnqueue));
 
     QueueConf qconf = {0};
     queue_conf_init(&qconf);
-    qconf.mem_alloc = crn_gc_malloc;
-    qconf.mem_free = crn_gc_free;
-    qconf.mem_calloc = crn_gc_calloc;
-
-    int rv = queue_new_conf(&qconf, &q->qo);
-    assert(rv == CC_OK);
+    q->qo = crnqueue_new_conf(&qconf);
     return q;
 }
 
-void crnqueu_free(crnqueue* q) {
+void crnqueue_free(crnqueue* q) {
     pmutex_lock(&q->mu);
     queue_destroy(q->qo);
     q->qo = 0;
@@ -220,6 +231,65 @@ size_t crnqueue_size(crnqueue* q){
     pmutex_lock(&q->mu);
     enum cc_stat rv = queue_size(q->qo);
     pmutex_unlock(&q->mu);
+    return rv;
+}
+
+/////
+crnunique* crnunique_new() {
+    crnunique* q = (crnunique*)crn_gc_malloc(sizeof(crnunique));
+    q->ht = crnhashtable_new_uintptr();
+    QueueConf qconf = {0};
+    queue_conf_init(&qconf);
+    q->qo = crnqueue_new_conf(&qconf);
+    return q;
+}
+
+void crnunique_free(crnunique* q) {
+    pmutex_lock(&q->mu);
+    queue_destroy(q->qo);
+    q->qo = 0;
+    hashtable_destroy(q->ht);
+    q->ht = 0;
+    pmutex_unlock(&q->mu);
+}
+
+enum cc_stat crnunique_peek(crnunique* q, void **out) {
+    pmutex_lock(&q->mu);
+    enum cc_stat rv = queue_peek(q->qo, out);
+    pmutex_unlock(&q->mu);
+    return rv;
+}
+
+enum cc_stat crnunique_poll(crnunique *q, void **out){
+    pmutex_lock(&q->mu);
+    enum cc_stat rv = queue_poll(q->qo, out);
+    if (rv == CC_OK) {
+        enum cc_stat rv1 = hashtable_remove(q->ht, *out, 0);
+        assert(rv1 == CC_OK);
+    }
+    pmutex_unlock(&q->mu);
+    return rv;
+}
+
+enum cc_stat crnunique_enqueue(crnunique *q, void *element){
+    pmutex_lock(&q->mu);
+    bool has = hashtable_contains_key(q->ht, element);
+    enum cc_stat rv = CC_OK;
+    if (!has) {
+        rv = queue_enqueue(q->qo, element);
+        enum cc_stat rv2 = hashtable_add(q->ht, element, (void*)0x1);
+        assert(rv2 == CC_OK);
+    }
+    pmutex_unlock(&q->mu);
+    return rv;
+}
+
+size_t crnunique_size(crnunique* q){
+    pmutex_lock(&q->mu);
+    enum cc_stat rv = queue_size(q->qo);
+    int rv2 = hashtable_size(q->ht);
+    pmutex_unlock(&q->mu);
+    assert(rv == rv2);
     return rv;
 }
 

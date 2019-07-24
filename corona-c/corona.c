@@ -29,6 +29,8 @@ typedef struct machine {
     crnqueue* ngrs; // fiber*  新任务，未分配栈
     crnmap* grs;  // # grid => fiber*
     fiber* curgr;   // 当前在执行的, 这好像得用栈结构吗？(应该不需要，fibers之间是并列关系)
+    // 需要执行的队列，runnable状态的。在新fiber，恢复fiber时加到该队列
+    crnunique* runq; // grid
     pmutex_t pkmu; // pack lock
     pcond_t pkcd;
     bool parking;
@@ -74,6 +76,7 @@ machine* crn_machine_get(int id);
 fiber* crn_machine_grget(machine* mc, int id);
 void crn_machine_grfree(machine* mc, int id);
 void crn_machine_signal(machine* mc);
+void crn_machine_grtorunq(machine* mc, int id);
 
 static int crn_nxtid(corona* nr) {
     while(true) {
@@ -256,7 +259,9 @@ void crn_fiber_resume_same_thread(fiber* gr) {
     assert(gr->state != executing);
     assert(gr->state != finished);
 
-    crn_fiber_setstate(gr,runnable);
+    crn_fiber_setstate(gr, runnable);
+    machine* mc = crn_machine_get(gr->mcid);
+    crn_machine_grtorunq(mc, gr->id);
 }
 void crn_fiber_resume_xthread(fiber* gr) {
     if (gr->id <= 0) {
@@ -267,7 +272,9 @@ void crn_fiber_resume_xthread(fiber* gr) {
     }
     if (crn_fiber_getstate(gr) == runnable) {
         lverb("resume but runnable %d\n", gr->id);
-        crn_machine_signal(crn_machine_get(gr->mcid));
+        machine* mc = crn_machine_get(gr->mcid);
+        crn_machine_grtorunq(mc, gr->id);
+        crn_machine_signal(mc);
         return;
     }
     if (crn_fiber_getstate(gr) == executing) {
@@ -280,12 +287,15 @@ void crn_fiber_resume_xthread(fiber* gr) {
     }
 
     // atomic_casint(&gr->state, waiting, runnable);
-    crn_fiber_setstate(gr,runnable);
+    crn_fiber_setstate(gr, runnable);
     if (gr->mcid > 100) { // TODO improve this hotfix
+        assert(gr->mcid < 100);
         linfo("mcid error %d\n", gr->mcid);
         return;
     }
+
     machine* mc = crn_machine_get(gr->mcid);
+    crn_machine_grtorunq(mc, gr->id);
     crn_machine_signal(mc);
 }
 void crn_fiber_suspend(fiber* gr) {
@@ -312,6 +322,7 @@ machine* crn_machine_new(int id) {
     mc->grs = crnmap_new_uintptr();
     mc->ngrs = crnqueue_new();
     crn_set_finalizer(mc->ngrs, queue_finalizer);
+    mc->runq = crnunique_new();
     corowp_create(&mc->coctx0, 0, 0, 0, 0);
     return mc;
 }
@@ -392,6 +403,11 @@ machine* __attribute__((no_instrument_function))
 
 void crn_machine_gradd(machine* mc, fiber* gr) {
     int rv = crnmap_add(mc->grs, (uintptr_t)(gr->id), gr);
+    assert(rv == CC_OK);
+    gr->mcid = mc->id;
+}
+void crn_machine_grtorunq(machine* mc, int id) {
+    int rv = crnunique_enqueue(mc->runq, (void*)(uintptr_t)id);
     assert(rv == CC_OK);
 }
 fiber* __attribute__((no_instrument_function))
@@ -618,6 +634,7 @@ static void* crn_procer1(void*arg) {
             if (mct != nilptr) {
                 lverb("move %d to %d\n", gr->id, mct->id);
                 crn_machine_gradd(mct, gr);
+                crn_machine_grtorunq(mct, gr->id);
                 crn_machine_signal(mct);
                 break;
             }
@@ -645,8 +662,31 @@ static bool crn_fiber_runnable_filter(void* tmp) {
 }
 static
 fiber* crn_sched_get_ready_one(machine*mc) {
-    fiber* rungr = (fiber*)crnmap_findone(mc->grs, crn_fiber_runnable_filter);
-    return rungr;
+    int grid = 0;
+    int rv = crnunique_poll(mc->runq, (void**)&grid);
+    if (rv == CC_ERR_OUT_OF_RANGE) return nilptr;
+    if (rv == CC_OK && grid != 0) {
+        fiber* gr = crn_machine_grget(mc, grid);
+        if (gr == nilptr) {
+            lverb("why grid not exist? %d\n", grid);
+            return nilptr;
+        }
+        if (gr->id == grid && gr->mcid == mc->id) {
+            grstate state = crn_fiber_getstate(gr);
+            if (state  != runnable) {
+                ltrace("why not runnable grid=%d %d %s\n", grid, state, grstate2str(state));
+                return nilptr;
+            }
+            // assert(state == runnable);
+            return gr;
+        }else{
+            linfo("some state not fit mc/gr %d/%d=?%d/%d\n", mc->id, grid, gr->mcid, gr->id);
+        }
+    }
+    // lwarn("some error %d %d\n", mc->id, crnqueue_size(mc->runq));
+    return nilptr;
+    // fiber* rungr = (fiber*)crnmap_findone(mc->grs, crn_fiber_runnable_filter);
+    // return rungr;
 }
 static
 void crn_sched_run_one(machine* mc, fiber* rungr) {
@@ -724,10 +764,11 @@ static void* crn_procerx(void*arg) {
                 crn_procer_yield_commit(mc, rungr);
                 continue;
             }
-            if (rand() % 3 == 2) {
+            if (rand() % 3 == 1) {
                 rungr = crn_sched_get_glob_one(mc);
                 if (rungr != 0) {
                     crn_machine_gradd(mc, rungr);
+                    crn_machine_grtorunq(mc, rungr->id);
                     continue;
                 }
             }
@@ -826,6 +867,7 @@ void crn_procer_resume_one(void* gr_, int ytype, int grid, int mcid) {
         ldebug("Invalid gr %p curid=%d %d\n", gr, gr->id, grid);
         return;
     }
+    // crn_machine_grtorunq(mc, grid);
     if (curgr != nilptr && gr->mcid == curgr->mcid) {
         crn_fiber_resume_same_thread(gr);
         // 相同machine线程的情况，要主动出让执行权。
