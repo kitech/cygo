@@ -908,7 +908,6 @@ int crn_procer_yield_multi(int ytype, int nfds, long fds[], int ytypes[]) {
 void crn_procer_resume_one(void* gr_, int ytype, int grid, int mcid) {
     fiber* gr = (fiber*)gr_;
     fiber* curgr = crn_fiber_getcur();
-    ytype = (ytype == 0 ? gr->pkreason : ytype);
     machine* mc = crn_machine_get(mcid);
     assert(mc != nilptr);
     fiber* gr2 = crn_machine_grget(mc, grid);
@@ -916,13 +915,15 @@ void crn_procer_resume_one(void* gr_, int ytype, int grid, int mcid) {
         ldebug("Invalid gr %p=%p curid=%d %d\n", gr, gr2, grid);
         return;
     }
-    // linfo("netpoller notify, ytype=%d %p, id=%d\n", ytype, gr, gr->id);
     if (grid != gr->id || mcid != gr->mcid) {
         // sometimes resume from netpoller is too late, gr already gone
         ldebug("Invalid gr %p curid=%d %d\n", gr, gr->id, grid);
         return;
     }
-    // crn_machine_grtorunq(mc, grid);
+
+    ytype = (ytype == 0 ? gr->pkreason : ytype);
+    // linfo("netpoller notify, ytype=%d %p, id=%d\n", ytype, gr, gr->id);
+
     if (curgr != nilptr && gr->mcid == curgr->mcid) {
         crn_fiber_resume_same_thread(gr);
         // 相同machine线程的情况，要主动出让执行权。
@@ -1258,11 +1259,11 @@ void crn_dump_fibers() {
         while (hashtable_iter_next(&hashtable_iter_53d46d2a04458e7b, &entry) != CC_ITER_END) {
             grcnt ++;
             fiber* gr = entry->value;
-            linfo2("mc/gr=%d/%d pk=%d state=%d(%s) pkreason=%d(%s) pktime=%d\n",
-                   i, gr->id, mc->parking, gr->state, grstate2str(gr->state),
-                   gr->pkreason, yield_type_name(gr->pkreason), nowt.tv_sec-gr->pktime.tv_sec);
+            linfo2("mc/gr=%d/%d state=%d(%s) pkreason=%d(%s) pktime=%d\n",
+                   i, gr->id, gr->state, grstate2str(gr->state), gr->pkreason,
+                   yield_type_name(gr->pkreason), nowt.tv_sec-gr->pktime.tv_sec);
         }
-        linfo2("mc=%d runq=%d\n", i, crnunique_size(mc->runq));
+        linfo2("mc=%d pk=%d runq=%d\n", i, mc->parking, crnunique_size(mc->runq));
     }
     linfo2("grcnt=%d\n", grcnt);
 }
