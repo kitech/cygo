@@ -407,7 +407,7 @@ func (this *g2nc) genStmt(scope *ast.Scope, stmt ast.Stmt, idx int) {
 		this.out("// ", posinfo).outnl()
 		stmtstr := this.prtnode(stmt)
 		if !strings.ContainsAny(strings.TrimSpace(stmtstr), "\n") {
-			this.out("// ").outnl()
+			this.outf("// %s", stmtstr).outnl()
 		}
 		this.genStmtTmps(scope, stmt)
 	}
@@ -532,14 +532,33 @@ func (c *g2nc) genAssignStmt(scope *ast.Scope, s *ast.AssignStmt) {
 			c.outf("->Error").outeq()
 			c.outf("%s_Error", strings.Trim(c.exprTypeName(scope, s.Rhs[i]), "*"))
 		} else {
-			if s.Tok.String() == ":=" {
+			if s.Tok == token.DEFINE {
 				c.out(c.exprTypeName(scope, s.Rhs[i])).outsp()
 			}
 			c.genExpr(scope, s.Lhs[i])
 
+			goty := c.info.TypeOf(s.Rhs[i])
 			var ns = putscope(scope, ast.Var, "varname", s.Lhs[i])
-			c.out(" = ")
+			if s.Tok == token.DEFINE {
+				c.outeq()
+			} else if s.Tok == token.AND_NOT_ASSIGN {
+				c.out(s.Tok.String()) // todo
+			} else {
+				if isstrty2(goty) && s.Tok == token.ADD_ASSIGN {
+					c.outeq()
+				} else {
+					c.out(s.Tok.String())
+				}
+			}
+			if isstrty2(goty) && s.Tok == token.ADD_ASSIGN {
+				c.out("cxstring_add(")
+				c.genExpr(scope, s.Lhs[i])
+				c.out(",")
+			}
 			c.genExpr(ns, s.Rhs[i])
+			if isstrty2(goty) && s.Tok == token.ADD_ASSIGN {
+				c.out(")")
+			}
 			// c.outfh().outnl()
 		}
 	}
