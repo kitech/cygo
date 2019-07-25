@@ -23,11 +23,8 @@ typedef struct rtsettings {
 extern rtsettings* rtsets;
 void crn_loglvl_forenv();
 
-
-void crn_loglock();
-void crn_logunlock();
-
 void crn_simlog(int level, const char *filename, int line, const char* funcname, const char *fmt, ...);
+// internal use
 void crn_simlog2(int level, const char *filename, int line, const char* funcname, const char *fmt, ...);
 
 
@@ -64,6 +61,8 @@ void crn_simlog2(int level, const char *filename, int line, const char* funcname
     if (SHOWLOG) { crn_simlog(LOGLVL_TRACE, __FILE__, __LINE__, __func__, fmt, __VA_ARGS__); }
 
 // depcreated
+void crn_loglock();
+void crn_logunlock();
 #define linfo333(fmt, ...)                                                \
     if (SHOWLOG) {                                                      \
         const char* filename = __FILE__; char* fbname = strrchr(filename, '/'); \

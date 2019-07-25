@@ -116,6 +116,10 @@ static void crn_fiber_setstate(fiber* gr, grstate state) {
     assert(sizeof(grstate) == sizeof(int));
     atomic_setint((int*)(&gr->state), (int)state);
 }
+static bool crn_fiber_setstate2(fiber* gr, grstate state, grstate oldst) {
+    assert(sizeof(grstate) == sizeof(int));
+    return atomic_casint((int*)(&gr->state), (int)oldst, (int)state);
+}
 static grstate crn_fiber_getstate(fiber* gr) {
     assert(sizeof(grstate) == sizeof(int));
     return atomic_getint((int*)(&gr->state));
@@ -302,33 +306,42 @@ void crn_fiber_resume_xthread(fiber* gr) {
         // maybe fiber already finished and deleted
         // TODO assert(gr != nilptr && gr->id > 0); // needed ???
     }
-    if (crn_fiber_getstate(gr) == runnable) {
-        lverb("resume but runnable %d\n", gr->id);
-        machine* mc = crn_machine_get(gr->mcid);
-        crn_machine_grtorunq(mc, gr->id);
-        crn_machine_signal(mc);
-        return;
-    }
-    if (crn_fiber_getstate(gr) == executing) {
-        ldebug("resume but executing grid=%d, mcid=%d\n", gr->id, gr->mcid);
-        return;
-    }
-    if (crn_fiber_getstate(gr) == finished) {
-        linfo("resume but finished grid=%d, mcid=%d\n", gr->id, gr->mcid);
-        return;
-    }
-
-    // atomic_casint(&gr->state, waiting, runnable);
-    crn_fiber_setstate(gr, runnable);
     if (gr->mcid > 100) { // TODO improve this hotfix
         assert(gr->mcid < 100);
         linfo("mcid error %d\n", gr->mcid);
         return;
     }
 
+    while(1) {
+    grstate state = crn_fiber_getstate(gr);
+    if (state == runnable) {
+        lverb("resume but runnable %d\n", gr->id);
+        machine* mc = crn_machine_get(gr->mcid);
+        crn_machine_grtorunq(mc, gr->id);
+        crn_machine_signal(mc);
+        return;
+    }
+    if (state == executing) {
+        ldebug("resume but executing grid=%d, mcid=%d\n", gr->id, gr->mcid);
+        return;
+    }
+    if (state == finished) {
+        linfo("resume but finished grid=%d, mcid=%d\n", gr->id, gr->mcid);
+        return;
+    }
+
+    // crn_fiber_setstate(gr, runnable);
+    bool setok = crn_fiber_setstate2(gr, runnable, state);
+    if (!setok) {
+        linfo("cannot set state %d\n", gr->id);
+        continue;
+    }
+
     machine* mc = crn_machine_get(gr->mcid);
     crn_machine_grtorunq(mc, gr->id);
     crn_machine_signal(mc);
+    break;
+    }
 }
 void crn_fiber_suspend(fiber* gr) {
     gr->myfrm = crn_get_frame();
@@ -694,6 +707,7 @@ static bool crn_fiber_runnable_filter(void* tmp) {
 }
 static
 fiber* crn_sched_get_ready_one(machine*mc) {
+    while(1) { // make effort to get one
     int grid = 0;
     int rv = crnunique_poll(mc->runq, (void**)&grid);
     if (rv == CC_ERR_OUT_OF_RANGE) return nilptr;
@@ -701,20 +715,23 @@ fiber* crn_sched_get_ready_one(machine*mc) {
         fiber* gr = crn_machine_grget(mc, grid);
         if (gr == nilptr) {
             lverb("why grid not exist? %d\n", grid);
-            return nilptr;
+            continue; // return nilptr;
         }
         if (gr->id == grid && gr->mcid == mc->id) {
             grstate state = crn_fiber_getstate(gr);
-            if (state  != runnable) {
+            if (state != runnable) {
                 ltrace("why not runnable grid=%d %d %s\n", grid, state, grstate2str(state));
-                return nilptr;
+                continue; // return nilptr;
             }
             // assert(state == runnable);
             return gr;
         }else{
-            linfo("some state not fit mc/gr %d/%d=?%d/%d\n", mc->id, grid, gr->mcid, gr->id);
+            linfo("state not fit mc/gr %d/%d=?%d/%d\n", mc->id, grid, gr->mcid, gr->id);
+            continue;
         }
     }
+    }
+    assert(1==2);
     // lwarn("some error %d %d\n", mc->id, crnqueue_size(mc->runq));
     return nilptr;
     // fiber* rungr = (fiber*)crnmap_findone(mc->grs, crn_fiber_runnable_filter);
@@ -804,6 +821,7 @@ static void* crn_procerx(void*arg) {
                     continue;
                 }
             }
+            if (crnunique_size(mc->runq) > 0) { continue; }
         }
         {
             if (stopworld) {
@@ -1200,7 +1218,7 @@ void crn_post_gclock_proc() {
 }
 
 void crn_dump_fibers() {
-    linfo2("aaa %d\n", 0);
+    linfo2("dumping %d\n", 0);
     extern HashTable* crnmap_getraw(crnmap* table);
     int grcnt = 0;
     for (int i = 1; i <= 5; i++ ) {
@@ -1223,6 +1241,7 @@ void crn_dump_fibers() {
                    i, gr->id, mc->parking, gr->state, grstate2str(gr->state),
                    gr->pkreason, yield_type_name(gr->pkreason));
         }
+        linfo2("mc=%d runq=%d\n", i, crnunique_size(mc->runq));
     }
     linfo2("grcnt=%d\n", grcnt);
 }
