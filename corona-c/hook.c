@@ -347,6 +347,7 @@ ssize_t send(int sockfd, const void *buf, size_t len, int flags)
 {
     if (!send_f) initHook();
     // linfo("%d %d %d fdnb=%d\n", sockfd, len, flags, fd_is_nonblocking(sockfd));
+    flags |= MSG_NOSIGNAL;
     while (true) {
         ssize_t rv = send_f(sockfd, buf, len, flags);
         int eno = rv < 0 ? errno : 0;

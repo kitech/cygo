@@ -52,6 +52,10 @@ void fdcontext_free(fdcontext* fdctx) {
 
 typedef int(*fcntl_t)(int __fd, int __cmd, ...);
 extern fcntl_t fcntl_f;
+typedef int (*setsockopt_t)(int sockfd, int level, int optname,
+                            const void *optval, socklen_t optlen);
+extern setsockopt_t setsockopt_f;
+
 
 bool fd_is_nonblocking(int fd) {
     int flags = fcntl_f(fd, F_GETFL, 0);
@@ -147,6 +151,8 @@ void hookcb_oncreate(int fd, int fdty, bool isNonBlocking, int domain, int sockt
         // set nonblocking???
         // linfo("fd is blocking %d, nb=%d\n", fd, fd_is_nonblocking(fd));
     }
+    bool yes = true; // MSG_NOSIGNAL for linux?, SO_NOSIGPIPE for BSD/MAC
+    // int ret = setsockopt_f(fd, SOL_SOCKET, SO_NOSIGPIPE, &yes, sizeof(yes));
 
     fdcontext* fdctx = fdcontext_new(fd);
     fdctx->fdty = fdty;

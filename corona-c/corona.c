@@ -752,8 +752,11 @@ void crn_sched_run_one(machine* mc, fiber* rungr) {
     gcurgrid__ = 0;
     mc->curgr = nilptr;
 
+    int pkreason = rungr->pkreason;
     int curst = crn_fiber_getstate(rungr);
-    if (curst == waiting) {
+    if (curst == waiting || curst == runnable) {
+        if (pkreason == YIELD_TYPE_CHAN_SEND || pkreason == YIELD_TYPE_CHAN_RECV){
+        }
         // 在这才解锁，用于确保rungr状态完全切换完成
         if (rungr->hclock != nilptr) {
             pmutex_t* l = rungr->hclock;
@@ -761,9 +764,18 @@ void crn_sched_run_one(machine* mc, fiber* rungr) {
             pmutex_unlock(l);
             // linfo("unlocked chan lock %p on %d\n", l, rungr->id);
         }
+    }
+    if (rungr->hclock != nilptr) {
+        lerror("holding hclock error %d\n", rungr->id);
+    }
+    assert(rungr->hclock == nilptr);
+
+    if (curst == waiting) {
     } else if (curst == finished) {
         // linfo("finished gr %d\n", rungr->id);
         crn_machine_grfree(mc, rungr->id);
+    }else if (curst == runnable){
+        // already resumed just after suspend?
     }else{
         // is break from fiber when not waiting or finished an error? not
         linfo("break from gr %d, state=%d pkreason=%d(%s)\n",
@@ -1259,13 +1271,18 @@ void crn_dump_fibers() {
         while (hashtable_iter_next(&hashtable_iter_53d46d2a04458e7b, &entry) != CC_ITER_END) {
             grcnt ++;
             fiber* gr = entry->value;
-            linfo2("mc/gr=%d/%d state=%d(%s) pkreason=%d(%s) pktime=%d\n",
+            linfo2("mc/gr=%d/%d state=%d(%s) pkreason=%d(%s) pktime=%d hclock=%d\n",
                    i, gr->id, gr->state, grstate2str(gr->state), gr->pkreason,
-                   yield_type_name(gr->pkreason), nowt.tv_sec-gr->pktime.tv_sec);
+                   yield_type_name(gr->pkreason), nowt.tv_sec-gr->pktime.tv_sec,
+                   gr->hclock == nilptr ? 0 : 1);
         }
         linfo2("mc=%d pk=%d runq=%d\n", i, mc->parking, crnunique_size(mc->runq));
     }
     linfo2("grcnt=%d\n", grcnt);
+}
+
+static void crn_ignore_signal(int signo) {
+    linfo2("catched signal and ignored %d\n", signo);
 }
 
 bool gcinited = false;
@@ -1304,6 +1321,8 @@ void crn_init_intern() {
     gcinited = true;
 
     // log init here
+    // signal(SIGPIPE, SIG_IGN);
+    signal(SIGPIPE, crn_ignore_signal);
     netpoller_use_threads();
 }
 
