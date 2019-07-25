@@ -11,6 +11,7 @@
 #include <stdatomic.h>
 
 // sys
+#include <time.h>
 // #include <pthread.h>
 // #include <threads.h> // c11 mtx_t
 #include <sys/epoll.h>
@@ -66,6 +67,7 @@ struct fiber {
     bool isresume;
     pmutex_t* hclock; // hchan.lock
     int pkreason;
+    struct timeval pktime;
     struct GC_stack_base* stksb; // machine's
     void* gchandle;
     void* savefrm; // upper frame

@@ -346,6 +346,7 @@ void crn_fiber_resume_xthread(fiber* gr) {
 void crn_fiber_suspend(fiber* gr) {
     gr->myfrm = crn_get_frame();
     crn_set_frame(gr->savefrm);
+    gettimeofday(&gr->pktime, nilptr);
     crn_fiber_setstate(gr,waiting);
     crn_call_with_alloc_lock(crn_gc_setbottom0, gr);
     corowp_transfer(&gr->coctx, gr->coctx0);
@@ -824,10 +825,14 @@ static void* crn_procerx(void*arg) {
             if (crnunique_size(mc->runq) > 0) { continue; }
         }
         {
-            if (stopworld) {
+            int runqsz = crnunique_size(mc->runq);
+            if (stopworld && runqsz == 0) {
                 linfo("no task, parking... %d by %d\n", mc->id, stopworld);
+            }else if (stopworld && runqsz > 0) {
+                linfo("Have task, but stopworld... %d by %d\n", mc->id, stopworld);
             }
             // linfo("no task, parking... %d by %d\n", mc->id, stopworld);
+
             int rv = atomic_casbool(&mc->parking, false, true);
             assert(rv == true);
             pcond_wait(&mc->pkcd, &mc->pkmu);
@@ -1087,7 +1092,7 @@ static void crn_gc_stop_proc() {
     for (int i = 3; i <= 5; i++ ) {
         if (i == nochkid) { continue; }
         machine* mc = crn_machine_get_nolk(i);
-        if (mc == 0) {
+        if (mc == nilptr) {
             linfo2("mchssz = %d\n", crnmap_size(gnr__->mchs));
             assert(mc != nilptr);
             break;
@@ -1097,6 +1102,20 @@ static void crn_gc_stop_proc() {
 
     int rv = atomic_casbool(&nr->stopworld,true,false);
     assert(rv == true);
+
+    // try active procer
+    for (int i = 1; i <= 5; i++ ) {
+        if (i == 2) { continue; }
+        machine* mc = crn_machine_get_nolk(i);
+        if (mc == nilptr) {
+            linfo2("mchssz = %d\n", crnmap_size(gnr__->mchs));
+            assert(mc != nilptr);
+        }else{
+            if (mc->parking) {
+                crn_machine_signal(mc);
+            }
+        }
+    }
 }
 static
 void crn_gc_on_collection_event2(GC_EventType evty) {
@@ -1220,6 +1239,8 @@ void crn_post_gclock_proc() {
 void crn_dump_fibers() {
     linfo2("dumping %d\n", 0);
     extern HashTable* crnmap_getraw(crnmap* table);
+    struct timeval nowt;
+    gettimeofday(&nowt, nilptr);
     int grcnt = 0;
     for (int i = 1; i <= 5; i++ ) {
         if (i == 2) { continue; }
@@ -1237,9 +1258,9 @@ void crn_dump_fibers() {
         while (hashtable_iter_next(&hashtable_iter_53d46d2a04458e7b, &entry) != CC_ITER_END) {
             grcnt ++;
             fiber* gr = entry->value;
-            linfo2("mc/gr=%d/%d pk=%d state=%d(%s) pkreason=%d(%s)\n",
+            linfo2("mc/gr=%d/%d pk=%d state=%d(%s) pkreason=%d(%s) pktime=%d\n",
                    i, gr->id, mc->parking, gr->state, grstate2str(gr->state),
-                   gr->pkreason, yield_type_name(gr->pkreason));
+                   gr->pkreason, yield_type_name(gr->pkreason), nowt.tv_sec-gr->pktime.tv_sec);
         }
         linfo2("mc=%d runq=%d\n", i, crnunique_size(mc->runq));
     }
