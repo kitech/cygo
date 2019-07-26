@@ -1218,7 +1218,7 @@ void crn_gc_on_thread_event(GC_EventType evty, void* thid) {
     if (nr == nilptr || (nr != nilptr && nr->inited == false)) return;
 }
 
-void crn_pre_gclock_proc() {
+void crn_pre_gclock_proc(const char* funcname) {
     // linfo("hohoo %d\n", gcurmcid__);
     if (gcurmcobj == nilptr) return;
 
@@ -1233,7 +1233,7 @@ void crn_pre_gclock_proc() {
     }
 
 }
-void crn_post_gclock_proc() {
+void crn_post_gclock_proc(const char* funcname) {
     // linfo("hohoo %d\n", gcurmcid__);
     if (gcurmcobj == nilptr) return;
 
@@ -1288,6 +1288,9 @@ static void crn_ignore_signal(int signo) {
 bool gcinited = false;
 static
 void crn_init_intern() {
+    extern void crn_dump_libc_plt();
+    // crn_dump_libc_plt();
+    // exit(-1);
     srand(time(0));
     crn_loglvl_forenv();
     extern void (*crn_pre_gclock_fn)();

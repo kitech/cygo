@@ -1,9 +1,9 @@
 
 
 set(mydir ${CMAKE_CURRENT_LIST_DIR})
+set(party3dir ${CMAKE_CURRENT_LIST_DIR}/3rdparty)
 
 include_directories(${mydir}/src ${mydir}/include ${mydir}/bdwgc/include)
-
 add_library(cxrt STATIC  ${mydir}/src/cxrtbase.c
   ${mydir}/src/cxmemory.c ${mydir}/src/cxstring.c
   ${mydir}/src/cxhashtable.c ${mydir}/src/cxarray.c
@@ -18,6 +18,8 @@ set(corona_c_srcs
 	${mydir}/corona-c/corowp.c
 	${mydir}/corona-c/hook.c
 	${mydir}/corona-c/hookcb.c
+	${mydir}/corona-c/hook2.c
+#	${mydir}/corona-c/hookbyplt.c
 	${mydir}/corona-c/futex.c
 	${mydir}/corona-c/corona_util.c
 	${mydir}/corona-c/rxilog.c
@@ -32,7 +34,13 @@ set(corona_c_srcs
 	${mydir}/corona-c/coronagc.c
 	${mydir}/corona-c/corona.c
 	${mydir}/corona-c/functrace.c
-)
+  )
+
+# include_directories(${party3dir}/plthook)
+# set(plthook_c_srcs
+#   ${party3dir}/plthook/plthook_elf.c
+#   )
+
 add_library(crn STATIC ${corona_c_srcs})
 #add_executable(corona ${corona_c_srcs} corona-c/main.c)
 set(CMAKE_C_FLAGS "-g -O0 -std=c11 -D_GNU_SOURCE ")

@@ -43,8 +43,8 @@ hchan* hchan_new(int cap) {
 
     // only support max 32 concurrent fibers on one hchan
     // should enough
-    hc->recvq = szqueue_init(132);
-    hc->sendq = szqueue_init(132);
+    hc->recvq = szqueue_init(256);
+    hc->sendq = szqueue_init(256);
 
     return hc;
 }

@@ -6,29 +6,29 @@
 #include "coronagc.h"
 #include "coronapriv.h"
 
-extern void crn_pre_gclock_proc();
-extern void crn_post_gclock_proc();
+extern void crn_pre_gclock_proc(const char* funcname);
+extern void crn_post_gclock_proc(const char* funcname);
 
 // for some internal use, cannot let thread yield
 int pmutex_lock(pmutex_t *mutex)
 {
-    crn_pre_gclock_proc();
+    crn_pre_gclock_proc(__func__);
     int rv = pmutex_lock_f(mutex);
-    crn_post_gclock_proc();
+    crn_post_gclock_proc(__func__);
     return rv;
 }
 int pmutex_trylock(pmutex_t *mutex)
 {
-    crn_pre_gclock_proc();
+    crn_pre_gclock_proc(__func__);
     int rv = pmutex_trylock_f(mutex);
-    crn_post_gclock_proc();
+    crn_post_gclock_proc(__func__);
     return rv;
 }
 int pmutex_unlock(pmutex_t *mutex)
 {
-    crn_pre_gclock_proc();
+    crn_pre_gclock_proc(__func__);
     int rv = pmutex_unlock_f(mutex);
-    crn_post_gclock_proc();
+    crn_post_gclock_proc(__func__);
     return rv;
 }
 int pmutex_init(pmutex_t *mutex, const pmutexattr_t *attr)
@@ -88,17 +88,17 @@ int crn_mutex_lock(crn_mutex *mutex)
         assert(rv == CC_OK);
         crn_procer_yield(-1, YIELD_TYPE_LOCK);
     }
-    crn_pre_gclock_proc();
+    crn_pre_gclock_proc(__func__);
     int rv = pthread_mutex_lock(&mutex->lock);
     assert(rv == 0);
-    crn_post_gclock_proc();
+    crn_post_gclock_proc(__func__);
     return rv;
 }
 int crn_mutex_trylock(crn_mutex *mutex)
 {
-    crn_pre_gclock_proc();
+    crn_pre_gclock_proc(__func__);
     int rv = pthread_mutex_trylock(&mutex->lock);
-    crn_post_gclock_proc();
+    crn_post_gclock_proc(__func__);
     return rv;
 }
 int crn_mutex_unlock(crn_mutex *mutex)
@@ -107,9 +107,9 @@ int crn_mutex_unlock(crn_mutex *mutex)
     assert(mygr != nilptr);
 
     assert(atomic_getptr((void**)&mutex->holder) == mygr);
-    crn_pre_gclock_proc();
+    crn_pre_gclock_proc(__func__);
     int rv = pthread_mutex_unlock(&mutex->lock);
-    crn_post_gclock_proc();
+    crn_post_gclock_proc(__func__);
     assert(rv == 0);
 
     bool bv = atomic_casptr((void**)&mutex->holder, mygr, nilptr);
