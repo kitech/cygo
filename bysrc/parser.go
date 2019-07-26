@@ -48,7 +48,8 @@ type ParserContext struct {
 	closures  []*ast.FuncLit
 	multirets []*ast.FuncDecl
 	defers    []*ast.DeferStmt
-	globvars  []ast.Node // => ValueSpec node
+	globvars  []ast.Node            // => ValueSpec node
+	kvpairs   map[ast.Node]ast.Node // left <=> value
 
 	gb     *graph.Graph
 	bdpkgs *build.Package
@@ -127,6 +128,7 @@ func (this *ParserContext) Init() error {
 		"typedefs", len(this.typeDeclsm), "funcdefs", len(this.funcDeclsm))
 
 	this.walkpass_tmpvars()
+	this.walkpass_kvpairs()
 	this.walkpass_gostmt()
 	this.walkpass_chan_send_recv()
 	this.walkpass_closures()
@@ -626,6 +628,33 @@ func (pc *ParserContext) walkpass_tmpvars() {
 	}
 	log.Println("tmpvars", len(tmpvars))
 	pc.tmpvars = tmpvars
+}
+
+func (pc *ParserContext) walkpass_kvpairs() {
+	kvpairs := map[ast.Node]ast.Node{}
+	pkgs := pc.pkgs
+	for _, pkg := range pkgs {
+		astutil.Apply(pkg, func(c *astutil.Cursor) bool {
+			switch te := c.Node().(type) {
+			case *ast.AssignStmt:
+				for idx, le := range te.Lhs {
+					kvpairs[le] = te.Rhs[idx]
+					kvpairs[te.Rhs[idx]] = le
+				}
+			default:
+				gopp.G_USED(te)
+			}
+			return true
+		}, func(c *astutil.Cursor) bool {
+			switch te := c.Node().(type) {
+			default:
+				gopp.G_USED(te)
+			}
+			return true
+		})
+	}
+	log.Println("kvpairs", len(kvpairs))
+	pc.kvpairs = kvpairs
 }
 
 func (pc *ParserContext) walkpass_gostmt() {

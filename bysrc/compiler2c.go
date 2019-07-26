@@ -1131,6 +1131,7 @@ func (c *g2nc) genCallExprPrintln(scope *ast.Scope, te *ast.CallExpr) {
 }
 func (c *g2nc) genCallExprNorm(scope *ast.Scope, te *ast.CallExpr) {
 	// funame := te.Fun.(*ast.Ident).Name
+
 	selfn, isselfn := te.Fun.(*ast.SelectorExpr)
 	isidt := false
 	iscfn := false
@@ -1148,6 +1149,27 @@ func (c *g2nc) genCallExprNorm(scope *ast.Scope, te *ast.CallExpr) {
 		case *types.Named:
 			isifacesel = isiface2(ne.Underlying())
 		}
+	}
+	gotyx := c.info.TypeOf(te.Fun)
+	goty := gotyx.(*types.Signature)
+	// log.Println(te.Args, te.Fun, gotyx, reflect.TypeOf(gotyx), goty.Variadic())
+	haslv := c.psctx.kvpairs[te] != nil
+
+	idt := newIdent(tmpvarname())
+	if goty.Variadic() && haslv {
+		c.out("{0}").outfh().outnl()
+		c.outf("Array* %s = cxarray_new()", idt.Name).outfh().outnl()
+		for idx, e1 := range te.Args {
+			if idx < goty.Params().Len()-1 {
+				continue
+			}
+			c.outf("array_add(%s, (void*)", idt.Name)
+			c.genExpr(scope, e1)
+			c.out(")")
+			c.outfh().outnl()
+		}
+		c.genExpr(scope, c.psctx.kvpairs[te].(ast.Expr))
+		c.outeq()
 	}
 
 	if isselfn {
@@ -1178,6 +1200,10 @@ func (c *g2nc) genCallExprNorm(scope *ast.Scope, te *ast.CallExpr) {
 		c.out(gopp.IfElseStr(len(te.Args) > 0, ",", ""))
 	}
 	for idx, e1 := range te.Args {
+		if idx == goty.Params().Len()-1 {
+			c.out(idt.Name)
+			break
+		}
 		c.genExpr(scope, e1)
 		c.out(gopp.IfElseStr(idx == len(te.Args)-1, "", ", "))
 	}
@@ -1965,6 +1991,8 @@ func (c *g2nc) genCxarrGet(scope *ast.Scope, vname ast.Expr, vidx ast.Expr) {
 	switch te := vidx.(type) {
 	case *ast.BasicLit:
 		idxstr = te.Value
+	case *ast.Ident:
+		idxstr = te.Name
 	default:
 		log.Println("todo", vidx, reflect.TypeOf(vidx))
 	}
