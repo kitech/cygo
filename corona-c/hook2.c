@@ -25,7 +25,7 @@ int pthread_create_wip(pthread_t *thread, const pthread_attr_t *attr,
 }
 
 
-int getaddrinfo(const char *node, const char *service,
+int getaddrinfo_wip(const char *node, const char *service,
                 const struct addrinfo *hints,
                 struct addrinfo **res)
 {

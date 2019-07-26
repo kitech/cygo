@@ -1288,8 +1288,8 @@ static void crn_ignore_signal(int signo) {
 bool gcinited = false;
 static
 void crn_init_intern() {
-    extern void crn_dump_libc_plt();
-    // crn_dump_libc_plt();
+    // extern void crn_dump_libc_plt(); crn_dump_libc_plt();
+    // extern int install_hook_function(); install_hook_function();
     // exit(-1);
     srand(time(0));
     crn_loglvl_forenv();

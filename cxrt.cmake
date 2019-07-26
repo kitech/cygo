@@ -38,10 +38,12 @@ set(corona_c_srcs
 
 # include_directories(${party3dir}/plthook)
 # set(plthook_c_srcs
-#   ${party3dir}/plthook/plthook_elf.c
-#   )
+#    ${party3dir}/plthook/plthook_elf.c
+#    )
 
-add_library(crn STATIC ${corona_c_srcs})
+ add_library(crn STATIC ${corona_c_srcs}
+   # ${plthook_c_srcs}
+   )
 #add_executable(corona ${corona_c_srcs} corona-c/main.c)
 set(CMAKE_C_FLAGS "-g -O0 -std=c11 -D_GNU_SOURCE ")
 #set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -pedantic") # non ISO C warning
