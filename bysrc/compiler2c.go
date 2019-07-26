@@ -523,14 +523,19 @@ func (c *g2nc) genAssignStmt(scope *ast.Scope, s *ast.AssignStmt) {
 			c.outf("cxfree(%s)", tvname).outfh().outnl()
 		} else if iserrorty2(c.info.TypeOf(s.Lhs[i])) {
 			c.genExpr(scope, s.Lhs[i])
-			c.outeq().out("error_new_zero()").outfh().outnl()
-			c.genExpr(scope, s.Lhs[i])
-			c.outf("->data").outeq()
-			c.genExpr(scope, s.Rhs[i])
-			c.outfh().outnl()
-			c.genExpr(scope, s.Lhs[i])
-			c.outf("->Error").outeq()
-			c.outf("%s_Error", strings.Trim(c.exprTypeName(scope, s.Rhs[i]), "*"))
+			c.outeq()
+			if c.info.TypeOf(s.Rhs[i]) == c.info.TypeOf(s.Lhs[i]) {
+				c.genExpr(scope, s.Rhs[i])
+			} else {
+				c.out("error_new_zero()").outfh().outnl()
+				c.genExpr(scope, s.Lhs[i])
+				c.outf("->data").outeq()
+				c.genExpr(scope, s.Rhs[i])
+				c.outfh().outnl()
+				c.genExpr(scope, s.Lhs[i])
+				c.outf("->Error").outeq()
+				c.outf("%s_Error", strings.Trim(c.exprTypeName(scope, s.Rhs[i]), "*"))
+			}
 		} else {
 			if s.Tok == token.DEFINE {
 				c.out(c.exprTypeName(scope, s.Rhs[i])).outsp()
@@ -1951,7 +1956,7 @@ func (c *g2nc) genCxarrSet(scope *ast.Scope, vname ast.Expr, vidx ast.Expr, elem
 		log.Println("todo", elem, reflect.TypeOf(elem))
 	}
 
-	c.outf("array_replace_at(%v, (void*)(uintptr_t)%v, %v, 0)",
+	c.outf("array_replace_at(%v, (void*)(uintptr_t)%v, %v, nilptr)",
 		vname, valstr, idxstr).outfh().outnl()
 }
 func (c *g2nc) genCxarrGet(scope *ast.Scope, vname ast.Expr, vidx ast.Expr) {
