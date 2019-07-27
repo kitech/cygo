@@ -1151,12 +1151,18 @@ func (c *g2nc) genCallExprNorm(scope *ast.Scope, te *ast.CallExpr) {
 		}
 	}
 	gotyx := c.info.TypeOf(te.Fun)
-	goty := gotyx.(*types.Signature)
+	isvardic := false
+	var goty *types.Signature
+	if gotyx != nil {
+		goty = gotyx.(*types.Signature)
+		isvardic = goty.Variadic()
+	}
+
 	// log.Println(te.Args, te.Fun, gotyx, reflect.TypeOf(gotyx), goty.Variadic())
 	haslv := c.psctx.kvpairs[te] != nil
 
 	idt := newIdent(tmpvarname())
-	if goty.Variadic() && haslv {
+	if isvardic && haslv {
 		c.out("{0}").outfh().outnl()
 		c.outf("Array* %s = cxarray_new()", idt.Name).outfh().outnl()
 		for idx, e1 := range te.Args {
@@ -1200,7 +1206,7 @@ func (c *g2nc) genCallExprNorm(scope *ast.Scope, te *ast.CallExpr) {
 		c.out(gopp.IfElseStr(len(te.Args) > 0, ",", ""))
 	}
 	for idx, e1 := range te.Args {
-		if idx == goty.Params().Len()-1 {
+		if isvardic && idx == goty.Params().Len()-1 {
 			c.out(idt.Name)
 			break
 		}
