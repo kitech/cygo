@@ -1,6 +1,7 @@
 
 #include <event2/event.h>
 #include <event2/thread.h>
+#include <event2/dns.h>
 
 #include "coronapriv.h"
 
@@ -12,9 +13,11 @@
 
 #define EV_IO EV_READ|EV_WRITE|EV_CLOSED
 #define EV_TIMER EV_TIMEOUT
+#define EV_DNS_RESOLV 0
 
 typedef struct netpoller {
     struct event_base * loop;
+    struct evdns_base* dnsbase;
     HashTable* watchers; // ev_watcher* => fiber*
     pmutex_t evmu;
 } netpoller;
@@ -32,6 +35,7 @@ netpoller* netpoller_new() {
     netpoller* np = (netpoller*)crn_gc_malloc(sizeof(netpoller));
     np->loop = event_base_new();
     assert(np->loop != 0);
+    np->dnsbase = evdns_base_new(np->loop, 1);
 
     // hashtable_new(&np->watchers);
 
@@ -55,11 +59,12 @@ void netpoller_loop() {
 
 typedef struct evdata {
     int evtyp;
-    void* data;
+    void* data; // fiber*
     int grid;
     int mcid;
     int ytype;
-    long fd; // fd or ns
+    long fd; // fd or ns or hostname
+    void** out; //
     struct timeval tv;
     struct event* evt;
 } evdata;
@@ -213,6 +218,96 @@ void netpoller_timer(long ns, int ytype, fiber* gr) {
     // linfo("timer add d=%p %ld\n", d, ns);
 }
 
+static
+void evdns_resolv_cb(int errcode, struct evutil_addrinfo *addr, void *ptr)
+{
+    evdata* d = (evdata*)ptr;
+    const char *name = (const char*)d->fd;
+    struct addrinfo** resout = (struct addrinfo**)d->out;
+    if (errcode) {
+        lerror("%s -> %s\n", name, evutil_gai_strerror(errcode));
+    } else {
+        struct evutil_addrinfo *ai;
+        if (addr->ai_canonname) {
+            // linfo(" [%s]\n", addr->ai_canonname);
+        }
+
+        for (ai = addr; ai; ai = ai->ai_next) {
+            char buf[128];
+            const char *s = NULL;
+            if (ai->ai_family == AF_INET) {
+                struct sockaddr_in *sin = (struct sockaddr_in *)ai->ai_addr;
+                s = evutil_inet_ntop(AF_INET, &sin->sin_addr, buf, 128);
+            } else if (ai->ai_family == AF_INET6) {
+                struct sockaddr_in6 *sin6 = (struct sockaddr_in6 *)ai->ai_addr;
+                s = evutil_inet_ntop(AF_INET6, &sin6->sin6_addr, buf, 128);
+            }
+            if (s) {
+                // linfo("-> %s\n", s);
+            }else{
+                break;
+            }
+            struct addrinfo* tai = crn_raw_malloc(sizeof(struct addrinfo));
+            tai->ai_flags = ai->ai_flags;
+            tai->ai_family = ai->ai_family;
+            tai->ai_socktype = ai->ai_socktype;
+            tai->ai_protocol = ai->ai_protocol;
+            tai->ai_addrlen = ai->ai_addrlen;
+            tai->ai_addr = crn_raw_malloc(sizeof(struct sockaddr));
+            memcpy(tai->ai_addr, ai->ai_addr, sizeof(struct sockaddr));
+            tai->ai_canonname = ai->ai_canonname == nilptr ? nilptr : strdup(ai->ai_canonname);
+            tai->ai_next = *resout;
+            *resout = tai;
+        }
+        evutil_freeaddrinfo(addr);
+    }
+
+    void* dd = d->data;
+    int ytype = d->ytype;
+    int grid = d->grid;
+    int mcid = d->mcid;
+
+    evdata_free(d);
+    //crn_post_gclock_proc(__func__);
+    crn_procer_resume_one(dd, ytype, grid, mcid);
+}
+
+void* netpoller_dnsresolv(const char* hostname, int ytype, fiber* gr, struct addrinfo** addr) {
+    netpoller* np = gnpl__;
+    //crn_pre_gclock_proc(__func__);
+
+    evdata* d = evdata_new(EV_DNS_RESOLV, gr);
+    d->grid = gr->id;
+    d->mcid = gr->mcid;
+    d->ytype = ytype;
+    d->fd = (long)hostname;
+    d->out = (void**)addr;
+
+    struct evutil_addrinfo hints;
+    struct evdns_getaddrinfo_request *req;
+    struct user_data *user_data;
+    memset(&hints, 0, sizeof(hints));
+    hints.ai_family = AF_UNSPEC;
+    hints.ai_flags = EVUTIL_AI_CANONNAME;
+    /* Unless we specify a socktype, we'll get at least two entries for
+     * each address: one for TCP and one for UDP. That's not what we
+     * want. */
+    hints.ai_socktype = SOCK_STREAM;
+    hints.ai_protocol = IPPROTO_TCP;
+
+    crn_pre_gclock_proc(__func__);
+    req = evdns_getaddrinfo(np->dnsbase, hostname, NULL /* no service name given */,
+                            &hints, evdns_resolv_cb, d);
+    crn_post_gclock_proc(__func__);
+
+    if (req == NULL) {
+        lwarn("    [request for %s returned immediately]\n", hostname);
+    }
+
+    // linfo("dnsr add d=%p %ld\n", d, hostname);
+    return req;
+}
+
 // when ytype is SLEEP/USLEEP/NANOSLEEP, fd is the nanoseconds
 void netpoller_yieldfd(long fd, int ytype, fiber* gr) {
     assert(ytype > YIELD_TYPE_NONE);
@@ -260,6 +355,9 @@ void netpoller_yieldfd(long fd, int ytype, fiber* gr) {
         break;
     // case YIELD_TYPE_READ: case YIELD_TYPE_READV:
     // case YIELD_TYPE_RECV: case YIELD_TYPE_RECVFROM: case YIELD_TYPE_RECVMSG:
+    case YIELD_TYPE_GETADDRINFO:
+    //    netpoller_dnsresolv((char*)fd, ytype, gr);
+        break;
     default:
         // linfo("add reader fd=%d ytype=%d=%s\n", fd, ytype, yield_type_name(ytype));
         assert(fd >= 0);

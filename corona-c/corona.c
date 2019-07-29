@@ -856,14 +856,17 @@ static void* crn_procerx(void*arg) {
 }
 
 bool __attribute__((no_instrument_function))
-crn_in_procer() { return gcurmcid__ != 0; }
+crn_in_procer() { return gcurmcid__ != 0 && gcurmcid__ != 2 && gcurmcid__ != 1; }
 
 int crn_procer_yield(long fd, int ytype) {
     // check是否是procer线程
     if (gcurmcid__ == 0) {
-        linfo("maybe not procer thread %ld %d\n", fd, ytype)
-            // 应该不是 procer线程
-            return -1;
+        // linfo("maybe not procer thread %ld %d %s\n", fd, ytype, yield_type_name(ytype));
+        // 应该不是 procer线程
+        if (ytype == YIELD_TYPE_RECVFROM) {
+            // assert(1==2);
+        }
+        return -1;
     }
     // linfo("yield fd=%ld, ytype=%s(%d), mcid=%d, grid=%d\n", fd, yield_type_name(ytype), ytype, gcurmcid__, gcurgrid__);
     machine* mc = crn_machine_get(gcurmcid__);
@@ -1326,6 +1329,7 @@ void crn_init_intern() {
     // log init here
     // signal(SIGPIPE, SIG_IGN);
     signal(SIGPIPE, crn_ignore_signal);
+    // signal(SIGPWR, crn_ignore_signal);
     netpoller_use_threads();
 }
 

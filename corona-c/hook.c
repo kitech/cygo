@@ -163,6 +163,8 @@ int connect(int fd, const struct sockaddr *addr, socklen_t addrlen)
 int accept(int sockfd, struct sockaddr *addr, socklen_t *addrlen)
 {
     if (!accept_f) initHook();
+    if (!crn_in_procer()) return accept_f(sockfd, addr, addrlen);
+
     // linfo("%d fdnb=%d\n", sockfd, fd_is_nonblocking(sockfd));
     while(1){
         int rv = accept_f(sockfd, addr, addrlen);
@@ -184,8 +186,9 @@ int accept(int sockfd, struct sockaddr *addr, socklen_t *addrlen)
 
 ssize_t read(int fd, void *buf, size_t count)
 {
-    if (!crn_in_procer()) return read_f(fd, buf, count);
     if (!read_f) initHook();
+    if (!crn_in_procer()) return read_f(fd, buf, count);
+
     // linfo("%d fdnb=%d bufsz=%d\n", fd, fd_is_nonblocking(fd), count);
     while (1){
         ssize_t rv = read_f(fd, buf, count);
@@ -244,6 +247,8 @@ ssize_t recvfrom(int sockfd, void *buf, size_t len, int flags,
         struct sockaddr *src_addr, socklen_t *addrlen)
 {
     if (!recvfrom_f) initHook();
+    if (!crn_in_procer()) return recvfrom_f(sockfd, buf, len, flags, src_addr, addrlen);
+
     struct timeval btv = {0};
     struct timeval etv = {0};
     gettimeofday(&btv, 0);
@@ -267,8 +272,9 @@ ssize_t recvfrom(int sockfd, void *buf, size_t len, int flags,
 
 ssize_t recvmsg(int sockfd, struct msghdr *msg, int flags)
 {
-    if (!crn_in_procer()) return recvmsg_f(sockfd, msg, flags);
     if (!recvmsg_f) initHook();
+    if (!crn_in_procer()) return recvmsg_f(sockfd, msg, flags);
+
     // linfo("%d fdnb=%d\n", sockfd, fd_is_nonblocking(sockfd));
     time_t btime = time(0);
     for (int i = 0; ; i ++){
@@ -319,6 +325,7 @@ ssize_t recvmsg(int sockfd, struct msghdr *msg, int flags)
 ssize_t write(int fd, const void *buf, size_t count)
 {
     if (!write_f) initHook();
+    if (!crn_in_procer()) return write(fd, buf, count);
     // linfo("%d %d\n", fd, count);
 
     while(1){
@@ -346,8 +353,10 @@ ssize_t writev(int fd, const struct iovec *iov, int iovcnt)
 ssize_t send(int sockfd, const void *buf, size_t len, int flags)
 {
     if (!send_f) initHook();
+    if (!crn_in_procer()) return send(sockfd, buf, len, flags);
     // linfo("%d %d %d fdnb=%d\n", sockfd, len, flags, fd_is_nonblocking(sockfd));
-    flags |= MSG_NOSIGNAL;
+
+    flags |= MSG_NOSIGNAL; // fix SIGPIPE and exit with errro code 141
     while (true) {
         ssize_t rv = send_f(sockfd, buf, len, flags);
         int eno = rv < 0 ? errno : 0;
@@ -369,15 +378,27 @@ ssize_t sendto(int sockfd, const void *buf, size_t len, int flags,
         const struct sockaddr *dest_addr, socklen_t addrlen)
 {
     if (!sendto_f) initHook();
-    linfo("%d\n", sockfd);
+    if (!crn_in_procer()) return sendto_f(sockfd, buf, len, flags, dest_addr, addrlen);
+    linfo("%d %p\n", sockfd, crn_fiber_getcur());
+
+    while(1) {
+        int rv = sendto_f(sockfd, buf, len, flags, dest_addr, addrlen);
+        if (rv >= 0) {
+            return rv;
+        }
+        linfo("%d len %d %d %s\n", rv, len, errno, strerror(errno));
+        return rv;
+    }
+
     assert(1==2);
     return -1;
 }
 
 ssize_t sendmsg(int sockfd, const struct msghdr *msg, int flags)
 {
-    if (!crn_in_procer()) return sendmsg_f(sockfd, msg, flags);
     if (!sendmsg_f) initHook();
+    if (!crn_in_procer()) return sendmsg_f(sockfd, msg, flags);
+
     // linfo("%d fdnb=%d\n", sockfd, fd_is_nonblocking(sockfd));
     while (1){
         ssize_t rv = sendmsg_f(sockfd, msg, flags);
@@ -398,8 +419,9 @@ ssize_t sendmsg(int sockfd, const struct msghdr *msg, int flags)
 // ------ for dns syscall
 int __poll(struct pollfd *fds, nfds_t nfds, int timeout)
 {
-    if (!crn_in_procer()) return poll_f(fds, nfds, timeout);
     if (!poll_f) initHook();
+    if (!crn_in_procer()) return poll_f(fds, nfds, timeout);
+
     // linfo("%d fd0=%d timeo=%d\n", nfds, fds[0].fd, timeout);
     if (timeout == 0) {  // non-block
         int rv = poll_f(fds, nfds, timeout);

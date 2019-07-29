@@ -5,15 +5,15 @@
 
 #include "coronagc.h"
 
-/* void* crn_raw_malloc(size_t size) { */
-/*     return calloc(1, size); */
-/* } */
+void* crn_raw_malloc(size_t size) {
+     return calloc(1, size);
+}
 /* void* crn_raw_realloc(void* ptr, size_t size) { */
 /*     return realloc(ptr, size); */
 /* } */
-/* void crn_raw_free(void* ptr) { */
-/*     return free(ptr); */
-/* } */
+void crn_raw_free(void* ptr) {
+    return free(ptr);
+}
 /* void* crn_raw_calloc(size_t n, size_t size) { */
 /*     return calloc(n, size); */
 /* } */
@@ -54,6 +54,7 @@ static void* crn_gc_free_block(void* ptr) {
     return 0;
 }
 void crn_gc_free(void* ptr) {
+    if (ptr == 0) return;
     crn_pre_gclock(__func__);
     // GC_FREE(ptr);
     GC_do_blocking(crn_gc_free_block, ptr);

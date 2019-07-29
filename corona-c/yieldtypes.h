@@ -40,6 +40,7 @@ typedef enum yield_type
      YIELD_TYPE_GETHOSTBYNAMER,
      YIELD_TYPE_GETHOSTBYNAME2R,
      YIELD_TYPE_GETHOSTBYADDR,
+     YIELD_TYPE_GETADDRINFO,
 
      YIELD_TYPE_MAX,
     } yield_type;

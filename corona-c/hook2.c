@@ -36,6 +36,79 @@ int getaddrinfo_wip(const char *node, const char *service,
     return rv;
 }
 
+int getaddrinfo(const char *node, const char *service,
+                    const struct addrinfo *hints,
+                    struct addrinfo **res)
+{
+    if (!getaddrinfo_f) initHook2();
+    if (!crn_in_procer()) return getaddrinfo_f(node, service, hints, res);
+    // linfo("%s **res=%d\n", node, res);
+
+    extern void* netpoller_dnsresolv(const char* hostname, int ytype, fiber* gr, void** out);
+    fiber* gr = crn_fiber_getcur();
+    const char* hostname = node;
+    struct addrinfo **res2 = calloc(1, sizeof(void*));
+    void* retptr = netpoller_dnsresolv(hostname, YIELD_TYPE_GETADDRINFO, gr, (void**)res2);
+
+    if (retptr == nilptr && *res2 != nilptr) {
+    }else{
+        crn_procer_yield((long)node, YIELD_TYPE_GETADDRINFO);
+    }
+
+    if (*res2 != nilptr) {
+        *res = *res2;
+        return 0;
+    }
+    return -1;
+}
+
+#include <arpa/inet.h>
+static char* lookup_host_impl2 (const char *host)
+{
+    struct addrinfo hints, *res;
+    int errcode;
+    char addrstr[100];
+    void *ptr;
+
+    memset (&hints, 0, sizeof (hints));
+    hints.ai_family = PF_UNSPEC;
+    hints.ai_socktype = SOCK_STREAM;
+    hints.ai_flags |= AI_CANONNAME;
+
+    errcode = getaddrinfo (host, NULL, &hints, &res);
+    if (errcode != 0) {
+        perror ("getaddrinfo");
+        return 0;
+    }
+
+    char* ipaddr = crn_gc_malloc(120);
+    linfo ("Host: %s %p\n", host, res);
+    while (res) {
+        inet_ntop (res->ai_family, res->ai_addr->sa_data, addrstr, 100);
+
+        switch (res->ai_family) {
+        case AF_INET:
+            ptr = &((struct sockaddr_in *) res->ai_addr)->sin_addr;
+            break;
+        case AF_INET6:
+            ptr = &((struct sockaddr_in6 *) res->ai_addr)->sin6_addr;
+            break;
+        }
+        inet_ntop (res->ai_family, ptr, addrstr, 100);
+        linfo ("IPv%d address: %s (%s)\n", res->ai_family == PF_INET6 ? 6 : 4,
+                addrstr, res->ai_canonname);
+
+        memcpy(ipaddr, addrstr, strlen(addrstr));
+        res = res->ai_next;
+    }
+    freeaddrinfo(res);
+
+    return ipaddr;
+}
+
+char* crn_getaddrinfo(const char* hostname) {
+    return lookup_host_impl2 (hostname);
+}
 
 static int doInitHook2() {
     if (getaddrinfo_f) return 0;
