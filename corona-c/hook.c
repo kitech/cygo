@@ -325,7 +325,7 @@ ssize_t recvmsg(int sockfd, struct msghdr *msg, int flags)
 ssize_t write(int fd, const void *buf, size_t count)
 {
     if (!write_f) initHook();
-    if (!crn_in_procer()) return write(fd, buf, count);
+    if (!crn_in_procer()) return write_f(fd, buf, count);
     // linfo("%d %d\n", fd, count);
 
     while(1){
@@ -379,7 +379,7 @@ ssize_t sendto(int sockfd, const void *buf, size_t len, int flags,
 {
     if (!sendto_f) initHook();
     if (!crn_in_procer()) return sendto_f(sockfd, buf, len, flags, dest_addr, addrlen);
-    linfo("%d %p\n", sockfd, crn_fiber_getcur());
+    // linfo("%d %p\n", sockfd, crn_fiber_getcur());
 
     while(1) {
         int rv = sendto_f(sockfd, buf, len, flags, dest_addr, addrlen);

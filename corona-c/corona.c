@@ -920,6 +920,23 @@ int crn_procer_yield_multi(int ytype, int nfds, long fds[], int ytypes[]) {
     crn_fiber_suspend(gr);
     return 0;
 }
+bool crn_procer_resume_prechk(void* gr_, int ytype, int grid, int mcid) {
+    fiber* gr = (fiber*)gr_;
+    fiber* curgr = crn_fiber_getcur();
+    machine* mc = crn_machine_get(mcid);
+    assert(mc != nilptr);
+    fiber* gr2 = crn_machine_grget(mc, grid);
+    if (gr2 != gr) {
+        ldebug("Invalid gr %p=%p curid=%d %d\n", gr, gr2, grid);
+        return false;
+    }
+    if (grid != gr->id || mcid != gr->mcid) {
+        // sometimes resume from netpoller is too late, gr already gone
+        ldebug("Invalid gr %p curid=%d %d\n", gr, gr->id, grid);
+        return false;
+    }
+    return true;
+}
 void crn_procer_resume_one(void* gr_, int ytype, int grid, int mcid) {
     fiber* gr = (fiber*)gr_;
     fiber* curgr = crn_fiber_getcur();

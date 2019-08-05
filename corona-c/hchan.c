@@ -104,11 +104,10 @@ int hchan_len(hchan* hc) { return chan_size(hc->c); }
 
 // TODO when sending/recving, hchan closed case
 int hchan_send(hchan* hc, void* data) {
-    pmutex_lock(&hc->lock);
-
     fiber* mygr = crn_fiber_getcur();
     assert(mygr != nilptr);
 
+    pmutex_lock(&hc->lock);
     if (hc->cap == 0) {
         // if any fiber waiting, put data to it elem and then wakeup
         // else put self to sendq and then parking self
@@ -177,11 +176,10 @@ int hchan_send(hchan* hc, void* data) {
 }
 
 int hchan_recv(hchan* hc, void** pdata) {
-    pmutex_lock(&hc->lock);
-
     fiber* mygr = crn_fiber_getcur();
     assert(mygr != nilptr);
 
+    pmutex_lock(&hc->lock);
     if (hc->cap == 0) {
         // if have elem not nil, get it
         // else if any sendq, wakeup them,

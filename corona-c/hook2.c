@@ -43,20 +43,28 @@ int getaddrinfo(const char *node, const char *service,
     if (!getaddrinfo_f) initHook2();
     if (!crn_in_procer()) return getaddrinfo_f(node, service, hints, res);
     // linfo("%s **res=%d\n", node, res);
+    extern void* netpoller_dnsresolv(const char* hostname, int ytype, fiber* gr, void** out, int* errcode);
 
-    extern void* netpoller_dnsresolv(const char* hostname, int ytype, fiber* gr, void** out);
     fiber* gr = crn_fiber_getcur();
     const char* hostname = node;
-    struct addrinfo **res2 = calloc(1, sizeof(void*));
-    void* retptr = netpoller_dnsresolv(hostname, YIELD_TYPE_GETADDRINFO, gr, (void**)res2);
+    // struct addrinfo **res2 = calloc(1, sizeof(void*));
+    struct addrinfo *oldres = *res;
+    struct addrinfo *res2 = nilptr;
+    int errcode = 0;
+    void* retptr = netpoller_dnsresolv(hostname, YIELD_TYPE_GETADDRINFO, gr, (void**)&res2, &errcode);
+    assert(retptr != nilptr && res2 == nilptr);
 
-    if (retptr == nilptr && *res2 != nilptr) {
+    int yielded = 1;
+    if (retptr == nilptr && res2 != nilptr) {
+        yielded = 0;
     }else{
         crn_procer_yield((long)node, YIELD_TYPE_GETADDRINFO);
     }
+    assert(yielded == 1);
 
-    if (*res2 != nilptr) {
-        *res = *res2;
+    linfo("%d %p %d %p %s %s\n", yielded, oldres, res2 != nilptr, res2, node, service);
+    if (res2 != nilptr) {
+        *res = res2;
         return 0;
     }
     return -1;
