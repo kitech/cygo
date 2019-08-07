@@ -1,10 +1,10 @@
 #!/bin/sh
 
-rm -rf ./crnclr
-git clone . crnclr
-du -hs crnclr
+rm -rf ./congo
+git clone . congo
+du -hs congo
 
-cd crnclr
+cd congo
 
 skip_commit()
 {
@@ -45,4 +45,4 @@ git gc
 git log --oneline | wc -l
 
 cd -
-du -hs crnclr
+du -hs congo
