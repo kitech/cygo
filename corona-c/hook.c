@@ -353,7 +353,7 @@ ssize_t writev(int fd, const struct iovec *iov, int iovcnt)
 ssize_t send(int sockfd, const void *buf, size_t len, int flags)
 {
     if (!send_f) initHook();
-    if (!crn_in_procer()) return send(sockfd, buf, len, flags);
+    if (!crn_in_procer()) return send_f(sockfd, buf, len, flags);
     // linfo("%d %d %d fdnb=%d\n", sockfd, len, flags, fd_is_nonblocking(sockfd));
 
     flags |= MSG_NOSIGNAL; // fix SIGPIPE and exit with errro code 141

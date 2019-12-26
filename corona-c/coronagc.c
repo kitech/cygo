@@ -53,16 +53,23 @@ static void* crn_gc_free_block(void* ptr) {
     // crn_post_gclock();
     return 0;
 }
+// GC_clear_fl_marks loops https://www.hpl.hp.com/hosted/linux/mail-archives/gc/2008-March/002176.html
+// The only way I know for this to happen is if you call GC_free() on thesame object twice.
+static int __we_take_free_owner = 0;
 void crn_gc_free(void* ptr) {
     if (ptr == 0) return;
     crn_pre_gclock(__func__);
-    // GC_FREE(ptr);
-    GC_do_blocking(crn_gc_free_block, ptr);
+    if (__we_take_free_owner == 1) {
+        GC_FREE(ptr);
+        // GC_do_blocking(crn_gc_free_block, ptr);
+    }else{}
     crn_post_gclock(__func__);
 }
 void crn_gc_free2(void* ptr) {
     crn_pre_gclock(__func__);
-    GC_FREE(ptr);
+    if (__we_take_free_owner == 1) {
+        GC_FREE(ptr);
+    }
     crn_post_gclock(__func__);
 }
 void* crn_gc_calloc(size_t n, size_t size) {

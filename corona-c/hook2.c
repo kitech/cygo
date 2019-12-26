@@ -52,7 +52,13 @@ int getaddrinfo(const char *node, const char *service,
     struct addrinfo *res2 = nilptr;
     int errcode = 0;
     void* retptr = netpoller_dnsresolv(hostname, YIELD_TYPE_GETADDRINFO, gr, (void**)&res2, &errcode);
-    assert(retptr != nilptr && res2 == nilptr);
+    // If we can answer the request immediately (with an error or not!), then we invoke cb immediately and return NULL.
+    // assert(retptr != nilptr && res2 == nilptr);
+    if (retptr == nilptr) {
+        assert(res2 != nilptr);
+    }else{
+        assert(res2 == nilptr);
+    }
 
     int yielded = 1;
     if (retptr == nilptr && res2 != nilptr) {
@@ -60,7 +66,11 @@ int getaddrinfo(const char *node, const char *service,
     }else{
         crn_procer_yield((long)node, YIELD_TYPE_GETADDRINFO);
     }
-    assert(yielded == 1);
+    if (retptr == nilptr) {
+        assert(yielded == 0);
+    }else{
+        assert(yielded == 1);
+    }
 
     linfo("%d %p %d %p %s %s\n", yielded, oldres, res2 != nilptr, res2, node, service);
     if (res2 != nilptr) {

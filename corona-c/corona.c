@@ -291,9 +291,16 @@ void crn_fiber_run(fiber* gr) {
 
 // 只改状态，不切换
 void crn_fiber_resume_same_thread(fiber* gr) {
+    int state = crn_fiber_getstate(gr);
+    if (state == executing) {
+        return;
+    }
+    if (state == finished) {
+        linfo("why executing or finished %s, id %d\n", grstate2str(state), gr->id);
+    }
     assert(gr->isresume == true);
-    assert(gr->state != executing);
-    assert(gr->state != finished);
+    // assert(state != executing);
+    assert(state != finished);
 
     crn_fiber_setstate(gr, runnable);
     machine* mc = crn_machine_get(gr->mcid);
