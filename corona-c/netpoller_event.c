@@ -290,6 +290,7 @@ void evdns_resolv_cbproc(int errcode, struct evutil_addrinfo *addr, void *ptr)
     // void* chkderef = *resout2; // FIXME deref crash
     *resout2 = resout;
     *ioerrcode = errcode;
+    // linfo("resolved resume %d\n", grid);
     crn_procer_resume_one(dd, ytype, grid, mcid);
 }
 

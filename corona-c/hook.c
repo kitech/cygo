@@ -116,7 +116,7 @@ int socket(int domain, int type, int protocol)
     int sock = socket_f(domain, type, protocol);
     if (sock >= 0) {
         hookcb_oncreate(sock, FDISSOCKET, false, domain, type, protocol);
-        // linfo("task(%s) hook socket, returns %d.\n", "", sock);
+        // linfo("task(%s) hook socket, returns %d nb %d.\n", "", sock, fd_is_nonblocking(sock));
         // linfo("domain=%d type=%s(%d) socket=%d\n", domain, type==SOCK_STREAM ? "tcp" : "what", type, sock);
     }
 
@@ -125,8 +125,8 @@ int socket(int domain, int type, int protocol)
 
 int socketpair(int domain, int type, int protocol, int sv[2])
 {
-    // if (crn_in_procer())
     if (!socketpair_f) initHook();
+    if (!crn_in_procer()) return socketpair_f(domain, type, protocol, sv);
     linfo("%d\n", type);
 
     int rv = socketpair_f(domain, type, protocol, sv);
@@ -145,16 +145,28 @@ int connect(int fd, const struct sockaddr *addr, socklen_t addrlen)
 
     time_t btime = time(0);
     for (int i = 0;; i++) {
+        char buf[200] = {0};
+        struct sockaddr_in* sa = addr;
+        // linfo("what addr %s\n", inet_ntop(AF_INET, &sa->sin_addr.s_addr, buf, 200));
+        // linfo("blocking?? fd=%d %d\n", fd, fd_is_nonblocking(fd));
+        if (!fd_is_nonblocking(fd)) {
+            lwarn("why fd is blocking mode %d?\n", fd);
+            // memcpy(1, 2, 3);
+            // hookcb_fd_set_nonblocking(fd, 1);
+        }
+        assert(fd_is_nonblocking(fd) == 1);
         int rv = connect_f(fd, addr, addrlen);
+        // linfo("what addr %s\n", inet_ntop(AF_INET, &sa->sin_addr.s_addr, buf, 200));
         int eno = rv < 0 ? errno : 0;
         if (rv >= 0) {
-            // linfo("connect ok %d %d, %d, %d\n", fd, errno, time(0)-btime, i);
+            linfo("connect ok %d %d, %d, %d\n", fd, errno, time(0)-btime, i);
             return rv;
         }
         if (eno != EINPROGRESS && eno != EALREADY) {
             linfo("Unknown %d %d %d %d %s\n", fd, rv, eno, i, strerror(eno));
             return rv;
         }
+        // linfo("yield %d %d %d\n", fd, rv, eno);
         crn_procer_yield(fd, YIELD_TYPE_CONNECT);
     }
     assert(1==2); // unreachable
@@ -346,6 +358,7 @@ ssize_t write(int fd, const void *buf, size_t count)
 ssize_t writev(int fd, const struct iovec *iov, int iovcnt)
 {
     if (!writev_f) initHook();
+    if (!crn_in_procer()) return writev_f(fd, iov, iovcnt);
     linfo("%d\n", fd);
     assert(1==2);
 }
@@ -852,9 +865,12 @@ int fclose(FILE* fp)
 FILE* fopen(const char *pathname, const char *mode)
 {
     if (!fopen_f) initHook();
+    // if (!crn_in_procer()) return fopen_f(fds, nfds, timeout);
     // linfo("%s %s\n", pathname, mode);
 
     FILE* fp = fopen_f(pathname, mode);
+    // linfo("fopen fp=%p fnlen=%d %s\n", fp, strlen(pathname), pathname);
+    if (fp == 0) { return 0; }
     int fd = fileno(fp);
     // hookcb_oncreate(fd, FDISFILE, 0, 0,0,0);
     // linfo("%s %s %d fdnb=%d\n", pathname, mode, fd, fd_is_nonblocking(fd));
