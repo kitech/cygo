@@ -212,6 +212,12 @@ ssize_t read(int fd, void *buf, size_t count)
             linfo("fd=%d err=%d eno=%d err=%s\n", fd, rv, errno, strerror(errno));
             return rv;
         }
+        bool inpoll = hookcb_getin_poll(fd);
+        // linfo("read yeild %d n %d nb %d inpoll %d\n", fd, count, fd_is_nonblocking(fd), inpoll);
+        if (inpoll) { // dont yeild inpoll fd read
+            hookcb_setin_poll(fd, false);
+            return rv;
+        }
         crn_procer_yield(fd, YIELD_TYPE_READ);
     }
     assert(1==2); // unreachable
@@ -338,6 +344,7 @@ ssize_t write(int fd, const void *buf, size_t count)
 {
     if (!write_f) initHook();
     if (!crn_in_procer()) return write_f(fd, buf, count);
+    if (fd == 1 || fd == 2) return write_f(fd, buf, count);
     // linfo("%d %d\n", fd, count);
 
     while(1){
@@ -466,6 +473,7 @@ int __poll(struct pollfd *fds, nfds_t nfds, int timeout)
             tytypes[j] = YIELD_TYPE_WRITE;
             j++;
         }
+        hookcb_setin_poll(fds[i].fd, true);
     }
     int ynfds = nevts;
     if (timeout > 0) {
@@ -491,6 +499,7 @@ int __poll(struct pollfd *fds, nfds_t nfds, int timeout)
                 return rv;
             }
         }
+        // linfo("poll yeild %d timeo %d\n", i, timeout);
         crn_procer_yield_multi(YIELD_TYPE_UUPOLL, ynfds, tfds, tytypes);
     }
     assert(1==2);

@@ -27,6 +27,8 @@ All exported functions is `crnpub.h`
 [ ] mutex lock/unlock yield?
 [ ] dynamic increase/decrease processor(P)
 [x] sockfd timeout support
+[ ] dynamic increase/decrease stack size
+[ ] lock to os thread
 
 ### Difference with Go
 * Ours gosched is a sleep, Go's Gosched is long parking and wait resched
@@ -40,7 +42,7 @@ Thanks all the contributors.
 * libchan https://github.com/tylertreat/chan
 * libcollectc
 * rixlog
-* libgc >= 8.2.0
+* libgc >= 8.0.0
 * libevent >= 2.1
 * libelf/plthook
 
