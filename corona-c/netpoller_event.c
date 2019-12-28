@@ -24,10 +24,14 @@ typedef struct netpoller {
 
 static netpoller* gnpl__ = 0;
 
+static void netpoller_logcb(int severity, const char *msg) {
+    // linfo("lvl=%d msg=%s\n", severity, msg);
+}
 void netpoller_use_threads() {
     evthread_use_pthreads();
     // or evthread_use_windows_threads()
     event_set_mem_functions(crn_gc_malloc, crn_gc_realloc, crn_gc_free);
+    event_set_log_callback(netpoller_logcb);
 }
 
 netpoller* netpoller_new() {
@@ -159,7 +163,7 @@ void netpoller_readfd(int fd, int ytype, fiber* gr) {
     }
 
     if (d != nilptr) {
-        // linfo("event_add d=%p\n", d);
+        // linfo("event_add d=%p fd=%d ytype=%d rv=%d\n", d, fd, ytype, rv);
     }
 }
 
