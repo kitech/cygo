@@ -4,7 +4,7 @@
 # win上能用的是啥
 # GC_THREADS not GC_PTHREADS
 # -finstrument-functions
-CFLAGS=-g -O0 -std=c11 -D_GNU_SOURCE -DNRDEBUG -DCORO_STACKALLOC -DCORO_UCONTEXT -DHAVE_UCONTEXT_H -DHAVE_SETJMP_H -DHAVE_SIGALTSTACK -I. -I../cltc/include -I../bdwgc/include -DGC_THREADS -fstack-usage # -finstrument-functions
+CFLAGS=-g -O0 -std=c11 -D_GNU_SOURCE -DNRDEBUG -DCORO_STACKALLOC -DCORO_UCONTEXT -DHAVE_UCONTEXT_H -DHAVE_SETJMP_H -DHAVE_SIGALTSTACK -I. -I../cltc/include -I../bdwgc/include -I../3rdparty/picoev -DGC_THREADS -fstack-usage # -finstrument-functions
 LDFLAGS=-L../cltc/lib -lcollectc -levent -levent_pthreads -L ../bdwgc/.libs -lgc -lpthread -ldl -Wl,--export-dynamic
 
 dotos:
@@ -22,6 +22,7 @@ dotos:
 	gcc ${CFLAGS} -o hselect.o -c hselect.c
 	#gcc ${CFLAGS} -o netpoller_ev.o -c netpoller_ev.c
 	gcc ${CFLAGS} -o netpoller_event.o -c netpoller_event.c
+	gcc ${CFLAGS} -o netpoller_event.o -c netpoller_picoev.c
 	gcc ${CFLAGS} -o coronagc.o -c coronagc.c
 	gcc ${CFLAGS} -o corona.o -c corona.c
 	gcc ${CFLAGS} -o main.o -c main.c

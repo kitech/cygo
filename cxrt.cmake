@@ -12,7 +12,7 @@ add_library(cxrt STATIC  ${mydir}/src/cxrtbase.c
 #  ${mydir}/src/cppminrt.cpp
   )
 
-include_directories(${mydir}/corona-c ${mydir}/cltc/include)
+include_directories(${mydir}/corona-c ${mydir}/cltc/include ${party3dir}/picoev)
 set(corona_c_srcs
   ${mydir}/corona-c/coro.c
 	${mydir}/corona-c/corowp.c
@@ -30,10 +30,12 @@ set(corona_c_srcs
 	${mydir}/corona-c/hchan.c
 	${mydir}/corona-c/hselect.c
 #	${mydir}/corona-c/netpoller_ev.c
-	${mydir}/corona-c/netpoller_event.c
+  ${mydir}/corona-c/netpoller_event.c
+  # ${mydir}/corona-c/netpoller_picoev.c
 	${mydir}/corona-c/coronagc.c
 	${mydir}/corona-c/corona.c
 	${mydir}/corona-c/functrace.c
+  ${party3dir}/picoev/picoev_epoll.c
   )
 
 # include_directories(${party3dir}/plthook)
@@ -44,6 +46,7 @@ set(corona_c_srcs
  add_library(crn STATIC ${corona_c_srcs}
    # ${plthook_c_srcs}
    )
+
 #add_executable(corona ${corona_c_srcs} corona-c/main.c)
 set(CMAKE_C_FLAGS "-g -O0 -std=c11 -D_GNU_SOURCE ")
 #set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -pedantic") # non ISO C warning
