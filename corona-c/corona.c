@@ -865,6 +865,13 @@ static void* crn_procerx(void*arg) {
 bool __attribute__((no_instrument_function))
 crn_in_procer() { return gcurmcid__ != 0 && gcurmcid__ != 2 && gcurmcid__ != 1; }
 
+// 在yield函数中，调用suspend之前调用
+static int crn_fiber_mark_curstk_used(fiber* gr) {
+    int usestkmark = 0;
+    int usestksz = (void*)&usestkmark - gr->stack.sptr + sizeof(int)*2;
+    // lverb("curstk inuse grid=%d mcid=%d stksz=%d\n", gr->id, gr->mcid, usestksz);
+    return usestksz;
+}
 int crn_procer_yield(long fd, int ytype) {
     // check是否是procer线程
     if (gcurmcid__ == 0) {
@@ -890,6 +897,7 @@ int crn_procer_yield(long fd, int ytype) {
         mc->yinfo.fd = fd;
         // netpoller_yieldfd(fd, ytype, gr);
     }
+    crn_fiber_mark_curstk_used(gr);
     crn_fiber_suspend(gr);
     return 0;
 }
@@ -924,6 +932,7 @@ int crn_procer_yield_multi(int ytype, int nfds, long fds[], int ytypes[]) {
             // netpoller_yieldfd(fd, ytype, gr);
         }
     }
+    crn_fiber_mark_curstk_used(gr);
     crn_fiber_suspend(gr);
     return 0;
 }

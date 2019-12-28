@@ -28,7 +28,10 @@ All exported functions is `crnpub.h`
 [ ] dynamic increase/decrease processor(P)
 [x] sockfd timeout support
 [ ] dynamic increase/decrease stack size
+[ ] copy stack, copy stack 解决了栈大小溢出的问题了没？
+[x] detect stack size in use in yeild
 [ ] lock to os thread
+
 
 ### Difference with Go
 * Ours gosched is a sleep, Go's Gosched is long parking and wait resched
@@ -44,10 +47,10 @@ Thanks all the contributors.
 * rixlog
 * libgc >= 8.0.0
 * libevent >= 2.1
+* picoev
 * libelf/plthook
 
 ### BUGS
-
 [x] SIGABRT: coro\_init () at /noro/coro.c:104
     when resume a finished fiber, this crash occurs
 [ ] SIGSEGV: bdwgc: mark.c:1581 GC\_push\_all\_eager
@@ -79,3 +82,6 @@ Thanks all the contributors.
 
 GC_NPROCS=1 ./prog to set gc thread count
 
+### 同类
+* https://github.com/canonical/libco pure C, single thread, no dynamic stack size
+* 
