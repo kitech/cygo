@@ -6,6 +6,7 @@
 #define FDISSOCKET  1
 #define FDISPIPE  2
 #define FDISFILE  3
+#define FDXLIB 4
 
 typedef struct fdcontext fdcontext;
 typedef struct hookcb hookcb;
@@ -16,6 +17,7 @@ bool fdcontext_is_tcpsocket(fdcontext*fdctx);
 bool fdcontext_is_nonblocking(fdcontext*fdctx);
 bool fd_is_nonblocking(int fd);
 int hookcb_fd_set_nonblocking(int fd, bool isNonBlocking);
+int fdcontext_get_fdtype(fdcontext*fdctx);
 
 hookcb* hookcb_get();
 void hookcb_oncreate(int fd, int fdty, bool isNonBlocking, int domain, int sockty, int protocol) ;

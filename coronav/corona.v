@@ -31,7 +31,7 @@ fn C.gettid() int
 // fn C.sleep(s int) int
 
 pub fn lock_osthread() { C.crn_lock_osthread() }
-pub fn add_custom_fd(fd int) { C.hookcb_oncreate(fd, 2, true, 0, 0, 0) }
+pub fn add_custom_fd(fd int) { C.hookcb_oncreate(fd, 4, true, 0, 0, 0) }
 
 pub fn new() &Corona{
 	crn := &Corona{0,0}
@@ -59,13 +59,17 @@ pub fn post(f fn(voidptr), arg voidptr) {
 	C.crn_post(f, arg)
 }
 
-pub fn forever() {
-	for { time.sleep(500) }
-}
-
 fn C.cxrt_init_env()
 
 pub fn init_env() {
 	//
 	C.cxrt_init_env()
 }
+
+pub fn forever() {
+	for { time.sleep(500) }
+}
+pub fn fortimer(timeoutms int) {
+	assert 1==2
+}
+

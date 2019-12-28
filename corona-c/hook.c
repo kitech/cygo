@@ -316,7 +316,7 @@ ssize_t recvmsg(int sockfd, struct msghdr *msg, int flags)
     if (!recvmsg_f) initHook();
     if (!crn_in_procer()) return recvmsg_f(sockfd, msg, flags);
 
-    // linfo("%d fdnb=%d\n", sockfd, fd_is_nonblocking(sockfd));
+    // linfo("%d fdnb=%d flags=%d\n", sockfd, fd_is_nonblocking(sockfd), flags);
     assert(fd_is_nonblocking(sockfd)==1);
     time_t btime = time(0);
     for (int i = 0; ; i ++){
@@ -335,6 +335,8 @@ ssize_t recvmsg(int sockfd, struct msghdr *msg, int flags)
             linfo("fd=%d fdnb=%d rv=%d eno=%d err=%s\n", sockfd, isnb, rv, eno, strerror(eno));
             return rv;
         }
+        // hotfix xlib fd nowait
+        if (eno == EAGAIN && fdcontext_get_fdtype(fdctx) == FDXLIB) { return rv; }
         if (isudp) {
             time_t dtime = time(0) - btime;
             if (i > 0 && dtime >= 5) {
@@ -359,6 +361,8 @@ ssize_t recvmsg(int sockfd, struct msghdr *msg, int flags)
             ytypes[1] = YIELD_TYPE_MSLEEP;
             crn_procer_yield_multi(YIELD_TYPE_RECVMSG_TIMEOUT, 2, tfds, ytypes);
         }else{
+            // linfo("recvmsg yeild fd=%d isudp=%d rv=%d eno=%d err=%s\n", sockfd, isudp, rv, eno, strerror(eno));
+            // assert(1==2);
             crn_procer_yield(sockfd, YIELD_TYPE_RECVMSG);
         }
     }
@@ -405,13 +409,14 @@ ssize_t writev(int fd, const struct iovec *iov, int iovcnt)
         ssize_t rv = writev_f(fd, iov, iovcnt);
         int eno = rv < 0 ? errno : 0;
         if (rv >= 0) {
-            // assert(rv == ???)
+            assert(rv == totlen);
             return rv;
         }
         if (eno != EINPROGRESS && eno != EAGAIN) {
             linfo("fd=%d rv=%d eno=%d err=%s\n", fd, rv, eno, strerror(eno));
             return rv;
         }
+        // linfo("writev yield fd=%d rv=%d len=%d\n", fd, rv, totlen);
         crn_procer_yield(fd, YIELD_TYPE_WRITEV);
     }
     assert(1==2);

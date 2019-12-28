@@ -99,6 +99,7 @@ bool fdcontext_is_tcpsocket(fdcontext*fdctx) {
     return fdctx->fdty == FDISSOCKET && fdctx->sockty == SOCK_STREAM;
 }
 bool fdcontext_is_nonblocking(fdcontext*fdctx){ return fdctx->isNonBlocking; }
+int fdcontext_get_fdtype(fdcontext*fdctx){ return fdctx->fdty; }
 
 // global static vars
 static hookcb* ghkcb__ = {0};
