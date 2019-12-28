@@ -350,6 +350,7 @@ ssize_t write(int fd, const void *buf, size_t count)
     while(1){
         ssize_t rv = write_f(fd, buf, count);
         int eno = rv < 0 ? errno : 0;
+        // linfo("wrote fd=%d rv=%d\n", fd, rv);
         if (rv >= 0) {
             return rv;
         }
@@ -357,6 +358,9 @@ ssize_t write(int fd, const void *buf, size_t count)
             linfo("fd=%d rv=%d eno=%d err=%s\n", fd, rv, eno, strerror(eno));
             return rv;
         }
+
+        bool inpoll = hookcb_getin_poll(fd);
+        linfo("write yeild %d n %d nb %d inpoll %d\n", fd, count, fd_is_nonblocking(fd), inpoll);
         crn_procer_yield(fd, YIELD_TYPE_WRITE);
     }
     assert(1==2); // unreachable
@@ -435,9 +439,24 @@ ssize_t sendmsg(int sockfd, const struct msghdr *msg, int flags)
     assert(1==2); // unreachable
 }
 
+
+static int getiocinq(int fd)  {
+    int val = 0;
+    int rv = ioctl_f(fd, TIOCINQ, &val);
+    if (rv == -1) {
+        //         vpp.prtcerr('getiocinq $fd')
+    }
+    if (rv == -1) {
+        // return 0
+    }
+    // assert rv != -1
+    return val;
+}
+
+
 // ---------------------------------------------------------------------------
 // ------ for dns syscall
-int __poll(struct pollfd *fds, nfds_t nfds, int timeout)
+int __poll(struct pollfd fds[], nfds_t nfds, int timeout)
 {
     if (!poll_f) initHook();
     if (!crn_in_procer()) return poll_f(fds, nfds, timeout);
@@ -447,12 +466,14 @@ int __poll(struct pollfd *fds, nfds_t nfds, int timeout)
         int rv = poll_f(fds, nfds, timeout);
         return rv;
     }
+
     int nevts = 0;
     for (int i = 0; i < nfds; i ++) {
         if (fds[i].events & POLLIN) { nevts += 1; }
         if (fds[i].events & POLLOUT) { nevts += 1; }
         if (fds[i].events & POLLERR) {  }
-        if (POLLIN | POLLOUT == fds[i].events || POLLIN == fds[i].events || POLLOUT == fds[i].events) {
+        if (POLLIN | POLLOUT == fds[i].events ||
+            POLLIN == fds[i].events || POLLOUT == fds[i].events) {
         }else{
             linfo("not supported poll event set %d %d\n", POLLIN | POLLOUT, fds[i].events);
         }
@@ -473,7 +494,6 @@ int __poll(struct pollfd *fds, nfds_t nfds, int timeout)
             tytypes[j] = YIELD_TYPE_WRITE;
             j++;
         }
-        hookcb_setin_poll(fds[i].fd, true);
     }
     int ynfds = nevts;
     if (timeout > 0) {
@@ -484,9 +504,11 @@ int __poll(struct pollfd *fds, nfds_t nfds, int timeout)
     }
 
     for (int i = 0; ; i++) {
+        for (int i = 0; i < nfds; i ++) { hookcb_setin_poll(fds[i].fd, true); }
         int rv = poll_f(fds, nfds, 0);
         int eno = rv < 0 ? errno : 0;
-        // linfo("i=%d %d fd0=%d timeo=%d rv=%d\n", i, nfds, fds[0].fd, timeout, rv);
+        int qval = getiocinq(fds[0].fd);
+        // linfo("i=%d %d fd0=%d timeo=%d rv=%d qval=%d\n", i, nfds, fds[0].fd, timeout, rv, qval);
         if (rv > 0) {
             return rv;
         }
@@ -499,12 +521,14 @@ int __poll(struct pollfd *fds, nfds_t nfds, int timeout)
                 return rv;
             }
         }
-        // linfo("poll yeild %d timeo %d\n", i, timeout);
-        crn_procer_yield_multi(YIELD_TYPE_UUPOLL, ynfds, tfds, tytypes);
+
+        // linfo("poll yeild %d timeo %d rv %d\n", i, timeout, rv);
+        int fixyn = i == 0 ? ynfds : (ynfds-1);
+        crn_procer_yield_multi(YIELD_TYPE_UUPOLL, fixyn, tfds, tytypes);
     }
     assert(1==2);
 }
-int poll(struct pollfd *fds, nfds_t nfds, int timeout)
+int poll(struct pollfd fds[], nfds_t nfds, int timeout)
 {
     return __poll(fds, nfds, timeout);
 }

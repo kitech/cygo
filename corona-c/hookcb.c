@@ -75,6 +75,11 @@ int fdcontext_set_nonblocking(fdcontext*fdctx, bool isNonBlocking) {
 
     int rv = fcntl_f(fd, F_SETFL,
             isNonBlocking ? (flags | O_NONBLOCK) : (flags & ~O_NONBLOCK));
+    {
+        int one = 1;
+        // setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, &one, sizeof(int));
+        // setsockopt(fd, IPPROTO_TCP, TCP_NODELAY, &one, sizeof(int));
+    }
     return rv;
 }
 int hookcb_fd_set_nonblocking(int fd, bool isNonBlocking) {
@@ -246,3 +251,20 @@ fdcontext* hookcb_get_fdcontext(int fd) {
     }
     return fdctx;
 }
+
+/*
+
+  int rcvbuf = 0;
+  int valen = sizeof(int);
+  getsockopt(fds[i].fd, SOL_SOCKET, SO_RCVBUF, &rcvbuf, &valen);
+  int sndbuf = 0;
+  int valen2 = sizeof(int);
+  getsockopt(fds[i].fd, SOL_SOCKET, SO_SNDBUF, &sndbuf, &valen2);
+  linfo("fd=%d evs=%d POLLIN=%d POLLOUT=%d RCVBUF=%d SNDBUF=%d\n",
+  fds[i].fd, fds[i].events, POLLIN, POLLOUT,rcvbuf, sndbuf);
+  rcvbuf = 1000;
+  setsockopt(fds[i].fd, SOL_SOCKET, SO_RCVBUF, &rcvbuf, sizeof(int));
+  sndbuf = 5000;
+  setsockopt(fds[i].fd, SOL_SOCKET, SO_SNDBUF, &sndbuf, sizeof(int));
+
+*/
