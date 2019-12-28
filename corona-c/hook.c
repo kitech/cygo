@@ -248,6 +248,7 @@ ssize_t read(int fd, void *buf, size_t count)
 ssize_t readv(int fd, const struct iovec *iov, int iovcnt)
 {
     if (!readv_f) initHook();
+    if (!crn_in_procer()) return readv_f(fd, iov, iovcnt);
     linfo("%d\n", fd);
     assert(1==2);
 }
@@ -316,6 +317,7 @@ ssize_t recvmsg(int sockfd, struct msghdr *msg, int flags)
     if (!crn_in_procer()) return recvmsg_f(sockfd, msg, flags);
 
     // linfo("%d fdnb=%d\n", sockfd, fd_is_nonblocking(sockfd));
+    assert(fd_is_nonblocking(sockfd)==1);
     time_t btime = time(0);
     for (int i = 0; ; i ++){
         ssize_t rv = recvmsg_f(sockfd, msg, flags);
@@ -326,10 +328,11 @@ ssize_t recvmsg(int sockfd, struct msghdr *msg, int flags)
 
         fdcontext* fdctx = hookcb_get_fdcontext(sockfd);
         bool isudp = fdcontext_is_socket(fdctx) && !fdcontext_is_tcpsocket(fdctx);
-        // linfo("fd=%d isudp=%d\n", sockfd, isudp);
+        bool isnb = fd_is_nonblocking(sockfd);
+        // linfo("fd=%d isudp=%d rv=%d eno=%d err=%s\n", sockfd, isudp, rv, eno, strerror(eno));
 
         if (eno != EINPROGRESS && eno != EAGAIN && eno != EWOULDBLOCK) {
-            linfo("fd=%d fdnb=%d rv=%d eno=%d err=%s\n", sockfd, fd_is_nonblocking(sockfd), rv, eno, strerror(eno));
+            linfo("fd=%d fdnb=%d rv=%d eno=%d err=%s\n", sockfd, isnb, rv, eno, strerror(eno));
             return rv;
         }
         if (isudp) {
@@ -392,7 +395,25 @@ ssize_t writev(int fd, const struct iovec *iov, int iovcnt)
 {
     if (!writev_f) initHook();
     if (!crn_in_procer()) return writev_f(fd, iov, iovcnt);
-    linfo("%d\n", fd);
+
+    int totlen = 0;
+    for (int i = 0; i < iovcnt; i++) { totlen += iov[i].iov_len; }
+    // linfo("%d %d %d\n", fd, iovcnt, totlen);
+
+    assert(fd_is_nonblocking(fd) == 1);
+    while (true) {
+        ssize_t rv = writev_f(fd, iov, iovcnt);
+        int eno = rv < 0 ? errno : 0;
+        if (rv >= 0) {
+            // assert(rv == ???)
+            return rv;
+        }
+        if (eno != EINPROGRESS && eno != EAGAIN) {
+            linfo("fd=%d rv=%d eno=%d err=%s\n", fd, rv, eno, strerror(eno));
+            return rv;
+        }
+        crn_procer_yield(fd, YIELD_TYPE_WRITEV);
+    }
     assert(1==2);
 }
 
