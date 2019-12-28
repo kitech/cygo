@@ -74,6 +74,7 @@ struct fiber {
     void* myfrm; // my frame when yield
     // this should not access multiple thread, so just use non-lock hashtable
     HashTable* specifics; // like thread specific // int* => void*, value can pass to free()
+    int lock_osthr; // lock os thread
     void* used_stkbottom;
     int used_stksz;  // = used_stkbottom - stack.sptr(stktop)
 };

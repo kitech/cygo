@@ -11,6 +11,7 @@
 
 #if defined(LIBGO_SYS_Linux)
 #include <sys/epoll.h>
+#include <sys/inotify.h>
 #endif
 
 typedef int (*pipe_t)(int pipefd[2]);
@@ -19,6 +20,10 @@ extern pipe_t pipe_f;
 #if defined(LIBGO_SYS_Linux)
 typedef int (*pipe2_t)(int pipefd[2], int flags);
 extern pipe2_t pipe2_f;
+typedef int(*inotify_init_t)();
+extern inotify_init_t inotify_init_f;
+typedef int(*inotify_init1_t)(int flags);
+extern inotify_init1_t inotify_init1_f;
 #endif
 
 typedef int (*socket_t)(int domain, int type, int protocol);

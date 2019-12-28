@@ -108,10 +108,12 @@ void netpoller_evwatcher_cb(evutil_socket_t fd, short events, void* arg) {
     int grid = d->grid;
     int mcid = d->mcid;
     struct event* evt = d->evt;
+    fiber *gr = dd;
 
     switch (d->evtyp) {
     case EV_TIMER:
         // evtimer_del(d->evt);
+        // linfo("evwoke ev=%d fd=%d(%d) ytype=%d=%s %p grid=%d, mcid=%d d=%p\n", events, fd, fd, ytype, yield_type_name(ytype), dd, gr->id, gr->mcid, d);
         break;
     case EV_IO:
         // event_del(d->evt);
@@ -121,7 +123,6 @@ void netpoller_evwatcher_cb(evutil_socket_t fd, short events, void* arg) {
         assert(1==2);
     }
 
-    fiber *gr = dd;
     // linfo("before release d=%p\n", d);
     if (d->evtyp == EV_TIMER && fd != -1) {
         linfo("evwoke ev=%d fd=%d(%d) ytype=%d=%s %p grid=%d, mcid=%d d=%p\n",
@@ -220,7 +221,7 @@ void netpoller_timer(long ns, int ytype, fiber* gr) {
         return;
     }
 
-    // linfo("timer add d=%p %ld\n", d, ns);
+    // linfo("timer add d=%p %ld ytype=%d=%s sec=%d, usec=%d\n", d, ns, ytype, yield_type_name(ytype), d->tv.tv_sec, d->tv.tv_usec);
 }
 
 static struct addrinfo* netpoller_dump_addrinfo(struct evutil_addrinfo* addr) {

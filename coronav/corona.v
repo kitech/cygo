@@ -1,5 +1,7 @@
 module coronav
 
+import time
+
 #flag -I@VMOD/cxrt/corona-c -I@VMOD/cxrt/src -I@VMOD/cxrt/cltc/include
 #flag -L@VMOD/cxrt/bysrc
 #flag -L@VMOD/cxrt/cltc/lib
@@ -8,6 +10,7 @@ module coronav
 
 #include "corona_util.h"
 #include "crnpub.h"
+#include "hookcb.h"
 #include "cxrtbase.h"
 
 // struct C.corona{}
@@ -21,9 +24,14 @@ mut:
 fn C.crn_init_and_wait_done() *C.corona
 fn C.crn_goid() int
 fn C.crn_post(f voidptr, arg voidptr)
+fn C.crn_lock_osthread()
 
+fn C.hookcb_oncreate()
 fn C.gettid() int
 // fn C.sleep(s int) int
+
+pub fn lock_osthread() { C.crn_lock_osthread() }
+pub fn add_custom_fd(fd int) { C.hookcb_oncreate(fd, 2, true, 0, 0, 0) }
 
 pub fn new() &Corona{
 	crn := &Corona{0,0}
@@ -49,6 +57,10 @@ pub fn sleep(s int) { C.sleep(s) }
 
 pub fn post(f fn(voidptr), arg voidptr) {
 	C.crn_post(f, arg)
+}
+
+pub fn forever() {
+	for { time.sleep(500) }
 }
 
 fn C.cxrt_init_env()

@@ -11,7 +11,7 @@
 #include <corona.h>
 #include <coronapriv.h>
 
-const int dftstksz = 64*1024;
+const int dftstksz = 128*1024;
 const int dftstkusz = dftstksz/8; // unit size by sizeof(void*)
 
 typedef struct yieldinfo {
@@ -549,6 +549,12 @@ void crn_fiber_setspec(void* spec, void* val) {
         crn_gc_free(oldv);
     }
 }
+void crn_lock_osthread() {
+    fiber* gr = crn_fiber_getcur();
+    if (gr == 0) { return; }
+    gr->lock_osthr = 1;
+}
+
 // int crn_num_fibers() { return atomic_getint(gnr__); }
 // procer internal API
 static
@@ -744,6 +750,10 @@ fiber* crn_sched_get_ready_one(machine*mc) {
     return nilptr;
     // fiber* rungr = (fiber*)crnmap_findone(mc->grs, crn_fiber_runnable_filter);
     // return rungr;
+}
+static // TODO
+fiber* crn_sched_steal_ready_one(machine*mc) {
+    assert(1==2);
 }
 static
 void crn_sched_run_one(machine* mc, fiber* rungr) {
@@ -1091,6 +1101,7 @@ static void crn_gc_start_proc() {
         }
     }
 
+    int first_log_wait_too_long = 0;
     time_t btime = time(0);
     for(int i = 0;; i++) {
         bool allpark = crn_machine_all_parking(nochkid);
@@ -1109,8 +1120,16 @@ static void crn_gc_start_proc() {
             /* } */
             if (nowt-btime >= 3) {
                 // maybe in calling GC_malloc, which has mutex lock
-                linfo2("wait too long for all parking %d %d %d\n", nochkid, nowt-btime, i);
-                assert(1==2);
+                if (first_log_wait_too_long == 0) {
+                    first_log_wait_too_long = 1;
+                    linfo2("wait too long for all parking %d %d %d\n", nochkid, nowt-btime, i);
+                }
+                // assert(1==2);
+                // break;
+            }
+            if (nowt-btime >= 5) {
+                // it's danger, but still break to continue
+                linfo2("wait too long for all parking %d %d %d - danger\n", nochkid, nowt-btime, i);
                 break;
             }
             extern int (*usleep_f)(useconds_t usec);
@@ -1334,7 +1353,7 @@ void crn_init_intern() {
     crn_pre_gclock_fn = crn_pre_gclock_proc;
     crn_post_gclock_fn = crn_post_gclock_proc;
 
-    crn_gc_set_nprocs(1);
+    crn_gc_set_nprocs(1); // GC_NPROCS=1
     // GC_set_find_leak(1);
     GC_set_finalize_on_demand(0);
     GC_set_free_space_divisor(50); // default 3

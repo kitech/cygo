@@ -14,6 +14,7 @@
 #include <poll.h>
 #if defined(LIBGO_SYS_Linux)
 # include <sys/epoll.h>
+# include <sys/inotify.h>
 #elif defined(LIBGO_SYS_FreeBSD)
 # include <sys/event.h>
 # include <sys/time.h>
@@ -26,6 +27,8 @@
 #endif
 
 pipe_t pipe_f = NULL;
+inotify_init_t inotify_init_f = NULL;
+inotify_init1_t inotify_init1_f = NULL;
 socket_t socket_f = NULL;
 socketpair_t socketpair_f = NULL;
 connect_t connect_f = NULL;
@@ -102,6 +105,24 @@ int pipe2(int pipefd[2], int flags)
     if (rv == 0) {
         hookcb_oncreate(pipefd[0], FDISPIPE, !!(flags&O_NONBLOCK), 0,0,0);
         hookcb_oncreate(pipefd[1], FDISPIPE, !!(flags&O_NONBLOCK), 0,0,0);
+    }
+    return rv;
+}
+int inotify_init() {
+    if (!inotify_init_f) initHook();
+    // linfo("%d\n", 0);
+    int rv = inotify_init_f();
+    if (rv > 0) {
+        hookcb_oncreate(rv, FDISPIPE, 0, 0,0,0);
+    }
+    return rv;
+}
+int inotify_init1(int flags) {
+    if (!inotify_init1_f) initHook();
+    int rv = inotify_init1_f(flags);
+    // linfo("%d fd=%d %d %d\n", flags, rv, IN_NONBLOCK, IN_CLOEXEC);
+    if (rv > 0) {
+        hookcb_oncreate(rv, FDISPIPE, !!(flags&IN_NONBLOCK), 0,0,0);
     }
     return rv;
 }
@@ -202,6 +223,7 @@ ssize_t read(int fd, void *buf, size_t count)
     if (!crn_in_procer()) return read_f(fd, buf, count);
 
     // linfo("%d fdnb=%d bufsz=%d\n", fd, fd_is_nonblocking(fd), count);
+    assert(fd_is_nonblocking(fd) == 1);
     while (1){
         ssize_t rv = read_f(fd, buf, count);
         int eno = rv < 0 ? errno : 0;
@@ -662,13 +684,19 @@ int select(int nfds, fd_set *readfds, fd_set *writefds,
 
 unsigned int sleep(unsigned int seconds)
 {
-    if (!crn_in_procer()) return sleep_f(seconds);
     if (!sleep_f) initHook();
+    if (!crn_in_procer()) return sleep_f(seconds);
     // linfo("%d\n", seconds);
 
-    {
-        int rv = crn_procer_yield(seconds, YIELD_TYPE_SLEEP);
-        return 0;
+    unsigned int leftsec = seconds;
+    time_t btime = time(0);
+    while(1){ // maybe resume by some previours timer???
+        int rv = crn_procer_yield(leftsec, YIELD_TYPE_SLEEP);
+        time_t etime = time(0);
+        int dtime = etime-btime;
+        if (dtime >= seconds) { return 0; }
+        leftsec = seconds - dtime;
+        // linfo("leftsec=%d dtime=%d etime=%d btime=%d\n", leftsec, etime-btime, etime, btime);
     }
 }
 
@@ -1042,9 +1070,12 @@ static int doInitHook()
     if (connect_f) return 0;
     connect_f = (connect_t)dlsym(RTLD_NEXT, "connect");
     // linfo("%s:%d, doInitHook %p\n", __FILE__, __LINE__, connect_f);
+    assert(connect_f != 0);
 
     if (connect_f) {
         pipe_f = (pipe_t)dlsym(RTLD_NEXT, "pipe");
+        inotify_init_f = (inotify_init_t)dlsym(RTLD_NEXT, "inotify_init");
+        inotify_init1_f = (inotify_init1_t)dlsym(RTLD_NEXT, "inotify_init1");
         socket_f = (socket_t)dlsym(RTLD_NEXT, "socket");
         socketpair_f = (socketpair_t)dlsym(RTLD_NEXT, "socketpair");
         connect_f = (connect_t)dlsym(RTLD_NEXT, "connect");

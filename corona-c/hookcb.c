@@ -146,7 +146,7 @@ hookcb* hookcb_get() {
 
 
 void hookcb_oncreate(int fd, int fdty, bool isNonBlocking, int domain, int sockty, int protocol) {
-    if (!crn_in_procer()) return;
+    // if (!crn_in_procer()) return; // create 只记录，所以不需要检测是否在fiber内
     if (!gcinited) return;
     hookcb* hkcb = hookcb_get();
     if (hkcb == 0) {
