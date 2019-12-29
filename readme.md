@@ -21,3 +21,8 @@ That's will generate minimal binary. The farther plan is compile any Go package 
 ### Supported original Go packages
 * unsafe
 * errors
+
+### 资料
+* [ ] Let's Build A Simple Interpreter  https://github.com/rspivak/lsbasi
+* [ ] dwarf https://github.com/gimli-rs/gimli
+
