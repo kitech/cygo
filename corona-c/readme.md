@@ -59,6 +59,7 @@ Thanks all the contributors.
 * [ ] gopackany:goroutine\_post, seems many times just after this: Assertion failure: extra/../misc.c:1986
 * [ ] ==17317==  Access not within mapped region at address 0x0
     ==17317==    at 0x168C14: kind\_j8p3h8iojolY0RbF1nkaZgxmltree (stdlib\_xmltree.nim.c:310)
+* [x] current curl upload data 100%, but wait long time, then throw error: Error in the HTTP2 framing layer
 * [ ] libcurl slow response(26s). so wtf, 上网高峰出现，否则表现挺好的？？？并不，隔时间长了执行则消息，间隔时间短执行则出现。
 * [ ] hang forever on ppoll ()
 * [ ] sometimes GC will stop work

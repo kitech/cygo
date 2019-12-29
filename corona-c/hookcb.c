@@ -21,7 +21,8 @@ typedef struct fdcontext {
     int sockty; // tcp/udp...
     int protocol; //
     time_t tm;
-    bool inpoll; // in select/poll
+    bool inpoll_read; // in select/poll
+    bool inpoll_write; // in select/poll
 } fdcontext;
 
 typedef struct hookcb {
@@ -218,7 +219,7 @@ void hookcb_ondup(int from, int to) {
 }
 
 //
-void hookcb_setin_poll(int fd, bool set) {
+void hookcb_setin_poll(int fd, bool set, bool isread) {
     hookcb* hkcb = hookcb_get();
     if (hkcb == 0) return ;
 
@@ -227,9 +228,13 @@ void hookcb_setin_poll(int fd, bool set) {
     assert(rv == CC_OK);
     assert(fdctx != 0);
 
-    fdctx->inpoll = set;
+    if (isread) {
+        fdctx->inpoll_read = set;
+    }else{
+        fdctx->inpoll_write = set;
+    }
 }
-bool hookcb_getin_poll(int fd) {
+bool hookcb_getin_poll(int fd, bool isread) {
     hookcb* hkcb = hookcb_get();
     if (hkcb == 0) return ;
 
@@ -238,7 +243,11 @@ bool hookcb_getin_poll(int fd) {
     assert(rv == CC_OK);
     assert(fdctx != 0);
 
-    return fdctx->inpoll;
+    if (isread) {
+        return fdctx->inpoll_read;
+    }else{
+        return fdctx->inpoll_write;
+    }
 }
 
 fdcontext* hookcb_get_fdcontext(int fd) {

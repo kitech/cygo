@@ -23,8 +23,8 @@ hookcb* hookcb_get();
 void hookcb_oncreate(int fd, int fdty, bool isNonBlocking, int domain, int sockty, int protocol) ;
 void hookcb_onclose(int fd) ;
 void hookcb_ondup(int from, int to) ;
-void hookcb_setin_poll(int fd, bool set);
-bool hookcb_getin_poll(int fd);
+void hookcb_setin_poll(int fd, bool set, bool isread);
+bool hookcb_getin_poll(int fd, bool isread);
 fdcontext* hookcb_get_fdcontext(int fd);
 
 #endif

@@ -234,10 +234,10 @@ ssize_t read(int fd, void *buf, size_t count)
             linfo("fd=%d err=%d eno=%d err=%s\n", fd, rv, errno, strerror(errno));
             return rv;
         }
-        bool inpoll = hookcb_getin_poll(fd);
+        bool inpoll = hookcb_getin_poll(fd, true);
         // linfo("read yeild %d n %d nb %d inpoll %d\n", fd, count, fd_is_nonblocking(fd), inpoll);
         if (inpoll) { // dont yeild inpoll fd read
-            hookcb_setin_poll(fd, false);
+            // hookcb_setin_poll(fd, false, true); // cannot clear flag, or unexpected yeild/suspend
             return rv;
         }
         crn_procer_yield(fd, YIELD_TYPE_READ);
@@ -388,7 +388,7 @@ ssize_t write(int fd, const void *buf, size_t count)
             return rv;
         }
 
-        bool inpoll = hookcb_getin_poll(fd);
+        bool inpoll = hookcb_getin_poll(fd, false);
         linfo("write yeild %d n %d nb %d inpoll %d\n", fd, count, fd_is_nonblocking(fd), inpoll);
         crn_procer_yield(fd, YIELD_TYPE_WRITE);
     }
@@ -542,6 +542,7 @@ int __poll(struct pollfd fds[], nfds_t nfds, int timeout)
             tytypes[j] = YIELD_TYPE_WRITE;
             j++;
         }
+        // linfo("poll fd %d read %d write %d\n", fds[i].fd, fds[i].events & POLLIN, fds[i].events & POLLOUT);
     }
     int ynfds = nevts;
     if (timeout > 0) {
@@ -552,12 +553,28 @@ int __poll(struct pollfd fds[], nfds_t nfds, int timeout)
     }
 
     for (int i = 0; ; i++) {
-        for (int i = 0; i < nfds; i ++) { hookcb_setin_poll(fds[i].fd, true); }
+        for (int i = 0; i < nfds; i ++) {
+            if (fds[i].events&POLLIN) {
+                hookcb_setin_poll(fds[i].fd, false, true);
+            }
+            if (fds[i].events&POLLOUT) {
+                hookcb_setin_poll(fds[i].fd, false, false);
+            }
+        }
         int rv = poll_f(fds, nfds, 0);
         int eno = rv < 0 ? errno : 0;
         int qval = getiocinq(fds[0].fd);
         // linfo("i=%d %d fd0=%d timeo=%d rv=%d qval=%d\n", i, nfds, fds[0].fd, timeout, rv, qval);
         if (rv > 0) {
+            // when clear
+            for (int i = 0; i < nfds; i ++) {
+                if (fds[i].events&POLLIN) {
+                    hookcb_setin_poll(fds[i].fd, true, true);
+                }
+                if (fds[i].events&POLLOUT) {
+                    hookcb_setin_poll(fds[i].fd, true, false);
+                }
+            }
             return rv;
         }
         if (timeout > 0 && i > 0) {

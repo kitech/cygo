@@ -306,7 +306,7 @@ void crn_fiber_resume_same_thread(fiber* gr) {
     machine* mc = crn_machine_get(gr->mcid);
     crn_machine_grtorunq(mc, gr->id);
 }
-void crn_fiber_resume_xthread(fiber* gr) {
+void crn_fiber_resume_xthread(fiber* gr, int ytype) {
     if (gr->id <= 0) {
         linfo("some error occurs??? %d\n", gr->id);
         return;
@@ -322,18 +322,18 @@ void crn_fiber_resume_xthread(fiber* gr) {
     while(1) {
     grstate state = crn_fiber_getstate(gr);
     if (state == runnable) {
-        lverb("resume but runnable %d\n", gr->id);
+        lverb("resume but runnable %d %s\n", gr->id, yield_type_name(ytype));
         machine* mc = crn_machine_get(gr->mcid);
         crn_machine_grtorunq(mc, gr->id);
         crn_machine_signal(mc);
         return;
     }
     if (state == executing) {
-        ldebug("resume but executing grid=%d, mcid=%d\n", gr->id, gr->mcid);
+        ldebug("resume but executing grid=%d, mcid=%d ytype=%s\n", gr->id, gr->mcid, yield_type_name(ytype));
         return;
     }
     if (state == finished) {
-        linfo("resume but finished grid=%d, mcid=%d\n", gr->id, gr->mcid);
+        linfo("resume but finished grid=%d, mcid=%d ytype=%s\n", gr->id, gr->mcid, yield_type_name(ytype));
         return;
     }
 
@@ -980,7 +980,7 @@ void crn_procer_resume_one(void* gr_, int ytype, int grid, int mcid) {
     }
 
     ytype = (ytype == 0 ? gr->pkreason : ytype);
-    // linfo("netpoller notify, ytype=%d %p, id=%d\n", ytype, gr, gr->id);
+    // linfo("netpoller notify, ytype=%d(%s) %p, id=%d\n", ytype, yield_type_name(ytype), gr, gr->id);
 
     if (curgr != nilptr && gr->mcid == curgr->mcid) {
         crn_fiber_resume_same_thread(gr);
@@ -988,7 +988,7 @@ void crn_procer_resume_one(void* gr_, int ytype, int grid, int mcid) {
         // 另外考虑是否只针对chan send/recv。
         crn_procer_yield(1001, YIELD_TYPE_NANOSLEEP);
     }else {
-        crn_fiber_resume_xthread(gr);
+        crn_fiber_resume_xthread(gr, ytype);
     }
 }
 void crn_sched() {
