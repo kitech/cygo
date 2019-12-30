@@ -24,10 +24,12 @@ void (*crn_pre_gclock_fn)(const char* funcname) = 0;
 void (*crn_post_gclock_fn)(const char* funcname) = 0;
 
 static void crn_pre_gclock(const char* funcname) {
+    // if (crn_pre_gclock_fn == 0) { return ; } // temporary test
     assert(crn_pre_gclock_fn != 0);
     crn_pre_gclock_fn(funcname);
 }
 static void crn_post_gclock(const char* funcname) {
+    // if (crn_post_gclock_fn == 0) { return ; }
     assert(crn_post_gclock_fn != 0);
     crn_post_gclock_fn(funcname);
 }

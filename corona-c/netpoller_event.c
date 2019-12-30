@@ -244,13 +244,13 @@ static struct addrinfo* netpoller_dump_addrinfo(struct evutil_addrinfo* addr) {
             break;
         }
 
-        struct addrinfo* tai = crn_raw_malloc(sizeof(struct addrinfo));
+        struct addrinfo* tai = crn_gc_malloc(sizeof(struct addrinfo));
         tai->ai_flags = ai->ai_flags;
         tai->ai_family = ai->ai_family;
         tai->ai_socktype = ai->ai_socktype;
         tai->ai_protocol = ai->ai_protocol;
         tai->ai_addrlen = ai->ai_addrlen;
-        tai->ai_addr = crn_raw_malloc(sizeof(struct sockaddr));
+        tai->ai_addr = crn_gc_malloc(sizeof(struct sockaddr));
         memcpy(tai->ai_addr, ai->ai_addr, sizeof(struct sockaddr));
         tai->ai_canonname = ai->ai_canonname == nilptr ? nilptr : strdup(ai->ai_canonname);
         tai->ai_next = resout;

@@ -3,7 +3,8 @@
 set(mydir ${CMAKE_CURRENT_LIST_DIR})
 set(party3dir ${CMAKE_CURRENT_LIST_DIR}/3rdparty)
 
-include_directories(${mydir}/src ${mydir}/include ${mydir}/bdwgc/include)
+#  ${mydir}/bdwgc/include
+include_directories(${mydir}/src ${mydir}/include)
 add_library(cxrt STATIC  ${mydir}/src/cxrtbase.c
   ${mydir}/src/cxmemory.c ${mydir}/src/cxstring.c
   ${mydir}/src/cxhashtable.c ${mydir}/src/cxarray.c
@@ -69,9 +70,9 @@ set(CMAKE_CXX_FLAGS "-nostdlib -fno-rtti -fno-rtti -fno-exceptions")
 set_target_properties(crn PROPERTIES COMPILE_FLAGS ${corona_c_flags})
 #set_target_properties(corona PROPERTIES COMPILE_FLAGS ${corona_c_flags})
 #target_link_libraries(corona -L./bdwgc/.libs -L./cltc/lib gc collectc event event_pthreads pthread dl)
-set(gclib "${mydir}/bdwgc/.libs/libgc.a")
-#set(gclib "-lgc")
-set(cxrt_ldflags "-levent -levent_pthreads -L${mydir}/bdwgc/.libs ${gclib} -lpthread -ldl -lc")
+#set(gclib "${mydir}/bdwgc/.libs/libgc.a") # -L${mydir}/bdwgc/.libs
+set(gclib "-lgc")
+set(cxrt_ldflags "-levent -levent_pthreads ${gclib} -lpthread -ldl -lc")
 # note: all libraries which maybe create threads, must put before -lgc
 
 

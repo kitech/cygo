@@ -2,11 +2,16 @@ module coronav
 
 import time
 
+// need use crn_gc_malloc/crn_gc_realloc in v build, not just GC_malloc/GC_realloc
+// this can help avoid gc hang problem
+// and cxrt_init_env need run more eary
+
 #flag -I@VMOD/cxrt/corona-c -I@VMOD/cxrt/src -I@VMOD/cxrt/3rdparty/cltc/src
 #flag -L@VMOD/cxrt/bysrc
 #flag -L@VMOD/cxrt/cltc/lib
 #flag -lcxrt -lcrn -levent -levent_pthreads
-#flag -L@VMOD/cxrt/bdwgc/.libs -lgc -lpthread
+#flag -lgc -lpthread
+// #flag -L@VMOD/cxrt/bdwgc/.libs -lgc -lpthread
 
 #include "corona_util.h"
 #include "crnpub.h"

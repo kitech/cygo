@@ -4,8 +4,10 @@
 # win上能用的是啥
 # GC_THREADS not GC_PTHREADS
 # -finstrument-functions
-CFLAGS=-g -O0 -std=c11 -D_GNU_SOURCE -DNRDEBUG -DCORO_STACKALLOC -DCORO_UCONTEXT -DHAVE_UCONTEXT_H -DHAVE_SETJMP_H -DHAVE_SIGALTSTACK -I. -I../3rdparty/cltc/src -I../bdwgc/include -I../3rdparty/picoev -DGC_THREADS -fstack-usage # -finstrument-functions
-LDFLAGS=-levent -levent_pthreads -L ../bdwgc/.libs -lgc -lpthread -ldl -Wl,--export-dynamic
+CFLAGS=-g -O0 -std=c11 -D_GNU_SOURCE -DNRDEBUG -DCORO_STACKALLOC -DCORO_UCONTEXT -DHAVE_UCONTEXT_H -DHAVE_SETJMP_H -DHAVE_SIGALTSTACK -I. -I../3rdparty/cltc/src -I../3rdparty/picoev -DGC_THREADS -fstack-usage # -finstrument-functions
+# -I../bdwgc/include
+# -L ../bdwgc/.libs
+LDFLAGS=-levent -levent_pthreads -lgc -lpthread -ldl -Wl,--export-dynamic
 
 dotos:
 	gcc ${CFLAGS} -o coro.o -c ./coro.c
@@ -44,8 +46,9 @@ clean:
 # step/next/continue/delete
 # list
 
-# https://github.com/ivmai/bdwgc/issues/154#issuecomment-293088265
-# ./configure --enable-static=no --enable-shared=yes --enable-cplusplus --enable-gc-debug --enable-gc-assertion --disable-parallel-mark
+# https://github.com/ivmai/bdwgc/issuees/154#issuecomment-293088265
+# https://github.com/ivmai/bdwgc/issues/152
+# ./configure --enable-static=no --enable-shared=yes --enable-cplusplus --enable-gc-debug --enable-gc-assertion --disable-parallel-mark --enable-munmap
 
 # real stack corrupt debug process blog
 # https://blogs.unity3d.com/2016/04/25/debugging-memory-corruption-who-the-hell-writes-2-into-my-stack-2/
