@@ -2,10 +2,10 @@ module coronav
 
 import time
 
-#flag -I@VMOD/cxrt/corona-c -I@VMOD/cxrt/src -I@VMOD/cxrt/cltc/include
+#flag -I@VMOD/cxrt/corona-c -I@VMOD/cxrt/src -I@VMOD/cxrt/3rdparty/cltc/src
 #flag -L@VMOD/cxrt/bysrc
 #flag -L@VMOD/cxrt/cltc/lib
-#flag -lcxrt -lcrn -l:libcollectc.a -levent -levent_pthreads
+#flag -lcxrt -lcrn -levent -levent_pthreads
 #flag -L@VMOD/cxrt/bdwgc/.libs -lgc -lpthread
 
 #include "corona_util.h"

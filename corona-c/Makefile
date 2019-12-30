@@ -4,8 +4,8 @@
 # win上能用的是啥
 # GC_THREADS not GC_PTHREADS
 # -finstrument-functions
-CFLAGS=-g -O0 -std=c11 -D_GNU_SOURCE -DNRDEBUG -DCORO_STACKALLOC -DCORO_UCONTEXT -DHAVE_UCONTEXT_H -DHAVE_SETJMP_H -DHAVE_SIGALTSTACK -I. -I../cltc/include -I../bdwgc/include -I../3rdparty/picoev -DGC_THREADS -fstack-usage # -finstrument-functions
-LDFLAGS=-L../cltc/lib -lcollectc -levent -levent_pthreads -L ../bdwgc/.libs -lgc -lpthread -ldl -Wl,--export-dynamic
+CFLAGS=-g -O0 -std=c11 -D_GNU_SOURCE -DNRDEBUG -DCORO_STACKALLOC -DCORO_UCONTEXT -DHAVE_UCONTEXT_H -DHAVE_SETJMP_H -DHAVE_SIGALTSTACK -I. -I../3rdparty/cltc/src -I../bdwgc/include -I../3rdparty/picoev -DGC_THREADS -fstack-usage # -finstrument-functions
+LDFLAGS=-levent -levent_pthreads -L ../bdwgc/.libs -lgc -lpthread -ldl -Wl,--export-dynamic
 
 dotos:
 	gcc ${CFLAGS} -o coro.o -c ./coro.c

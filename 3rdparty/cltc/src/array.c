@@ -677,7 +677,7 @@ enum cc_stat array_filter(Array *ar, bool (*pred) (const void*), Array **out)
  *
  * @param[in] ar array that is being reversed
  */
-void array_reverse(Array *ar)
+void array_reverse_(Array *ar)
 {
     size_t i;
     size_t j;

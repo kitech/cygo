@@ -12,7 +12,8 @@ add_library(cxrt STATIC  ${mydir}/src/cxrtbase.c
 #  ${mydir}/src/cppminrt.cpp
   )
 
-include_directories(${mydir}/corona-c ${mydir}/cltc/include ${party3dir}/picoev)
+set(cltcdir ${party3dir}/cltc/src) # need ln cltc/src/include cltc/src/collectc
+include_directories(${mydir}/corona-c ${party3dir}/picoev ${cltcdir}/include ${cltcdir})
 set(corona_c_srcs
   ${mydir}/corona-c/coro.c
 	${mydir}/corona-c/corowp.c
@@ -43,9 +44,15 @@ set(corona_c_srcs
 #    ${party3dir}/plthook/plthook_elf.c
 #    )
 
- add_library(crn STATIC ${corona_c_srcs}
-   # ${plthook_c_srcs}
-   )
+set(cltc_c_srcs
+  ${cltcdir}/array.c ${cltcdir}/hashtable.c
+  ${cltcdir}/queue.c ${cltcdir}/deque.c ${cltcdir}/common.c
+)
+
+add_library(crn STATIC ${corona_c_srcs}
+  ${cltc_c_srcs}
+  # ${plthook_c_srcs}
+  )
 
 #add_executable(corona ${corona_c_srcs} corona-c/main.c)
 set(CMAKE_C_FLAGS "-g -O0 -std=c11 -D_GNU_SOURCE ")
@@ -64,7 +71,7 @@ set_target_properties(crn PROPERTIES COMPILE_FLAGS ${corona_c_flags})
 #target_link_libraries(corona -L./bdwgc/.libs -L./cltc/lib gc collectc event event_pthreads pthread dl)
 set(gclib "${mydir}/bdwgc/.libs/libgc.a")
 #set(gclib "-lgc")
-set(cxrt_ldflags "-lcollectc -levent -levent_pthreads -L${mydir}/bdwgc/.libs -L${mydir}/cltc/lib ${gclib} -lpthread -ldl -lc")
+set(cxrt_ldflags "-levent -levent_pthreads -L${mydir}/bdwgc/.libs ${gclib} -lpthread -ldl -lc")
 # note: all libraries which maybe create threads, must put before -lgc
 
 

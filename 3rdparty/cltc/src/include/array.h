@@ -111,7 +111,7 @@ enum cc_stat  array_subarray        (Array *ar, size_t from, size_t to, Array **
 enum cc_stat  array_copy_shallow    (Array *ar, Array **out);
 enum cc_stat  array_copy_deep       (Array *ar, void *(*cp) (void*), Array **out);
 
-void          array_reverse         (Array *ar);
+void          array_reverse_         (Array *ar);
 enum cc_stat  array_trim_capacity   (Array *ar);
 
 size_t        array_contains        (Array *ar, void *element);
