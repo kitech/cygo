@@ -9,9 +9,9 @@ import time
 #flag -I@VMOD/cxrt/corona-c -I@VMOD/cxrt/src -I@VMOD/cxrt/3rdparty/cltc/src
 #flag -L@VMOD/cxrt/bysrc
 #flag -L@VMOD/cxrt/cltc/lib
-#flag -lcxrt -lcrn -levent -levent_pthreads
+#flag -lcxrt -lcrn
+#flag -levent -levent_pthreads
 #flag -lgc -lpthread
-// #flag -L@VMOD/cxrt/bdwgc/.libs -lgc -lpthread
 
 #include "corona_util.h"
 #include "crnpub.h"

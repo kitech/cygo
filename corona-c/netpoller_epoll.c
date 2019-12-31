@@ -1,14 +1,10 @@
 
-/* #include <event2/event.h> */
-/* #include <event2/thread.h> */
-/* #include <event2/dns.h> */
 
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <netdb.h>
 #include <sys/timerfd.h>
-
-#include "picoev.h"
+#include <sys/epoll.h>
 
 #include "coronapriv.h"
 
@@ -16,18 +12,18 @@
 // 所以在这是可以使用libev/libuv/picoev。
 // 如果以后hook，则这的实现无效了。看似也不需要hook epoll
 
-#define EV_IO PICOEV_READ|PICOEV_WRITE
-#define EV_TIMER EV_IO*2
-#define EV_DNS_RESOLV 0
+#define CXEV_IO (0x1<<5)
+#define CXEV_TIMER (0x1<<6)
+#define CXEV_DNS_RESOLV (0x1<<7)
 
 // TODO thread mutex
 
+typedef struct evdata2 evdata2;
 typedef struct netpoller {
-    picoev_loop *loop;
-    int tmerfd;
-    HashTable* tmers; // fd => evdata
-    // struct evdns_base* dnsbase;
-    HashTable* watchers; // ev_watcher* => fiber*
+    int epfd;
+    evdata2 *evfds[999];
+
+    HashTable* watchers; // ev_watcher* => evdata2
     pmutex_t evmu;
 } netpoller;
 
@@ -37,23 +33,16 @@ static void netpoller_logcb(int severity, const char *msg) {
     linfo("lvl=%d msg=%s\n", severity, msg);
 }
 void netpoller_use_threads() {
-    // evthread_use_pthreads();
-    // or evthread_use_windows_threads()
-    // event_set_mem_functions(crn_gc_malloc, crn_gc_realloc, crn_gc_free);
-    // event_set_log_callback(netpoller_logcb);
+
 }
 
 netpoller* netpoller_new() {
     assert(gnpl__ == 0);
-    picoev_init(1234);
     netpoller* np = (netpoller*)crn_gc_malloc(sizeof(netpoller));
-    np->loop = picoev_create_loop(3456);
-    // np->loop = event_base_new();
-    assert(np->loop != 0);
-    np->tmerfd = timerfd_create(CLOCK_REALTIME, TFD_NONBLOCK | TFD_CLOEXEC);
+    np->epfd = epoll_create1(EPOLL_CLOEXEC);
+    assert(np->epfd > 0);
     // np->dnsbase = evdns_base_new(np->loop, 1);
 
-    hashtable_new(&np->tmers);
     // hashtable_new(&np->watchers);
 
     gnpl__ = np;
@@ -65,7 +54,37 @@ void netpoller_loop() {
     assert(np != 0);
 
     for (;;) {
-        int rv = picoev_loop_once(np->loop, 100);
+        struct epoll_event revt = {0};
+        int rv = epoll_wait(np->epfd, &revt, 1, 10000);
+        int eno = errno;
+        if (rv < 0) {
+            if (eno == EINTR) {
+                continue;
+            }
+            linfo("wtf %d %s\n", rv, strerror(errno));
+        }
+        assert(rv >= 0);
+        if (rv == 0) { continue; }
+        assert(rv == 1);
+        int evfd = revt.data.fd;
+        int evts = revt.events;
+        // linfo("gotevt %d %d\n", evfd, evts);
+        rv = epoll_ctl(np->epfd, EPOLL_CTL_DEL, evfd, nilptr);
+        // assert(rv == 0);
+        pthread_mutex_lock(&np->evmu);
+        evdata2* d2 = np->evfds[evfd];
+        if (d2 != 0) {
+            np->evfds[evfd] = nilptr; // clear
+            // linfo("clear fd %d\n", evfd);
+        }
+        pthread_mutex_unlock(&np->evmu);
+        if (d2 == 0) {
+            linfo("wtf, fd not found %d\n", evfd);
+        }else{
+            extern void netpoller_picoev_globcb(int epfd, int fd, int events, void* cbarg);
+            netpoller_picoev_globcb(np->epfd, evfd, evts, d2);
+        }
+
         if (0) {
             linfo("ohno, rv=%d\n", rv);
         }
@@ -103,7 +122,7 @@ static void atstgc_finalizer_fn(evdata* obj, void* cbdata) {
 evdata* evdata_new(int evtyp, void* data) {
     assert(evtyp >= 0);
 
-    netpoller* np = gnpl__;
+    // netpoller* np = gnpl__;
     evdata* d = crn_gc_malloc(sizeof(evdata));
     d->evtyp = evtyp;
     d->data = data;
@@ -114,18 +133,20 @@ void evdata_free(evdata* d) {
     crn_gc_free(d);
 }
 evdata2* evdata2_new(int evtyp) {
-    netpoller* np = gnpl__;
-    evdata2* d = crn_gc_malloc(sizeof(evdata2));
-    d->evtyp = evtyp;
-    // GC_register_finalizer(d, atstgc_finalizer_fn, nilptr, nilptr, nilptr);
-    return d;
+    // netpoller* np = gnpl__;
+    assert(evtyp >= CXEV_IO && evtyp <= CXEV_DNS_RESOLV);
+    evdata2* d2 = crn_gc_malloc(sizeof(evdata2));
+    d2->evtyp = evtyp;
+    d2->dr = d2->dw = d2->dt = 0;
+    return d2;
 }
 
 extern void crn_procer_resume_one(void* cbdata, int ytype, int grid, int mcid);
 
 // common version callback, support ev_io, ev_timer
-static
-void netpoller_picoev_globcb(picoev_loop* loop, int fd, int events, void* cbarg) {
+void netpoller_picoev_globcb(int epfd, int fd, int events, void* cbarg) {
+    netpoller* np = gnpl__;
+
     evdata2* d2 = (evdata2*)cbarg;
     assert(d2 != 0);
     evdata* d = 0;
@@ -133,42 +154,49 @@ void netpoller_picoev_globcb(picoev_loop* loop, int fd, int events, void* cbarg)
     int ytype = 0; // = d->ytype;
     int grid = 0; //= d->grid;
     int mcid = 0; // d->mcid;
-    // struct event* evt = d->evt;
+    // linfo("fd=%d events=%d cbarg=%p %p\n", fd, events, cbarg, 0);
 
     int newev = 0;
     int rv = 0;
     switch (d2->evtyp) {
-    case EV_TIMER:
-        rv = picoev_del(loop, fd);
+    case CXEV_TIMER:
+        linfo("fd=%d events=%d cbarg=%p %p\n", fd, events, cbarg, 0);
+        pthread_mutex_lock(&np->evmu);
+        pthread_mutex_unlock(&np->evmu);
         close(fd);
         d = d2->dt;
         d2->dt = 0;
         break;
-    case EV_IO:
-        if ((events & PICOEV_READ) && (events & PICOEV_WRITE)) {
-            assert(1==2);
-        }
-        if (events & PICOEV_READ) {
+    case CXEV_IO:
+        if (events & EPOLLIN) {
             d = d2->dr;
-            d2->dr = 0;
-        }else if (events & PICOEV_WRITE) {
+        }
+        if (events & EPOLLOUT) {
             d = d2->dw;
-            d2->dw = 0;
-        }else{
+        }
+        if ((events & EPOLLIN) == 0 && (events & EPOLLOUT) == 0) {
             assert(1==2);
         }
-        if (d2->dr != 0) { newev |= PICOEV_READ; }
-        if (d2->dw != 0) { newev |= PICOEV_READ; }
+        if (d2->dr != nilptr) { newev |= EPOLLIN; }
+        if (d2->dw != nilptr) { newev |= EPOLLOUT; }
         if (newev == 0) {
-            rv = picoev_del(loop, fd);
         }else{
-            rv = picoev_set_events(loop, fd, newev);
+            pthread_mutex_lock(&np->evmu);
+            np->evfds[fd] = d2;
+            pthread_mutex_unlock(&np->evmu);
+            struct epoll_event evt = {0};
+            evt.events = newev | EPOLLET;
+            evt.data.fd = fd;
+            rv = epoll_ctl(np->epfd, EPOLL_CTL_ADD, fd, &evt);
         }
         break;
     default:
-        linfo("wtf fd=%d %d %d\n", fd, d->evtyp, d->ytype);
+        linfo("wtf fd=%d %d %d %d\n", fd, CXEV_IO, CXEV_TIMER, CXEV_DNS_RESOLV);
+        // linfo("wtf fd=%d r=%d w=%d\n", fd, events&PICOEV_READ, events&PICOEV_WRITE);
+        linfo("wtf fd=%d %p %d %p %p %p\n", fd, d2, d2->evtyp, d2->dr, d2->dw, d2->dt);
         assert(1==2);
     }
+    assert(d != nilptr);
     dd = d->data;
     ytype = d->ytype;
     grid = d->grid;
@@ -176,7 +204,7 @@ void netpoller_picoev_globcb(picoev_loop* loop, int fd, int events, void* cbarg)
 
     fiber *gr = dd;
     // linfo("before release d=%p\n", d);
-    if (d->evtyp == EV_TIMER && fd != -1 && 0) { // use for check data mismatch case
+    if (d->evtyp == CXEV_TIMER && fd != -1 && 0) { // use for check data mismatch case
         linfo("evwoke ev=%d fd=%d(%d) ytype=%d=%s %p grid=%d, mcid=%d d=%p\n",
               events, fd, fd, ytype, yield_type_name(ytype), dd, gr->id, gr->mcid, d);
         // assert(fd == -1);
@@ -193,27 +221,41 @@ extern void crn_post_gclock_proc(const char* funcname);
 static
 void netpoller_readfd(int fd, int ytype, fiber* gr) {
     netpoller* np = gnpl__;
-    evdata* d = evdata_new(EV_IO, gr);
+    evdata* d = evdata_new(CXEV_IO, gr);
     d->grid = gr->id;
     d->mcid = gr->mcid;
     d->ytype = ytype;
     d->fd = fd;
 
-    // struct event* evt = event_new(np->loop, fd, EV_READ|EV_CLOSED, netpoller_evwatcher_cb, d);
-    // d->evt = evt;
     crn_pre_gclock_proc(__func__);
     int rv = 0;
-    if (picoev_is_active(np->loop, fd)) {
-        int ev = picoev_get_events(np->loop, fd);
-        evdata2* d2 = picoev.fds[fd].cb_arg;
+    pthread_mutex_lock(&np->evmu);
+    int inuse = np->evfds[fd] != 0;
+    // assert (inuse == 0);
+    if (inuse) {
+        evdata2* d2 = np->evfds[fd];
         d2->dr = d;
-        ev = ev | PICOEV_READ;
-        rv = picoev_set_events(np->loop, fd, ev);
+        int newev = EPOLLET;
+        if (d2->dw != nilptr) { newev |= EPOLLOUT; }
+        newev |= EPOLLIN;
+        rv = epoll_ctl(np->epfd, EPOLL_CTL_DEL, fd, 0);
+        // assert(rv == 0);
+        struct epoll_event evt = {0};
+        evt.events = newev;
+        evt.data.fd = fd;
+        rv = epoll_ctl(np->epfd, EPOLL_CTL_ADD, fd, &evt);
+        linfo("add r reset %d\n", fd);
     }else{
-        evdata2* d2 = evdata2_new(EV_IO);
+        evdata2* d2 = evdata2_new(d->evtyp);
         d2->dr = d;
-        rv = picoev_add(np->loop, fd, PICOEV_READ,0, netpoller_picoev_globcb, d2);
+        struct epoll_event evt = {0};
+        evt.events = EPOLLIN | EPOLLET;
+        evt.data.fd = fd;
+        np->evfds[fd] = d2;
+        rv = epoll_ctl(np->epfd, EPOLL_CTL_ADD, fd, &evt);
+        linfo("add r new %d\n", fd);
     }
+    pthread_mutex_unlock(&np->evmu);
     crn_post_gclock_proc(__func__);
     if (rv != 0) {
         lwarn("add error %d %d %d\n", rv, fd, gr->id);
@@ -234,25 +276,40 @@ void netpoller_readfd(int fd, int ytype, fiber* gr) {
 static
 void netpoller_writefd(int fd, int ytype, fiber* gr) {
     netpoller* np = gnpl__;
-    evdata* d = evdata_new(EV_IO, gr);
+    evdata* d = evdata_new(CXEV_IO, gr);
     d->grid = gr->id;
     d->mcid = gr->mcid;
     d->ytype = ytype;
     d->fd = fd;
 
-    crn_pre_gclock_proc(__func__);
     int rv = 0;
-    if (picoev_is_active(np->loop, fd)) {
-        int ev = picoev_get_events(np->loop, fd);
-        evdata2* d2 = picoev.fds[fd].cb_arg;
-        d2->dr = d;
-        ev = ev | PICOEV_WRITE;
-        rv = picoev_set_events(np->loop, fd, ev);
-    }else{
-        evdata2* d2 = evdata2_new(EV_IO);
+    crn_pre_gclock_proc(__func__);
+    pthread_mutex_lock(&np->evmu);
+    int inuse = np->evfds[fd] != 0;
+    if (inuse) {
+        evdata2* d2 = np->evfds[fd];
         d2->dw = d;
-        rv = picoev_add(np->loop, fd, PICOEV_WRITE, 0, netpoller_picoev_globcb, d2);
+        int newev = EPOLLET;
+        if (d2->dr != nilptr) { newev |= EPOLLIN; }
+        newev |= EPOLLOUT;
+        rv = epoll_ctl(np->epfd, EPOLL_CTL_DEL, fd, 0);
+        // assert(rv == 0);
+        struct epoll_event evt = {0};
+        evt.events = newev;
+        evt.data.fd = fd;
+        rv = epoll_ctl(np->epfd, EPOLL_CTL_ADD, fd, &evt);
+        linfo("add w reset %d\n", fd);
+    }else{
+        evdata2* d2 = evdata2_new(d->evtyp);
+        d2->dw = d;
+        struct epoll_event evt = {0};
+        evt.events = EPOLLOUT | EPOLLET;
+        evt.data.fd = fd;
+        np->evfds[fd] = d2;
+        rv = epoll_ctl(np->epfd, EPOLL_CTL_ADD, fd, &evt);
+        linfo("add w new %d\n", fd);
     }
+    pthread_mutex_unlock(&np->evmu);
     crn_post_gclock_proc(__func__);
     if (rv != 0) {
         lwarn("add error %d %d %d\n", rv, fd, gr->id);
@@ -269,7 +326,7 @@ static
 void netpoller_timer(long ns, int ytype, fiber* gr) {
     netpoller* np = gnpl__;
 
-    evdata* d = evdata_new(EV_TIMER, gr);
+    evdata* d = evdata_new(CXEV_TIMER, gr);
     d->grid = gr->id;
     d->mcid = gr->mcid;
     d->ytype = ytype;
@@ -277,21 +334,38 @@ void netpoller_timer(long ns, int ytype, fiber* gr) {
     d->tv.tv_sec = ns/1000000000;
     d->tv.tv_usec = ns/1000 % 1000000;
 
-    int tmfd = timerfd_create(CLOCK_REALTIME, TFD_NONBLOCK | TFD_CLOEXEC);
+    int tmfd = timerfd_create(CLOCK_MONOTONIC, TFD_NONBLOCK | TFD_CLOEXEC);
     d->fd = tmfd;
+    assert(tmfd > 0);
+    assert(tmfd < 999);
 
     struct timespec ts;
+    ts.tv_sec = time(0) + d->tv.tv_sec;
     ts.tv_sec = d->tv.tv_sec;
     ts.tv_nsec = d->tv.tv_usec*1000;
-    struct itimerspec its;
+    struct itimerspec its = {0};
     its.it_interval = ts;
     its.it_value = ts;
     int rv0 = timerfd_settime(tmfd, 0, &its, 0);
 
-    evdata2* d2 = evdata2_new(EV_TIMER);
+    evdata2* d2 = evdata2_new(d->evtyp);
     d2->dt = d;
+
+    int rv = 0;
     crn_pre_gclock_proc(__func__);
-    int rv = picoev_add(np->loop, tmfd, PICOEV_READ, 0, netpoller_picoev_globcb, d2);
+    pthread_mutex_lock(&np->evmu);
+    int inuse = np->evfds[tmfd] != 0;
+    if (inuse) {
+        linfo("tmfd inuse %d sec=%d nsec=%d\n", tmfd, ts.tv_sec, ts.tv_nsec);
+        assert (inuse == 0);
+    }else{
+        struct epoll_event evt = {0};
+        evt.events = EPOLLIN | EPOLLET;
+        evt.data.fd = tmfd;
+        np->evfds[tmfd] = d2;
+        rv = epoll_ctl(np->epfd, EPOLL_CTL_ADD, tmfd, &evt);
+    }
+    pthread_mutex_unlock(&np->evmu);
     crn_post_gclock_proc(__func__);
     if (rv != 0) {
         lwarn("add error %d %ld %d\n", rv, ns, gr->id);
@@ -301,7 +375,7 @@ void netpoller_timer(long ns, int ytype, fiber* gr) {
         return;
     }
 
-    // linfo("timer add d=%p %ld\n", d, ns);
+    linfo("timer add %d d=%p %ld sec=%d nsec=%d\n", tmfd, d, ns, ts.tv_sec, ts.tv_nsec);
 }
 
 // what to do

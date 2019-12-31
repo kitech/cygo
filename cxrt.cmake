@@ -33,7 +33,7 @@ set(corona_c_srcs
 	${mydir}/corona-c/hselect.c
 #	${mydir}/corona-c/netpoller_ev.c
   ${mydir}/corona-c/netpoller_event.c
-  # ${mydir}/corona-c/netpoller_picoev.c
+  # ${mydir}/corona-c/netpoller_epoll.c
 	${mydir}/corona-c/coronagc.c
 	${mydir}/corona-c/corona.c
 	${mydir}/corona-c/functrace.c
@@ -72,6 +72,7 @@ set_target_properties(crn PROPERTIES COMPILE_FLAGS ${corona_c_flags})
 #target_link_libraries(corona -L./bdwgc/.libs -L./cltc/lib gc collectc event event_pthreads pthread dl)
 #set(gclib "${mydir}/bdwgc/.libs/libgc.a") # -L${mydir}/bdwgc/.libs
 set(gclib "-lgc")
+set(libevents_ldflags "-levent -levent_pthreads")
 set(cxrt_ldflags "-levent -levent_pthreads ${gclib} -lpthread -ldl -lc")
 # note: all libraries which maybe create threads, must put before -lgc
 

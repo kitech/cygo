@@ -24,7 +24,7 @@ dotos:
 	gcc ${CFLAGS} -o hselect.o -c hselect.c
 	#gcc ${CFLAGS} -o netpoller_ev.o -c netpoller_ev.c
 	gcc ${CFLAGS} -o netpoller_event.o -c netpoller_event.c
-	gcc ${CFLAGS} -o netpoller_event.o -c netpoller_picoev.c
+	gcc ${CFLAGS} -o netpoller_event.o -c netpoller_epoll.c
 	gcc ${CFLAGS} -o coronagc.o -c coronagc.c
 	gcc ${CFLAGS} -o corona.o -c corona.c
 	gcc ${CFLAGS} -o main.o -c main.c
