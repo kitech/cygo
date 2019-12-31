@@ -31,7 +31,13 @@ void cxrt_init_routine_env() {
     // assert(1==2);
 }
 
+static time_t cxrt_inited = 0;
 void cxrt_init_env() {
+    if (cxrt_inited > 0) {
+        printf("%s:%d %s already inited %d\n", __FILE__, __LINE__, __FUNCTION__, cxrt_inited);
+        return;
+    }
+    cxrt_inited = time(0);
     // cxrt_init_gc_env();
     crn_init_and_wait_done();
 }

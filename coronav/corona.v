@@ -64,7 +64,8 @@ pub fn post(f fn(voidptr), arg voidptr) {
 	C.crn_post(f, arg)
 }
 
-fn C.cxrt_init_env()
+// redefine in vlip/builtin/bdwgc.v
+// fn C.cxrt_init_env()
 
 pub fn init_env() {
 	//

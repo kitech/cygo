@@ -30,7 +30,9 @@ All exported functions is `crnpub.h`
 * [ ] dynamic increase/decrease stack size
 * [ ] copy stack, copy stack 解决了栈大小溢出的问题了没？
 * [x] detect stack size in use in yeild
+* [ ] stat info for fibers/schedulers
 * [ ] lock to os thread
+* [ ] drop thread local storage usage
 
 
 ### Difference with Go
