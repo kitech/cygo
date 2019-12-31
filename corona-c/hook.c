@@ -148,7 +148,7 @@ int socketpair(int domain, int type, int protocol, int sv[2])
 {
     if (!socketpair_f) initHook();
     if (!crn_in_procer()) return socketpair_f(domain, type, protocol, sv);
-    linfo("%d\n", type);
+    // linfo("%d\n", type);
 
     int rv = socketpair_f(domain, type, protocol, sv);
     if (rv == 0) {
@@ -180,7 +180,7 @@ int connect(int fd, const struct sockaddr *addr, socklen_t addrlen)
         // linfo("what addr %s\n", inet_ntop(AF_INET, &sa->sin_addr.s_addr, buf, 200));
         int eno = rv < 0 ? errno : 0;
         if (rv >= 0) {
-            linfo("connect ok %d %d, %d, %d\n", fd, errno, time(0)-btime, i);
+            // linfo("connect ok %d %d, %d, %d\n", fd, errno, time(0)-btime, i);
             return rv;
         }
         if (eno != EINPROGRESS && eno != EALREADY) {

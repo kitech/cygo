@@ -32,8 +32,8 @@ set(corona_c_srcs
 	${mydir}/corona-c/hchan.c
 	${mydir}/corona-c/hselect.c
 #	${mydir}/corona-c/netpoller_ev.c
-  ${mydir}/corona-c/netpoller_event.c
-  # ${mydir}/corona-c/netpoller_epoll.c
+  # ${mydir}/corona-c/netpoller_event.c
+  ${mydir}/corona-c/netpoller_epoll.c
 	${mydir}/corona-c/coronagc.c
 	${mydir}/corona-c/corona.c
 	${mydir}/corona-c/functrace.c

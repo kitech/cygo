@@ -147,32 +147,29 @@ extern void crn_procer_resume_one(void* cbdata, int ytype, int grid, int mcid);
 void netpoller_picoev_globcb(int epfd, int fd, int events, void* cbarg) {
     netpoller* np = gnpl__;
 
+    // linfo("fd=%d events=%d cbarg=%p %p\n", fd, events, cbarg, 0);
     evdata2* d2 = (evdata2*)cbarg;
     assert(d2 != 0);
-    evdata* d = 0;
-    void* dd = 0; // = d->data;
-    int ytype = 0; // = d->ytype;
-    int grid = 0; //= d->grid;
-    int mcid = 0; // d->mcid;
-    // linfo("fd=%d events=%d cbarg=%p %p\n", fd, events, cbarg, 0);
+    evdata* dv[3] = {0};
+    int dvcnt = 0;
 
     int newev = 0;
     int rv = 0;
     switch (d2->evtyp) {
     case CXEV_TIMER:
-        linfo("fd=%d events=%d cbarg=%p %p\n", fd, events, cbarg, 0);
-        pthread_mutex_lock(&np->evmu);
-        pthread_mutex_unlock(&np->evmu);
+        // linfo("fd=%d events=%d cbarg=%p %p\n", fd, events, cbarg, 0);
         close(fd);
-        d = d2->dt;
-        d2->dt = 0;
+        dv[dvcnt++] = d2->dt;
+        d2->dt = nilptr;
         break;
     case CXEV_IO:
         if (events & EPOLLIN) {
-            d = d2->dr;
+            dv[dvcnt++] = d2->dr;
+            d2->dr = nilptr;
         }
         if (events & EPOLLOUT) {
-            d = d2->dw;
+            dv[dvcnt++] = d2->dw;
+            d2->dw = nilptr;
         }
         if ((events & EPOLLIN) == 0 && (events & EPOLLOUT) == 0) {
             assert(1==2);
@@ -196,22 +193,21 @@ void netpoller_picoev_globcb(int epfd, int fd, int events, void* cbarg) {
         linfo("wtf fd=%d %p %d %p %p %p\n", fd, d2, d2->evtyp, d2->dr, d2->dw, d2->dt);
         assert(1==2);
     }
-    assert(d != nilptr);
-    dd = d->data;
-    ytype = d->ytype;
-    grid = d->grid;
-    mcid = d->mcid;
+    assert(dvcnt > 0);
+    for (int i = 0; i < 3; i++) {
+        evdata* d = dv[i];
+        if (d == nilptr) { break; }
 
-    fiber *gr = dd;
-    // linfo("before release d=%p\n", d);
-    if (d->evtyp == CXEV_TIMER && fd != -1 && 0) { // use for check data mismatch case
-        linfo("evwoke ev=%d fd=%d(%d) ytype=%d=%s %p grid=%d, mcid=%d d=%p\n",
-              events, fd, fd, ytype, yield_type_name(ytype), dd, gr->id, gr->mcid, d);
-        // assert(fd == -1);
+        void* dd = d->data;
+        int ytype = d->ytype;
+        int grid = d->grid;
+        int mcid = d->mcid;
+        evdata_free(d);
+        // evdata2_free(d2);
+
+        crn_procer_resume_one(dd, ytype, grid, mcid);
     }
-    evdata_free(d);
-    // evdata2_free(d2);
-    crn_procer_resume_one(dd, ytype, grid, mcid);
+
 }
 
 
@@ -234,17 +230,29 @@ void netpoller_readfd(int fd, int ytype, fiber* gr) {
     // assert (inuse == 0);
     if (inuse) {
         evdata2* d2 = np->evfds[fd];
-        d2->dr = d;
-        int newev = EPOLLET;
-        if (d2->dw != nilptr) { newev |= EPOLLOUT; }
-        newev |= EPOLLIN;
-        rv = epoll_ctl(np->epfd, EPOLL_CTL_DEL, fd, 0);
-        // assert(rv == 0);
-        struct epoll_event evt = {0};
-        evt.events = newev;
-        evt.data.fd = fd;
-        rv = epoll_ctl(np->epfd, EPOLL_CTL_ADD, fd, &evt);
-        linfo("add r reset %d\n", fd);
+        int druse = d2->dr != nilptr;
+        int samefib = druse ? d2->dr->data == gr : 0;
+        int override = 0;
+        if (druse && samefib) {
+            // ignore ok?
+        }else{
+            override = 1;
+            d2->dr = d;
+            int newev = EPOLLET;
+            if (d2->dw != nilptr) { newev |= EPOLLOUT; }
+            newev |= EPOLLIN;
+            rv = epoll_ctl(np->epfd, EPOLL_CTL_DEL, fd, 0);
+            // assert(rv == 0);
+            struct epoll_event evt = {0};
+            evt.events = newev;
+            evt.data.fd = fd;
+            rv = epoll_ctl(np->epfd, EPOLL_CTL_ADD, fd, &evt);
+        }
+        if (druse && samefib && !override) {
+            // ignored operation
+        }else{
+            linfo("add r reset %d druse=%d samefib=%d override=%d\n", fd, druse, samefib, override);
+        }
     }else{
         evdata2* d2 = evdata2_new(d->evtyp);
         d2->dr = d;
@@ -253,7 +261,7 @@ void netpoller_readfd(int fd, int ytype, fiber* gr) {
         evt.data.fd = fd;
         np->evfds[fd] = d2;
         rv = epoll_ctl(np->epfd, EPOLL_CTL_ADD, fd, &evt);
-        linfo("add r new %d\n", fd);
+        // linfo("add r new %d\n", fd);
     }
     pthread_mutex_unlock(&np->evmu);
     crn_post_gclock_proc(__func__);
@@ -288,17 +296,28 @@ void netpoller_writefd(int fd, int ytype, fiber* gr) {
     int inuse = np->evfds[fd] != 0;
     if (inuse) {
         evdata2* d2 = np->evfds[fd];
-        d2->dw = d;
-        int newev = EPOLLET;
-        if (d2->dr != nilptr) { newev |= EPOLLIN; }
-        newev |= EPOLLOUT;
-        rv = epoll_ctl(np->epfd, EPOLL_CTL_DEL, fd, 0);
-        // assert(rv == 0);
-        struct epoll_event evt = {0};
-        evt.events = newev;
-        evt.data.fd = fd;
-        rv = epoll_ctl(np->epfd, EPOLL_CTL_ADD, fd, &evt);
-        linfo("add w reset %d\n", fd);
+        int dwuse = d2->dw != nilptr;
+        int samefib = dwuse ? d2->dw->data == gr : 0;
+        int override = 0;
+        if (dwuse && samefib) {
+        }else{
+            override = 1;
+            d2->dw = d;
+            int newev = EPOLLET;
+            if (d2->dr != nilptr) { newev |= EPOLLIN; }
+            newev |= EPOLLOUT;
+            rv = epoll_ctl(np->epfd, EPOLL_CTL_DEL, fd, 0);
+            // assert(rv == 0);
+            struct epoll_event evt = {0};
+            evt.events = newev;
+            evt.data.fd = fd;
+            rv = epoll_ctl(np->epfd, EPOLL_CTL_ADD, fd, &evt);
+        }
+        if (dwuse && samefib && !override) {
+            // ignored operation
+        }else{
+            linfo("add w reset %d dwuse=%d samefib=%d override=%d\n", fd, dwuse, samefib, override);
+        }
     }else{
         evdata2* d2 = evdata2_new(d->evtyp);
         d2->dw = d;
@@ -307,7 +326,7 @@ void netpoller_writefd(int fd, int ytype, fiber* gr) {
         evt.data.fd = fd;
         np->evfds[fd] = d2;
         rv = epoll_ctl(np->epfd, EPOLL_CTL_ADD, fd, &evt);
-        linfo("add w new %d\n", fd);
+        // linfo("add w new %d\n", fd);
     }
     pthread_mutex_unlock(&np->evmu);
     crn_post_gclock_proc(__func__);
@@ -375,7 +394,7 @@ void netpoller_timer(long ns, int ytype, fiber* gr) {
         return;
     }
 
-    linfo("timer add %d d=%p %ld sec=%d nsec=%d\n", tmfd, d, ns, ts.tv_sec, ts.tv_nsec);
+    // linfo("timer add %d d=%p %ld sec=%d nsec=%d\n", tmfd, d, ns, ts.tv_sec, ts.tv_nsec);
 }
 
 // what to do
