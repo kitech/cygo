@@ -46,8 +46,8 @@ typedef struct evdata2 {
 static int crn_tree_timer_cmp(const void* k1x, const void* k2x) {
     evdata* k1 = (evdata*)k1x;
     evdata* k2 = (evdata*)k2x;
-    int64_t k1us = k1->tv2.tv_sec*1000000 + k1->tv2.tv_usec;
-    int64_t k2us = k2->tv2.tv_sec*1000000 + k2->tv2.tv_usec;
+    int64_t k1us = k1->tv2.tv_sec*CRN_USEC + k1->tv2.tv_usec;
+    int64_t k2us = k2->tv2.tv_sec*CRN_USEC + k2->tv2.tv_usec;
     if (k1us == k2us) { return 0; }
     if (k1us > k2us) { return k1us-k2us; }
     if (k1us < k2us) { return k1us-k2us; }
@@ -115,14 +115,17 @@ static int netpoller_next_timeout() {
     if (rv == CC_ERR_KEY_NOT_FOUND) {
         return -1;
     }
-    struct timeval nowtv = {0};
-    gettimeofday(&nowtv, 0);
-    int64_t nowus = nowtv.tv_sec*1000000 + nowtv.tv_usec;
-    int64_t us1 = d->tv2.tv_sec*1000000 + d->tv2.tv_usec;
+    evdata nowd = {0};
+    gettimeofday(&nowd.tv, nilptr);
+    int64_t diffus = crn_tree_timer_cmp(d, &nowd);
+    // struct timeval nowtv = {0};
+    // gettimeofday(&nowtv, 0);
+    // int64_t nowus = nowtv.tv_sec*1000000 + nowtv.tv_usec;
+    // int64_t us1 = d->tv2.tv_sec*1000000 + d->tv2.tv_usec;
     // linfo("cnt=%d nowus=%ld us1=%ld diff=%d\n", tabsz, nowus/1000, us1/1000, (us1-nowus)/1000);
-    int64_t diff = us1-nowus;
-    if (diff < 0) { return 0; }
-    return (int)(diff/1000);
+    // int64_t diffus = us1-nowus;
+    if (diffus < 0) { return 0; }
+    return (int)(diffus/1000);
 }
 
 static int netpoller_resume_one(evdata* d) {
@@ -164,7 +167,7 @@ static int netpoller_dispatch_timers2() {
     pthread_mutex_unlock(&np->evmu);
     if (expcnt > 0) {
         curd = expires[0];
-        linfo("expire cnt=%d tot=%d seqno=%d\n", expcnt, tabsz, curd->seqno);
+        // linfo("expire cnt=%d tot=%d seqno=%d\n", expcnt, tabsz, curd->seqno);
     }
     for (int i = 0; i < expcnt; i++) {
         curd = expires[i];
@@ -200,7 +203,7 @@ void netpoller_loop() {
             // netpoller_dispatch_timers();
             // continue;
         }
-        timeout = timeout <= 5 ? 5 : timeout;
+        timeout = timeout <= 31 ? 31 : timeout;
         // linfo("next timeout %d %d\n", timeout, timeout/1000);
         rv = epoll_wait(np->epfd, &revt, 1, timeout);
         int eno = errno;
@@ -315,7 +318,8 @@ void netpoller_picoev_globcb(int epfd, int fd, int events, void* cbarg) {
             d2->dw = nilptr;
         }
         if ((events & EPOLLIN) == 0 && (events & EPOLLOUT) == 0) {
-            assert(1==2);
+            // assert(1==2);
+            linfo("woo, close??? %d\n", fd);
         }
         if (d2->dr != nilptr) { newev |= EPOLLIN; }
         if (d2->dw != nilptr) { newev |= EPOLLOUT; }
