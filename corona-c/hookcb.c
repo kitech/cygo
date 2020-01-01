@@ -99,6 +99,10 @@ bool fdcontext_is_tcpsocket(fdcontext*fdctx) {
     if (fdctx == 0) return false;
     return fdctx->fdty == FDISSOCKET && fdctx->sockty == SOCK_STREAM;
 }
+bool fdcontext_is_file(fdcontext*fdctx) {
+    if (fdctx == 0) return false;
+    return fdctx->fdty == FDISFILE;
+}
 bool fdcontext_is_nonblocking(fdcontext*fdctx){ return fdctx->isNonBlocking; }
 int fdcontext_get_fdtype(fdcontext*fdctx){ return fdctx->fdty; }
 
@@ -186,7 +190,7 @@ void hookcb_oncreate(int fd, int fdty, bool isNonBlocking, int domain, int sockt
 }
 
 void hookcb_onclose(int fd) {
-    if (!crn_in_procer()) return;
+    // if (!crn_in_procer()) return;
     if (!gcinited) return;
     hookcb* hkcb = hookcb_get();
     if (hkcb == 0) return ;
@@ -196,7 +200,7 @@ void hookcb_onclose(int fd) {
     int rv = crnmap_remove(hkcb->fdctxs,(uintptr_t)fd,(void**)&fdctx);
     // maybe not found when just startup
     if (fdctx == 0) {
-        linfo("fd not found in context %d\n", fd);
+        // linfo("fd not found in context %d\n", fd);
     }else{
         fdcontext_free(fdctx);
     }
@@ -225,6 +229,11 @@ void hookcb_setin_poll(int fd, bool set, bool isread) {
 
     fdcontext* fdctx = 0;
     int rv = crnmap_get(hkcb->fdctxs,(uintptr_t)fd,(void**)&fdctx);
+    if (rv != CC_OK) {
+        // linfo("open why not found %d\n", fd);
+        // maybe already close
+        return;
+    }
     assert(rv == CC_OK);
     assert(fdctx != 0);
 

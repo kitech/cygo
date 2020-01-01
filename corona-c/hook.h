@@ -129,6 +129,18 @@ extern fclose_t fclose_f;
 
 typedef FILE*(*fopen_t)(const char *pathname, const char *mode);
 extern fopen_t fopen_f;
+typedef int (*open_t)(const char *pathname, int flags, mode_t mode);
+extern open_t open_f;
+typedef int (*open64_t)(const char *pathname, int flags, mode_t mode);
+extern open64_t open64_f;
+typedef int (*creat_t)(const char *pathname, mode_t mode);
+extern creat_t creat_f;
+typedef int (*openat_t)(int dirfd, const char *pathname, int flags, mode_t mode);
+extern openat_t openat_f;
+typedef FILE *(*fdopen_t)(int fd, const char *mode);
+extern fdopen_t fdopen_f;
+typedef int (*eventfd_t)(unsigned int initval, int flags);
+extern eventfd_t eventfd_f;
 
 typedef int (*pmutex_lock_t)(pthread_mutex_t *mutex);
 extern pmutex_lock_t pmutex_lock_f;

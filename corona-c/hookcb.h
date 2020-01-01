@@ -7,6 +7,9 @@
 #define FDISPIPE  2
 #define FDISFILE  3
 #define FDXLIB 4
+#define EVENTFD 5
+#define SIGNALFD 6
+#define TIMERFD 7
 
 typedef struct fdcontext fdcontext;
 typedef struct hookcb hookcb;
@@ -14,6 +17,7 @@ typedef struct hookcb hookcb;
 int fdcontext_set_nonblocking(fdcontext*fdctx, bool isNonBlocking) ;
 bool fdcontext_is_socket(fdcontext*fdctx);
 bool fdcontext_is_tcpsocket(fdcontext*fdctx);
+bool fdcontext_is_file(fdcontext*fdctx);
 bool fdcontext_is_nonblocking(fdcontext*fdctx);
 bool fd_is_nonblocking(int fd);
 int hookcb_fd_set_nonblocking(int fd, bool isNonBlocking);

@@ -1423,6 +1423,7 @@ void crn_init(corona* nr) {
         } else {
             pthread_create(t, 0, crn_procerx, (void*)mc);
         }
+        pthread_detach(*t);
     }
     // GC_enable();
 }

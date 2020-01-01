@@ -59,6 +59,12 @@ dup2_t dup2_f = NULL;
 dup3_t dup3_f = NULL;
 fclose_t fclose_f = NULL;
 fopen_t fopen_f = NULL;
+open_t open_f = NULL;
+open64_t open64_f = NULL;
+creat_t creat_f = NULL;
+openat_t openat_f = NULL;
+fdopen_t fdopen_f = NULL;
+eventfd_t eventfd_f = NULL;
 pmutex_lock_t pmutex_lock_f = NULL;
 pmutex_trylock_t pmutex_trylock_f = NULL;
 pmutex_unlock_t pmutex_unlock_f = NULL;
@@ -94,12 +100,22 @@ int pipe(int pipefd[2])
     }
     return rv;
 }
+int __pipe(int pipefd[2]) {
+    linfo("%d\n", 11233456);
+    assert(1==2);
+}
+#ifndef _GNU_SOURCE
+#define _GNU_SOURCE 1
+#endif
+
 #if defined(LIBGO_SYS_Linux)
+// why not hooked of glib2 use?
 int pipe2(int pipefd[2], int flags)
 {
     // if (crn_in_procer())
-    if (!socket_f) initHook();
-    ldebug("%d\n", flags);
+    if (!pipe2_f) initHook();
+    linfo("%d\n", flags);
+    assert(1==2);
 
     int rv = pipe2_f(pipefd, flags);
     if (rv == 0) {
@@ -108,6 +124,11 @@ int pipe2(int pipefd[2], int flags)
     }
     return rv;
 }
+int __pipe2(int pipefd[2], int flags) {
+    linfo("%d\n", flags);
+    assert(1==2);
+}
+
 int inotify_init() {
     if (!inotify_init_f) initHook();
     // linfo("%d\n", 0);
@@ -223,7 +244,17 @@ ssize_t read(int fd, void *buf, size_t count)
     if (!crn_in_procer()) return read_f(fd, buf, count);
 
     // linfo("%d fdnb=%d bufsz=%d\n", fd, fd_is_nonblocking(fd), count);
-    assert(fd_is_nonblocking(fd) == 1);
+    fdcontext* ctx = hookcb_get_fdcontext(fd);
+    if (ctx == nilptr) {
+        linfo("wtf, why not found fd %d\n", fd);
+        assert(1==2);
+    }
+    bool isfile = fdcontext_is_file(ctx);
+    if (fd_is_nonblocking(fd) == 0 && !isfile) {
+        linfo("%d fdnb=%d bufsz=%d\n", fd, fd_is_nonblocking(fd), count);
+        assert(fd_is_nonblocking(fd) == 1);
+    }
+    //
     while (1){
         ssize_t rv = read_f(fd, buf, count);
         int eno = rv < 0 ? errno : 0;
@@ -976,9 +1007,117 @@ FILE* fopen(const char *pathname, const char *mode)
     // linfo("fopen fp=%p fnlen=%d %s\n", fp, strlen(pathname), pathname);
     if (fp == 0) { return 0; }
     int fd = fileno(fp);
-    // hookcb_oncreate(fd, FDISFILE, 0, 0,0,0);
+    hookcb_oncreate(fd, FDISFILE, 0, 0,0,0);
     // linfo("%s %s %d fdnb=%d\n", pathname, mode, fd, fd_is_nonblocking(fd));
     return fp;
+}
+FILE * freopen (const char *filename, const char *opentype, FILE *stream) {
+    assert(1==2);
+}
+FILE * freopen64 (const char *filename, const char *opentype, FILE *stream){
+    assert(1==2);
+}
+
+int open(const char *pathname, int flags, ...) {
+    if (!open_f) initHook();
+    // if (!crn_in_procer()) return open_f(fds, nfds, timeout);
+    // linfo("%s %d\n", pathname, flags);
+
+    va_list ap;
+    mode_t mode;
+    va_start(ap, flags);
+    mode = va_arg(ap, mode_t);
+    va_end(ap);
+
+    int fd = open_f(pathname, flags, mode);
+    // linfo("%s %d %d %s\n", pathname, 0, fd, strerror(errno));
+    if (fd > 0) {
+        hookcb_oncreate(fd, FDISFILE, 0, 0,0,0);
+    }
+    return fd;
+}
+int __open(const char *pathname, int flags, mode_t mode) {
+    linfo("%s %d\n", pathname, mode);
+    return open(pathname, flags, mode);
+}
+int open64 (const char *filename, int flags, ...) {
+    if (!open64_f) initHook();
+    // if (!crn_in_procer()) return open_f(fds, nfds, timeout);
+    // linfo("%s %d\n", filename, flags);
+
+    va_list ap;
+    mode_t mode;
+    va_start(ap, flags);
+    mode = va_arg(ap, mode_t);
+    va_end(ap);
+
+    int fd = open64_f(filename, flags, mode);
+    // linfo("%s %d %d %s\n", filename, 0, fd, strerror(errno));
+    if (fd > 0) {
+        hookcb_oncreate(fd, FDISFILE, 0, 0,0,0);
+    }
+    return fd;
+}
+
+int creat(const char *pathname, mode_t mode) {
+    if (!creat_f) initHook();
+    // if (!crn_in_procer()) return open_f(fds, nfds, timeout);
+    linfo("%s %d\n", pathname, mode);
+
+    int rv = creat_f(pathname,  mode);
+    linfo("%s %d %d %s\n", pathname, mode, rv, strerror(errno));
+    if (rv > 0) {
+        if (strstr(pathname, "fonts")) {
+        }else{
+            // memcpy(0x1, 0x2, 3);
+        }
+    }
+    return rv;
+}
+int openat(int dirfd, const char *pathname, int flags, ...) {
+    mode_t mode = 022;
+    if (!openat_f) initHook();
+    // if (!crn_in_procer()) return open_f(fds, nfds, timeout);
+    linfo("%d %s %d\n", dirfd, pathname, mode);
+
+    int rv = openat_f(dirfd, pathname, flags,  mode);
+    linfo("%s %d %d %s\n", pathname, mode, rv, strerror(errno));
+    if (rv > 0) {
+        if (strstr(pathname, "fonts")) {
+        }else{
+            // memcpy(0x1, 0x2, 3);
+        }
+    }
+    return rv;
+}
+FILE *fdopen(int fd, const char *mode) {
+    if (!fdopen_f) initHook();
+    // if (!crn_in_procer()) return open_f(fds, nfds, timeout);
+    linfo("%d %s\n", fd, mode);
+    assert(1==2);
+
+    FILE* rv = fdopen_f(fd, mode);
+    int fd2 = -1;
+    if (rv != 0) {}
+    linfo("%d %s %d %s\n", fd, mode, rv, strerror(errno));
+    if (rv != 0) {
+    }
+    return rv;
+}
+int eventfd(unsigned int initval, int flags) {
+    if (!eventfd_f) initHook();
+    // if (!crn_in_procer()) return open_f(fds, nfds, timeout);
+    // linfo("%d %d\n", initval, flags);
+
+    int rv = eventfd_f(initval, flags);
+    // linfo("%d %d\n", initval, flags);
+    int fd2 = -1;
+    if (rv != 0) {}
+    // linfo("%d %d %d %s\n", initval, flags, rv, strerror(errno));
+    if (rv != 0) {
+        hookcb_oncreate(rv, EVENTFD, 0, 0,0,0);
+    }
+    return rv;
 }
 
 int pthread_mutex_lock_wip(pthread_mutex_t *mutex)
@@ -1149,6 +1288,11 @@ static int doInitHook()
         dup3_f = (dup3_t)dlsym(RTLD_NEXT, "dup3");
         fclose_f = (fclose_t)dlsym(RTLD_NEXT, "fclose");
         fopen_f = (fopen_t)dlsym(RTLD_NEXT, "fopen");
+        open_f = (open_t)dlsym(RTLD_NEXT, "open");
+        open64_f = (open_t)dlsym(RTLD_NEXT, "open64");
+        creat_f = (creat_t)dlsym(RTLD_NEXT, "creat");
+        fdopen_f = (fdopen_t)dlsym(RTLD_NEXT, "fdopen");
+        eventfd_f = (eventfd_t)dlsym(RTLD_NEXT, "eventfd");
         pmutex_lock_f = (pmutex_lock_t)dlsym(RTLD_NEXT, "pthread_mutex_lock");
         pmutex_trylock_f = (pmutex_trylock_t)dlsym(RTLD_NEXT, "pthread_mutex_trylock");
         pmutex_unlock_f = (pmutex_unlock_t)dlsym(RTLD_NEXT, "pthread_mutex_unlock");

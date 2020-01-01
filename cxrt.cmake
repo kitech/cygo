@@ -73,7 +73,7 @@ set_target_properties(crn PROPERTIES COMPILE_FLAGS ${corona_c_flags})
 #set(gclib "${mydir}/bdwgc/.libs/libgc.a") # -L${mydir}/bdwgc/.libs
 set(gclib "-lgc")
 set(libevents_ldflags "-levent -levent_pthreads")
-set(cxrt_ldflags "-levent -levent_pthreads ${gclib} -lpthread -ldl -lc")
+set(cxrt_ldflags "${gclib} -lpthread -ldl -lc")
 # note: all libraries which maybe create threads, must put before -lgc
 
 

@@ -10,7 +10,7 @@ import time
 #flag -L@VMOD/cxrt/bysrc
 #flag -L@VMOD/cxrt/cltc/lib
 #flag -lcxrt -lcrn
-#flag -levent -levent_pthreads
+// #flag -levent -levent_pthreads
 #flag -lgc -lpthread
 
 #include "corona_util.h"
