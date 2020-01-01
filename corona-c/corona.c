@@ -195,7 +195,7 @@ void crn_fiber_destroy(fiber* gr) {
     if (gr->stack.sptr != 0) {
         int rv = mprotect(gr->stkptr, 4096, PROT_READ|PROT_WRITE);
         assert(rv == 0);
-        crn_gc_free2(gr->stkptr);
+        crn_gc_free_uncollectable(gr->stkptr);
         // free(gr->stack.sptr);
     }
     void* optr = gr;

@@ -67,11 +67,9 @@ void crn_gc_free(void* ptr) {
     }else{}
     crn_post_gclock(__func__);
 }
-void crn_gc_free2(void* ptr) {
+void crn_gc_free_uncollectable(void* ptr) {
     crn_pre_gclock(__func__);
-    if (__we_take_free_owner == 1) {
-        GC_FREE(ptr);
-    }
+    GC_FREE(ptr);
     crn_post_gclock(__func__);
 }
 void* crn_gc_calloc(size_t n, size_t size) {
