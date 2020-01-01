@@ -47,6 +47,7 @@ set(corona_c_srcs
 
 set(cltc_c_srcs
   ${cltcdir}/array.c ${cltcdir}/hashtable.c
+  ${cltcdir}/array.c ${cltcdir}/treetable.c
   ${cltcdir}/queue.c ${cltcdir}/deque.c ${cltcdir}/common.c
 )
 

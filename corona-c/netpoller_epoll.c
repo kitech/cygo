@@ -1,10 +1,13 @@
 
 
+#include <fcntl.h>
+#include <unistd.h>
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <netdb.h>
-#include <sys/timerfd.h>
 #include <sys/epoll.h>
+#include <sys/timerfd.h>
+#include <sys/eventfd.h>
 
 #include "coronapriv.h"
 
@@ -16,13 +19,51 @@
 #define CXEV_TIMER (0x1<<6)
 #define CXEV_DNS_RESOLV (0x1<<7)
 
-// TODO thread mutex
 
-typedef struct evdata2 evdata2;
+extern void crn_procer_resume_one(void* cbdata, int ytype, int grid, int mcid);
+
+typedef struct evdata {
+    int evtyp;
+    void* data; // fiber*
+    int grid;
+    int mcid;
+    int ytype;
+    long fd; // fd or ns or hostname
+    void** out; //
+    int *errcode;
+    long seqno;
+    struct timeval tv;
+    struct timeval tv2; // absolute time
+    struct event* evt;
+} evdata;
+typedef struct evdata2 {
+    int evtyp;
+    evdata* dr;
+    evdata* dw;
+    evdata* dt;
+} evdata2;
+
+static int crn_tree_timer_cmp(const void* k1x, const void* k2x) {
+    evdata* k1 = (evdata*)k1x;
+    evdata* k2 = (evdata*)k2x;
+    int64_t k1us = k1->tv2.tv_sec*1000000 + k1->tv2.tv_usec;
+    int64_t k2us = k2->tv2.tv_sec*1000000 + k2->tv2.tv_usec;
+    if (k1us == k2us) { return 0; }
+    if (k1us > k2us) { return k1us-k2us; }
+    if (k1us < k2us) { return k1us-k2us; }
+}
+static TreeTableConf crndftdttconf = {.cmp   = crn_tree_timer_cmp,
+                                      .mem_alloc  = crn_gc_malloc,
+                                      .mem_calloc = crn_gc_calloc,
+                                      .mem_free   = crn_gc_free};
+// thread safe poller
 typedef struct netpoller {
     int epfd;
     evdata2 *evfds[999];
-
+    long seqno;
+    int tmupfd[2]; // timer add refresh notify epoll_wait pipe
+    int tmupevfd;
+    TreeTable* timers; // evdata2* => 0
     HashTable* watchers; // ev_watcher* => evdata2
     pmutex_t evmu;
 } netpoller;
@@ -43,32 +84,151 @@ netpoller* netpoller_new() {
     assert(np->epfd > 0);
     // np->dnsbase = evdns_base_new(np->loop, 1);
 
+    np->seqno = 10000;
+    int rv = treetable_new_conf(&crndftdttconf, &np->timers);
+    assert(rv == CC_OK);
+    rv = pipe2(np->tmupfd, O_NONBLOCK);
+    assert(rv == 0);
+    np->tmupevfd = eventfd(0, EFD_CLOEXEC|EFD_NONBLOCK);
+    assert(np->tmupevfd > 0);
     // hashtable_new(&np->watchers);
 
     gnpl__ = np;
     return np;
 }
 
+// 1/1000 秒, used in epoll_wait
+static int netpoller_next_timeout() {
+    netpoller* np = gnpl__;
+    assert(np != 0);
+
+    evdata* d = nilptr;
+    int tabsz = 0;
+    int rv = CC_ERR_KEY_NOT_FOUND;
+    pthread_mutex_lock(&np->evmu);
+    tabsz = treetable_size(np->timers);
+    if (tabsz > 0) {
+        rv = treetable_get_first_key(np->timers, (void**)&d);
+    }
+    pthread_mutex_unlock(&np->evmu);
+    assert(rv == CC_OK || rv == CC_ERR_KEY_NOT_FOUND);
+    if (rv == CC_ERR_KEY_NOT_FOUND) {
+        return -1;
+    }
+    struct timeval nowtv = {0};
+    gettimeofday(&nowtv, 0);
+    int64_t nowus = nowtv.tv_sec*1000000 + nowtv.tv_usec;
+    int64_t us1 = d->tv2.tv_sec*1000000 + d->tv2.tv_usec;
+    // linfo("cnt=%d nowus=%ld us1=%ld diff=%d\n", tabsz, nowus/1000, us1/1000, (us1-nowus)/1000);
+    int64_t diff = us1-nowus;
+    if (diff < 0) { return 0; }
+    return (int)(diff/1000);
+}
+
+static int netpoller_resume_one(evdata* d) {
+    void* dd = d->data;
+    int ytype = d->ytype;
+    int grid = d->grid;
+    int mcid = d->mcid;
+    evdata_free(d);
+    // evdata2_free(d2);
+
+    crn_procer_resume_one(dd, ytype, grid, mcid);
+}
+
+static int netpoller_dispatch_timers2() {
+    netpoller* np = gnpl__;
+    assert(np != 0);
+
+    evdata nowd = {0};
+    gettimeofday(&nowd.tv2, nilptr);
+    evdata* expires[128] = {0};
+    int expcnt = 0;
+
+    int tabsz = 0;
+    int rv = 0;
+    evdata* curd = nilptr;
+    pthread_mutex_lock(&np->evmu);
+    tabsz = treetable_size(np->timers);
+    for (int i = 0; i < 128 && i < tabsz; i++) {
+        rv = treetable_get_first_key(np->timers, (void**)&curd);
+        if (rv != CC_OK) break;
+        rv = crn_tree_timer_cmp(curd, &nowd);
+        if ( rv <= 0) {
+            expires[expcnt++] = curd;
+            treetable_remove(np->timers, curd, nilptr);
+        }else{
+            break;
+        }
+    }
+    pthread_mutex_unlock(&np->evmu);
+    if (expcnt > 0) {
+        curd = expires[0];
+        linfo("expire cnt=%d tot=%d seqno=%d\n", expcnt, tabsz, curd->seqno);
+    }
+    for (int i = 0; i < expcnt; i++) {
+        curd = expires[i];
+        // linfo("expire i=%d/%d %p\n", i, expcnt, curd);
+        netpoller_resume_one(curd);
+    }
+    return expcnt;
+}
+static int netpoller_dispatch_timers() {
+    while (1) {
+        int rv = netpoller_dispatch_timers2();
+        if (rv == 0) break;
+    }
+}
+static void netpoller_dispatch_fd(struct epoll_event *revt) {
+
+}
 void netpoller_loop() {
     netpoller* np = gnpl__;
     assert(np != 0);
 
+    struct epoll_event evt = {0};
+    evt.events = EPOLLIN;
+    evt.data.fd = np->tmupevfd;
+    int rv = epoll_ctl(np->epfd, EPOLL_CTL_ADD, np->tmupevfd, &evt);
+    assert(rv == 0);
+
     for (;;) {
         struct epoll_event revt = {0};
-        int rv = epoll_wait(np->epfd, &revt, 1, 10000);
+        int timeout = netpoller_next_timeout();
+        timeout = timeout < 0 ? CRN_MSEC*10 : timeout;
+        if (timeout == 0) {
+            // netpoller_dispatch_timers();
+            // continue;
+        }
+        timeout = timeout <= 5 ? 5 : timeout;
+        // linfo("next timeout %d %d\n", timeout, timeout/1000);
+        rv = epoll_wait(np->epfd, &revt, 1, timeout);
         int eno = errno;
         if (rv < 0) {
             if (eno == EINTR) {
                 continue;
             }
             linfo("wtf %d %s\n", rv, strerror(errno));
+            assert(1==2);
         }
         assert(rv >= 0);
-        if (rv == 0) { continue; }
+        if (rv == 0) {
+            netpoller_dispatch_timers();
+            continue;
+        }
         assert(rv == 1);
         int evfd = revt.data.fd;
         int evts = revt.events;
         // linfo("gotevt %d %d\n", evfd, evts);
+        if (evfd == np->tmupevfd) {
+            uint64_t val;
+            while(1) {
+                rv = read(np->tmupevfd, &val, sizeof(uint64_t));
+                if (rv <= 0) {break;}
+            }
+            netpoller_dispatch_timers();
+            continue;
+        }
         rv = epoll_ctl(np->epfd, EPOLL_CTL_DEL, evfd, nilptr);
         // assert(rv == 0);
         pthread_mutex_lock(&np->evmu);
@@ -84,6 +244,7 @@ void netpoller_loop() {
             extern void netpoller_picoev_globcb(int epfd, int fd, int events, void* cbarg);
             netpoller_picoev_globcb(np->epfd, evfd, evts, d2);
         }
+        netpoller_dispatch_timers();
 
         if (0) {
             linfo("ohno, rv=%d\n", rv);
@@ -92,24 +253,6 @@ void netpoller_loop() {
     assert(1==2);
 }
 
-typedef struct evdata {
-    int evtyp;
-    void* data; // fiber*
-    int grid;
-    int mcid;
-    int ytype;
-    long fd; // fd or ns or hostname
-    void** out; //
-    int *errcode;
-    struct timeval tv;
-    struct event* evt;
-} evdata;
-typedef struct evdata2 {
-    int evtyp;
-    evdata* dr;
-    evdata* dw;
-    evdata* dt;
-} evdata2;
 
 static void atstgc_finalizer_fn(evdata* obj, void* cbdata) {
     linfo("finilize obj %p, %p\n", obj, cbdata);
@@ -141,7 +284,7 @@ evdata2* evdata2_new(int evtyp) {
     return d2;
 }
 
-extern void crn_procer_resume_one(void* cbdata, int ytype, int grid, int mcid);
+
 
 // common version callback, support ev_io, ev_timer
 void netpoller_picoev_globcb(int epfd, int fd, int events, void* cbarg) {
@@ -197,19 +340,9 @@ void netpoller_picoev_globcb(int epfd, int fd, int events, void* cbarg) {
     for (int i = 0; i < 3; i++) {
         evdata* d = dv[i];
         if (d == nilptr) { break; }
-
-        void* dd = d->data;
-        int ytype = d->ytype;
-        int grid = d->grid;
-        int mcid = d->mcid;
-        evdata_free(d);
-        // evdata2_free(d2);
-
-        crn_procer_resume_one(dd, ytype, grid, mcid);
+        netpoller_resume_one(d);
     }
-
 }
-
 
 extern void crn_pre_gclock_proc(const char* funcname);
 extern void crn_post_gclock_proc(const char* funcname);
@@ -352,38 +485,20 @@ void netpoller_timer(long ns, int ytype, fiber* gr) {
     d->fd = ns;
     d->tv.tv_sec = ns/1000000000;
     d->tv.tv_usec = ns/1000 % 1000000;
-
-    int tmfd = timerfd_create(CLOCK_MONOTONIC, TFD_NONBLOCK | TFD_CLOEXEC);
-    d->fd = tmfd;
-    assert(tmfd > 0);
-    assert(tmfd < 999);
-
-    struct timespec ts;
-    ts.tv_sec = time(0) + d->tv.tv_sec;
-    ts.tv_sec = d->tv.tv_sec;
-    ts.tv_nsec = d->tv.tv_usec*1000;
-    struct itimerspec its = {0};
-    its.it_interval = ts;
-    its.it_value = ts;
-    int rv0 = timerfd_settime(tmfd, 0, &its, 0);
-
-    evdata2* d2 = evdata2_new(d->evtyp);
-    d2->dt = d;
+    gettimeofday(&d->tv2, nilptr);
+    int usec = d->tv2.tv_usec + d->tv.tv_usec;
+    d->tv2.tv_sec += d->tv.tv_sec + usec/1000000;
+    d->tv2.tv_usec = usec%1000000;
 
     int rv = 0;
     crn_pre_gclock_proc(__func__);
     pthread_mutex_lock(&np->evmu);
-    int inuse = np->evfds[tmfd] != 0;
-    if (inuse) {
-        linfo("tmfd inuse %d sec=%d nsec=%d\n", tmfd, ts.tv_sec, ts.tv_nsec);
-        assert (inuse == 0);
-    }else{
-        struct epoll_event evt = {0};
-        evt.events = EPOLLIN | EPOLLET;
-        evt.data.fd = tmfd;
-        np->evfds[tmfd] = d2;
-        rv = epoll_ctl(np->epfd, EPOLL_CTL_ADD, tmfd, &evt);
-    }
+        d->seqno = ++np->seqno;
+        rv = treetable_add(np->timers, d, (void*)0);
+        assert(rv == CC_OK);
+        uint64_t tmval = 1;
+        rv = write(np->tmupevfd, &tmval, sizeof(uint64_t));
+        rv = rv == sizeof(uint64_t) ? 0 : rv;
     pthread_mutex_unlock(&np->evmu);
     crn_post_gclock_proc(__func__);
     if (rv != 0) {

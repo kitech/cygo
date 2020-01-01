@@ -19,8 +19,9 @@
 
 // third
 #include "coro.h"
-#include "collectc/hashtable.h"
 #include "collectc/array.h"
+#include "collectc/hashtable.h"
+#include "collectc/treetable.h"
 
 #define nilptr ((void*)NULL)
 #define invlidptr ((void*)1234567)
@@ -36,6 +37,7 @@
 #include "szqueue.h"
 #include "chan.h"
 #include "coronagc.h"
+#include "netpoller.h"
 
 
 typedef struct fiber fiber;

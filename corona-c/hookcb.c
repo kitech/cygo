@@ -245,7 +245,7 @@ void hookcb_setin_poll(int fd, bool set, bool isread) {
 }
 bool hookcb_getin_poll(int fd, bool isread) {
     hookcb* hkcb = hookcb_get();
-    if (hkcb == 0) return ;
+    if (hkcb == 0) return false;
 
     fdcontext* fdctx = 0;
     int rv = crnmap_get(hkcb->fdctxs,(uintptr_t)fd,(void**)&fdctx);

@@ -114,8 +114,7 @@ int pipe2(int pipefd[2], int flags)
 {
     // if (crn_in_procer())
     if (!pipe2_f) initHook();
-    linfo("%d\n", flags);
-    assert(1==2);
+    // linfo("%d\n", flags);
 
     int rv = pipe2_f(pipefd, flags);
     if (rv == 0) {
