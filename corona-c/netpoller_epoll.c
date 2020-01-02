@@ -32,8 +32,7 @@ typedef struct evdata {
     void** out; //
     int *errcode;
     long seqno;
-    struct timeval tv;
-    struct timeval tv2; // absolute time
+    struct timeval tv; // absolute time
     struct event* evt;
 } evdata;
 typedef struct evdata2 {
@@ -46,8 +45,8 @@ typedef struct evdata2 {
 static int crn_tree_timer_cmp(const void* k1x, const void* k2x) {
     evdata* k1 = (evdata*)k1x;
     evdata* k2 = (evdata*)k2x;
-    int k1us = k1->tv2.tv_sec*CRN_USEC + k1->tv2.tv_usec;
-    int k2us = k2->tv2.tv_sec*CRN_USEC + k2->tv2.tv_usec;
+    int k1us = k1->tv.tv_sec*CRN_USEC + k1->tv.tv_usec;
+    int k2us = k2->tv.tv_sec*CRN_USEC + k2->tv.tv_usec;
     return -(k1us - k2us);
 }
 static TreeTableConf crndftttconf = {.cmp   = crn_tree_timer_cmp,
@@ -121,7 +120,7 @@ static int netpoller_next_timeout() {
         return -1;
     }
     evdata nowd = {0};
-    gettimeofday(&nowd.tv2, nilptr);
+    gettimeofday(&nowd.tv, nilptr);
     int diffus = -crn_tree_timer_cmp(curd, &nowd);
     // linfo("next timeout %d %d\n", diffus, diffus/1000);
     if (diffus < 0) { return 0; }
@@ -144,7 +143,7 @@ static int netpoller_dispatch_timers2() {
     assert(np != 0);
 
     evdata nowd = {0};
-    gettimeofday(&nowd.tv2, nilptr);
+    gettimeofday(&nowd.tv, nilptr);
     evdata* expires[128] = {0};
     int expcnt = 0;
 
@@ -246,8 +245,8 @@ void netpoller_loop() {
         if (d2 == 0) {
             linfo("wtf, fd not found %d\n", evfd);
         }else{
-            extern void netpoller_picoev_globcb(int epfd, int fd, int events, void* cbarg);
-            netpoller_picoev_globcb(np->epfd, evfd, evts, d2);
+            extern void netpoller_crnev_globcb(int epfd, int fd, int events, void* cbarg);
+            netpoller_crnev_globcb(np->epfd, evfd, evts, d2);
         }
         netpoller_dispatch_timers();
 
@@ -292,7 +291,7 @@ evdata2* evdata2_new(int evtyp) {
 
 
 // common version callback, support ev_io, ev_timer
-void netpoller_picoev_globcb(int epfd, int fd, int events, void* cbarg) {
+void netpoller_crnev_globcb(int epfd, int fd, int events, void* cbarg) {
     netpoller* np = gnpl__;
 
     // linfo("fd=%d events=%d cbarg=%p %p\n", fd, events, cbarg, 0);
@@ -338,7 +337,7 @@ void netpoller_picoev_globcb(int epfd, int fd, int events, void* cbarg) {
         break;
     default:
         linfo("wtf fd=%d %d %d %d\n", fd, CXEV_IO, CXEV_TIMER, CXEV_DNS_RESOLV);
-        // linfo("wtf fd=%d r=%d w=%d\n", fd, events&PICOEV_READ, events&PICOEV_WRITE);
+        // linfo("wtf fd=%d r=%d w=%d\n", fd, events&EPOLLIN, events&EPOLLOUT);
         linfo("wtf fd=%d %p %d %p %p %p\n", fd, d2, d2->evtyp, d2->dr, d2->dw, d2->dt);
         assert(1==2);
     }
@@ -489,18 +488,15 @@ void netpoller_timer(long ns, int ytype, fiber* gr) {
     d->mcid = gr->mcid;
     d->ytype = ytype;
     d->fd = ns;
-    d->tv.tv_sec = ns/1000000000;
-    d->tv.tv_usec = ns/1000 % 1000000;
-    gettimeofday(&d->tv2, nilptr);
-    int usec = d->tv2.tv_usec + d->tv.tv_usec;
-    d->tv2.tv_sec += d->tv.tv_sec + usec/1000000;
-    d->tv2.tv_usec = usec%1000000;
+    gettimeofday(&d->tv, nilptr);
+    long usec = d->tv.tv_sec*CRN_USEC + d->tv.tv_usec + ns/1000;
+    d->tv.tv_sec = usec/CRN_USEC;
+    d->tv.tv_usec = usec%CRN_USEC;
 
     int rv = 0;
     crn_pre_gclock_proc(__func__);
     pthread_mutex_lock(&np->evmu);
         d->seqno = ++np->seqno;
-        // rv = treetable_add(np->timers, d, (void*)0);
         rv = pqueue_push(np->timers, d);
         assert(rv == CC_OK);
     pthread_mutex_unlock(&np->evmu);
