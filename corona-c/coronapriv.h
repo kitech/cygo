@@ -22,6 +22,7 @@
 #include "collectc/array.h"
 #include "collectc/hashtable.h"
 #include "collectc/treetable.h"
+#include "collectc/pqueue.h"
 
 #define nilptr ((void*)NULL)
 #define invlidptr ((void*)1234567)

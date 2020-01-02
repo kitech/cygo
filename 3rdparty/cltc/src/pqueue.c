@@ -206,6 +206,8 @@ static enum cc_stat expand_capacity(PQueue *pq)
     return CC_OK;
 }
 
+size_t pqueue_size(PQueue* pq) { return pq->size; }
+
 /**
  * Pushes the element in the pqueue
  *
@@ -240,6 +242,7 @@ enum cc_stat pqueue_push(PQueue *pq, void *element)
         pq->buffer[CC_PARENT(i)] = tmp;
 
         i      = CC_PARENT(i);
+        if (i == 0) break;
         child  = pq->buffer[i];
         parent = pq->buffer[CC_PARENT(i)];
     }

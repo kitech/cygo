@@ -66,6 +66,7 @@ enum cc_stat  pqueue_new_conf        (PQueueConf const * const conf, PQueue **ou
 void          pqueue_destroy         (PQueue *pqueue);
 void          pqueue_destroy_cb      (PQueue *pqueue, void (*cb) (void*));
 
+size_t pqueue_size(PQueue* pq);
 enum cc_stat  pqueue_push            (PQueue *pqueue, void *element);
 enum cc_stat  pqueue_top             (PQueue *pqueue, void **out);
 enum cc_stat  pqueue_pop             (PQueue *pqueue, void **out);
