@@ -59,7 +59,7 @@ add_library(crn STATIC ${corona_c_srcs}
   )
 
 #add_executable(corona ${corona_c_srcs} corona-c/main.c)
-set(CMAKE_C_FLAGS "-g -O0 -std=c11 -D_GNU_SOURCE ")
+set(CMAKE_C_FLAGS "-g -O0 -fPIC -std=c11 -D_GNU_SOURCE ")
 #set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -pedantic") # non ISO C warning
 #set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -fsanitize=address") # stack corrupt
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -ggdb3 -fno-omit-frame-pointer") # stack corrupt

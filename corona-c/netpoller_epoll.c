@@ -306,29 +306,36 @@ void netpoller_crnev_globcb(int epfd, int fd, int events, void* cbarg) {
     case CXEV_TIMER:
         // linfo("fd=%d events=%d cbarg=%p %p\n", fd, events, cbarg, 0);
         close(fd);
+        pthread_mutex_lock(&np->evmu);
         dv[dvcnt++] = d2->dt;
         d2->dt = nilptr;
+        pthread_mutex_unlock(&np->evmu);
         break;
     case CXEV_IO:
-        if (events & EPOLLIN) {
-            dv[dvcnt++] = d2->dr;
-            d2->dr = nilptr;
+        pthread_mutex_lock(&np->evmu);
+        if ((events & EPOLLIN)||(events & EPOLLHUP)||(events & EPOLLERR)) {
+            if (d2->dr) {
+                dv[dvcnt++] = d2->dr;
+                d2->dr = nilptr;
+            }
         }
-        if (events & EPOLLOUT) {
-            dv[dvcnt++] = d2->dw;
-            d2->dw = nilptr;
+        if ((events & EPOLLOUT)||(events & EPOLLHUP)||(events & EPOLLERR)) {
+            if (d2->dw) {
+                dv[dvcnt++] = d2->dw;
+                d2->dw = nilptr;
+            }
         }
         if ((events & EPOLLIN) == 0 && (events & EPOLLOUT) == 0) {
             // assert(1==2);
-            linfo("woo, close??? %d\n", fd);
+            linfo("woo, close, error??? %d %d %d %d\n", fd, events, events&EPOLLHUP, events&EPOLLERR);
         }
         if (d2->dr != nilptr) { newev |= EPOLLIN; }
         if (d2->dw != nilptr) { newev |= EPOLLOUT; }
-        if (newev == 0) {
-        }else{
-            pthread_mutex_lock(&np->evmu);
+        if (newev != 0) {
             np->evfds[fd] = d2;
-            pthread_mutex_unlock(&np->evmu);
+        }
+        pthread_mutex_unlock(&np->evmu);
+        if (newev != 0) {
             struct epoll_event evt = {0};
             evt.events = newev | EPOLLET;
             evt.data.fd = fd;

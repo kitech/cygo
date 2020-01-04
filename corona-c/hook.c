@@ -1103,10 +1103,21 @@ FILE *fdopen(int fd, const char *mode) {
     }
     return rv;
 }
+
+int pthread_create111(pthread_t *thread, const pthread_attr_t *attr,
+                   void *(*start_routine) (void *), void *arg) {
+    linfo("ooo %d\n", 123);
+}
 int eventfd(unsigned int initval, int flags) {
     if (!eventfd_f) initHook();
     // if (!crn_in_procer()) return open_f(fds, nfds, timeout);
     // linfo("%d %d\n", initval, flags);
+    if (GC_thread_is_registered() == 0) { // hotfix qt event dispatch thread
+        linfo("%d %d not gcreg thread\n", initval, flags);
+        struct GC_stack_base stkbase;
+        GC_get_stack_base(&stkbase);
+        GC_register_my_thread(&stkbase);
+    }
 
     int rv = eventfd_f(initval, flags);
     // linfo("%d %d\n", initval, flags);

@@ -1368,8 +1368,9 @@ void crn_init_intern() {
     GC_set_start_callback(crn_gc_start_proc);
     GC_set_on_collection_event(crn_gc_on_collection_event2);
     // GC_set_on_thread_event(crn_gc_on_thread_event);
-    GC_INIT();
     GC_allow_register_threads();
+    // GC_use_threads_discovery(); // depcreated
+    GC_INIT();
     // linfo("main thread registered: %d\n", GC_thread_is_registered()); // yes
     // linfo("gcfreq=%d\n", GC_get_full_freq()); // 19
     // GC_set_full_freq(5);
