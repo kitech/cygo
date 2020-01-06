@@ -877,10 +877,14 @@ crn_in_procer() { return gcurmcid__ != 0 && gcurmcid__ != 2 && gcurmcid__ != 1; 
 
 // 在yield函数中，调用suspend之前调用
 static int crn_fiber_mark_curstk_used(fiber* gr) {
-    int usestkmark = 0;
-    int usestksz = (void*)&usestkmark - gr->stack.sptr + sizeof(int)*2;
-    // lverb("curstk inuse grid=%d mcid=%d stksz=%d\n", gr->id, gr->mcid, usestksz);
-    return usestksz;
+    int used_stkmark = 0;
+    int used_stksz = gr->stack.ssze - ((uint64_t)((void*)&used_stkmark) - (uint64_t)(gr->stack.sptr));
+    used_stksz -= sizeof(int)*2;
+    // lverb("curstk inuse grid=%d mcid=%d stksz=%d\n", gr->id, gr->mcid, used_stksz);
+    if (used_stksz > gr->used_stksz) {
+        gr->used_stksz = used_stksz;
+    }
+    return used_stksz;
 }
 int crn_procer_yield(long fd, int ytype) {
     // check是否是procer线程
@@ -1406,6 +1410,46 @@ corona* crn_new() {
     return nr;
 }
 
+#include "crnpub.h"
+void crn_get_stats(crn_inner_stats* st) {
+    corona* nr = gnr__;
+    st->mch_totcnt = 3;
+    machine* mc = nilptr;
+    for (int i = 5; i > 0; i --) {
+        if (i == 2) continue;
+        int rv = crnmap_get(nr->mchs, (uintptr_t)i, (void**)&mc);
+        assert(rv == CC_OK || rv == CC_ERR_KEY_NOT_FOUND || rv == CC_ERR_OUT_OF_RANGE);
+        int fibnum1 = crnqueue_size(mc->ngrs);
+        int fibnum2 = crnmap_size(mc->grs);
+        st->fiber_totcnt += fibnum1 + fibnum2;
+        if (mc->parking == 0) st->mch_actcnt += 1;
+        // linfo("fn1=%d, fn2=%d mc=%d stsz=%d\n", fibnum1, fibnum2, i, sizeof(crn_inner_stats));
+
+        Array* arr = nilptr;
+        rv = crnmap_get_values(mc->grs, &arr);
+        if (rv != CC_OK) {
+            if (rv == CC_ERR_INVALID_CAPACITY) {
+                // nothing
+                assert(crnmap_size(mc->grs) == 0);
+            }else{
+                linfo("some err %d get fiber of mc %d %p %d\n", rv, i, mc->grs, crnmap_size(mc->grs));
+            }
+        }else{
+            assert(rv == CC_OK || rv == CC_ERR_KEY_NOT_FOUND || rv == CC_ERR_OUT_OF_RANGE);
+            for (int i = 0; i < array_size(arr); i++) {
+                fiber* gr = nilptr;
+                rv = array_get_at(arr, i, (void**)&gr);
+                assert(rv == CC_OK);
+                if (gr->state == executing) st->fiber_actcnt += 1;
+                st->fiber_totmem += gr->stack.ssze;
+                if (gr->used_stksz > st->maxstksz) {
+                    st->maxstksz = gr->used_stksz;
+                }
+                // linfo("max stksz fib %d %d/%d\n", gr->id, gr->used_stksz, gr->stack.ssze);
+            }
+        }
+    }
+}
 
 // 开启的总线程数除了以下，还有libgc的线程（3个？）
 void crn_init(corona* nr) {

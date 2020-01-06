@@ -34,6 +34,8 @@ fn C.crn_lock_osthread()
 fn C.hookcb_oncreate()
 fn C.gettid() int
 // fn C.sleep(s int) int
+fn C.crn_get_stats()
+
 
 pub fn lock_osthread() { C.crn_lock_osthread() }
 pub fn add_custom_fd(fd int) { C.hookcb_oncreate(fd, 4, true, 0, 0, 0) }
@@ -62,6 +64,22 @@ pub fn sleep(s int) { C.sleep(s) }
 
 pub fn post(f fn(voidptr), arg voidptr) {
 	C.crn_post(f, arg)
+}
+
+pub struct InnerStats {
+mut:
+    mch_totcnt   int
+	mch_actcnt int
+	fiber_totcnt int
+	fiber_actcnt int
+	fiber_totmem int
+	maxstksz int
+}
+
+pub fn get_stats() &InnerStats {
+	st := &InnerStats{}
+	C.crn_get_stats(st)
+	return st
 }
 
 // redefine in vlip/builtin/bdwgc.v
