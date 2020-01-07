@@ -1,0 +1,45 @@
+name: act1
+on: push
+
+jobs:
+  job1st:
+    name: job1st
+    runs-on: ubuntu-18.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@master
+
+      - name: runmysh
+        run: |
+          env
+          date
+          pwd && ls -lh
+          echo '====='
+          pwd && ls -lh ..
+          echo '====='
+          pwd && ls -lh ../..
+          ./scripts/date.sh
+          mkdir /opt/test1
+
+      - name: prep install
+        run: |
+          sudo apt install -y libxcb1-dev libxcb-xkb-dev libx11-xcb-dev libxcb-cursor-dev libxcb-render0-dev libxkbcommon-x11-dev libxkbcommon-dev libdbus-1-dev fonts-wqy-microhei fonts-wqy-zenhei
+          sudo apt remove -y libgc1c2
+      - name: build qtlt
+        env:
+          BINTRAY_APIKEY: ${{ secrets.BINTRAY_APIKEY }}
+        run: |
+          ./scripts/build-libgc-8.0.4x.sh
+          make -C corona-c
+
+      - name: irc report
+        uses: rectalogic/notify-irc@v1
+        with:
+          #server: ${{ secrets.IRCSRV }}
+          #port: ${{ secrets.IRCPORT }}
+          tls: true
+          channel: "#vknuts"
+          nickname: gareport
+          message: ${{ github.repository }} finished
+
+

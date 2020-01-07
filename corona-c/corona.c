@@ -11,7 +11,8 @@
 #include <corona.h>
 #include <coronapriv.h>
 
-const int dftstksz = 128*1024;
+#define dftstksz (128*1024)
+// const int dftstksz = 128*1024;
 const int dftstkusz = dftstksz/8; // unit size by sizeof(void*)
 
 typedef struct yieldinfo {

@@ -1,6 +1,9 @@
 A library that implemention golang's core features,
 goroutines, schedulers, channels, goselect and garbage collect.
 
+### Requirements
+* [ ] libgc-dev 8.0.4+
+
 ### Features
 
 * [x] stackful coroutine
@@ -13,7 +16,7 @@ goroutines, schedulers, channels, goselect and garbage collect.
 
 ### Usage
 
-All exported functions is `crnpub.h`
+All exported functions is in `crnpub.h`
 
 ### Todos
 
