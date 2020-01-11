@@ -104,6 +104,7 @@ func (this *g2nc) genpkg(name string, pkg *ast.Package) {
 */
 func (this *g2nc) genfile(scope *ast.Scope, name string, f *ast.File) {
 	log.Println("processing", name, f.Name, exprpos(this.psctx, f))
+	this.outf("// mod %s %s ", name, exprpos(this.psctx, f)).outnl()
 	/*
 		for idx, cmto := range f.Comments {
 			log.Println(idx, len(f.Comments), cmto.Text())

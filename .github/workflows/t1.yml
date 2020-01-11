@@ -4,8 +4,17 @@ on: push
 jobs:
   job1st:
     name: job1st
+    strategy:
+      matrix:
+        go-version: [1.13.x, 1.12.x]
+        #go-version: [1.12.x, 1.13.x]
+        # platform: [ubuntu-latest, macos-latest, windows-latest]
     runs-on: ubuntu-18.04
     steps:
+      - name: Install Go
+        uses: actions/setup-go@v1
+        with:
+          go-version: ${{ matrix.go-version }}
       - name: Checkout
         uses: actions/checkout@master
 
@@ -20,10 +29,11 @@ jobs:
           pwd && ls -lh ../..
           ./scripts/date.sh
           mkdir /opt/test1
+          cat ${{ runner.temp }}/_github_workflow/event.json
 
       - name: prep install
         run: |
-          sudo apt install -y libxcb1-dev libxcb-xkb-dev libx11-xcb-dev libxcb-cursor-dev libxcb-render0-dev libxkbcommon-x11-dev libxkbcommon-dev libdbus-1-dev fonts-wqy-microhei fonts-wqy-zenhei
+          sudo apt install -y libxcb1-dev libxcb-xkb-dev libx11-xcb-dev libxcb-cursor-dev libxcb-render0-dev libxkbcommon-x11-dev libxkbcommon-dev libdbus-1-dev libcurl4-openssl-dev
           sudo apt remove -y libgc1c2
       - name: build corona-c
         env:
@@ -46,6 +56,6 @@ jobs:
           tls: true
           channel: "#vknuts"
           nickname: gareport
-          message: ${{ github.repository }} finished
+          message: finished https://github.com/${{ github.repository }}/commit/${{ github.sha }}/checks?check_suite_id=  https://github.com/${{ github.repository }}/commit/${{ github.sha }}/logs
 
 

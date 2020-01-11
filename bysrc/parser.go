@@ -21,15 +21,11 @@ import (
 )
 
 type ParserContext struct {
-	path  string
-	wkdir string // for cgo
-	// pkgname   string
+	path      string
+	wkdir     string // for cgo
 	pkgrename string
 	fset      *token.FileSet
-	// pkgs      map[string]*ast.Package
 	files     []*ast.File
-	typkgsddd *types.Package
-	confddd   types.Config
 	info      *types.Info
 	cursors   map[ast.Node]*astutil.Cursor
 	grstargs  map[string]bool // goroutines packed arguments structure
@@ -54,8 +50,7 @@ type ParserContext struct {
 	globvars  []ast.Node            // => ValueSpec node
 	kvpairs   map[ast.Node]ast.Node // left <=> value
 
-	gb *graph.Graph
-	// bdpkgs *build.Package
+	gb    *graph.Graph
 	ccode string
 }
 
@@ -63,10 +58,6 @@ func NewParserContext(path string, pkgrename string) *ParserContext {
 	this := &ParserContext{}
 	this.path = path
 	this.pkgrename = pkgrename
-	this.info = &types.Info{}
-	this.info.Types = make(map[ast.Expr]types.TypeAndValue)
-	this.info.Defs = make(map[*ast.Ident]types.Object)
-	this.info.Uses = make(map[*ast.Ident]types.Object)
 	this.cursors = make(map[ast.Node]*astutil.Cursor)
 	this.grstargs = make(map[string]bool)
 	this.typeDeclsm = make(map[string]*ast.TypeSpec)
@@ -80,7 +71,10 @@ func NewParserContext(path string, pkgrename string) *ParserContext {
 
 func (this *ParserContext) Init() error {
 	cfg := &packages.Config{Mode: packages.LoadFiles | packages.LoadImports | packages.LoadTypes | packages.LoadAllSyntax}
-	// cfg.Env = append(os.Environ(), []string{"CGO_ENABLED=1"}...)
+	// cfg.Env = append([]string{"CGO_ENABLED=1"}, os.Environ()...)
+	// why could not import C (no metadata for C) ?
+	// if C side has some compile error, this would happend
+	// not really need go 1.13.5+, but CGO_ENABLED=1
 	pkgs, err := packages.Load(cfg, flag.Args()...)
 	gopp.ErrPrint(err)
 	if err != nil {
@@ -88,7 +82,7 @@ func (this *ParserContext) Init() error {
 	}
 	cnt := packages.PrintErrors(pkgs)
 	if cnt > 0 {
-		return fmt.Errorf("load error %d", cnt)
+		return fmt.Errorf("load error %d %v", cnt, pkgs[0].Errors)
 	}
 
 	this.cfg2 = cfg
@@ -316,6 +310,15 @@ func (this *mypkgimporter) Import(path string) (pkgo *types.Package, err error) 
 }
 
 func trimgopath(filename string) string {
+	cachepath := os.Getenv("GOCACHE")
+	if cachepath == "" {
+		cachepath = os.Getenv("HOME") + "/.cache/go-build"
+	}
+	if cachepath != "" && strings.HasPrefix(filename, cachepath) {
+		filename = "@GOCACHE/" + filename[len(cachepath):]
+		return filename
+	}
+
 	gopath := os.Getenv("GOPATH")
 	gopaths := strings.Split(gopath, ":")
 
@@ -323,14 +326,6 @@ func trimgopath(filename string) string {
 		if strings.HasPrefix(filename, pfx) {
 			return "@GOPATH/" + filename[len(pfx)+5:]
 		}
-	}
-
-	cachepath := os.Getenv("GOCACHE")
-	if cachepath == "" {
-		cachepath = os.Getenv("HOME") + "/.cache/go-build"
-	}
-	if cachepath != "" && strings.HasPrefix(filename, cachepath) {
-		filename = "@GOCACHE/" + filename[len(cachepath):]
 	}
 
 	return filename

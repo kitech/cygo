@@ -31,7 +31,7 @@ func main() {
 	err = psctx.Init()
 	gopp.ErrPrint(err, fname)
 	if err != nil {
-		return
+		os.Exit(-1)
 	}
 	psctx.walkpass()
 
