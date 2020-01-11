@@ -82,7 +82,20 @@ func (this *ParserContext) Init() error {
 	}
 	cnt := packages.PrintErrors(pkgs)
 	if cnt > 0 {
-		return fmt.Errorf("load error %d %v", cnt, pkgs[0].Errors)
+		pkg := pkgs[0]
+		alldeclnouse := true
+		for _, e := range pkg.Errors {
+			if strings.Contains(fmt.Sprintf("%v", e), "declared but not used") {
+			} else {
+				alldeclnouse = false
+				break
+			}
+		}
+		if alldeclnouse {
+			log.Println("all error is declared but not used, ignored", cnt)
+		} else {
+			return fmt.Errorf("load error %d %v", cnt, pkgs[0].Errors)
+		}
 	}
 
 	this.cfg2 = cfg

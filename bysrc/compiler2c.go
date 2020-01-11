@@ -1135,14 +1135,15 @@ func (c *g2nc) genCallExprPrintln(scope *ast.Scope, te *ast.CallExpr) {
 	// c.genExpr(scope, te.Fun)
 	c.out("println2")
 	c.out("(")
-	c.out("__FILE__, __LINE__, __func__", gopp.IfElseStr(len(te.Args) > 0, ",", "")).outnl()
+	c.out("__FILE__, __LINE__, __func__",
+		gopp.IfElseStr(len(te.Args) > 0, ",", "")).outnl()
 	if len(te.Args) > 0 {
 		var tyfmts []string
 		for _, e1 := range te.Args {
 			tyfmt := c.exprTypeFmt(scope, e1)
 			tyfmts = append(tyfmts, "%"+tyfmt)
 		}
-		c.out(fmt.Sprintf(`"%s"`, strings.Join(tyfmts, " ")))
+		c.out(fmt.Sprintf(`"%s\n"`, strings.Join(tyfmts, " ")))
 		c.out(", ")
 	}
 	for idx, e1 := range te.Args {
