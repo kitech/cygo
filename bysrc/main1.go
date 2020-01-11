@@ -1,12 +1,12 @@
 package main
 
 import (
+	"flag"
 	"gopp"
 	"io/ioutil"
 	"log"
 	"os"
 	"os/exec"
-	"runtime"
 	"strings"
 	"time"
 )
@@ -14,6 +14,51 @@ import (
 var fname string
 
 func main() {
+	flag.Parse()
+	if len(os.Args) < 2 {
+		log.Fatalln("must specify a go source file to tranpiler")
+	}
+	fname = os.Args[1]
+	fio, err := os.Lstat(fname)
+	gopp.ErrPrint(err)
+	if err != nil {
+		return
+	}
+	if !fio.IsDir() {
+		log.Fatalln("Not a dir", fname)
+	}
+	psctx := NewParserContext(fname, "")
+	err = psctx.Init()
+	gopp.ErrPrint(err, fname)
+	if err != nil {
+		return
+	}
+	psctx.walkpass()
+
+	// g2n := g2nim{}
+	g2n := g2nc{}
+	g2n.basecomp = newbasecomp(psctx)
+	g2n.genpkgs()
+	code, ext := g2n.code()
+	dstfile := "aaa" + ".go." + ext
+	ioutil.WriteFile("opkgs/"+dstfile, []byte(code), 0644)
+
+	/*
+		code := ""
+		extname := ""
+		for i := len(comps) - 1; i >= 0; i-- {
+			str, ext := comps[i].code()
+			code += str
+			extname = ext
+		}
+		fname := "opkgs/foo." + extname
+		ioutil.WriteFile(fname, []byte(code), 0644)
+	*/
+	clangfmt(fname)
+}
+
+/*
+func maindep() {
 	if len(os.Args) < 2 {
 		log.Fatalln("must specify a go source file to tranpiler")
 	}
@@ -88,6 +133,8 @@ func main() {
 	ioutil.WriteFile(fname, []byte(code), 0644)
 	clangfmt(fname)
 }
+*/
+
 func clangfmt(fname string) {
 	cmdo := exec.Command("clang-format", "-i", fname)
 	err := cmdo.Run()
@@ -108,7 +155,8 @@ func dogen(fname string, pkgrename string) (*ParserContext, *g2nc) {
 	g2n.basecomp = newbasecomp(psctx)
 	g2n.genpkgs()
 	code, ext := g2n.code()
-	dstfile := psctx.bdpkgs.Name + ".go." + ext
+	// dstfile := psctx.bdpkgs.Name + ".go." + ext
+	dstfile := "aaa" + ".go." + ext
 	ioutil.WriteFile("opkgs/"+dstfile, []byte(code), 0644)
 	return psctx, &g2n
 }

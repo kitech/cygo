@@ -1,0 +1,8 @@
+module go2nim
+
+go 1.12
+
+require (
+	github.com/thoas/go-funk v0.5.0
+	github.com/twmb/algoimpl v0.0.0-20170717182524-076353e90b94
+)

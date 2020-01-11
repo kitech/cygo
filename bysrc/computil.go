@@ -358,7 +358,8 @@ func (psctx *ParserContext) isglobal(e ast.Node) bool {
 		return false
 	default:
 		gopp.G_USED(te)
-		return psctx.isglobal(psctx.cursors[e].Parent())
+		return false
+		// return psctx.isglobal(psctx.cursors[e].Parent())
 	}
 }
 

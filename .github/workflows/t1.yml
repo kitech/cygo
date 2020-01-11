@@ -25,12 +25,18 @@ jobs:
         run: |
           sudo apt install -y libxcb1-dev libxcb-xkb-dev libx11-xcb-dev libxcb-cursor-dev libxcb-render0-dev libxkbcommon-x11-dev libxkbcommon-dev libdbus-1-dev fonts-wqy-microhei fonts-wqy-zenhei
           sudo apt remove -y libgc1c2
-      - name: build qtlt
+      - name: build corona-c
         env:
           BINTRAY_APIKEY: ${{ secrets.BINTRAY_APIKEY }}
         run: |
           ./scripts/build-libgc-8.0.4x.sh
           make -C corona-c
+
+      - name: build bysrc
+        env:
+          BINTRAY_APIKEY: ${{ secrets.BINTRAY_APIKEY }}
+        run: |
+          ./scripts/build-bysrc.sh
 
       - name: irc report
         uses: rectalogic/notify-irc@v1

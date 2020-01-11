@@ -1,7 +1,7 @@
 package main
 
 /*
-#cgo LDFLAGS: -lhehe1
+#cgo LDFLAGS: -lcurl
 
 #include <sys/socket.h>
 #include <unistd.h>
@@ -18,10 +18,10 @@ func main() {
 	var v = 5
 	println(v)
 	C.sleep(1)
-	var fd int = C.socket(C.AF_INET, C.SOCK_STREAM, 0)
+	var fd int = int(C.socket(C.AF_INET, C.SOCK_STREAM, 0))
 	println(fd)
 	// println(C.errno)
-	var pid int = C.getpid()
+	var pid int = int(C.getpid())
 	println(pid)
 
 	t2foo0()

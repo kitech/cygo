@@ -12,6 +12,8 @@ import (
 	"strings"
 
 	"github.com/thoas/go-funk"
+	"golang.org/x/tools/go/ast/astutil"
+	"golang.org/x/tools/go/packages"
 )
 
 func init() {
@@ -25,26 +27,41 @@ type g2nc struct {
 
 	sb     strings.Builder
 	curpkg string
-	pkgo   *ast.Package
+	// pkgo   *ast.Package
+	pkgo *packages.Package
 
 	info *types.Info
 }
 
 func (this *g2nc) genpkgs() {
-	this.info = &this.psctx.info
+	this.info = this.psctx.info
 
 	// pkgs order?
 	for pname, pkg := range this.psctx.pkgs {
-		pkg.Scope = ast.NewScope(nil)
+		// pkg.Scope = ast.NewScope(nil)
 		this.curpkg = pkg.Name
 		this.pkgo = pkg
 
-		this.genpkg(pname, pkg)
-		this.calcClosureInfo(pkg.Scope, pkg)
-		this.calcDeferInfo(pkg.Scope, pkg)
-		this.genGostmtTypes(pkg.Scope, pkg)
-		this.genChanTypes(pkg.Scope, pkg)
-		this.genMultiretTypes(pkg.Scope, pkg)
+		gopp.G_USED(pname)
+
+		// this.genpkg(pname, pkg)
+		// this.calcClosureInfo(pkg.Scope, pkg)
+		// this.calcDeferInfo(pkg.Scope, pkg)
+		// this.genGostmtTypes(pkg.Scope, pkg)
+		// this.genChanTypes(pkg.Scope, pkg)
+		// this.genMultiretTypes(pkg.Scope, pkg)
+		// this.genFuncs(pkg)
+	}
+
+	for pname, pkg := range this.psctx.pkgs {
+		scope := pkg.Syntax[0].Scope
+		log.Println(pname, pkg)
+		this.genpkg2(pname, pkg)
+		this.calcClosureInfo(scope, pkg)
+		this.calcDeferInfo(scope, pkg)
+		this.genGostmtTypes(scope, pkg)
+		this.genChanTypes(scope, pkg)
+		this.genMultiretTypes(scope, pkg)
 		this.genFuncs(pkg)
 	}
 
@@ -64,14 +81,29 @@ func (c *g2nc) pkgpfx() string {
 	return pfx
 }
 
+func (this *g2nc) genpkg2(name1 string, pkg *packages.Package) {
+	log.Println("processing package", name1, pkg.GoFiles, len(pkg.Syntax))
+	for _, f := range pkg.Syntax {
+		astutil.Apply(f, func(c *astutil.Cursor) bool {
+			// log.Println(name1, c.Node())
+			return true
+		}, func(c *astutil.Cursor) bool {
+			return true
+		})
+		this.genfile(f.Scope, f.Name.Name, f)
+	}
+}
+
+/*
 func (this *g2nc) genpkg(name string, pkg *ast.Package) {
 	log.Println("processing package", name)
 	for name, f := range pkg.Files {
 		this.genfile(pkg.Scope, name, f)
 	}
 }
+*/
 func (this *g2nc) genfile(scope *ast.Scope, name string, f *ast.File) {
-	log.Println("processing", name)
+	log.Println("processing", name, f.Name, exprpos(this.psctx, f))
 	/*
 		for idx, cmto := range f.Comments {
 			log.Println(idx, len(f.Comments), cmto.Text())
@@ -94,7 +126,7 @@ func (this *g2nc) genfile(scope *ast.Scope, name string, f *ast.File) {
 	// 	this.genDecl(scope, d)
 	// }
 }
-func (c *g2nc) calcClosureInfo(scope *ast.Scope, pkg *ast.Package) {
+func (c *g2nc) calcClosureInfo(scope *ast.Scope, pkg *packages.Package) {
 	fds := map[*ast.FuncDecl]int{}
 	for _, fnlit := range c.psctx.closures {
 		fd := upfindFuncDeclAst(c.psctx, fnlit, 0)
@@ -112,7 +144,8 @@ func (c *g2nc) calcClosureInfo(scope *ast.Scope, pkg *ast.Package) {
 	}
 
 }
-func (c *g2nc) calcDeferInfo(scope *ast.Scope, pkg *ast.Package) {
+func (c *g2nc) calcDeferInfo(scope *ast.Scope, pkg *packages.Package) {
+	c.out("// defer types ", fmt.Sprintf("%d", len(c.psctx.defers))).outnl()
 	defers := map[*ast.FuncDecl][]*ast.DeferStmt{}
 	for _, defero := range c.psctx.defers {
 		tmpfd := upfindFuncDeclNode(c.psctx, defero, 0)
@@ -123,16 +156,16 @@ func (c *g2nc) calcDeferInfo(scope *ast.Scope, pkg *ast.Package) {
 		c.deferidx[defero] = deferi
 	}
 }
-func (c *g2nc) genGostmtTypes(scope *ast.Scope, pkg *ast.Package) {
-	c.out("// gostmt types", fmt.Sprintf("%d", len(c.psctx.gostmts))).outnl()
+func (c *g2nc) genGostmtTypes(scope *ast.Scope, pkg *packages.Package) {
+	c.out("// gostmt types ", fmt.Sprintf("%d", len(c.psctx.gostmts))).outnl()
 	for idx, gostmt := range c.psctx.gostmts {
 		c.outf("// %d %v %v", idx, gostmt.Call.Fun, gostmt.Call.Args).outnl()
 		c.genFiberStargs(scope, gostmt.Call)
 		c.outnl()
 	}
 }
-func (c *g2nc) genChanTypes(scope *ast.Scope, pkg *ast.Package) {
-	c.out("// chan types", fmt.Sprintf("%d", len(c.psctx.chanops))).outnl()
+func (c *g2nc) genChanTypes(scope *ast.Scope, pkg *packages.Package) {
+	c.out("// chan types ", fmt.Sprintf("%d", len(c.psctx.chanops))).outnl()
 	gottys := map[string]bool{}
 	// te: ast.SendStmt.Chan/ast.UnaryExpr.X
 	for _, te := range c.psctx.chanops {
@@ -146,8 +179,8 @@ func (c *g2nc) genChanTypes(scope *ast.Scope, pkg *ast.Package) {
 		c.outnl()
 	}
 }
-func (c *g2nc) genMultiretTypes(scope *ast.Scope, pkg *ast.Package) {
-	c.out("// multirets types", fmt.Sprintf("%d", len(c.psctx.gostmts))).outnl()
+func (c *g2nc) genMultiretTypes(scope *ast.Scope, pkg *packages.Package) {
+	c.out("// multirets types ", fmt.Sprintf("%d", len(c.psctx.gostmts))).outnl()
 	for idx, fd := range c.psctx.multirets {
 		c.outf("// %d %v %v", idx, fd.Name, fd.Type.Results.NumFields()).outnl()
 		c.outf("typedef struct %s_multiret_arg %s_multiret_arg", fd.Name.Name, fd.Name.Name).outfh().outnl()
@@ -167,8 +200,9 @@ func (c *g2nc) genMultiretTypes(scope *ast.Scope, pkg *ast.Package) {
 	}
 }
 
-func (this *g2nc) genFuncs(pkg *ast.Package) {
-	scope := pkg.Scope
+func (this *g2nc) genFuncs(pkg *packages.Package) {
+	this.out("// funcs decl ", fmt.Sprintf("%d", len(this.psctx.funcDeclsv))).outnl()
+	scope := pkg.Syntax[0].Scope
 	// ordered funcDeclsv
 	for _, fd := range this.psctx.funcDeclsv {
 		if fd == nil {
@@ -181,7 +215,7 @@ func (this *g2nc) genFuncs(pkg *ast.Package) {
 		this.genDecl(scope, fd)
 	}
 
-	this.genInitGlobvars(pkg.Scope, pkg)
+	this.genInitGlobvars(pkg.Syntax[0].Scope, pkg)
 
 	this.genInitFuncs(scope, pkg)
 	if pkg.Name == "main" {
@@ -376,7 +410,7 @@ func (c *g2nc) genMainFunc(scope *ast.Scope) {
 	c.out("return 0").outfh().outnl()
 	c.out("}").outnl()
 }
-func (c *g2nc) genInitFuncs(scope *ast.Scope, pkg *ast.Package) {
+func (c *g2nc) genInitFuncs(scope *ast.Scope, pkg *packages.Package) {
 	for idx, fd := range c.psctx.initFuncs {
 		c.outf("// %s", c.exprpos(fd).String()).outnl()
 		c.out("static").outsp()
@@ -404,7 +438,9 @@ func (this *g2nc) genStmt(scope *ast.Scope, stmt ast.Stmt, idx int) {
 	// log.Println(stmt, reflect.TypeOf(stmt))
 	if stmt != nil {
 		posinfo := this.exprpos(stmt).String()
+		fields := strings.Split(posinfo, ":")
 		this.out("// ", posinfo).outnl()
+		this.outf("#line %s \"%s\"", fields[1], fields[0]).outnl()
 		stmtstr := this.prtnode(stmt)
 		if !strings.ContainsAny(strings.TrimSpace(stmtstr), "\n") {
 			this.outf("// %s", stmtstr).outnl()
@@ -2327,6 +2363,7 @@ func (c *g2nc) genValueSpec(scope *ast.Scope, spec *ast.ValueSpec, validx int) {
 		if varty == nil && validx > 0 {
 			varty = vp1stty
 		}
+		// log.Println(validx, idx, varname, varty, spec.Values, len(c.info.Types))
 		if varty == nil && strings.HasPrefix(types.ExprString(spec.Values[0]), "C.") {
 			varty = types.Typ[types.UntypedInt]
 		}
@@ -2412,7 +2449,7 @@ func (c *g2nc) genValueSpec(scope *ast.Scope, spec *ast.ValueSpec, validx int) {
 
 }
 
-func (c *g2nc) genInitGlobvars(scope *ast.Scope, pkg *ast.Package) {
+func (c *g2nc) genInitGlobvars(scope *ast.Scope, pkg *packages.Package) {
 	c.outf("void %sglobvars_init() {", c.pkgpfx()).outnl()
 	for _, varx := range c.psctx.globvars {
 		varo := varx.(*ast.ValueSpec)
@@ -2481,8 +2518,10 @@ typedef _Ctype_long _Ctype_ptrdiff_t;
 }
 
 func (this *g2nc) code() (string, string) {
+	log.Println(this.sb.String())
 	code := ""
-	code += fmt.Sprintf("// %s of %s\n", this.psctx.bdpkgs.Dir, this.psctx.wkdir)
+	// code += fmt.Sprintf("// %s of %s\n", this.psctx.bdpkgs.Dir, this.psctx.wkdir)
+	code += fmt.Sprintf("// %s of %s\n", this.psctx.path, this.psctx.wkdir)
 	code += this.psctx.ccode
 	code += "#include <cxrtbase.h>\n\n"
 	code += this.genPrecgodefs() + "\n"

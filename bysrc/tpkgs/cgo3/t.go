@@ -1,7 +1,7 @@
 package main
 
 /*
-#cgo LDFLAGS: -lhehe1
+#cgo LDFLAGS: -lcurl
 
 #include <sys/socket.h>
 #include <unistd.h>
