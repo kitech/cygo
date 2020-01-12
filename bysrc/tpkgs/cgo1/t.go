@@ -24,5 +24,5 @@ func main() {
 	var pid int = int(C.getpid())
 	println(pid)
 
-	t2foo0()
+	t2foo0() // from ./t2.go
 }

@@ -92,7 +92,7 @@ func (this *ParserContext) Init() error {
 			}
 		}
 		if alldeclnouse {
-			log.Println("all error is declared but not used, ignored", cnt)
+			log.Println("all error is `declared but not used`, ignored", cnt)
 		} else {
 			return fmt.Errorf("load error %d %v", cnt, pkgs[0].Errors)
 		}
@@ -102,6 +102,7 @@ func (this *ParserContext) Init() error {
 	this.bdpkgs = pkgs[0]
 	gopp.Assert(len(pkgs) == 1, "wtt", len(pkgs))
 	this.info = this.bdpkgs.TypesInfo
+
 	return err
 }
 
@@ -176,6 +177,7 @@ func (pc *ParserContext) walkpass() {
 	pc.walkpass_flatten_packages()
 	pc.fset = pc.bdpkgs.Fset
 	log.Println("typesinfo cnt ", len(pc.info.Types))
+	pc.ccode = pc.pickCCode()
 
 	this := pc
 	this.walkpass_valid_files()
@@ -201,29 +203,19 @@ func (pc *ParserContext) walkpass_flatten_packages() {
 	imps := map[string]*packages.Package{}
 	var flatten_proc func(pkgs map[string]*packages.Package)
 	flatten_proc = func(pkgs map[string]*packages.Package) {
-		for name, pkg := range pkgs {
-			ignored := ""
-			if strings.HasPrefix(pkg.Name, "internal/") ||
-				strings.HasPrefix(pkg.Name, "unsafe") ||
-				strings.HasPrefix(pkg.Name, "runtime/") || pkg.Name == "runtime" ||
-				pkg.Name == "sync" || pkg.Name == "syscall" || pkg.Name == "sys" ||
-				pkg.Name == "atomic" || pkg.Name == "cgo" ||
-				pkg.Name == "reflectlite" || pkg.Name == "errors" ||
-				pkg.Name == "bytealg" || pkg.Name == "oserror" ||
-				pkg.Name == "cpu" || pkg.Name == "math" || pkg.Name == "race" {
-				ignored = "ignored"
-			}
-			log.Println(name, pkg.Name, ignored)
-			if ignored == "" {
-				imps[name] = pkg
+		for pkgpath, pkg := range pkgs {
+			pkgname := pkg.Name
+			if isgointernpkg(pkgpath, pkgname) {
+				log.Println(pkgpath, pkgname, "ignored")
+			} else {
+				imps[pkgpath] = pkg
 			}
 		}
 		for _, pkg := range pkgs {
 			flatten_proc(pkg.Imports)
 		}
 	}
-	tmps := map[string]*packages.Package{}
-	tmps[pc.bdpkgs.Name] = pc.bdpkgs
+	tmps := map[string]*packages.Package{pc.bdpkgs.PkgPath: pc.bdpkgs}
 	flatten_proc(tmps)
 	pc.pkgs = imps
 }
@@ -231,7 +223,13 @@ func (pc *ParserContext) walkpass_flatten_fset() {
 	pc.fset = pc.bdpkgs.Fset
 }
 
-// cgo preprocessor
+// CgoFiles merges in GoFiles in xgo/packages
+// https://github.com/golang/tools/blob/a7a6caa82ab2c7a235db8f1e47d3a8f2e7a6c054/go/packages/golist.go#L729
+func (pc *ParserContext) walkpass_cgo_files_populate() {
+	// extract cgo files from packages.Package.GoFiles
+}
+
+// cgo preprocessor types
 /*
 func (pc *ParserContext) walkpass_cgo_processor() {
 	pc.wkdir = "_obj"
@@ -274,6 +272,7 @@ func (pc *ParserContext) walkpass_cgo_processor() {
 	os.Rename(pc.wkdir+"/_cgo_gotypes.go", pc.wkdir+"/cxuse_cgo_gotypes.go")
 }
 */
+
 func (pc *ParserContext) walkpass_check() {
 	// pc.conf.FakeImportC = true
 	// pc.conf.Importer = &mypkgimporter{}
@@ -352,6 +351,16 @@ func exprpos(pc *ParserContext, e ast.Node) token.Position {
 	return poso
 }
 
+// return notrimmed filename
+func exprpos2(pc *ParserContext, e ast.Node) token.Position {
+	if e == nil {
+		return token.Position{}
+	}
+	poso := pc.fset.Position(e.Pos())
+	// poso.Filename = trimgopath(poso.Filename)
+	return poso
+}
+
 func (this *ParserContext) pickCCode() string {
 	rawcode := this.pickCCode2()
 	lines := strings.Split(rawcode, "\n")
@@ -359,6 +368,8 @@ func (this *ParserContext) pickCCode() string {
 	for _, line := range lines {
 		if !strings.HasPrefix(line, "#cgo ") {
 			rawcode += line + "\n"
+		} else {
+			rawcode += "// " + line + "\n"
 		}
 	}
 	// log.Println("got c code", rawcode)
@@ -366,6 +377,11 @@ func (this *ParserContext) pickCCode() string {
 }
 func (this *ParserContext) pickCCode2() string {
 	ccode := ""
+	// CgoFiles is in packages.Package.GoFiles
+	for _, f := range this.bdpkgs.GoFiles {
+		var fo *ast.File = this.findFileobj(f)
+		ccode += this.pickCCode3(fo)
+	}
 	/*
 		for _, f := range this.bdpkgs.CgoFiles {
 			var fo *ast.File = this.findFileobj(f)
@@ -381,16 +397,27 @@ func (this *ParserContext) pickCCode3(fo *ast.File) string {
 			gopp.G_USED(idx, idx2)
 			if impo.Pos()-token.Pos(len("\nimport ")) == cmto.End() {
 				// log.Println("got c code", cmto.Text())
-				return cmto.Text()
+				lineposi := exprpos(this, cmto)
+				codeblk := "// embeded C code block begin\n"
+				codeblk += fmt.Sprintf("#line %d \"%s\"\n%s\n",
+					lineposi.Line, lineposi.Filename, cmto.Text())
+				codeblk += "// embeded C code block end\n"
+				return codeblk
 			}
 		}
 	}
 	return ""
 }
-func (this *ParserContext) findFileobj(fbname string) *ast.File {
+
+// origname full path name of go file
+func (this *ParserContext) findFileobj(origname string) *ast.File {
 	for _, pkgo := range this.pkgs {
 		for _, fileo := range pkgo.Syntax {
 			if fileo == nil {
+			}
+			fullname := exprpos2(this, fileo).Filename
+			if fullname == origname {
+				return fileo
 			}
 		}
 		/*

@@ -83,6 +83,7 @@ func (c *g2nc) pkgpfx() string {
 
 func (this *g2nc) genpkg2(name1 string, pkg *packages.Package) {
 	log.Println("processing package", name1, pkg.GoFiles, len(pkg.Syntax))
+	log.Println("pkg other files", name1, pkg.ExportFile, pkg.OtherFiles, pkg.CompiledGoFiles)
 	for _, f := range pkg.Syntax {
 		astutil.Apply(f, func(c *astutil.Cursor) bool {
 			// log.Println(name1, c.Node())
@@ -94,14 +95,6 @@ func (this *g2nc) genpkg2(name1 string, pkg *packages.Package) {
 	}
 }
 
-/*
-func (this *g2nc) genpkg(name string, pkg *ast.Package) {
-	log.Println("processing package", name)
-	for name, f := range pkg.Files {
-		this.genfile(pkg.Scope, name, f)
-	}
-}
-*/
 func (this *g2nc) genfile(scope *ast.Scope, name string, f *ast.File) {
 	log.Println("processing", name, f.Name, exprpos(this.psctx, f))
 	this.outf("// mod %s %s ", name, exprpos(this.psctx, f)).outnl()
@@ -440,7 +433,8 @@ func (this *g2nc) genStmt(scope *ast.Scope, stmt ast.Stmt, idx int) {
 	if stmt != nil {
 		posinfo := this.exprpos(stmt).String()
 		fields := strings.Split(posinfo, ":")
-		this.out("// ", posinfo).outnl()
+		// this.out("// ", posinfo).outnl()
+		this.outnl()
 		this.outf("#line %s \"%s\"", fields[1], fields[0]).outnl()
 		stmtstr := this.prtnode(stmt)
 		if !strings.ContainsAny(strings.TrimSpace(stmtstr), "\n") {
@@ -1143,7 +1137,7 @@ func (c *g2nc) genCallExprPrintln(scope *ast.Scope, te *ast.CallExpr) {
 			tyfmt := c.exprTypeFmt(scope, e1)
 			tyfmts = append(tyfmts, "%"+tyfmt)
 		}
-		c.out(fmt.Sprintf(`"%s\n"`, strings.Join(tyfmts, " ")))
+		c.out(fmt.Sprintf(`"%s"`, strings.Join(tyfmts, " ")))
 		c.out(", ")
 	}
 	for idx, e1 := range te.Args {
@@ -2520,13 +2514,13 @@ typedef _Ctype_long _Ctype_ptrdiff_t;
 }
 
 func (this *g2nc) code() (string, string) {
-	log.Println(this.sb.String())
 	code := ""
-	// code += fmt.Sprintf("// %s of %s\n", this.psctx.bdpkgs.Dir, this.psctx.wkdir)
 	code += fmt.Sprintf("// %s of %s\n", this.psctx.path, this.psctx.wkdir)
 	code += this.psctx.ccode
 	code += "#include <cxrtbase.h>\n\n"
 	code += this.genPrecgodefs() + "\n"
 	code += this.sb.String()
+
+	log.Println(code)
 	return code, "c"
 }
