@@ -187,7 +187,11 @@ func (pc *ParserContext) walkpass() {
 	this.walkpass_flat_cursors()
 	this.walkpass_func_deps()
 	log.Println("pkgs", "types:", len(this.info.Types),
-		"typedefs", len(this.typeDeclsm), "funcdefs", len(this.funcDeclsm))
+		"implicits", len(this.info.Implicits),
+		"???defs", len(this.info.Defs),
+		"???uses", len(this.info.Uses),
+		"typedefs", len(this.typeDeclsm),
+		"funcdefs", len(this.funcDeclsm))
 
 	this.walkpass_tmpvars()
 	this.walkpass_kvpairs()
@@ -732,23 +736,30 @@ func (pc *ParserContext) walkpass_tmpvars() {
 	}, func(c *astutil.Cursor) bool {
 		switch te := c.Node().(type) {
 		case *ast.CompositeLit:
-			break
+			// break
 			ce := c.Node().(ast.Expr)
 			vsp2 := &ast.AssignStmt{}
 			vsp2.Lhs = []ast.Expr{newIdent(tmpvarname())}
 			vsp2.Rhs = []ast.Expr{ce}
-			xe := &ast.UnaryExpr{}
-			xe.Op = token.AND
-			xe.OpPos = c.Node().Pos()
-			xe.X = ce
-			vsp2.Rhs = []ast.Expr{xe}
 			vsp2.Tok = token.DEFINE
+			if false {
+				xe := &ast.UnaryExpr{}
+				xe.Op = token.AND
+				xe.OpPos = c.Node().Pos()
+				xe.X = ce
+				vsp2.Rhs = []ast.Expr{xe}
+			} else {
+				// vsp2.Rhs = []ast.Expr{ce}
+			}
 			c.Replace(vsp2.Lhs[0])
 			stmt := upfindstmt(pc, c, 0)
 			tmpvars[stmt] = append(tmpvars[stmt], vsp2)
+			log.Println(c)
 			tyval := types.TypeAndValue{}
 			tyval.Type = pc.info.TypeOf(ce)
-			tyval.Type = types.NewPointer(tyval.Type)
+			if false {
+				tyval.Type = types.NewPointer(tyval.Type)
+			}
 			pc.info.Types[vsp2.Lhs[0]] = tyval
 			pc.info.Types[vsp2.Rhs[0]] = tyval
 		case *ast.UnaryExpr:

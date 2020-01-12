@@ -7,6 +7,7 @@ import (
 	"go/types"
 	"gopp"
 	"log"
+	"os"
 	"reflect"
 	"runtime/debug"
 	"strings"
@@ -30,11 +31,17 @@ type g2nc struct {
 	// pkgo   *ast.Package
 	pkgo *packages.Package
 
-	info *types.Info
+	info  *types.Info
+	scope *ast.Scope
+	outfp *os.File
 }
 
 func (this *g2nc) genpkgs() {
 	this.info = this.psctx.info
+	this.scope = ast.NewScope(nil)
+	outfp, err := os.OpenFile("/tmp/bysrc.out", os.O_CREATE|os.O_RDWR|os.O_TRUNC, 0644)
+	gopp.ErrPrint(err)
+	this.outfp = outfp
 
 	// pkgs order?
 	for pname, pkg := range this.psctx.pkgs {
@@ -53,8 +60,8 @@ func (this *g2nc) genpkgs() {
 		// this.genFuncs(pkg)
 	}
 
+	scope := this.scope
 	for pname, pkg := range this.psctx.pkgs {
-		scope := pkg.Syntax[0].Scope
 		log.Println(pname, pkg)
 		this.genpkg2(pname, pkg)
 		this.calcClosureInfo(scope, pkg)
@@ -91,7 +98,7 @@ func (this *g2nc) genpkg2(name1 string, pkg *packages.Package) {
 		}, func(c *astutil.Cursor) bool {
 			return true
 		})
-		this.genfile(f.Scope, f.Name.Name, f)
+		this.genfile(this.scope, f.Name.Name, f)
 	}
 }
 
@@ -196,7 +203,7 @@ func (c *g2nc) genMultiretTypes(scope *ast.Scope, pkg *packages.Package) {
 
 func (this *g2nc) genFuncs(pkg *packages.Package) {
 	this.out("// funcs decl ", fmt.Sprintf("%d", len(this.psctx.funcDeclsv))).outnl()
-	scope := pkg.Syntax[0].Scope
+	scope := this.scope
 	// ordered funcDeclsv
 	for _, fd := range this.psctx.funcDeclsv {
 		if fd == nil {
@@ -209,7 +216,7 @@ func (this *g2nc) genFuncs(pkg *packages.Package) {
 		this.genDecl(scope, fd)
 	}
 
-	this.genInitGlobvars(pkg.Syntax[0].Scope, pkg)
+	this.genInitGlobvars(this.scope, pkg)
 
 	this.genInitFuncs(scope, pkg)
 	if pkg.Name == "main" {
@@ -433,9 +440,12 @@ func (this *g2nc) genStmt(scope *ast.Scope, stmt ast.Stmt, idx int) {
 	if stmt != nil {
 		posinfo := this.exprpos(stmt).String()
 		fields := strings.Split(posinfo, ":")
-		// this.out("// ", posinfo).outnl()
-		this.outnl()
-		this.outf("#line %s \"%s\"", fields[1], fields[0]).outnl()
+		if len(fields) > 1 {
+			this.outnl()
+			this.outf("#line %s \"%s\"", fields[1], fields[0]).outnl()
+		} else {
+			this.out("// ", posinfo).outnl()
+		}
 		stmtstr := this.prtnode(stmt)
 		if !strings.ContainsAny(strings.TrimSpace(stmtstr), "\n") {
 			this.outf("// %s", stmtstr).outnl()
@@ -1712,9 +1722,17 @@ func (this *g2nc) genExpr2(scope *ast.Scope, e ast.Expr) {
 		case *ast.MapType:
 			this.outf("cxhashtable_new()").outfh().outnl()
 			var vo = scope.Lookup("varname")
+			if vo == nil {
+				// vo = lookscope(scope, "varname")
+			}
+			if vo == nil {
+				gotyval := this.info.Types[te]
+				log.Println("temp var?", vo, this.exprpos(te), gotyval)
+			}
 			for idx, ex := range te.Elts {
 				switch be := ex.(type) {
 				case *ast.KeyValueExpr:
+					// log.Println(vo == nil, ex, idx, this.exprpos(ex))
 					this.genCxmapAddkv(scope, vo.Data, be.Key, be.Value)
 					this.outfh().outnl()
 				default:
@@ -1724,12 +1742,15 @@ func (this *g2nc) genExpr2(scope *ast.Scope, e ast.Expr) {
 		case *ast.ArrayType:
 			var vo = scope.Lookup("varname")
 			if vo == nil {
+				// vo = lookscope(scope, "varname")
+			}
+			if vo == nil {
 				gotyval := this.info.Types[te]
 				log.Println("temp var?", vo, this.exprpos(te), gotyval)
 			}
 			this.outf("cxarray_new()").outfh().outnl()
 			for idx, ex := range te.Elts {
-				log.Println(vo == nil, ex, idx, this.exprpos(ex))
+				// log.Println(vo == nil, ex, idx, this.exprpos(ex))
 				this.genCxarrAdd(scope, vo.Data, ex, idx)
 				this.outfh().outnl()
 			}
@@ -1997,7 +2018,11 @@ func (c *g2nc) genCxarrAdd(scope *ast.Scope, vnamex interface{}, ve ast.Expr, id
 	}
 
 	varobj := c.info.ObjectOf(vnamex.(*ast.Ident))
-	pkgpfx := gopp.IfElseStr(isglobalid(c.psctx, vnamex.(*ast.Ident)), varobj.Pkg().Name(), "")
+	log.Println(varobj == nil, vnamex, ve, idx)
+	pkgpfx := ""
+	if isglobalid(c.psctx, vnamex.(*ast.Ident)) {
+		pkgpfx = varobj.Pkg().Name()
+	}
 	pkgpfx = gopp.IfElseStr(pkgpfx == "", "", pkgpfx+"_")
 	c.outf("array_add(%s%v, (void*)(uintptr_t)%v)", pkgpfx,
 		vnamex.(*ast.Ident).Name, valstr) // .outfh().outnl()
@@ -2345,6 +2370,18 @@ func putscope(scope *ast.Scope, k ast.ObjKind, name string, value interface{}) *
 	return pscope
 }
 
+// orignal Lookup igore Outer scope, but this not
+func lookscope(scope *ast.Scope, name string) *ast.Object {
+	if scope == nil {
+		return nil
+	}
+	obj := scope.Lookup(name)
+	if obj != nil {
+		return obj
+	}
+	return lookscope(scope.Outer, name)
+}
+
 var vp1stval ast.Expr
 var vp1stty types.Type
 var vp1stidx int
@@ -2489,6 +2526,7 @@ func (this *g2nc) out(ss ...string) *g2nc {
 	for _, s := range ss {
 		// fmt.Print(s, " ")
 		this.sb.WriteString(s + "")
+		this.outfp.WriteString(s + "")
 	}
 	return this
 }
