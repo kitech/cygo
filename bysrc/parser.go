@@ -742,7 +742,14 @@ func (pc *ParserContext) walkpass_tmpvars() {
 			vsp2.Lhs = []ast.Expr{newIdent(tmpvarname())}
 			vsp2.Rhs = []ast.Expr{ce}
 			vsp2.Tok = token.DEFINE
-			if false {
+			anded := false
+			cety := pc.info.TypeOf(ce)
+			if _, ok1 := cety.(*types.Named); ok1 {
+				if _, ok2 := cety.Underlying().(*types.Struct); ok2 {
+					anded = true
+				}
+			}
+			if anded {
 				xe := &ast.UnaryExpr{}
 				xe.Op = token.AND
 				xe.OpPos = c.Node().Pos()
@@ -754,17 +761,21 @@ func (pc *ParserContext) walkpass_tmpvars() {
 			c.Replace(vsp2.Lhs[0])
 			stmt := upfindstmt(pc, c, 0)
 			tmpvars[stmt] = append(tmpvars[stmt], vsp2)
-			log.Println(c)
 			tyval := types.TypeAndValue{}
 			tyval.Type = pc.info.TypeOf(ce)
-			if false {
+			if anded {
 				tyval.Type = types.NewPointer(tyval.Type)
 			}
 			pc.info.Types[vsp2.Lhs[0]] = tyval
 			pc.info.Types[vsp2.Rhs[0]] = tyval
 		case *ast.UnaryExpr:
 			if te.Op == token.AND {
+				stmt := upfindstmt(pc, c, 0)
+				if tmpvars[stmt] != nil {
+					c.Replace(te.X)
+				}
 				if _, ok := te.X.(*ast.CompositeLit); ok {
+					log.Panicln("not reach")
 					vsp2 := &ast.AssignStmt{}
 					vsp2.Lhs = []ast.Expr{newIdent(tmpvarname())}
 					vsp2.Rhs = []ast.Expr{te}

@@ -39,7 +39,7 @@ type g2nc struct {
 func (this *g2nc) genpkgs() {
 	this.info = this.psctx.info
 	this.scope = ast.NewScope(nil)
-	outfp, err := os.OpenFile("/tmp/bysrc.out", os.O_CREATE|os.O_RDWR|os.O_TRUNC, 0644)
+	outfp, err := os.OpenFile("/tmp/bysrc.out.c", os.O_CREATE|os.O_RDWR|os.O_TRUNC, 0644)
 	gopp.ErrPrint(err)
 	this.outfp = outfp
 
@@ -1759,8 +1759,27 @@ func (this *g2nc) genExpr2(scope *ast.Scope, e ast.Expr) {
 		case *ast.Ident: // TODO
 			var vo = scope.Lookup("varname")
 			this.outf("%v_new_zero()", this.exprTypeName(scope, be)).outfh().outnl()
-			for _, ex := range te.Elts {
-				this.outf("%v->%v = %v", vo, "aaa", ex)
+			for idx, ex := range te.Elts {
+				this.genExpr(scope, vo.Data.(ast.Expr))
+				this.out("->")
+				switch ef := ex.(type) {
+				case *ast.KeyValueExpr:
+					this.genExpr(scope, ef.Key)
+					this.outeq()
+					this.genExpr(scope, ef.Value)
+				default:
+					tetyx := this.info.TypeOf(te)
+					switch tetyx.(type) {
+					case *types.Named:
+						tetyx = tetyx.Underlying()
+					default:
+						log.Panicln("need more", tetyx, reflect.TypeOf(tetyx))
+					}
+					tety := tetyx.(*types.Struct)
+					this.out(tety.Field(idx).Name())
+					this.outeq()
+					this.genExpr(scope, ex)
+				}
 				this.outfh().outnl()
 			}
 		default:
