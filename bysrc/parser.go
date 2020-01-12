@@ -432,6 +432,13 @@ func (this *ParserContext) findFileobj(origname string) *ast.File {
 	return nil
 }
 
+func (pc *ParserContext) pkgmap2arr() (arr []*packages.Package) {
+	for _, pkgo := range pc.pkgs {
+		arr = append(arr, pkgo)
+	}
+	return
+}
+
 func (pc *ParserContext) walkpass_valid_files() {
 	this := pc
 	pkgs := pc.pkgs
@@ -448,130 +455,134 @@ func (pc *ParserContext) walkpass_valid_files() {
 	this.files = files
 }
 
+// astutil.Apply for all packages, files
+func (pc *ParserContext) Apply(pre func(c *astutil.Cursor) bool, post func(c *astutil.Cursor) bool) {
+	for _, pkg := range pc.pkgs {
+		for _, fileo := range pkg.Syntax {
+			astutil.Apply(fileo, pre, post)
+		}
+	}
+}
+
 func (pc *ParserContext) walkpass_func_deps() {
 	pc.walkpass_func_deps1()
 	pc.walkpass_func_deps2()
 }
 func (pc *ParserContext) walkpass_func_deps1() {
 	this := pc
-	pkgs := pc.pkgs
 
 	pc.putFuncCallDependcy("main", "main_go")
-	for _, pkg := range pkgs {
-		for _, fileo := range pkg.Syntax {
-			var curfds []string // stack, current func decls
-			astutil.Apply(fileo, func(c *astutil.Cursor) bool {
-				switch te := c.Node().(type) {
-				case *ast.TypeSpec:
-					// log.Println("typedef", t.Name.Name)
-					this.typeDeclsm[te.Name.Name] = te
-				case *ast.FuncDecl:
-					if te.Recv != nil && te.Recv.NumFields() > 0 {
-						varty := te.Recv.List[0].Type
-						if ve, ok := varty.(*ast.StarExpr); ok {
-							varty2 := ve.X
-							tyname := varty2.(*ast.Ident).Name
-							fnfullname := tyname + "_" + te.Name.Name
-							this.funcDeclsm[fnfullname] = te
-							curfds = append(curfds, fnfullname)
-						} else if ve, ok := varty.(*ast.Ident); ok {
-							tyname := ve.Name
-							fnfullname := tyname + "_" + te.Name.Name
-							this.funcDeclsm[fnfullname] = te
-							curfds = append(curfds, fnfullname)
-						} else {
-							log.Println("todo", varty, reflect.TypeOf(te.Recv.List[0]))
-						}
-					} else {
-						if te.Name.Name == "init" {
-							this.initFuncs = append(this.initFuncs, te)
-						}
-						this.funcDeclsm[te.Name.Name] = te
-						curfds = append(curfds, te.Name.Name)
-					}
-				case *ast.CallExpr:
-					if len(curfds) == 0 { // global scope call
-						switch be := te.Fun.(type) {
-						case *ast.SelectorExpr:
-							if iscsel(be.X) {
-								break
-							} else {
-								log.Println("wtf", te, te.Fun, reflect.TypeOf(te.Fun))
-							}
-						default:
-							log.Println("wtf", te, te.Fun, reflect.TypeOf(te.Fun))
-						}
-						// break
-					} else {
-						var curfd = curfds[len(curfds)-1]
-						switch be := te.Fun.(type) {
-						case *ast.Ident:
-							this.putFuncCallDependcy(curfd, be.Name)
-						case *ast.SelectorExpr:
-							if iscsel(be.X) {
-								break
-							}
-							varty := this.info.TypeOf(be.X)
-							if varty == nil {
-								break
-							}
-							tyname := sign2rety(varty.String())
-							tyname = strings.TrimRight(tyname, "*")
-							fnfullname := tyname + "_" + be.Sel.Name
-							this.putFuncCallDependcy(curfd, fnfullname)
-						default:
-							log.Println("todo", te.Fun, reflect.TypeOf(te.Fun))
-						}
-					}
-				case *ast.Ident: // func name referenced
-					if len(curfds) == 0 {
-						break
-					}
-					var curfd = curfds[len(curfds)-1]
-					varobj := this.info.ObjectOf(te)
-					switch varobj.(type) {
-					case *types.Func:
-						this.putFuncCallDependcy(curfd, te.Name)
-					}
-				case *ast.ReturnStmt:
-				case *ast.CompositeLit:
-					if len(curfds) == 0 {
-						log.Println("todo globvar", exprpos(pc, c.Node()))
-						break
-					}
-					var curfd = curfds[len(curfds)-1]
-					goty := pc.info.TypeOf(te.Type)
-					for funame, fd := range pc.funcDeclsm {
-						if fd.Recv.NumFields() == 0 {
-							continue
-						}
-						rcv0 := fd.Recv.List[0]
-						rcvty := pc.info.TypeOf(rcv0.Type)
-						samety := rcvty == goty
-						if ptrty, ok := rcvty.(*types.Pointer); ok && !samety {
-							samety = ptrty.Elem() == goty
-						}
-						if samety {
-							this.putFuncCallDependcy(curfd, funame)
-						}
-					}
+	var curfds []string // stack, current func decls
+	pc.Apply(func(c *astutil.Cursor) bool {
+		switch te := c.Node().(type) {
+		case *ast.TypeSpec:
+			// log.Println("typedef", t.Name.Name)
+			this.typeDeclsm[te.Name.Name] = te
+		case *ast.FuncDecl:
+			if te.Recv != nil && te.Recv.NumFields() > 0 {
+				varty := te.Recv.List[0].Type
+				if ve, ok := varty.(*ast.StarExpr); ok {
+					varty2 := ve.X
+					tyname := varty2.(*ast.Ident).Name
+					fnfullname := tyname + "_" + te.Name.Name
+					this.funcDeclsm[fnfullname] = te
+					curfds = append(curfds, fnfullname)
+				} else if ve, ok := varty.(*ast.Ident); ok {
+					tyname := ve.Name
+					fnfullname := tyname + "_" + te.Name.Name
+					this.funcDeclsm[fnfullname] = te
+					curfds = append(curfds, fnfullname)
+				} else {
+					log.Println("todo", varty, reflect.TypeOf(te.Recv.List[0]))
 				}
-				return true
-			}, func(c *astutil.Cursor) bool {
-				switch te := c.Node().(type) {
-				case *ast.FuncDecl:
-					if te.Recv != nil && te.Recv.NumFields() > 0 {
-						curfds = curfds[:len(curfds)-1]
+			} else {
+				if te.Name.Name == "init" {
+					this.initFuncs = append(this.initFuncs, te)
+				}
+				this.funcDeclsm[te.Name.Name] = te
+				curfds = append(curfds, te.Name.Name)
+			}
+		case *ast.CallExpr:
+			if len(curfds) == 0 { // global scope call
+				switch be := te.Fun.(type) {
+				case *ast.SelectorExpr:
+					if iscsel(be.X) {
+						break
 					} else {
-						curfds = curfds[:len(curfds)-1]
+						log.Println("wtf", te, te.Fun, reflect.TypeOf(te.Fun))
 					}
 				default:
-					gopp.G_USED(te)
+					log.Println("wtf", te, te.Fun, reflect.TypeOf(te.Fun))
 				}
-				return true
-			})
+				// break
+			} else {
+				var curfd = curfds[len(curfds)-1]
+				switch be := te.Fun.(type) {
+				case *ast.Ident:
+					this.putFuncCallDependcy(curfd, be.Name)
+				case *ast.SelectorExpr:
+					if iscsel(be.X) {
+						break
+					}
+					varty := this.info.TypeOf(be.X)
+					if varty == nil {
+						break
+					}
+					tyname := sign2rety(varty.String())
+					tyname = strings.TrimRight(tyname, "*")
+					fnfullname := tyname + "_" + be.Sel.Name
+					this.putFuncCallDependcy(curfd, fnfullname)
+				default:
+					log.Println("todo", te.Fun, reflect.TypeOf(te.Fun))
+				}
+			}
+		case *ast.Ident: // func name referenced
+			if len(curfds) == 0 {
+				break
+			}
+			var curfd = curfds[len(curfds)-1]
+			varobj := this.info.ObjectOf(te)
+			switch varobj.(type) {
+			case *types.Func:
+				this.putFuncCallDependcy(curfd, te.Name)
+			}
+		case *ast.ReturnStmt:
+		case *ast.CompositeLit:
+			if len(curfds) == 0 {
+				log.Println("todo globvar", exprpos(pc, c.Node()))
+				break
+			}
+			var curfd = curfds[len(curfds)-1]
+			goty := pc.info.TypeOf(te.Type)
+			for funame, fd := range pc.funcDeclsm {
+				if fd.Recv.NumFields() == 0 {
+					continue
+				}
+				rcv0 := fd.Recv.List[0]
+				rcvty := pc.info.TypeOf(rcv0.Type)
+				samety := rcvty == goty
+				if ptrty, ok := rcvty.(*types.Pointer); ok && !samety {
+					samety = ptrty.Elem() == goty
+				}
+				if samety {
+					this.putFuncCallDependcy(curfd, funame)
+				}
+			}
 		}
-	}
+		return true
+	}, func(c *astutil.Cursor) bool {
+		switch te := c.Node().(type) {
+		case *ast.FuncDecl:
+			if te.Recv != nil && te.Recv.NumFields() > 0 {
+				curfds = curfds[:len(curfds)-1]
+			} else {
+				curfds = curfds[:len(curfds)-1]
+			}
+		default:
+			gopp.G_USED(te)
+		}
+		return true
+	})
 }
 func (pc *ParserContext) walkpass_func_deps2() {
 	nodes := pc.gb.TopologicalSort()
@@ -597,49 +608,39 @@ func (pc *ParserContext) walkpass_func_deps2() {
 }
 
 func (pc *ParserContext) walkpass_flat_cursors() {
-	pkgs := pc.pkgs
-	for _, pkg := range pkgs {
-		for _, fileo := range pkg.Syntax {
-			astutil.Apply(fileo, func(c *astutil.Cursor) bool {
-				tc := *c
-				pc.cursors[c.Node()] = &tc
-				switch te := c.Node().(type) {
-				default:
-					gopp.G_USED(te)
-				}
-				return true
-			}, func(c *astutil.Cursor) bool {
-				switch te := c.Node().(type) {
-				default:
-					gopp.G_USED(te)
-				}
-				return true
-			})
+	pc.Apply(func(c *astutil.Cursor) bool {
+		tc := *c
+		pc.cursors[c.Node()] = &tc
+		switch te := c.Node().(type) {
+		default:
+			gopp.G_USED(te)
 		}
-	}
+		return true
+	}, func(c *astutil.Cursor) bool {
+		switch te := c.Node().(type) {
+		default:
+			gopp.G_USED(te)
+		}
+		return true
+	})
 }
 
 func (pc *ParserContext) walkpass_tmpl_proc() {
-	pkgs := pc.pkgs
-	for _, pkg := range pkgs {
-		for _, fileo := range pkg.Syntax {
-			astutil.Apply(fileo, func(c *astutil.Cursor) bool {
-				tc := *c
-				pc.cursors[c.Node()] = &tc
-				switch te := c.Node().(type) {
-				default:
-					gopp.G_USED(te)
-				}
-				return true
-			}, func(c *astutil.Cursor) bool {
-				switch te := c.Node().(type) {
-				default:
-					gopp.G_USED(te)
-				}
-				return true
-			})
+	pc.Apply(func(c *astutil.Cursor) bool {
+		tc := *c
+		pc.cursors[c.Node()] = &tc
+		switch te := c.Node().(type) {
+		default:
+			gopp.G_USED(te)
 		}
-	}
+		return true
+	}, func(c *astutil.Cursor) bool {
+		switch te := c.Node().(type) {
+		default:
+			gopp.G_USED(te)
+		}
+		return true
+	})
 }
 
 func (pc *ParserContext) dumpup(cs *astutil.Cursor, no int) {
@@ -688,127 +689,115 @@ func upfindFuncDecl(pc *ParserContext, cs *astutil.Cursor, no int) *ast.FuncDecl
 
 func (pc *ParserContext) walkpass_multiret() {
 	multirets := []*ast.FuncDecl{}
-	pkgs := pc.pkgs
-	for _, pkg := range pkgs {
-		for _, fileo := range pkg.Syntax {
-			astutil.Apply(fileo, func(c *astutil.Cursor) bool {
-				switch te := c.Node().(type) {
-				default:
-					gopp.G_USED(te)
-				}
-				return true
-			}, func(c *astutil.Cursor) bool {
-				switch te := c.Node().(type) {
-				case *ast.FuncDecl:
-					if te.Type.Results.NumFields() < 2 {
-						break
-					}
-					for idx, fld := range te.Type.Results.List {
-						if len(fld.Names) == 0 {
-							fld.Names = append(fld.Names, newIdent(tmpvarname2(idx)))
-						}
-					}
-					multirets = append(multirets, te)
-				default:
-					gopp.G_USED(te)
-				}
-				return true
-			})
+	pc.Apply(func(c *astutil.Cursor) bool {
+		switch te := c.Node().(type) {
+		default:
+			gopp.G_USED(te)
 		}
-	}
+		return true
+	}, func(c *astutil.Cursor) bool {
+		switch te := c.Node().(type) {
+		case *ast.FuncDecl:
+			if te.Type.Results.NumFields() < 2 {
+				break
+			}
+			for idx, fld := range te.Type.Results.List {
+				if len(fld.Names) == 0 {
+					fld.Names = append(fld.Names, newIdent(tmpvarname2(idx)))
+				}
+			}
+			multirets = append(multirets, te)
+		default:
+			gopp.G_USED(te)
+		}
+		return true
+	})
+
 	log.Println("multirets", len(multirets))
 	pc.multirets = multirets
 }
 
 // 一句表达不了的表达式临时变量
 func (pc *ParserContext) walkpass_tmpvars() {
-	pkgs := pc.pkgs
 	var tmpvars = map[ast.Stmt][]ast.Node{} // => tmpvarname
 	gopp.G_USED(tmpvars)
 
-	for _, pkg := range pkgs {
-		for _, fileo := range pkg.Syntax {
-			astutil.Apply(fileo, func(c *astutil.Cursor) bool {
-				switch te := c.Node().(type) {
-				default:
-					// log.Println(c.Name(), exprpos(pc, c.Node()))
-					gopp.G_USED(te)
-				}
-				return true
-			}, func(c *astutil.Cursor) bool {
-				switch te := c.Node().(type) {
-				case *ast.CompositeLit:
-					break
-					ce := c.Node().(ast.Expr)
+	pc.Apply(func(c *astutil.Cursor) bool {
+		switch te := c.Node().(type) {
+		default:
+			// log.Println(c.Name(), exprpos(pc, c.Node()))
+			gopp.G_USED(te)
+		}
+		return true
+	}, func(c *astutil.Cursor) bool {
+		switch te := c.Node().(type) {
+		case *ast.CompositeLit:
+			break
+			ce := c.Node().(ast.Expr)
+			vsp2 := &ast.AssignStmt{}
+			vsp2.Lhs = []ast.Expr{newIdent(tmpvarname())}
+			vsp2.Rhs = []ast.Expr{ce}
+			xe := &ast.UnaryExpr{}
+			xe.Op = token.AND
+			xe.OpPos = c.Node().Pos()
+			xe.X = ce
+			vsp2.Rhs = []ast.Expr{xe}
+			vsp2.Tok = token.DEFINE
+			c.Replace(vsp2.Lhs[0])
+			stmt := upfindstmt(pc, c, 0)
+			tmpvars[stmt] = append(tmpvars[stmt], vsp2)
+			tyval := types.TypeAndValue{}
+			tyval.Type = pc.info.TypeOf(ce)
+			tyval.Type = types.NewPointer(tyval.Type)
+			pc.info.Types[vsp2.Lhs[0]] = tyval
+			pc.info.Types[vsp2.Rhs[0]] = tyval
+		case *ast.UnaryExpr:
+			if te.Op == token.AND {
+				if _, ok := te.X.(*ast.CompositeLit); ok {
 					vsp2 := &ast.AssignStmt{}
 					vsp2.Lhs = []ast.Expr{newIdent(tmpvarname())}
-					vsp2.Rhs = []ast.Expr{ce}
-					xe := &ast.UnaryExpr{}
-					xe.Op = token.AND
-					xe.OpPos = c.Node().Pos()
-					xe.X = ce
-					vsp2.Rhs = []ast.Expr{xe}
+					vsp2.Rhs = []ast.Expr{te}
 					vsp2.Tok = token.DEFINE
+					vsp2.TokPos = c.Node().Pos()
 					c.Replace(vsp2.Lhs[0])
 					stmt := upfindstmt(pc, c, 0)
 					tmpvars[stmt] = append(tmpvars[stmt], vsp2)
 					tyval := types.TypeAndValue{}
-					tyval.Type = pc.info.TypeOf(ce)
-					tyval.Type = types.NewPointer(tyval.Type)
+					tyval.Type = pc.info.TypeOf(te)
 					pc.info.Types[vsp2.Lhs[0]] = tyval
-					pc.info.Types[vsp2.Rhs[0]] = tyval
-				case *ast.UnaryExpr:
-					if te.Op == token.AND {
-						if _, ok := te.X.(*ast.CompositeLit); ok {
-							vsp2 := &ast.AssignStmt{}
-							vsp2.Lhs = []ast.Expr{newIdent(tmpvarname())}
-							vsp2.Rhs = []ast.Expr{te}
-							vsp2.Tok = token.DEFINE
-							vsp2.TokPos = c.Node().Pos()
-							c.Replace(vsp2.Lhs[0])
-							stmt := upfindstmt(pc, c, 0)
-							tmpvars[stmt] = append(tmpvars[stmt], vsp2)
-							tyval := types.TypeAndValue{}
-							tyval.Type = pc.info.TypeOf(te)
-							pc.info.Types[vsp2.Lhs[0]] = tyval
-						}
-					}
-				default:
-					gopp.G_USED(te)
 				}
-				return true
-			})
+			}
+		default:
+			gopp.G_USED(te)
 		}
-	}
+		return true
+	})
+
 	log.Println("tmpvars", len(tmpvars))
 	pc.tmpvars = tmpvars
 }
 
 func (pc *ParserContext) walkpass_kvpairs() {
 	kvpairs := map[ast.Node]ast.Node{}
-	pkgs := pc.pkgs
-	for _, pkg := range pkgs {
-		for _, fileo := range pkg.Syntax {
-			astutil.Apply(fileo, func(c *astutil.Cursor) bool {
-				switch te := c.Node().(type) {
-				case *ast.AssignStmt:
-					for idx, le := range te.Lhs {
-						kvpairs[le] = te.Rhs[idx]
-						kvpairs[te.Rhs[idx]] = le
-					}
-				default:
-					gopp.G_USED(te)
-				}
-				return true
-			}, func(c *astutil.Cursor) bool {
-				switch te := c.Node().(type) {
-				default:
-					gopp.G_USED(te)
-				}
-				return true
-			})
+	pc.Apply(func(c *astutil.Cursor) bool {
+		switch te := c.Node().(type) {
+		case *ast.AssignStmt:
+			for idx, le := range te.Lhs {
+				kvpairs[le] = te.Rhs[idx]
+				kvpairs[te.Rhs[idx]] = le
+			}
+		default:
+			gopp.G_USED(te)
 		}
-	}
+		return true
+	}, func(c *astutil.Cursor) bool {
+		switch te := c.Node().(type) {
+		default:
+			gopp.G_USED(te)
+		}
+		return true
+	})
+
 	log.Println("kvpairs", len(kvpairs))
 	pc.kvpairs = kvpairs
 }
@@ -817,26 +806,22 @@ func (pc *ParserContext) walkpass_gostmt() {
 	var gostmts = []*ast.GoStmt{}
 	_ = gostmts
 
-	pkgs := pc.pkgs
-	for _, pkg := range pkgs {
-		for _, fileo := range pkg.Syntax {
-			astutil.Apply(fileo, func(c *astutil.Cursor) bool {
-				switch te := c.Node().(type) {
-				default:
-					gopp.G_USED(te)
-				}
-				return true
-			}, func(c *astutil.Cursor) bool {
-				switch te := c.Node().(type) {
-				case *ast.GoStmt:
-					gostmts = append(gostmts, te)
-				default:
-					gopp.G_USED(te)
-				}
-				return true
-			})
+	pc.Apply(func(c *astutil.Cursor) bool {
+		switch te := c.Node().(type) {
+		default:
+			gopp.G_USED(te)
 		}
-	}
+		return true
+	}, func(c *astutil.Cursor) bool {
+		switch te := c.Node().(type) {
+		case *ast.GoStmt:
+			gostmts = append(gostmts, te)
+		default:
+			gopp.G_USED(te)
+		}
+		return true
+	})
+
 	log.Println("gostmts", len(gostmts))
 	pc.gostmts = gostmts
 }
@@ -845,30 +830,26 @@ func (pc *ParserContext) walkpass_chan_send_recv() {
 	var chanops = []ast.Expr{}
 	_ = chanops
 
-	pkgs := pc.pkgs
-	for _, pkg := range pkgs {
-		for _, fileo := range pkg.Syntax {
-			astutil.Apply(fileo, func(c *astutil.Cursor) bool {
-				switch te := c.Node().(type) {
-				default:
-					gopp.G_USED(te)
-				}
-				return true
-			}, func(c *astutil.Cursor) bool {
-				switch te := c.Node().(type) {
-				case *ast.SendStmt:
-					chanops = append(chanops, te.Chan)
-				case *ast.UnaryExpr:
-					if te.Op == token.ARROW {
-						chanops = append(chanops, te.X)
-					}
-				default:
-					gopp.G_USED(te)
-				}
-				return true
-			})
+	pc.Apply(func(c *astutil.Cursor) bool {
+		switch te := c.Node().(type) {
+		default:
+			gopp.G_USED(te)
 		}
-	}
+		return true
+	}, func(c *astutil.Cursor) bool {
+		switch te := c.Node().(type) {
+		case *ast.SendStmt:
+			chanops = append(chanops, te.Chan)
+		case *ast.UnaryExpr:
+			if te.Op == token.ARROW {
+				chanops = append(chanops, te.X)
+			}
+		default:
+			gopp.G_USED(te)
+		}
+		return true
+	})
+
 	log.Println("chanops", len(chanops))
 	pc.chanops = chanops
 }
@@ -877,88 +858,80 @@ func (pc *ParserContext) walkpass_closures() {
 	var closures = []*ast.FuncLit{}
 	_ = closures
 
-	pkgs := pc.pkgs
-	for _, pkg := range pkgs {
-		for _, fileo := range pkg.Syntax {
-			astutil.Apply(fileo, func(c *astutil.Cursor) bool {
-				switch te := c.Node().(type) {
-				default:
-					gopp.G_USED(te)
-				}
-				return true
-			}, func(c *astutil.Cursor) bool {
-				switch te := c.Node().(type) {
-				case *ast.FuncLit:
-					closures = append(closures, te)
-				default:
-					gopp.G_USED(te)
-				}
-				return true
-			})
+	pc.Apply(func(c *astutil.Cursor) bool {
+		switch te := c.Node().(type) {
+		default:
+			gopp.G_USED(te)
 		}
-	}
+		return true
+	}, func(c *astutil.Cursor) bool {
+		switch te := c.Node().(type) {
+		case *ast.FuncLit:
+			closures = append(closures, te)
+		default:
+			gopp.G_USED(te)
+		}
+		return true
+	})
+
 	log.Println("closures", len(closures))
 	pc.closures = closures
 }
 
 //
 func (pc *ParserContext) walkpass_clean_cgodecl() {
-	pkgs := pc.pkgs
 	skipfds := []string{"_cgo_runtime_cgocallback", "_cgoCheckResult", "_cgoCheckPointer",
 		"_Cgo_use", "_cgo_runtime_cgocall", "_Cgo_ptr", "_cgo_cmalloc", "runtime_throw",
 		"_cgo_runtime_gostringn", "_cgo_runtime_gostring"}
 
-	for _, pkg := range pkgs {
-		for _, fileo := range pkg.Syntax {
-			astutil.Apply(fileo, func(c *astutil.Cursor) bool {
+	pc.Apply(func(c *astutil.Cursor) bool {
 
-				switch te := c.Node().(type) {
-				case *ast.FuncDecl:
+		switch te := c.Node().(type) {
+		case *ast.FuncDecl:
 
-					if funk.Contains(skipfds, te.Name.Name) {
-						c.Delete()
-					}
-				case *ast.ValueSpec:
-					name := te.Names[0].Name
-					if strings.HasPrefix(name, "__cgofn__cgo_") || strings.HasPrefix(name, "_cgo_") ||
-						strings.HasPrefix(name, "_Ciconst_") || strings.HasPrefix(name, "_Cfpvar_") {
-						c.Delete()
-						break
-					}
-					tystr := types.ExprString(te.Type)
-					if tystr == "syscall.Errno" || te.Names[0].Name == "_" {
-						c.Delete()
-						break
-					}
-				case *ast.CallExpr:
-					if fe, ok := te.Fun.(*ast.Ident); ok {
-						if fe.Name == "_Cgo_ptr" {
-							c.Replace(newIdent(te.Args[0].(*ast.Ident).Name[11:]))
-							break
-						}
-						if fe.Name == "_cgoCheckPointer" {
-							// panic: Delete node not contained in slice
-							// c.Delete()
-							// break
-						}
-					}
-				case *ast.Ident:
-					if strings.HasPrefix(te.Name, "_Ciconst_") {
-						c.Replace(newIdent(te.Name[9:]))
-					}
-				default:
-					gopp.G_USED(te)
+			if funk.Contains(skipfds, te.Name.Name) {
+				c.Delete()
+			}
+		case *ast.ValueSpec:
+			name := te.Names[0].Name
+			if strings.HasPrefix(name, "__cgofn__cgo_") || strings.HasPrefix(name, "_cgo_") ||
+				strings.HasPrefix(name, "_Ciconst_") || strings.HasPrefix(name, "_Cfpvar_") {
+				c.Delete()
+				break
+			}
+			tystr := types.ExprString(te.Type)
+			if tystr == "syscall.Errno" || te.Names[0].Name == "_" {
+				c.Delete()
+				break
+			}
+		case *ast.CallExpr:
+			if fe, ok := te.Fun.(*ast.Ident); ok {
+				if fe.Name == "_Cgo_ptr" {
+					c.Replace(newIdent(te.Args[0].(*ast.Ident).Name[11:]))
+					break
 				}
-				return true
-			}, func(c *astutil.Cursor) bool {
-				switch te := c.Node().(type) {
-				default:
-					gopp.G_USED(te)
+				if fe.Name == "_cgoCheckPointer" {
+					// panic: Delete node not contained in slice
+					// c.Delete()
+					// break
 				}
-				return true
-			})
+			}
+		case *ast.Ident:
+			if strings.HasPrefix(te.Name, "_Ciconst_") {
+				c.Replace(newIdent(te.Name[9:]))
+			}
+		default:
+			gopp.G_USED(te)
 		}
-	}
+		return true
+	}, func(c *astutil.Cursor) bool {
+		switch te := c.Node().(type) {
+		default:
+			gopp.G_USED(te)
+		}
+		return true
+	})
+
 }
 
 // todo
@@ -972,69 +945,62 @@ func (pc *ParserContext) walkpass_nested_type() {
 func (pc *ParserContext) walkpass_defers() {
 	defers := []*ast.DeferStmt{}
 
-	pkgs := pc.pkgs
-	for _, pkg := range pkgs {
-		for _, fileo := range pkg.Syntax {
-			astutil.Apply(fileo, func(c *astutil.Cursor) bool {
-				switch te := c.Node().(type) {
-				default:
-					gopp.G_USED(te)
-				}
-				return true
-			}, func(c *astutil.Cursor) bool {
-				switch te := c.Node().(type) {
-				case *ast.DeferStmt:
-					defers = append(defers, te)
-				case *ast.FuncDecl:
-					if te.Type.Results.NumFields() == 0 {
-						// if len(te.Body.List) == 0 {
-						// 	retstmt := &ast.ReturnStmt{}
-						// 	retstmt.Results = []ast.Expr{}
-						// 	// retstmt.Return = te.Pos()
-						// 	te.Body.List = append(te.Body.List, retstmt)
-						// } else {
-						// 	log.Println("hhh")
-						// 	laststmt := te.Body.List[len(te.Body.List)-1]
-						// 	log.Println(laststmt)
-						// }
-					}
-				default:
-					gopp.G_USED(te)
-				}
-				return true
-			})
+	pc.Apply(func(c *astutil.Cursor) bool {
+		switch te := c.Node().(type) {
+		default:
+			gopp.G_USED(te)
 		}
-	}
+		return true
+	}, func(c *astutil.Cursor) bool {
+		switch te := c.Node().(type) {
+		case *ast.DeferStmt:
+			defers = append(defers, te)
+		case *ast.FuncDecl:
+			if te.Type.Results.NumFields() == 0 {
+				// if len(te.Body.List) == 0 {
+				// 	retstmt := &ast.ReturnStmt{}
+				// 	retstmt.Results = []ast.Expr{}
+				// 	// retstmt.Return = te.Pos()
+				// 	te.Body.List = append(te.Body.List, retstmt)
+				// } else {
+				// 	log.Println("hhh")
+				// 	laststmt := te.Body.List[len(te.Body.List)-1]
+				// 	log.Println(laststmt)
+				// }
+			}
+		default:
+			gopp.G_USED(te)
+		}
+		return true
+	})
+
 	log.Println("defers", len(defers))
 	pc.defers = defers
 }
 
 func (pc *ParserContext) walkpass_globvars() {
 	globvars := []ast.Node{}
-	pkgs := pc.pkgs
-	for _, pkg := range pkgs {
-		for _, fileo := range pkg.Syntax {
-			astutil.Apply(fileo, func(c *astutil.Cursor) bool {
-				switch te := c.Node().(type) {
-				case *ast.ValueSpec:
-					for _, name := range te.Names {
-						if isglobalid(pc, name) {
-							globvars = append(globvars, te)
-						}
-					}
-				default:
-					gopp.G_USED(te)
+
+	pc.Apply(func(c *astutil.Cursor) bool {
+		switch te := c.Node().(type) {
+		case *ast.ValueSpec:
+			for _, name := range te.Names {
+				if isglobalid(pc, name) {
+					globvars = append(globvars, te)
 				}
-				return true
-			}, func(c *astutil.Cursor) bool {
-				switch te := c.Node().(type) {
-				default:
-					gopp.G_USED(te)
-				}
-				return true
-			})
+			}
+		default:
+			gopp.G_USED(te)
 		}
-	}
+		return true
+	}, func(c *astutil.Cursor) bool {
+		switch te := c.Node().(type) {
+		default:
+			gopp.G_USED(te)
+		}
+		return true
+	})
+
 	log.Println("globvars", len(globvars))
 	pc.globvars = globvars
 }
