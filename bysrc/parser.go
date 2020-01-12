@@ -97,6 +97,11 @@ func (this *ParserContext) Init() error {
 			return fmt.Errorf("load error %d %v", cnt, pkgs[0].Errors)
 		}
 	}
+	if len(pkgs) == 0 {
+		return fmt.Errorf("no package found?")
+	} else if len(pkgs) > 1 {
+		log.Println("Owt", len(pkgs))
+	}
 
 	this.cfg2 = cfg
 	this.bdpkgs = pkgs[0]
@@ -384,6 +389,9 @@ func (this *ParserContext) pickCCode2() string {
 	// CgoFiles is in packages.Package.GoFiles
 	for _, f := range this.bdpkgs.GoFiles {
 		var fo *ast.File = this.findFileobj(f)
+		if fo == nil {
+			continue
+		}
 		ccode += this.pickCCode3(fo)
 	}
 	/*
@@ -506,6 +514,7 @@ func (pc *ParserContext) walkpass_func_deps1() {
 				this.funcDeclsm[te.Name.Name] = te
 				curfds = append(curfds, te.Name.Name)
 			}
+
 		case *ast.CallExpr:
 			if len(curfds) == 0 { // global scope call
 				switch be := te.Fun.(type) {

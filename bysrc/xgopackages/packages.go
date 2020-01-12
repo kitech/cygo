@@ -693,12 +693,12 @@ func (ld *loader) loadRecursive(lpkg *loaderPackage) {
 func (ld *loader) loadPackage(lpkg *loaderPackage) {
 	if lpkg.PkgPath == "unsafe" {
 		// Fill in the blanks to avoid surprises.
-		lpkg.Types = types.Unsafe
-		lpkg.Fset = ld.Fset
-		lpkg.Syntax = []*ast.File{}
-		lpkg.TypesInfo = new(types.Info)
-		lpkg.TypesSizes = ld.sizes
-		return
+		// lpkg.Types = types.Unsafe
+		// lpkg.Fset = ld.Fset
+		// lpkg.Syntax = []*ast.File{}
+		// lpkg.TypesInfo = new(types.Info)
+		// lpkg.TypesSizes = ld.sizes
+		// return
 	}
 
 	// Call NewPackage directly with explicit name.

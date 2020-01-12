@@ -205,9 +205,9 @@ func (this *g2nc) genFuncs(pkg *packages.Package) {
 	this.out("// funcs decl ", fmt.Sprintf("%d", len(this.psctx.funcDeclsv))).outnl()
 	scope := this.scope
 	// ordered funcDeclsv
-	for _, fd := range this.psctx.funcDeclsv {
+	for idx, fd := range this.psctx.funcDeclsv {
 		if fd == nil {
-			log.Println("wtf", fd)
+			log.Println(idx, "wtf", fd)
 			continue
 		}
 		if fd.Name.Name == "init" {
@@ -310,8 +310,9 @@ func (c *g2nc) genPostFuncDecl(scope *ast.Scope, d *ast.FuncDecl) {
 func (this *g2nc) genFuncDecl(scope *ast.Scope, fd *ast.FuncDecl) {
 	if fd.Body == nil {
 		log.Println("decl only func", fd.Name)
-		if this.curpkg == "unsafe" && fd.Name.Name == "Sizeof" {
-			this.out("//")
+		if this.curpkg == "unsafe" &&
+			funk.Contains([]string{"Sizeof", "Offsetof", "Alignof"}, fd.Name.Name) {
+			this.out("// fake unsafe func:").outsp()
 		}
 		this.out("extern").outsp()
 		// return
@@ -957,6 +958,8 @@ func (c *g2nc) genCallExpr(scope *ast.Scope, te *ast.CallExpr) {
 	case *ast.SelectorExpr:
 		if c.funcistype(te.Fun) {
 			c.genTypeCtor(scope, te)
+		} else if strings.HasPrefix(c.exprstr(te.Fun), "unsafe.") {
+			c.genCallExprUnsafes(scope, te)
 		} else {
 			c.genCallExprNorm(scope, te)
 		}
@@ -1171,6 +1174,12 @@ func (c *g2nc) genCallExprPrintln(scope *ast.Scope, te *ast.CallExpr) {
 		// c.outfh().outnl()
 	}
 }
+func (c *g2nc) genCallExprUnsafes(scope *ast.Scope, te *ast.CallExpr) {
+	c.out(strings.Replace(c.exprstr(te.Fun), ".", "_", 1))
+	c.out("(")
+	c.genExpr(scope, te.Args[0])
+	c.out(")")
+}
 func (c *g2nc) genCallExprNorm(scope *ast.Scope, te *ast.CallExpr) {
 	// funame := te.Fun.(*ast.Ident).Name
 
@@ -1196,6 +1205,11 @@ func (c *g2nc) genCallExprNorm(scope *ast.Scope, te *ast.CallExpr) {
 	isvardic := false
 	var goty *types.Signature
 	if gotyx != nil {
+		log.Println(te.Fun, gotyx, reflect.TypeOf(gotyx))
+		if gotyb, ok := gotyx.(*types.Basic); ok {
+
+			log.Println(gotyb.Name(), gotyb.Kind(), gotyb.Info(), c.exprstr(te.Fun))
+		}
 		goty = gotyx.(*types.Signature)
 		isvardic = goty.Variadic()
 	}
@@ -1290,7 +1304,11 @@ func (c *g2nc) genTypeCtor(scope *ast.Scope, te *ast.CallExpr) {
 		}
 	case *ast.SelectorExpr:
 		c.out("(")
-		c.genExpr(scope, te.Fun)
+		if strings.HasPrefix(c.exprstr(te.Fun), "unsafe.") {
+			c.out(strings.Replace(c.exprstr(te.Fun), ".", "_", 1))
+		} else {
+			c.genExpr(scope, te.Fun)
+		}
 		c.out(")")
 		c.out("(")
 		c.genFuncArgs(scope, te.Args)
@@ -1645,7 +1663,7 @@ func (this *g2nc) genExpr(scope *ast.Scope, e ast.Expr) {
 	this.genExpr2(scope, e)
 }
 func (this *g2nc) genExpr2(scope *ast.Scope, e ast.Expr) {
-	// log.Println(reflect.TypeOf(e))
+	// log.Println(reflect.TypeOf(e), e)
 	switch te := e.(type) {
 	case *ast.Ident:
 		idname := te.Name
@@ -1917,7 +1935,7 @@ func (this *g2nc) genExpr2(scope *ast.Scope, e ast.Expr) {
 		} else {
 			this.genExpr(scope, te.X)
 			selxty := this.info.TypeOf(te.X)
-			log.Println(selxty, reflect.TypeOf(selxty))
+			log.Println(selxty, reflect.TypeOf(selxty), te)
 			if isinvalidty2(selxty) { // package
 				this.out("_")
 			} else {
@@ -2335,9 +2353,13 @@ func (this *g2nc) genTypeSpec(scope *ast.Scope, spec *ast.TypeSpec) {
 		this.outfh().outnl()
 	case *ast.SelectorExpr:
 		this.out("typedef").outsp()
-		this.genExpr(scope, te.X)
-		this.out("_")
-		this.genExpr(scope, te.Sel)
+		if strings.HasPrefix(this.exprstr(te), "unsafe.") {
+			this.out(strings.Replace(this.exprstr(te), ".", "_", 1))
+		} else {
+			this.genExpr(scope, te.X)
+			this.out("_")
+			this.genExpr(scope, te.Sel)
+		}
 		this.outsp()
 		specname := trimCtype(spec.Name.Name)
 		this.out(this.pkgpfx() + specname)
@@ -2566,6 +2588,7 @@ typedef uint32 _Ctype_uint;
 typedef int8 _Ctype_char;
 typedef float32 _Ctype_float;
 typedef _Ctype_long _Ctype_ptrdiff_t;
+typedef void* unsafe_Pointer;
 `
 	return precgodefs
 }

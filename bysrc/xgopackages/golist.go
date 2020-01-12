@@ -759,7 +759,7 @@ func golistDriver(cfg *Config, rootsDirs func() *goInfo, words ...string) (*driv
 		}
 
 		if pkg.PkgPath == "unsafe" {
-			pkg.GoFiles = nil // ignore fake unsafe.go file
+			// pkg.GoFiles = nil // ignore fake unsafe.go file
 		}
 
 		// Assume go list emits only absolute paths for Dir.
