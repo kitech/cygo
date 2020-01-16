@@ -404,7 +404,12 @@ func (this *g2nc) genStmt(scope *ast.Scope, stmt ast.Stmt, idx int) {
 	// log.Println(stmt, reflect.TypeOf(stmt))
 	if stmt != nil {
 		posinfo := this.exprpos(stmt).String()
-		this.out("// ", posinfo).outnl()
+		fields := strings.Split(posinfo, ":")
+		if len(fields) > 1 {
+			this.outf("#line %s \"%s\"", fields[1], fields[0]).outnl()
+		} else {
+			this.out("// ", posinfo).outnl()
+		}
 		stmtstr := this.prtnode(stmt)
 		if !strings.ContainsAny(strings.TrimSpace(stmtstr), "\n") {
 			this.outf("// %s", stmtstr).outnl()

@@ -31,9 +31,9 @@ func main() {
 	psctxs := []*ParserContext{}
 	comps := []*g2nc{}
 	pkgrenames := map[string]string{} // path => rename
+	dedups := map[string]bool{}       // pkgpath =>
 
-	gopath := os.Getenv("GOPATH")
-	gopaths := strings.Split(gopath, ":")
+	gopaths := gopp.Gopaths()
 	gopaths = append(gopaths, runtime.GOROOT())
 
 	for len(pkgpaths) > 0 {
@@ -46,6 +46,10 @@ func main() {
 			pkgrename = segs[1]
 		}
 
+		if _, ok := dedups[fname]; ok {
+			log.Println("already gened", fname)
+			continue
+		}
 		psctx, g2n := dogen(fname, pkgrename)
 		psctxs = append(psctxs, psctx)
 		comps = append(comps, g2n)
@@ -75,6 +79,7 @@ func main() {
 			}
 		}
 		log.Println("=================", fname)
+		dedups[fname] = true
 	}
 
 	code := ""
