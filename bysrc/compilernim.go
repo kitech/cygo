@@ -21,13 +21,12 @@ type g2nim struct {
 }
 
 func (this *g2nim) genpkgs() {
-	this.info = this.psctx.info
+	this.info = &this.psctx.info
 
 	// pkgs order?
 	for pname, pkg := range this.psctx.pkgs {
-		// pkg.Scope = ast.NewScope(nil)
-		// this.genpkg(pname, pkg)
-		gopp.G_USED(pname, pkg)
+		pkg.Scope = ast.NewScope(nil)
+		this.genpkg(pname, pkg)
 	}
 }
 

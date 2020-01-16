@@ -380,22 +380,3 @@ func isglobalid(pc *ParserContext, idt *ast.Ident) bool {
 	}
 	return false
 }
-
-func isgointernpkg(pkgpath, pkgname string) bool {
-	if strings.HasPrefix(pkgpath, "internal/") ||
-		(pkgpath == "unsafe" && pkgname == "unsafe") ||
-		strings.HasPrefix(pkgpath, "runtime/") ||
-		pkgname == "runtime" ||
-		pkgname == "sync" || pkgname == "syscall" || pkgname == "sys" ||
-		pkgname == "atomic" || pkgname == "cgo" ||
-		pkgname == "reflectlite" ||
-		pkgname == "errors" ||
-		pkgname == "bytealg" ||
-		pkgname == "oserror" ||
-		pkgname == "cpu" ||
-		pkgname == "math" ||
-		pkgname == "race" {
-		return true
-	}
-	return false
-}

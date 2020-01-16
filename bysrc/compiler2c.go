@@ -7,14 +7,11 @@ import (
 	"go/types"
 	"gopp"
 	"log"
-	"os"
 	"reflect"
 	"runtime/debug"
 	"strings"
 
 	"github.com/thoas/go-funk"
-	"golang.org/x/tools/go/ast/astutil"
-	"golang.org/x/tools/go/packages"
 )
 
 func init() {
@@ -28,47 +25,26 @@ type g2nc struct {
 
 	sb     strings.Builder
 	curpkg string
-	// pkgo   *ast.Package
-	pkgo *packages.Package
+	pkgo   *ast.Package
 
-	info  *types.Info
-	scope *ast.Scope
-	outfp *os.File
+	info *types.Info
 }
 
 func (this *g2nc) genpkgs() {
-	this.info = this.psctx.info
-	this.scope = ast.NewScope(nil)
-	outfp, err := os.OpenFile("/tmp/bysrc.out.c", os.O_CREATE|os.O_RDWR|os.O_TRUNC, 0644)
-	gopp.ErrPrint(err)
-	this.outfp = outfp
+	this.info = &this.psctx.info
 
 	// pkgs order?
 	for pname, pkg := range this.psctx.pkgs {
-		// pkg.Scope = ast.NewScope(nil)
+		pkg.Scope = ast.NewScope(nil)
 		this.curpkg = pkg.Name
 		this.pkgo = pkg
 
-		gopp.G_USED(pname)
-
-		// this.genpkg(pname, pkg)
-		// this.calcClosureInfo(pkg.Scope, pkg)
-		// this.calcDeferInfo(pkg.Scope, pkg)
-		// this.genGostmtTypes(pkg.Scope, pkg)
-		// this.genChanTypes(pkg.Scope, pkg)
-		// this.genMultiretTypes(pkg.Scope, pkg)
-		// this.genFuncs(pkg)
-	}
-
-	scope := this.scope
-	for pname, pkg := range this.psctx.pkgs {
-		log.Println(pname, pkg)
-		this.genpkg2(pname, pkg)
-		this.calcClosureInfo(scope, pkg)
-		this.calcDeferInfo(scope, pkg)
-		this.genGostmtTypes(scope, pkg)
-		this.genChanTypes(scope, pkg)
-		this.genMultiretTypes(scope, pkg)
+		this.genpkg(pname, pkg)
+		this.calcClosureInfo(pkg.Scope, pkg)
+		this.calcDeferInfo(pkg.Scope, pkg)
+		this.genGostmtTypes(pkg.Scope, pkg)
+		this.genChanTypes(pkg.Scope, pkg)
+		this.genMultiretTypes(pkg.Scope, pkg)
 		this.genFuncs(pkg)
 	}
 
@@ -88,23 +64,14 @@ func (c *g2nc) pkgpfx() string {
 	return pfx
 }
 
-func (this *g2nc) genpkg2(name1 string, pkg *packages.Package) {
-	log.Println("processing package", name1, pkg.GoFiles, len(pkg.Syntax))
-	log.Println("pkg other files", name1, pkg.ExportFile, pkg.OtherFiles, pkg.CompiledGoFiles)
-	for _, f := range pkg.Syntax {
-		astutil.Apply(f, func(c *astutil.Cursor) bool {
-			// log.Println(name1, c.Node())
-			return true
-		}, func(c *astutil.Cursor) bool {
-			return true
-		})
-		this.genfile(this.scope, f.Name.Name, f)
+func (this *g2nc) genpkg(name string, pkg *ast.Package) {
+	log.Println("processing package", name)
+	for name, f := range pkg.Files {
+		this.genfile(pkg.Scope, name, f)
 	}
 }
-
 func (this *g2nc) genfile(scope *ast.Scope, name string, f *ast.File) {
-	log.Println("processing", name, f.Name, exprpos(this.psctx, f))
-	this.outf("// mod %s %s ", name, exprpos(this.psctx, f)).outnl()
+	log.Println("processing", name)
 	/*
 		for idx, cmto := range f.Comments {
 			log.Println(idx, len(f.Comments), cmto.Text())
@@ -127,7 +94,7 @@ func (this *g2nc) genfile(scope *ast.Scope, name string, f *ast.File) {
 	// 	this.genDecl(scope, d)
 	// }
 }
-func (c *g2nc) calcClosureInfo(scope *ast.Scope, pkg *packages.Package) {
+func (c *g2nc) calcClosureInfo(scope *ast.Scope, pkg *ast.Package) {
 	fds := map[*ast.FuncDecl]int{}
 	for _, fnlit := range c.psctx.closures {
 		fd := upfindFuncDeclAst(c.psctx, fnlit, 0)
@@ -145,8 +112,7 @@ func (c *g2nc) calcClosureInfo(scope *ast.Scope, pkg *packages.Package) {
 	}
 
 }
-func (c *g2nc) calcDeferInfo(scope *ast.Scope, pkg *packages.Package) {
-	c.out("// defer types ", fmt.Sprintf("%d", len(c.psctx.defers))).outnl()
+func (c *g2nc) calcDeferInfo(scope *ast.Scope, pkg *ast.Package) {
 	defers := map[*ast.FuncDecl][]*ast.DeferStmt{}
 	for _, defero := range c.psctx.defers {
 		tmpfd := upfindFuncDeclNode(c.psctx, defero, 0)
@@ -157,16 +123,16 @@ func (c *g2nc) calcDeferInfo(scope *ast.Scope, pkg *packages.Package) {
 		c.deferidx[defero] = deferi
 	}
 }
-func (c *g2nc) genGostmtTypes(scope *ast.Scope, pkg *packages.Package) {
-	c.out("// gostmt types ", fmt.Sprintf("%d", len(c.psctx.gostmts))).outnl()
+func (c *g2nc) genGostmtTypes(scope *ast.Scope, pkg *ast.Package) {
+	c.out("// gostmt types", fmt.Sprintf("%d", len(c.psctx.gostmts))).outnl()
 	for idx, gostmt := range c.psctx.gostmts {
 		c.outf("// %d %v %v", idx, gostmt.Call.Fun, gostmt.Call.Args).outnl()
 		c.genFiberStargs(scope, gostmt.Call)
 		c.outnl()
 	}
 }
-func (c *g2nc) genChanTypes(scope *ast.Scope, pkg *packages.Package) {
-	c.out("// chan types ", fmt.Sprintf("%d", len(c.psctx.chanops))).outnl()
+func (c *g2nc) genChanTypes(scope *ast.Scope, pkg *ast.Package) {
+	c.out("// chan types", fmt.Sprintf("%d", len(c.psctx.chanops))).outnl()
 	gottys := map[string]bool{}
 	// te: ast.SendStmt.Chan/ast.UnaryExpr.X
 	for _, te := range c.psctx.chanops {
@@ -180,8 +146,8 @@ func (c *g2nc) genChanTypes(scope *ast.Scope, pkg *packages.Package) {
 		c.outnl()
 	}
 }
-func (c *g2nc) genMultiretTypes(scope *ast.Scope, pkg *packages.Package) {
-	c.out("// multirets types ", fmt.Sprintf("%d", len(c.psctx.gostmts))).outnl()
+func (c *g2nc) genMultiretTypes(scope *ast.Scope, pkg *ast.Package) {
+	c.out("// multirets types", fmt.Sprintf("%d", len(c.psctx.gostmts))).outnl()
 	for idx, fd := range c.psctx.multirets {
 		c.outf("// %d %v %v", idx, fd.Name, fd.Type.Results.NumFields()).outnl()
 		c.outf("typedef struct %s_multiret_arg %s_multiret_arg", fd.Name.Name, fd.Name.Name).outfh().outnl()
@@ -201,13 +167,12 @@ func (c *g2nc) genMultiretTypes(scope *ast.Scope, pkg *packages.Package) {
 	}
 }
 
-func (this *g2nc) genFuncs(pkg *packages.Package) {
-	this.out("// funcs decl ", fmt.Sprintf("%d", len(this.psctx.funcDeclsv))).outnl()
-	scope := this.scope
+func (this *g2nc) genFuncs(pkg *ast.Package) {
+	scope := pkg.Scope
 	// ordered funcDeclsv
-	for idx, fd := range this.psctx.funcDeclsv {
+	for _, fd := range this.psctx.funcDeclsv {
 		if fd == nil {
-			log.Println(idx, "wtf", fd)
+			log.Println("wtf", fd)
 			continue
 		}
 		if fd.Name.Name == "init" {
@@ -216,7 +181,7 @@ func (this *g2nc) genFuncs(pkg *packages.Package) {
 		this.genDecl(scope, fd)
 	}
 
-	this.genInitGlobvars(this.scope, pkg)
+	this.genInitGlobvars(pkg.Scope, pkg)
 
 	this.genInitFuncs(scope, pkg)
 	if pkg.Name == "main" {
@@ -310,9 +275,8 @@ func (c *g2nc) genPostFuncDecl(scope *ast.Scope, d *ast.FuncDecl) {
 func (this *g2nc) genFuncDecl(scope *ast.Scope, fd *ast.FuncDecl) {
 	if fd.Body == nil {
 		log.Println("decl only func", fd.Name)
-		if this.curpkg == "unsafe" &&
-			funk.Contains([]string{"Sizeof", "Offsetof", "Alignof"}, fd.Name.Name) {
-			this.out("// fake unsafe func:").outsp()
+		if this.curpkg == "unsafe" && fd.Name.Name == "Sizeof" {
+			this.out("//")
 		}
 		this.out("extern").outsp()
 		// return
@@ -412,7 +376,7 @@ func (c *g2nc) genMainFunc(scope *ast.Scope) {
 	c.out("return 0").outfh().outnl()
 	c.out("}").outnl()
 }
-func (c *g2nc) genInitFuncs(scope *ast.Scope, pkg *packages.Package) {
+func (c *g2nc) genInitFuncs(scope *ast.Scope, pkg *ast.Package) {
 	for idx, fd := range c.psctx.initFuncs {
 		c.outf("// %s", c.exprpos(fd).String()).outnl()
 		c.out("static").outsp()
@@ -440,13 +404,7 @@ func (this *g2nc) genStmt(scope *ast.Scope, stmt ast.Stmt, idx int) {
 	// log.Println(stmt, reflect.TypeOf(stmt))
 	if stmt != nil {
 		posinfo := this.exprpos(stmt).String()
-		fields := strings.Split(posinfo, ":")
-		if len(fields) > 1 {
-			this.outnl()
-			this.outf("#line %s \"%s\"", fields[1], fields[0]).outnl()
-		} else {
-			this.out("// ", posinfo).outnl()
-		}
+		this.out("// ", posinfo).outnl()
 		stmtstr := this.prtnode(stmt)
 		if !strings.ContainsAny(strings.TrimSpace(stmtstr), "\n") {
 			this.outf("// %s", stmtstr).outnl()
@@ -958,8 +916,6 @@ func (c *g2nc) genCallExpr(scope *ast.Scope, te *ast.CallExpr) {
 	case *ast.SelectorExpr:
 		if c.funcistype(te.Fun) {
 			c.genTypeCtor(scope, te)
-		} else if strings.HasPrefix(c.exprstr(te.Fun), "unsafe.") {
-			c.genCallExprUnsafes(scope, te)
 		} else {
 			c.genCallExprNorm(scope, te)
 		}
@@ -1142,8 +1098,7 @@ func (c *g2nc) genCallExprPrintln(scope *ast.Scope, te *ast.CallExpr) {
 	// c.genExpr(scope, te.Fun)
 	c.out("println2")
 	c.out("(")
-	c.out("__FILE__, __LINE__, __func__",
-		gopp.IfElseStr(len(te.Args) > 0, ",", "")).outnl()
+	c.out("__FILE__, __LINE__, __func__", gopp.IfElseStr(len(te.Args) > 0, ",", "")).outnl()
 	if len(te.Args) > 0 {
 		var tyfmts []string
 		for _, e1 := range te.Args {
@@ -1174,12 +1129,6 @@ func (c *g2nc) genCallExprPrintln(scope *ast.Scope, te *ast.CallExpr) {
 		// c.outfh().outnl()
 	}
 }
-func (c *g2nc) genCallExprUnsafes(scope *ast.Scope, te *ast.CallExpr) {
-	c.out(strings.Replace(c.exprstr(te.Fun), ".", "_", 1))
-	c.out("(")
-	c.genExpr(scope, te.Args[0])
-	c.out(")")
-}
 func (c *g2nc) genCallExprNorm(scope *ast.Scope, te *ast.CallExpr) {
 	// funame := te.Fun.(*ast.Ident).Name
 
@@ -1205,11 +1154,6 @@ func (c *g2nc) genCallExprNorm(scope *ast.Scope, te *ast.CallExpr) {
 	isvardic := false
 	var goty *types.Signature
 	if gotyx != nil {
-		log.Println(te.Fun, gotyx, reflect.TypeOf(gotyx))
-		if gotyb, ok := gotyx.(*types.Basic); ok {
-
-			log.Println(gotyb.Name(), gotyb.Kind(), gotyb.Info(), c.exprstr(te.Fun))
-		}
 		goty = gotyx.(*types.Signature)
 		isvardic = goty.Variadic()
 	}
@@ -1304,11 +1248,7 @@ func (c *g2nc) genTypeCtor(scope *ast.Scope, te *ast.CallExpr) {
 		}
 	case *ast.SelectorExpr:
 		c.out("(")
-		if strings.HasPrefix(c.exprstr(te.Fun), "unsafe.") {
-			c.out(strings.Replace(c.exprstr(te.Fun), ".", "_", 1))
-		} else {
-			c.genExpr(scope, te.Fun)
-		}
+		c.genExpr(scope, te.Fun)
 		c.out(")")
 		c.out("(")
 		c.genFuncArgs(scope, te.Args)
@@ -1663,7 +1603,7 @@ func (this *g2nc) genExpr(scope *ast.Scope, e ast.Expr) {
 	this.genExpr2(scope, e)
 }
 func (this *g2nc) genExpr2(scope *ast.Scope, e ast.Expr) {
-	// log.Println(reflect.TypeOf(e), e)
+	// log.Println(reflect.TypeOf(e))
 	switch te := e.(type) {
 	case *ast.Ident:
 		idname := te.Name
@@ -1740,17 +1680,9 @@ func (this *g2nc) genExpr2(scope *ast.Scope, e ast.Expr) {
 		case *ast.MapType:
 			this.outf("cxhashtable_new()").outfh().outnl()
 			var vo = scope.Lookup("varname")
-			if vo == nil {
-				// vo = lookscope(scope, "varname")
-			}
-			if vo == nil {
-				gotyval := this.info.Types[te]
-				log.Println("temp var?", vo, this.exprpos(te), gotyval)
-			}
 			for idx, ex := range te.Elts {
 				switch be := ex.(type) {
 				case *ast.KeyValueExpr:
-					// log.Println(vo == nil, ex, idx, this.exprpos(ex))
 					this.genCxmapAddkv(scope, vo.Data, be.Key, be.Value)
 					this.outfh().outnl()
 				default:
@@ -1760,15 +1692,12 @@ func (this *g2nc) genExpr2(scope *ast.Scope, e ast.Expr) {
 		case *ast.ArrayType:
 			var vo = scope.Lookup("varname")
 			if vo == nil {
-				// vo = lookscope(scope, "varname")
-			}
-			if vo == nil {
 				gotyval := this.info.Types[te]
 				log.Println("temp var?", vo, this.exprpos(te), gotyval)
 			}
 			this.outf("cxarray_new()").outfh().outnl()
 			for idx, ex := range te.Elts {
-				// log.Println(vo == nil, ex, idx, this.exprpos(ex))
+				log.Println(vo == nil, ex, idx, this.exprpos(ex))
 				this.genCxarrAdd(scope, vo.Data, ex, idx)
 				this.outfh().outnl()
 			}
@@ -1777,27 +1706,8 @@ func (this *g2nc) genExpr2(scope *ast.Scope, e ast.Expr) {
 		case *ast.Ident: // TODO
 			var vo = scope.Lookup("varname")
 			this.outf("%v_new_zero()", this.exprTypeName(scope, be)).outfh().outnl()
-			for idx, ex := range te.Elts {
-				this.genExpr(scope, vo.Data.(ast.Expr))
-				this.out("->")
-				switch ef := ex.(type) {
-				case *ast.KeyValueExpr:
-					this.genExpr(scope, ef.Key)
-					this.outeq()
-					this.genExpr(scope, ef.Value)
-				default:
-					tetyx := this.info.TypeOf(te)
-					switch tetyx.(type) {
-					case *types.Named:
-						tetyx = tetyx.Underlying()
-					default:
-						log.Panicln("need more", tetyx, reflect.TypeOf(tetyx))
-					}
-					tety := tetyx.(*types.Struct)
-					this.out(tety.Field(idx).Name())
-					this.outeq()
-					this.genExpr(scope, ex)
-				}
+			for _, ex := range te.Elts {
+				this.outf("%v->%v = %v", vo, "aaa", ex)
 				this.outfh().outnl()
 			}
 		default:
@@ -1935,7 +1845,7 @@ func (this *g2nc) genExpr2(scope *ast.Scope, e ast.Expr) {
 		} else {
 			this.genExpr(scope, te.X)
 			selxty := this.info.TypeOf(te.X)
-			log.Println(selxty, reflect.TypeOf(selxty), te)
+			log.Println(selxty, reflect.TypeOf(selxty))
 			if isinvalidty2(selxty) { // package
 				this.out("_")
 			} else {
@@ -2055,11 +1965,7 @@ func (c *g2nc) genCxarrAdd(scope *ast.Scope, vnamex interface{}, ve ast.Expr, id
 	}
 
 	varobj := c.info.ObjectOf(vnamex.(*ast.Ident))
-	log.Println(varobj == nil, vnamex, ve, idx)
-	pkgpfx := ""
-	if isglobalid(c.psctx, vnamex.(*ast.Ident)) {
-		pkgpfx = varobj.Pkg().Name()
-	}
+	pkgpfx := gopp.IfElseStr(isglobalid(c.psctx, vnamex.(*ast.Ident)), varobj.Pkg().Name(), "")
 	pkgpfx = gopp.IfElseStr(pkgpfx == "", "", pkgpfx+"_")
 	c.outf("array_add(%s%v, (void*)(uintptr_t)%v)", pkgpfx,
 		vnamex.(*ast.Ident).Name, valstr) // .outfh().outnl()
@@ -2112,30 +2018,10 @@ func (this *g2nc) exprTypeNameImpl(scope *ast.Scope, e ast.Expr) string {
 	{
 		// return "unknownty"
 	}
-	{
-		tystr := this.exprstr(e)
-		if strings.HasPrefix(tystr, "_Ctype_") {
-			return tystr[7:]
-		}
-	}
 
 	goty := this.info.TypeOf(e)
-	// _Ctype_int 导致 goty == nil
-	// import的包里的类型，只是个ast.Ident，怎么得到全面带包名的呢
 	if goty == nil {
-		log.Println(this.exprstr(e), len(this.info.Types))
-		if e1, ok := e.(*ast.StarExpr); ok {
-			log.Println(e1.X, e1.Star, reflect.TypeOf(e1.X))
-			goty = this.info.TypeOf(e1.X)
-			goobj := this.info.ObjectOf(e1.X.(*ast.Ident))
-			log.Println(this.exprstr(e), goty, reflect.TypeOf(goty), goobj)
-		}
-		log.Println(this.info.Types)
-		log.Println(this.strtypes)
-		cs := this.psctx.cursors[e]
-		log.Println(cs, cs.Name(), cs.Node(), reflect.TypeOf(cs.Node()))
-		log.Println(types.ExprString(e))
-		log.Println(this.info.Defs)
+		log.Println(this.exprstr(e))
 		log.Panicln(e, this.exprpos(e), reflect.TypeOf(e))
 	}
 	val := this.exprTypeNameImpl2(scope, goty, e)
@@ -2373,13 +2259,9 @@ func (this *g2nc) genTypeSpec(scope *ast.Scope, spec *ast.TypeSpec) {
 		this.outfh().outnl()
 	case *ast.SelectorExpr:
 		this.out("typedef").outsp()
-		if strings.HasPrefix(this.exprstr(te), "unsafe.") {
-			this.out(strings.Replace(this.exprstr(te), ".", "_", 1))
-		} else {
-			this.genExpr(scope, te.X)
-			this.out("_")
-			this.genExpr(scope, te.Sel)
-		}
+		this.genExpr(scope, te.X)
+		this.out("_")
+		this.genExpr(scope, te.Sel)
 		this.outsp()
 		specname := trimCtype(spec.Name.Name)
 		this.out(this.pkgpfx() + specname)
@@ -2431,18 +2313,6 @@ func putscope(scope *ast.Scope, k ast.ObjKind, name string, value interface{}) *
 	return pscope
 }
 
-// orignal Lookup igore Outer scope, but this not
-func lookscope(scope *ast.Scope, name string) *ast.Object {
-	if scope == nil {
-		return nil
-	}
-	obj := scope.Lookup(name)
-	if obj != nil {
-		return obj
-	}
-	return lookscope(scope.Outer, name)
-}
-
 var vp1stval ast.Expr
 var vp1stty types.Type
 var vp1stidx int
@@ -2457,7 +2327,6 @@ func (c *g2nc) genValueSpec(scope *ast.Scope, spec *ast.ValueSpec, validx int) {
 		if varty == nil && validx > 0 {
 			varty = vp1stty
 		}
-		// log.Println(validx, idx, varname, varty, spec.Values, len(c.info.Types))
 		if varty == nil && strings.HasPrefix(types.ExprString(spec.Values[0]), "C.") {
 			varty = types.Typ[types.UntypedInt]
 		}
@@ -2543,7 +2412,7 @@ func (c *g2nc) genValueSpec(scope *ast.Scope, spec *ast.ValueSpec, validx int) {
 
 }
 
-func (c *g2nc) genInitGlobvars(scope *ast.Scope, pkg *packages.Package) {
+func (c *g2nc) genInitGlobvars(scope *ast.Scope, pkg *ast.Package) {
 	c.outf("void %sglobvars_init() {", c.pkgpfx()).outnl()
 	for _, varx := range c.psctx.globvars {
 		varo := varx.(*ast.ValueSpec)
@@ -2587,7 +2456,6 @@ func (this *g2nc) out(ss ...string) *g2nc {
 	for _, s := range ss {
 		// fmt.Print(s, " ")
 		this.sb.WriteString(s + "")
-		this.outfp.WriteString(s + "")
 	}
 	return this
 }
@@ -2608,19 +2476,16 @@ typedef uint32 _Ctype_uint;
 typedef int8 _Ctype_char;
 typedef float32 _Ctype_float;
 typedef _Ctype_long _Ctype_ptrdiff_t;
-typedef void* unsafe_Pointer;
 `
 	return precgodefs
 }
 
 func (this *g2nc) code() (string, string) {
 	code := ""
-	code += fmt.Sprintf("// %s of %s\n", this.psctx.path, this.psctx.wkdir)
+	code += fmt.Sprintf("// %s of %s\n", this.psctx.bdpkgs.Dir, this.psctx.wkdir)
 	code += this.psctx.ccode
 	code += "#include <cxrtbase.h>\n\n"
 	code += this.genPrecgodefs() + "\n"
 	code += this.sb.String()
-
-	log.Println(code)
 	return code, "c"
 }
