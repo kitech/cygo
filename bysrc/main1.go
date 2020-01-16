@@ -80,6 +80,9 @@ func main() {
 		}
 		log.Println("=================", fname)
 		dedups[fname] = true
+		if strings.Contains(fname, "xnet") {
+			// os.Exit(-1)
+		}
 	}
 
 	code := ""

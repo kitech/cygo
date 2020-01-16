@@ -40,6 +40,10 @@ func isstrty2(typ types.Type) bool {
 	}
 	return isstrty(typ.String())
 }
+func iscstrty2(typ types.Type) bool {
+	tystr := typ.String()
+	return strings.HasPrefix(tystr, "*") && strings.HasSuffix(tystr, "_Ctype_char")
+}
 func isslicety(tystr string) bool    { return strings.HasPrefix(tystr, "[]") }
 func isslicety2(typ types.Type) bool { return isslicety(typ.String()) }
 func isarrayty(tystr string) bool {

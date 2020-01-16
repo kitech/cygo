@@ -147,7 +147,9 @@ func (pc *ParserContext) walkpass_cgo_processor() {
 		gopp.ErrPrint(err, pc.wkdir)
 		os.Mkdir(pc.wkdir, 0755)
 	}
-	cmdfld := []string{"/opt/go/bin/go", "tool", "cgo", "-objdir", pc.wkdir}
+	goexe, err := exec.LookPath("go")
+	gopp.ErrPrint(err)
+	cmdfld := []string{goexe, "tool", "cgo", "-objdir", pc.wkdir}
 	bdpkgs := pc.bdpkgs
 	for _, cgofile := range bdpkgs.CgoFiles {
 		cgofile = bdpkgs.Dir + "/" + cgofile

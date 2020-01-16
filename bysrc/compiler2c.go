@@ -284,6 +284,9 @@ func (this *g2nc) genFuncDecl(scope *ast.Scope, fd *ast.FuncDecl) {
 	// _Cfunc_xxx
 	iswcfn := iswrapcfunc(this.exprstr(fd.Name))
 	ismret := fd.Type.Results.NumFields() >= 2
+	if iswcfn {
+		this.outf("// %v %s", fd, exprpos(this.psctx, fd)).outnl()
+	}
 
 	fdname := fd.Name.Name
 	pkgpfx := this.pkgpfx()
@@ -317,7 +320,9 @@ func (this *g2nc) genFuncDecl(scope *ast.Scope, fd *ast.FuncDecl) {
 		}
 		this.outf("%s(", fd.Name.Name[7:])
 		for idx1, arge := range fd.Type.Params.List {
+			_, isptrty := arge.Type.(*ast.StarExpr)
 			for idx2, name := range arge.Names {
+				this.out(gopp.IfElseStr(isptrty, "(void*)", ""))
 				this.outf("%s", name.Name)
 				if idx1 == fd.Type.Params.NumFields()-1 && idx2 == len(arge.Names)-1 {
 				} else {
@@ -406,7 +411,8 @@ func (this *g2nc) genStmt(scope *ast.Scope, stmt ast.Stmt, idx int) {
 		posinfo := this.exprpos(stmt).String()
 		fields := strings.Split(posinfo, ":")
 		if len(fields) > 1 {
-			this.outf("#line %s \"%s\"", fields[1], fields[0]).outnl()
+			// this.outf("#line %s \"%s\"", fields[1], fields[0]).outnl()
+			this.out("// ", posinfo).outnl()
 		} else {
 			this.out("// ", posinfo).outnl()
 		}
@@ -1159,8 +1165,13 @@ func (c *g2nc) genCallExprNorm(scope *ast.Scope, te *ast.CallExpr) {
 	isvardic := false
 	var goty *types.Signature
 	if gotyx != nil {
-		goty = gotyx.(*types.Signature)
-		isvardic = goty.Variadic()
+		goty1, ok := gotyx.(*types.Signature)
+		if ok {
+			goty = goty1
+			isvardic = goty.Variadic()
+		} else {
+			log.Println(gotyx, reflect.TypeOf(gotyx), te.Fun)
+		}
 	}
 
 	// log.Println(te.Args, te.Fun, gotyx, reflect.TypeOf(gotyx), goty.Variadic())
@@ -1239,6 +1250,8 @@ func (c *g2nc) genTypeCtor(scope *ast.Scope, te *ast.CallExpr) {
 				varty := c.info.TypeOf(arg0)
 				if isslicety2(varty) {
 					c.outf("cxstring_new_cstr2((%v)->ptr, (%v)->len)", ce.Name, ce.Name)
+				} else if iscstrty2(varty) {
+					c.outf("cxstring_new_cstr(%v)", ce.Name)
 				} else {
 					c.outf("cxstring_new_char(%v)", ce.Name)
 				}
@@ -1608,12 +1621,15 @@ func (this *g2nc) genExpr(scope *ast.Scope, e ast.Expr) {
 	this.genExpr2(scope, e)
 }
 func (this *g2nc) genExpr2(scope *ast.Scope, e ast.Expr) {
-	// log.Println(reflect.TypeOf(e))
+	// log.Println(reflect.TypeOf(e), e)
 	switch te := e.(type) {
 	case *ast.Ident:
 		idname := te.Name
 		idname = gopp.IfElseStr(idname == "nil", "nilptr", idname)
 		idname = gopp.IfElseStr(idname == "string", "cxstring*", idname)
+		if strings.HasPrefix(idname, "_Ctype_") {
+			idname = idname[7:]
+		}
 		eobj := this.info.ObjectOf(te)
 		log.Println(e, eobj, isglobalid(this.psctx, te))
 		if eobj != nil {
@@ -1854,7 +1870,12 @@ func (this *g2nc) genExpr2(scope *ast.Scope, e ast.Expr) {
 			if isinvalidty2(selxty) { // package
 				this.out("_")
 			} else {
-				this.out("->")
+				switch selxty.(type) {
+				case *types.Named:
+					this.out(".")
+				default:
+					this.out("->")
+				}
 			}
 		}
 		this.genExpr(scope, te.Sel)
