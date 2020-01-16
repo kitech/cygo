@@ -2112,10 +2112,30 @@ func (this *g2nc) exprTypeNameImpl(scope *ast.Scope, e ast.Expr) string {
 	{
 		// return "unknownty"
 	}
+	{
+		tystr := this.exprstr(e)
+		if strings.HasPrefix(tystr, "_Ctype_") {
+			return tystr[7:]
+		}
+	}
 
 	goty := this.info.TypeOf(e)
+	// _Ctype_int 导致 goty == nil
+	// import的包里的类型，只是个ast.Ident，怎么得到全面带包名的呢
 	if goty == nil {
-		log.Println(this.exprstr(e))
+		log.Println(this.exprstr(e), len(this.info.Types))
+		if e1, ok := e.(*ast.StarExpr); ok {
+			log.Println(e1.X, e1.Star, reflect.TypeOf(e1.X))
+			goty = this.info.TypeOf(e1.X)
+			goobj := this.info.ObjectOf(e1.X.(*ast.Ident))
+			log.Println(this.exprstr(e), goty, reflect.TypeOf(goty), goobj)
+		}
+		log.Println(this.info.Types)
+		log.Println(this.strtypes)
+		cs := this.psctx.cursors[e]
+		log.Println(cs, cs.Name(), cs.Node(), reflect.TypeOf(cs.Node()))
+		log.Println(types.ExprString(e))
+		log.Println(this.info.Defs)
 		log.Panicln(e, this.exprpos(e), reflect.TypeOf(e))
 	}
 	val := this.exprTypeNameImpl2(scope, goty, e)

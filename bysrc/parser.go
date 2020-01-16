@@ -70,11 +70,20 @@ func NewParserContext(path string, pkgrename string) *ParserContext {
 }
 
 func (this *ParserContext) Init() error {
+	// 注意入口包必须有 import "C"
 	cfg := &packages.Config{Mode: packages.LoadFiles | packages.LoadImports | packages.LoadTypes | packages.LoadAllSyntax}
-	// cfg.Env = append([]string{"CGO_ENABLED=1"}, os.Environ()...)
+	// cfg.Env = append(os.Environ(), []string{"CGO_ENABLED=1"}...)
 	// why could not import C (no metadata for C) ?
 	// if C side has some compile error, this would happend
 	// not really need go 1.13.5+, but CGO_ENABLED=1
+	// cfg.Env = append(os.Environ(), []string{"CGO_ENABLED=1"}...)
+	// args := append([]string{"-gcflags \"-lc\""}, flag.Args()...)
+	// cfg.BuildFlags = append(cfg.BuildFlags, "-ldflags=-lc")
+	// cfg.BuildFlags = append(cfg.BuildFlags, "-a")
+	// args := flag.Args()
+	// fakecgo_impfile := args[len(args)-1] + "/impc.go"
+	// cfg.Overlay = map[string][]byte{}
+	// cfg.Overlay[fakecgo_impfile] = []byte("package main\n/*\n*/\nimport \"C\"\n")
 	pkgs, err := packages.Load(cfg, flag.Args()...)
 	gopp.ErrPrint(err)
 	if err != nil {
