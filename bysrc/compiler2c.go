@@ -108,8 +108,9 @@ func (c *g2nc) gentypeofs() {
 				// break
 			}
 			if iscty {
-				c.outf("typedef __typeof__((%v)0) %v_ctype;", fe.Sel.Name, fe.Sel.Name).outnl()
+				c.outf("typedef __typeof__((%v)0) %v__ctype;", fe.Sel.Name, fe.Sel.Name).outnl()
 			} else {
+				c.outf("// typedef __typeof__((%v)(", fe.Sel.Name).outnl()
 				c.outf("typedef __typeof__(%v(", fe.Sel.Name)
 				for idx, _ := range ne.Args {
 					c.out("0")
@@ -118,14 +119,14 @@ func (c *g2nc) gentypeofs() {
 						c.out(",")
 					}
 				}
-				c.outf(")) %v_ctype;", fe.Sel.Name).outnl()
+				c.outf(")) %v__ctype;", fe.Sel.Name).outnl()
 			}
 		case *ast.SelectorExpr:
 			if strings.HasPrefix(ne.Sel.Name, "struct_") {
 				structname := strings.Replace(ne.Sel.Name, "_", " ", 1)
 				c.outf("typedef %s %s;", structname, ne.Sel.Name).outnl()
 			}
-			c.outf("typedef __typeof__(%v) %v_ctype;", ne.Sel.Name, ne.Sel.Name).outnl()
+			c.outf("typedef __typeof__(%v) %v__ctype;", ne.Sel.Name, ne.Sel.Name).outnl()
 		}
 	}
 }
@@ -2107,12 +2108,12 @@ func (this *g2nc) exprTypeNameImpl(scope *ast.Scope, e ast.Expr) string {
 	{ // C.xxx or C.xxx()
 		if iscsel(e) {
 			name := exprstr(e)[2:]
-			return fmt.Sprintf("%s_ctype", name)
+			return fmt.Sprintf("%s__ctype", name)
 		}
 		if ce, ok := e.(*ast.CallExpr); ok {
 			if iscsel(ce.Fun) {
 				name := exprstr(ce.Fun)[2:]
-				return fmt.Sprintf("%s_ctype", name)
+				return fmt.Sprintf("%s__ctype", name)
 			}
 			log.Println(ce.Fun, reftyof(ce.Fun), len(this.info.Types))
 			if idt, ok := ce.Fun.(*ast.Ident); ok {
@@ -2125,12 +2126,12 @@ func (this *g2nc) exprTypeNameImpl(scope *ast.Scope, e ast.Expr) string {
 			log.Println(se, reftyof(se), se.X, reftyof(se.X))
 			if iscsel(se.X) {
 				name := exprstr(se.X)[2:]
-				return fmt.Sprintf("%s_ctype", name)
+				return fmt.Sprintf("%s__ctype", name)
 			}
 			if ce, ok := se.X.(*ast.CallExpr); ok {
 				if iscsel(ce.Fun) {
 					name := exprstr(ce.Fun)[2:]
-					return fmt.Sprintf("%s_ctype", name)
+					return fmt.Sprintf("%s__ctype", name)
 				}
 			}
 		}
@@ -2138,14 +2139,17 @@ func (this *g2nc) exprTypeNameImpl(scope *ast.Scope, e ast.Expr) string {
 			log.Println(se, reftyof(se), se.X, reftyof(se.X))
 			if iscsel(se.X) {
 				name := exprstr(se.X)[2:]
-				return fmt.Sprintf("%s_ctype", name)
+				return fmt.Sprintf("%s__ctype", name)
 			}
 			if ce, ok := se.X.(*ast.CompositeLit); ok {
 				if iscsel(ce.Type) {
 					name := exprstr(ce.Type)[2:]
-					return fmt.Sprintf("%s_ctype*", name)
+					return fmt.Sprintf("%s__ctype*", name)
 				}
 			}
+		}
+		if ie, ok := e.(*ast.IndexExpr); ok {
+			log.Println(exprstr(ie), ie.X, this.info.TypeOf(ie.X))
 		}
 	}
 

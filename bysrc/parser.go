@@ -43,6 +43,7 @@ type ParserContext struct {
 	initFuncs     []*ast.FuncDecl
 
 	csymbols  map[ast.Node]ast.ObjKind
+	ctypes    map[ast.Expr]types.Type
 	tmpvars   map[ast.Stmt][]ast.Node // => value node
 	gostmts   []*ast.GoStmt
 	chanops   []ast.Expr // *ast.SendStmt
@@ -103,6 +104,7 @@ func (this *ParserContext) Init() error {
 	}
 
 	this.walkpass_check()
+	this.walkpass_resolve_ctypes()
 
 	this.walkpass_clean_cgodecl()
 	this.walkpass_flat_cursors()
@@ -399,6 +401,143 @@ func (pc *ParserContext) walkpass_csymbols() {
 		})
 	}
 	pc.csymbols = cnodes
+}
+
+type canytype struct {
+	name    string
+	underty types.Type
+}
+
+func (caty *canytype) Underlying() types.Type { return caty.underty }
+func (caty *canytype) String() string         { return caty.name }
+
+func (pc *ParserContext) walkpass_resolve_ctypes() {
+	pc.walkpass_resolve_ctypes1()
+	for e, t := range pc.ctypes {
+		log.Println(exprstr(e), t)
+	}
+	pc.walkpass_resolve_ctypes2()
+	pc.walkpass_resolve_ctypes3()
+}
+func (pc *ParserContext) walkpass_resolve_ctypes1() {
+	pkgs := pc.pkgs
+
+	ctypes := map[ast.Expr]types.Type{}
+	for _, pkg := range pkgs {
+		astutil.Apply(pkg, func(c *astutil.Cursor) bool {
+			switch te := c.Node().(type) {
+			case ast.Expr:
+				csty := pc.info.TypeOf(te)
+				if csty != nil && !isinvalidty2(csty) {
+					break
+				}
+
+				switch se := te.(type) {
+				case *ast.SelectorExpr:
+					if iscsel(se) {
+						caty := &canytype{}
+						caty.name = se.Sel.Name + "__ctype"
+						tyandval := types.TypeAndValue{} //caty, nil}
+						tyandval.Type = caty
+						pc.info.Types[se] = tyandval
+						pc.info.Types[se.Sel] = tyandval
+						ctypes[se] = caty
+						pn := c.Parent()
+						log.Println(reftyof(pn))
+						switch pe := pn.(type) {
+						case *ast.CallExpr:
+							pc.info.Types[pe] = tyandval
+							ctypes[pe] = caty
+							// pe2 := pc.cursors[pe].Parent()
+							// if _, ok := pe2.(*ast.StarExpr); ok {
+							// pc.info.Types[pe2] =
+							//}
+						}
+						// ctypes[c.Parent().(ast.Expr)] = caty
+						// log.Println("fix some", te, reftyof(te), csty, ",", caty)
+					} else {
+						log.Println("fixty", te, reftyof(te), csty)
+					}
+				default:
+					log.Println(te, reftyof(te), csty)
+				}
+			}
+			return true
+		}, func(c *astutil.Cursor) bool {
+			return true
+		})
+	}
+	pc.ctypes = ctypes
+}
+func (pc *ParserContext) walkpass_resolve_ctypes2() {
+	pkgs := pc.pkgs
+
+	for _, pkg := range pkgs {
+		astutil.Apply(pkg, func(c *astutil.Cursor) bool {
+			return true
+		}, func(c *astutil.Cursor) bool {
+			switch te := c.Node().(type) {
+			case *ast.AssignStmt:
+				for idx, le := range te.Lhs {
+					csty := pc.info.TypeOf(le)
+					if csty != nil && !isinvalidty2(csty) {
+						break
+					}
+					re := te.Rhs[idx]
+					csty2 := pc.info.TypeOf(re)
+					if csty2 != nil && !isinvalidty2(csty2) {
+						log.Println(idx, "canfixty", le, reftyof(le), csty2)
+						tyandval := types.TypeAndValue{} //caty, nil}
+						tyandval.Type = csty2
+						pc.info.Types[le] = tyandval
+						pc.ctypes[le] = tyandval.Type
+					} else {
+						csty3 := pc.ctypes[re]
+						if csty3 != nil {
+							log.Println(idx, "canfixty", le, reftyof(le), csty2)
+							tyandval := types.TypeAndValue{} //caty, nil}
+							tyandval.Type = csty2
+							pc.info.Types[le] = tyandval
+							pc.ctypes[le] = tyandval.Type
+						} else {
+							log.Println(idx, "cannot fixty", le, reftyof(le), csty2, csty3, exprstr(re), reftyof(re))
+						}
+					}
+				}
+			case *ast.ValueSpec:
+				for _, name := range te.Names {
+					csty := pc.info.TypeOf(name)
+					if csty != nil && !isinvalidty2(csty) {
+						break
+					}
+					log.Println("untyval", reftyof(name), exprstr(name))
+				}
+			case ast.Expr:
+			}
+			return true
+		})
+	}
+
+}
+func (pc *ParserContext) walkpass_resolve_ctypes3() {
+	pkgs := pc.pkgs
+
+	for _, pkg := range pkgs {
+		astutil.Apply(pkg, func(c *astutil.Cursor) bool {
+			return true
+		}, func(c *astutil.Cursor) bool {
+			switch te := c.Node().(type) {
+			case ast.Expr:
+				csty := pc.info.TypeOf(te)
+				if csty != nil && !isinvalidty2(csty) {
+					break
+				}
+				log.Println("unresolvty", reftyof(te), exprstr(te))
+			}
+			return true
+		})
+	}
+
 }
 
 func (pc *ParserContext) walkpass_valid_files() {
