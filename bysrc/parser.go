@@ -75,8 +75,11 @@ func NewParserContext(path string, pkgrename string) *ParserContext {
 
 	return this
 }
-
 func (this *ParserContext) Init() error {
+	// return this.Init_no_cgocmd()
+	return this.Init_explict_cgo()
+}
+func (this *ParserContext) Init_no_cgocmd() error {
 	bdpkgs, err := build.ImportDir(this.path, build.ImportComment)
 	gopp.ErrPrint(err)
 	this.bdpkgs = bdpkgs
@@ -172,6 +175,7 @@ func (this *ParserContext) Init_explict_cgo() error {
 	this.walkpass_check()
 
 	this.walkpass_clean_cgodecl()
+	this.walkpass_resolve_ctypes_bycgo()
 	this.walkpass_flat_cursors()
 	this.walkpass_func_deps()
 	log.Println("pkgs", this.typkgs.Name(), "types:", len(this.info.Types),
@@ -344,6 +348,33 @@ func (this *ParserContext) findFileobj(fbname string) *ast.File {
 		}
 	}
 	return nil
+}
+
+func (pc *ParserContext) walkpass_resolve_ctypes_bycgo() {
+	pkgs := pc.pkgs
+
+	ctypes := map[ast.Expr]types.Type{}
+	for _, pkg := range pkgs {
+		astutil.Apply(pkg, func(c *astutil.Cursor) bool {
+			switch te := c.Node().(type) {
+			case ast.Expr:
+				csty := pc.info.TypeOf(te)
+				if csty != nil && !isinvalidty2(csty) {
+				} else {
+					log.Println("unfixty", te, reftyof(te), csty)
+				}
+				if strings.Contains(exprstr(te), "_Ctype_") ||
+					strings.Contains(exprstr(te), "_Cfunc_") {
+					log.Println("cgo ", reftyof(te), exprstr(te), csty)
+				}
+			case *ast.Ident:
+			}
+			return true
+		}, func(c *astutil.Cursor) bool {
+			return true
+		})
+	}
+	pc.ctypes = ctypes
 }
 
 func astcs_next(c *astutil.Cursor) *astutil.Cursor {
