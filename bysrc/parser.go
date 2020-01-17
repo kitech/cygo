@@ -76,8 +76,8 @@ func NewParserContext(path string, pkgrename string) *ParserContext {
 	return this
 }
 func (this *ParserContext) Init() error {
-	// return this.Init_no_cgocmd()
-	return this.Init_explict_cgo()
+	return this.Init_no_cgocmd()
+	// return this.Init_explict_cgo()
 }
 func (this *ParserContext) Init_no_cgocmd() error {
 	bdpkgs, err := build.ImportDir(this.path, build.ImportComment)

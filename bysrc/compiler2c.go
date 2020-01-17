@@ -1853,7 +1853,12 @@ func (this *g2nc) genExpr2(scope *ast.Scope, e ast.Expr) {
 	case *ast.IndexExpr:
 		varty := this.info.TypeOf(te.X)
 		vo := scope.Lookup("varval")
-		if ismapty(varty.String()) {
+		if varty == nil { // c type ???
+			this.genExpr(scope, te.X)
+			this.out("[")
+			this.genExpr(scope, te.Index)
+			this.out("]")
+		} else if ismapty(varty.String()) {
 			if vo == nil {
 				this.genCxmapAddkv(scope, te.X, te.Index, nil)
 			} else {
@@ -1882,6 +1887,11 @@ func (this *g2nc) genExpr2(scope *ast.Scope, e ast.Expr) {
 				this.out("=")
 				this.genExpr(scope, vo.Data.(ast.Expr))
 			}
+		} else if isinvalidty2(varty) { // c type???
+			this.genExpr(scope, te.X)
+			this.out("[")
+			this.genExpr(scope, te.Index)
+			this.out("]")
 		} else {
 			log.Println("todo", te.X, te.Index)
 			log.Println("todo", reflect.TypeOf(te.X), varty.String(), this.exprpos(te.X))
@@ -2149,7 +2159,19 @@ func (this *g2nc) exprTypeNameImpl(scope *ast.Scope, e ast.Expr) string {
 			}
 		}
 		if ie, ok := e.(*ast.IndexExpr); ok {
-			log.Println(exprstr(ie), ie.X, this.info.TypeOf(ie.X))
+			log.Println(exprstr(ie), ie.X, reftyof(ie.X), this.info.TypeOf(ie.X))
+			xty := this.info.TypeOf(ie.X)
+			if xty == nil || isinvalidty2(xty) {
+				// c type???
+				dimn := strings.Count(exprstr(ie), "[")
+				dimstr := strings.Repeat("[0]", dimn)
+				tope := ie.X
+				for i := 0; i < dimn-1; i++ {
+					ie2 := ie.X.(*ast.IndexExpr)
+					tope = ie2.X
+				}
+				return fmt.Sprintf("__typeof__(%s%s)", tope, dimstr)
+			}
 		}
 	}
 
