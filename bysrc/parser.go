@@ -82,6 +82,52 @@ func (this *ParserContext) Init() error {
 	if len(bdpkgs.InvalidGoFiles) > 0 {
 		log.Fatalln("Have InvalidGoFiles", bdpkgs.InvalidGoFiles)
 	}
+	log.Println(bdpkgs.GoFiles)
+
+	// parser step 2, got ast/types
+	this.fset = token.NewFileSet()
+	pkgs, err := parser.ParseDir(this.fset, this.path, this.dirFilter, 0|parser.AllErrors|parser.ParseComments)
+	gopp.ErrPrint(err)
+	this.pkgs = pkgs
+	this.ccode = this.pickCCode()
+
+	// this.ccode = this.pickCCode()
+	this.walkpass_valid_files()
+	this.walkpass_csymbols()
+
+	this.conf.DisableUnusedImportCheck = true
+	this.conf.Error = func(err error) {
+		if !strings.Contains(err.Error(), "declared but not used") {
+			log.Println(err)
+		}
+	}
+
+	this.walkpass_check()
+
+	this.walkpass_clean_cgodecl()
+	this.walkpass_flat_cursors()
+	this.walkpass_func_deps()
+	log.Println("pkgs", this.typkgs.Name(), "types:", len(this.info.Types),
+		"typedefs", len(this.typeDeclsm), "funcdefs", len(this.funcDeclsm))
+
+	this.walkpass_tmpvars()
+	this.walkpass_kvpairs()
+	this.walkpass_gostmt()
+	this.walkpass_chan_send_recv()
+	this.walkpass_closures()
+	this.walkpass_multiret()
+	this.walkpass_defers()
+	this.walkpass_globvars()
+
+	return err
+}
+func (this *ParserContext) Init_explict_cgo() error {
+	bdpkgs, err := build.ImportDir(this.path, build.ImportComment)
+	gopp.ErrPrint(err)
+	this.bdpkgs = bdpkgs
+	if len(bdpkgs.InvalidGoFiles) > 0 {
+		log.Fatalln("Have InvalidGoFiles", bdpkgs.InvalidGoFiles)
+	}
 	// use go-clang to resolve c function signature
 	// extract c code from bdpkgs.CgoFiles
 	// parser step 1, got raw cgo c code
@@ -139,6 +185,9 @@ func (this *ParserContext) Init() error {
 	this.walkpass_globvars()
 
 	return err
+}
+
+func (pc *ParserContext) parse_prepare_cgo_preprocessor() {
 }
 
 // cgo preprocessor

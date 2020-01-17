@@ -57,11 +57,11 @@ func main() {
 		imprenames := psctx.getImportNameMap()
 		for path, rename := range imprenames {
 			pkgrenames[path] = rename
-			log.Println(path, rename)
+			log.Println("pkgimp", path, rename)
 		}
 
 		for _, imppath := range psctx.bdpkgs.Imports {
-			log.Println(imppath, psctx.bdpkgs.Dir)
+			log.Println("pkgimp", imppath, psctx.bdpkgs.Dir)
 			if imppath == "runtime" ||
 				imppath == "atomic" ||
 				imppath == "runtime/cgo" ||

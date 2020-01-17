@@ -80,6 +80,14 @@ func iscident(e ast.Expr) bool {
 	}
 	return false
 }
+func iscsel222(e ast.Expr) bool {
+	if se, ok := e.(*ast.SelectorExpr); ok {
+		if iscident(se.X) {
+			return true
+		}
+	}
+	return false
+}
 
 func iserrorty2(typ types.Type) bool {
 	if typ == nil {
@@ -238,6 +246,7 @@ func (bc *basecomp) funcistype(idt ast.Expr) bool {
 }
 
 func (bc *basecomp) exprstr(e ast.Expr) string { return types.ExprString(e) }
+func exprstr(e ast.Expr) string                { return types.ExprString(e) }
 
 func (c *basecomp) exprpos(e ast.Node) token.Position {
 	return exprpos(c.psctx, e)

@@ -102,29 +102,49 @@ func (c *g2nc) gentypeofs() {
 		switch ne := nx.(type) {
 		case *ast.CallExpr:
 			fe := ne.Fun.(*ast.SelectorExpr)
+			iscty := false
 			if funk.Contains([]string{"int"}, fe.Sel.Name) {
-				break
+				iscty = true
+				// break
 			}
 			c.outf("#ifndef HAS_%v_type_var", fe.Sel.Name).outnl()
 			c.outf("#define HAS_%v_type_var", fe.Sel.Name).outnl()
-			c.outf("__typeof__(%v(", fe.Sel.Name)
-			for idx, _ := range ne.Args {
-				c.out("0")
-				if idx == len(ne.Args)-1 {
-				} else {
-					c.out(",")
+			if iscty {
+				c.outf("__typeof__((%v)0", fe.Sel.Name)
+				c.outf(") %v_type_var = {0};", fe.Sel.Name).outnl()
+				c.outf("typedef __typeof__(%v) %v_type;", fe.Sel.Name, fe.Sel.Name).outnl()
+			} else {
+				c.outf("__typeof__(%v(", fe.Sel.Name)
+				for idx, _ := range ne.Args {
+					c.out("0")
+					if idx == len(ne.Args)-1 {
+					} else {
+						c.out(",")
+					}
 				}
+				c.outf(")) %v_type_var = {0};", fe.Sel.Name).outnl()
+				c.outf("typedef __typeof__(%v(", fe.Sel.Name)
+				for idx, _ := range ne.Args {
+					c.out("0")
+					if idx == len(ne.Args)-1 {
+					} else {
+						c.out(",")
+					}
+				}
+				c.outf(")) %v_type;", fe.Sel.Name).outnl()
 			}
-			c.outf(")) %v_type_var = {0};", fe.Sel.Name).outnl()
 			c.out("#endif").outnl()
 		case *ast.SelectorExpr:
 			c.outf("#ifndef HAS_%v_type_var", ne.Sel.Name).outnl()
 			c.outf("#define HAS_%v_type_var", ne.Sel.Name).outnl()
 			if strings.HasPrefix(ne.Sel.Name, "struct_") {
 				structname := strings.Replace(ne.Sel.Name, "_", " ", 1)
+				c.outf("typedef %s %s;", structname, ne.Sel.Name).outnl()
 				c.outf("__typeof__(%v) %v_type_var = {0};", structname, ne.Sel.Name).outnl()
+				c.outf("typedef __typeof__(%v) %v_type;", structname, ne.Sel.Name).outnl()
 			} else {
 				c.outf("__typeof__(%v) %v_type_var = {0};", ne.Sel.Name, ne.Sel.Name).outnl()
+				c.outf("typedef __typeof__(%v) %v_type;", ne.Sel.Name, ne.Sel.Name).outnl()
 			}
 			c.out("#endif").outnl()
 		}
@@ -1184,21 +1204,27 @@ func (c *g2nc) genCallExprNorm(scope *ast.Scope, te *ast.CallExpr) {
 	// funame := te.Fun.(*ast.Ident).Name
 
 	selfn, isselfn := te.Fun.(*ast.SelectorExpr)
-	isidt := false
+	// isidt := false
 	iscfn := false
 	ispkgsel := false
 	isifacesel := false
 	if isselfn {
-		var selidt *ast.Ident
-		selidt, isidt = selfn.X.(*ast.Ident)
-		iscfn = isidt && selidt.Name == "C"
-		selty := c.info.TypeOf(selfn.X)
-		ispkgsel = isinvalidty2(selty)
+		// var selidt *ast.Ident
+		// selidt, isidt = selfn.X.(*ast.Ident)
+		// iscfn = isidt && selidt.Name == "C"
+		if iscsel(te.Fun) {
+			// selidt = selfn.Sel.(*ast.Ident)
+			// isidt = true
+			iscfn = true
+		} else {
+			selty := c.info.TypeOf(selfn.X)
+			ispkgsel = isinvalidty2(selty)
 
-		selxty := c.info.TypeOf(selfn.X)
-		switch ne := selxty.(type) {
-		case *types.Named:
-			isifacesel = isiface2(ne.Underlying())
+			selxty := c.info.TypeOf(selfn.X)
+			switch ne := selxty.(type) {
+			case *types.Named:
+				isifacesel = isiface2(ne.Underlying())
+			}
 		}
 	}
 	gotyx := c.info.TypeOf(te.Fun)
@@ -1236,7 +1262,9 @@ func (c *g2nc) genCallExprNorm(scope *ast.Scope, te *ast.CallExpr) {
 
 	if isselfn {
 		if iscfn {
+			c.out("(")
 			c.genExpr(scope, selfn.Sel)
+			c.out(")")
 		} else if isifacesel {
 			c.genExpr(scope, selfn.X)
 			c.out("->")
@@ -1704,11 +1732,20 @@ func (this *g2nc) genExpr2(scope *ast.Scope, e ast.Expr) {
 		keepop := true
 		switch t2 := te.X.(type) {
 		case *ast.CompositeLit:
+			if iscsel(t2.Type) {
+				ste := t2.Type.(*ast.SelectorExpr)
+				// this.outf("// c struct ctor %s", ste.Sel.Name)
+				stname := strings.Replace(ste.Sel.Name, "_", " ", 1)
+				this.outf("cxmalloc(sizeof(%s))", stname)
+				break
+			}
+
 			tystr := this.exprTypeName(scope, t2.Type)
 			this.outf("%s_new_zero()", tystr) //.outnl()
 			this.outfh().outnl()
 			keepop = false
 			varname := scope.Lookup("varname")
+
 			tyobj := this.info.ObjectOf(t2.Type.(*ast.Ident))
 			goty := tyobj.Type().(*types.Named).Underlying().(*types.Struct)
 			for idx, elmx := range t2.Elts {
@@ -1733,7 +1770,9 @@ func (this *g2nc) genExpr2(scope *ast.Scope, e ast.Expr) {
 			log.Println(reflect.TypeOf(te), t2, reflect.TypeOf(te.X), te.Pos())
 		}
 		if keepop {
-			this.outf("%v", te.Op.String())
+			if iscsel(te.X) {
+				this.outf("%v", te.Op.String())
+			}
 			this.genExpr(scope, te.X)
 		}
 	case *ast.CompositeLit:
@@ -1902,12 +1941,15 @@ func (this *g2nc) genExpr2(scope *ast.Scope, e ast.Expr) {
 			log.Println("todo", varty, te)
 		}
 	case *ast.SelectorExpr:
-		if iscsel(te.X) {
+		if iscsel(te) {
 		} else {
 			this.genExpr(scope, te.X)
 			selxty := this.info.TypeOf(te.X)
-			log.Println(selxty, reflect.TypeOf(selxty))
-			if isinvalidty2(selxty) { // package
+			log.Println(selxty, reflect.TypeOf(selxty), te.X)
+			if selxty == nil {
+				// c type?
+				this.out(". /* c struct selctorexpr */")
+			} else if isinvalidty2(selxty) { // package
 				this.out("_")
 			} else {
 				switch selxty.(type) {
@@ -2074,6 +2116,7 @@ func (c *g2nc) genCxarrGet(scope *ast.Scope, vname ast.Expr, vidx ast.Expr) {
 func (this *g2nc) exprTypeName(scope *ast.Scope, e ast.Expr) string {
 	// log.Println(e, reflect.TypeOf(e))
 	tyname := this.exprTypeNameImpl(scope, e)
+	log.Println(exprstr(e), reftyof(e), tyname)
 	if tyname == "unknownty" {
 		// log.Panicln(tyname, e, reflect.TypeOf(e), this.exprpos(e))
 	}
@@ -2083,6 +2126,53 @@ func (this *g2nc) exprTypeNameImpl(scope *ast.Scope, e ast.Expr) string {
 
 	{
 		// return "unknownty"
+	}
+	{ // C.xxx or C.xxx()
+		if iscsel(e) {
+			name := exprstr(e)[2:]
+			return fmt.Sprintf("%s_type", name)
+			// return exprstr(e)[2:]
+		}
+		if ce, ok := e.(*ast.CallExpr); ok {
+			if iscsel(ce.Fun) {
+				name := exprstr(ce.Fun)[2:]
+				return fmt.Sprintf("%s_type", name)
+				// return exprstr(ce.Fun)[2:] + "aaa"
+			}
+			log.Println(ce.Fun, reftyof(ce.Fun), len(this.info.Types))
+			log.Println(this.info.Types)
+			if idt, ok := ce.Fun.(*ast.Ident); ok {
+				if funk.Contains([]string{"int"}, idt.Name) {
+					return idt.Name
+				}
+			}
+		}
+		if se, ok := e.(*ast.StarExpr); ok {
+			log.Println(se, reftyof(se), se.X, reftyof(se.X))
+			if iscsel(se.X) {
+				return exprstr(se.X)
+			}
+			if ce, ok := se.X.(*ast.CallExpr); ok {
+				if iscsel(ce.Fun) {
+					name := exprstr(ce.Fun)[2:]
+					return fmt.Sprintf("%s_type", name)
+					// return exprstr(ce.Fun)[2:]
+				}
+			}
+		}
+		if se, ok := e.(*ast.UnaryExpr); ok {
+			log.Println(se, reftyof(se), se.X, reftyof(se.X))
+			if iscsel(se.X) {
+				return exprstr(se.X)
+			}
+			if ce, ok := se.X.(*ast.CompositeLit); ok {
+				if iscsel(ce.Type) {
+					name := exprstr(ce.Type)[2:]
+					return fmt.Sprintf("%s_type*", name)
+					// return exprstr(ce.Fun)[2:]
+				}
+			}
+		}
 	}
 
 	goty := this.info.TypeOf(e)
@@ -2095,7 +2185,7 @@ func (this *g2nc) exprTypeNameImpl(scope *ast.Scope, e ast.Expr) string {
 		// log.Panicln("unreachable")
 		val = this.exprstr(e)
 		val = strings.Replace(val, "C.", "", 1)
-		log.Println(val)
+		log.Println(val, exprstr(e))
 		// log.Panicln(e, iscsel(e), this.exprpos(e), this.exprstr(e), sign2rety(val))
 		return sign2rety(val)
 	}
@@ -2430,7 +2520,24 @@ func (c *g2nc) genValueSpec(scope *ast.Scope, spec *ast.ValueSpec, validx int) {
 			} else if ischanty2(varty) {
 				c.out("voidptr")
 			} else {
-				c.out(vartystr)
+				if isinvalidty(vartystr) {
+					if len(spec.Values) == 1 {
+						val0 := spec.Values[0]
+						if idt, ok := val0.(*ast.Ident); ok {
+							if strings.HasPrefix(idt.Name, "gxtv") {
+								c.outf("__typeof__(%v)", idt.Name)
+							} else {
+								log.Panicln("unexpected")
+							}
+						} else {
+							log.Panicln("unexpected")
+						}
+					} else {
+						log.Panicln("unexpected")
+					}
+				} else {
+					c.out(vartystr)
+				}
 			}
 			c.outsp()
 		}
