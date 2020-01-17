@@ -107,22 +107,9 @@ func (c *g2nc) gentypeofs() {
 				iscty = true
 				// break
 			}
-			c.outf("#ifndef HAS_%v_type_var", fe.Sel.Name).outnl()
-			c.outf("#define HAS_%v_type_var", fe.Sel.Name).outnl()
 			if iscty {
-				c.outf("__typeof__((%v)0", fe.Sel.Name)
-				c.outf(") %v_type_var = {0};", fe.Sel.Name).outnl()
-				c.outf("typedef __typeof__(%v) %v_type;", fe.Sel.Name, fe.Sel.Name).outnl()
+				c.outf("typedef __typeof__((%v)0) %v_ctype;", fe.Sel.Name, fe.Sel.Name).outnl()
 			} else {
-				c.outf("__typeof__(%v(", fe.Sel.Name)
-				for idx, _ := range ne.Args {
-					c.out("0")
-					if idx == len(ne.Args)-1 {
-					} else {
-						c.out(",")
-					}
-				}
-				c.outf(")) %v_type_var = {0};", fe.Sel.Name).outnl()
 				c.outf("typedef __typeof__(%v(", fe.Sel.Name)
 				for idx, _ := range ne.Args {
 					c.out("0")
@@ -131,22 +118,14 @@ func (c *g2nc) gentypeofs() {
 						c.out(",")
 					}
 				}
-				c.outf(")) %v_type;", fe.Sel.Name).outnl()
+				c.outf(")) %v_ctype;", fe.Sel.Name).outnl()
 			}
-			c.out("#endif").outnl()
 		case *ast.SelectorExpr:
-			c.outf("#ifndef HAS_%v_type_var", ne.Sel.Name).outnl()
-			c.outf("#define HAS_%v_type_var", ne.Sel.Name).outnl()
 			if strings.HasPrefix(ne.Sel.Name, "struct_") {
 				structname := strings.Replace(ne.Sel.Name, "_", " ", 1)
 				c.outf("typedef %s %s;", structname, ne.Sel.Name).outnl()
-				c.outf("__typeof__(%v) %v_type_var = {0};", structname, ne.Sel.Name).outnl()
-				c.outf("typedef __typeof__(%v) %v_type;", structname, ne.Sel.Name).outnl()
-			} else {
-				c.outf("__typeof__(%v) %v_type_var = {0};", ne.Sel.Name, ne.Sel.Name).outnl()
-				c.outf("typedef __typeof__(%v) %v_type;", ne.Sel.Name, ne.Sel.Name).outnl()
 			}
-			c.out("#endif").outnl()
+			c.outf("typedef __typeof__(%v) %v_ctype;", ne.Sel.Name, ne.Sel.Name).outnl()
 		}
 	}
 }
@@ -1735,8 +1714,8 @@ func (this *g2nc) genExpr2(scope *ast.Scope, e ast.Expr) {
 			if iscsel(t2.Type) {
 				ste := t2.Type.(*ast.SelectorExpr)
 				// this.outf("// c struct ctor %s", ste.Sel.Name)
-				stname := strings.Replace(ste.Sel.Name, "_", " ", 1)
-				this.outf("cxmalloc(sizeof(%s))", stname)
+				this.outf("cxmalloc(sizeof(%s))", ste.Sel.Name)
+				keepop = false
 				break
 			}
 
@@ -1770,9 +1749,7 @@ func (this *g2nc) genExpr2(scope *ast.Scope, e ast.Expr) {
 			log.Println(reflect.TypeOf(te), t2, reflect.TypeOf(te.X), te.Pos())
 		}
 		if keepop {
-			if iscsel(te.X) {
-				this.outf("%v", te.Op.String())
-			}
+			this.outf("%v", te.Op.String())
 			this.genExpr(scope, te.X)
 		}
 	case *ast.CompositeLit:
@@ -2130,17 +2107,14 @@ func (this *g2nc) exprTypeNameImpl(scope *ast.Scope, e ast.Expr) string {
 	{ // C.xxx or C.xxx()
 		if iscsel(e) {
 			name := exprstr(e)[2:]
-			return fmt.Sprintf("%s_type", name)
-			// return exprstr(e)[2:]
+			return fmt.Sprintf("%s_ctype", name)
 		}
 		if ce, ok := e.(*ast.CallExpr); ok {
 			if iscsel(ce.Fun) {
 				name := exprstr(ce.Fun)[2:]
-				return fmt.Sprintf("%s_type", name)
-				// return exprstr(ce.Fun)[2:] + "aaa"
+				return fmt.Sprintf("%s_ctype", name)
 			}
 			log.Println(ce.Fun, reftyof(ce.Fun), len(this.info.Types))
-			log.Println(this.info.Types)
 			if idt, ok := ce.Fun.(*ast.Ident); ok {
 				if funk.Contains([]string{"int"}, idt.Name) {
 					return idt.Name
@@ -2150,26 +2124,26 @@ func (this *g2nc) exprTypeNameImpl(scope *ast.Scope, e ast.Expr) string {
 		if se, ok := e.(*ast.StarExpr); ok {
 			log.Println(se, reftyof(se), se.X, reftyof(se.X))
 			if iscsel(se.X) {
-				return exprstr(se.X)
+				name := exprstr(se.X)[2:]
+				return fmt.Sprintf("%s_ctype", name)
 			}
 			if ce, ok := se.X.(*ast.CallExpr); ok {
 				if iscsel(ce.Fun) {
 					name := exprstr(ce.Fun)[2:]
-					return fmt.Sprintf("%s_type", name)
-					// return exprstr(ce.Fun)[2:]
+					return fmt.Sprintf("%s_ctype", name)
 				}
 			}
 		}
 		if se, ok := e.(*ast.UnaryExpr); ok {
 			log.Println(se, reftyof(se), se.X, reftyof(se.X))
 			if iscsel(se.X) {
-				return exprstr(se.X)
+				name := exprstr(se.X)[2:]
+				return fmt.Sprintf("%s_ctype", name)
 			}
 			if ce, ok := se.X.(*ast.CompositeLit); ok {
 				if iscsel(ce.Type) {
 					name := exprstr(ce.Type)[2:]
-					return fmt.Sprintf("%s_type*", name)
-					// return exprstr(ce.Fun)[2:]
+					return fmt.Sprintf("%s_ctype*", name)
 				}
 			}
 		}
