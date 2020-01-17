@@ -42,6 +42,7 @@ type ParserContext struct {
 	funcdeclNodes map[string]graph.Node
 	initFuncs     []*ast.FuncDecl
 
+	csymbols  map[ast.Node]ast.ObjKind
 	tmpvars   map[ast.Stmt][]ast.Node // => value node
 	gostmts   []*ast.GoStmt
 	chanops   []ast.Expr // *ast.SendStmt
@@ -92,6 +93,7 @@ func (this *ParserContext) Init() error {
 		this.ccode = this.pickCCode()
 	}
 
+	this.walkpass_csymbols()
 	this.walkpass_cgo_processor()
 	// replace codebase dir
 	this.path, this.wkdir = this.wkdir, this.path
@@ -291,6 +293,63 @@ func (this *ParserContext) findFileobj(fbname string) *ast.File {
 		}
 	}
 	return nil
+}
+
+func astcs_next(c *astutil.Cursor) *astutil.Cursor {
+	return nil
+}
+func astcs_prev(c *astutil.Cursor) *astutil.Cursor {
+	return nil
+}
+func astcs_upper(c *astutil.Cursor) *astutil.Cursor {
+	return nil
+}
+
+func (pc *ParserContext) walkpass_csymbols() {
+	pkgs := pc.pkgs
+
+	cnodes := map[ast.Node]ast.ObjKind{}
+	for _, pkg := range pkgs {
+		astutil.Apply(pkg, func(c *astutil.Cursor) bool {
+			switch te := c.Node().(type) {
+			case *ast.SelectorExpr:
+				if iscident(te.X) {
+					// log.Println("got111", te.X, te.Sel, c.Index())
+					// log.Println(c.Parent(), reflect.TypeOf(c.Parent()))
+					switch c.Parent().(type) {
+					case *ast.CallExpr:
+						cnodes[c.Parent()] = ast.Fun
+						// cnodes[c.Node()] = ast.Var
+						// cnodes[c.Node()] = ast.Con
+						// cnodes[c.Node()] = ast.Typ
+					case *ast.AssignStmt:
+						cnodes[c.Node()] = ast.Var
+					case *ast.CompositeLit:
+						cnodes[c.Node()] = ast.Var
+					default:
+						log.Panicln("not impl")
+					}
+				}
+			case *ast.CallExpr:
+				fo := te.Fun
+				if fe, ok := fo.(*ast.SelectorExpr); ok {
+					if iscident(fe) {
+						cnodes[c.Node()] = ast.Fun
+						log.Println("got222", fe.X, fe.Sel)
+						if true {
+							log.Panicln("not reach")
+						}
+						return false
+					}
+				}
+
+			}
+			return true
+		}, func(c *astutil.Cursor) bool {
+			return true
+		})
+	}
+	pc.csymbols = cnodes
 }
 
 func (pc *ParserContext) walkpass_valid_files() {

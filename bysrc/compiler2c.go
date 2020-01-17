@@ -40,6 +40,7 @@ func (this *g2nc) genpkgs() {
 		this.pkgo = pkg
 
 		this.genpkg(pname, pkg)
+		this.gentypeofs()
 		this.calcClosureInfo(pkg.Scope, pkg)
 		this.calcDeferInfo(pkg.Scope, pkg)
 		this.genGostmtTypes(pkg.Scope, pkg)
@@ -94,6 +95,41 @@ func (this *g2nc) genfile(scope *ast.Scope, name string, f *ast.File) {
 	// 	this.genDecl(scope, d)
 	// }
 }
+func (c *g2nc) gentypeofs() {
+	c.out("// __typeof__ types ", fmt.Sprintf("%d", len(c.psctx.csymbols))).outnl()
+	defer c.outnl()
+	for nx, _ := range c.psctx.csymbols {
+		switch ne := nx.(type) {
+		case *ast.CallExpr:
+			fe := ne.Fun.(*ast.SelectorExpr)
+			if funk.Contains([]string{"int"}, fe.Sel.Name) {
+				break
+			}
+			c.outf("#ifndef HAS_%v_type_var", fe.Sel.Name).outnl()
+			c.outf("#define HAS_%v_type_var", fe.Sel.Name).outnl()
+			c.outf("__typeof__(%v(", fe.Sel.Name)
+			for idx, _ := range ne.Args {
+				c.out("0")
+				if idx == len(ne.Args)-1 {
+				} else {
+					c.out(",")
+				}
+			}
+			c.outf(")) %v_type_var = {0};", fe.Sel.Name).outnl()
+			c.out("#endif").outnl()
+		case *ast.SelectorExpr:
+			c.outf("#ifndef HAS_%v_type_var", ne.Sel.Name).outnl()
+			c.outf("#define HAS_%v_type_var", ne.Sel.Name).outnl()
+			if strings.HasPrefix(ne.Sel.Name, "struct_") {
+				structname := strings.Replace(ne.Sel.Name, "_", " ", 1)
+				c.outf("__typeof__(%v) %v_type_var = {0};", structname, ne.Sel.Name).outnl()
+			} else {
+				c.outf("__typeof__(%v) %v_type_var = {0};", ne.Sel.Name, ne.Sel.Name).outnl()
+			}
+			c.out("#endif").outnl()
+		}
+	}
+}
 func (c *g2nc) calcClosureInfo(scope *ast.Scope, pkg *ast.Package) {
 	fds := map[*ast.FuncDecl]int{}
 	for _, fnlit := range c.psctx.closures {
@@ -124,7 +160,8 @@ func (c *g2nc) calcDeferInfo(scope *ast.Scope, pkg *ast.Package) {
 	}
 }
 func (c *g2nc) genGostmtTypes(scope *ast.Scope, pkg *ast.Package) {
-	c.out("// gostmt types", fmt.Sprintf("%d", len(c.psctx.gostmts))).outnl()
+	c.out("// gostmt types ", fmt.Sprintf("%d", len(c.psctx.gostmts))).outnl()
+	defer c.outnl()
 	for idx, gostmt := range c.psctx.gostmts {
 		c.outf("// %d %v %v", idx, gostmt.Call.Fun, gostmt.Call.Args).outnl()
 		c.genFiberStargs(scope, gostmt.Call)
@@ -132,7 +169,9 @@ func (c *g2nc) genGostmtTypes(scope *ast.Scope, pkg *ast.Package) {
 	}
 }
 func (c *g2nc) genChanTypes(scope *ast.Scope, pkg *ast.Package) {
-	c.out("// chan types", fmt.Sprintf("%d", len(c.psctx.chanops))).outnl()
+	c.out("// chan types ", fmt.Sprintf("%d", len(c.psctx.chanops))).outnl()
+	defer c.outnl()
+
 	gottys := map[string]bool{}
 	// te: ast.SendStmt.Chan/ast.UnaryExpr.X
 	for _, te := range c.psctx.chanops {
@@ -147,7 +186,8 @@ func (c *g2nc) genChanTypes(scope *ast.Scope, pkg *ast.Package) {
 	}
 }
 func (c *g2nc) genMultiretTypes(scope *ast.Scope, pkg *ast.Package) {
-	c.out("// multirets types", fmt.Sprintf("%d", len(c.psctx.gostmts))).outnl()
+	c.out("// multirets types ", fmt.Sprintf("%d", len(c.psctx.gostmts))).outnl()
+	defer c.outnl()
 	for idx, fd := range c.psctx.multirets {
 		c.outf("// %d %v %v", idx, fd.Name, fd.Type.Results.NumFields()).outnl()
 		c.outf("typedef struct %s_multiret_arg %s_multiret_arg", fd.Name.Name, fd.Name.Name).outfh().outnl()

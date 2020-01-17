@@ -74,6 +74,12 @@ func isuntypedty(tystr string) bool    { return strings.HasPrefix(tystr, "untype
 func isuntypedty2(typ types.Type) bool { return isuntypedty(typ.String()) }
 func iswrapcfunc(name string) bool     { return strings.HasPrefix(name, "_Cfunc") }
 func istuple(tystr string) bool        { return strings.Contains(tystr, "_multiret_") }
+func iscident(e ast.Expr) bool {
+	if idt, ok := e.(*ast.Ident); ok {
+		return idt.Name == "C"
+	}
+	return false
+}
 
 func iserrorty2(typ types.Type) bool {
 	if typ == nil {
@@ -384,3 +390,5 @@ func isglobalid(pc *ParserContext, idt *ast.Ident) bool {
 	}
 	return false
 }
+
+func reftyof(x interface{}) reflect.Type { return reflect.TypeOf(x) }
