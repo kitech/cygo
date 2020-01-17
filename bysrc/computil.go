@@ -88,6 +88,12 @@ func iscsel222(e ast.Expr) bool {
 	}
 	return false
 }
+func isnilident(e ast.Expr) bool {
+	if idt, ok := e.(*ast.Ident); ok {
+		return idt.Name == "nil"
+	}
+	return false
+}
 
 func iserrorty2(typ types.Type) bool {
 	if typ == nil {

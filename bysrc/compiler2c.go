@@ -111,7 +111,7 @@ func (c *g2nc) gentypeofs() {
 				c.outf("typedef __typeof__((%v)0) %v__ctype;", fe.Sel.Name, fe.Sel.Name).outnl()
 			} else {
 				c.outf("// typedef __typeof__((%v)(", fe.Sel.Name).outnl()
-				c.outf("typedef __typeof__(%v(", fe.Sel.Name)
+				c.outf("typedef __typeof__((%v)(", fe.Sel.Name)
 				for idx, _ := range ne.Args {
 					c.out("0")
 					if idx == len(ne.Args)-1 {
@@ -1537,6 +1537,10 @@ func (c *g2nc) genReturnStmt(scope *ast.Scope, e *ast.ReturnStmt) {
 					c.outf("%s->data =", idt.Name)
 					c.genExpr(scope, ae)
 					c.outfh().outnl()
+					if isnilident(ae) {
+						c.out(idt.Name).outeq().out("nilptr").outfh().outnl()
+						break
+					}
 					for i := 0; i < undty.NumMethods(); i++ {
 						c.outf("%s->%s = (__typeof__(%s->%s))%s_%s", idt.Name, undty.Method(i).Name(),
 							idt.Name, undty.Method(i).Name(),
@@ -2199,7 +2203,7 @@ func (this *g2nc) exprTypeNameImpl2(scope *ast.Scope, ety types.Type, e ast.Expr
 
 	goty := ety
 	tyval, isudty := this.strtypes[goty.String()]
-	// log.Println(goty, reflect.TypeOf(goty), e, reflect.TypeOf(e))
+	// log.Println(goty, reftyof(goty), e, reftyof(e))
 
 	switch te := goty.(type) {
 	case *types.Basic:
@@ -2211,7 +2215,7 @@ func (this *g2nc) exprTypeNameImpl2(scope *ast.Scope, ety types.Type, e ast.Expr
 			}
 			// log.Println(te, reflect.TypeOf(e), te.Info(), te.Name(), te.Underlying(), reflect.TypeOf(te.Underlying()))
 			return strings.Replace(te.String(), ".", "_", 1)
-			return te.Name()
+			// return te.Name()
 		}
 	case *types.Named:
 		teobj := te.Obj()
@@ -2287,7 +2291,7 @@ func (this *g2nc) exprTypeNameImpl2(scope *ast.Scope, ety types.Type, e ast.Expr
 			log.Println("todo", goty, reflect.TypeOf(goty), isudty, tyval, te, this.exprpos(e))
 		}
 	default:
-		log.Println("todo", goty, reflect.TypeOf(goty), isudty, tyval, te, this.exprpos(e))
+		log.Println("todo", goty, exprstr(e), reftyof(goty), isudty, tyval, te, this.exprpos(e))
 		return te.String()
 	}
 

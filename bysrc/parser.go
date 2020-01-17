@@ -312,6 +312,8 @@ func (this *ParserContext) pickCCode() string {
 	for _, line := range lines {
 		if !strings.HasPrefix(line, "#cgo ") {
 			rawcode += line + "\n"
+		} else {
+			rawcode += "// " + line + "\n"
 		}
 	}
 	// log.Println("got c code", rawcode)
@@ -398,9 +400,12 @@ func (pc *ParserContext) walkpass_csymbols() {
 				if iscident(te.X) {
 					// log.Println("got111", te.X, te.Sel, c.Index())
 					// log.Println(c.Parent(), reflect.TypeOf(c.Parent()))
-					switch c.Parent().(type) {
+					switch pe := c.Parent().(type) {
 					case *ast.CallExpr:
-						cnodes[c.Parent()] = ast.Fun
+						// log.Println("got111", te.X, te.Sel, c.Index(), c.Parent(), exprstr(c.Parent().(ast.Expr)))
+						if iscident(pe.Fun.(*ast.SelectorExpr).X) {
+							cnodes[c.Parent()] = ast.Fun
+						}
 						// cnodes[c.Node()] = ast.Var
 						// cnodes[c.Node()] = ast.Con
 						// cnodes[c.Node()] = ast.Typ
@@ -415,12 +420,9 @@ func (pc *ParserContext) walkpass_csymbols() {
 			case *ast.CallExpr:
 				fo := te.Fun
 				if fe, ok := fo.(*ast.SelectorExpr); ok {
-					if iscident(fe) {
+					if iscident(fe.X) {
 						cnodes[c.Node()] = ast.Fun
-						log.Println("got222", fe.X, fe.Sel)
-						if true {
-							log.Panicln("not reach")
-						}
+						// log.Println("got222", exprstr(fe.X), fe.X, fe.Sel)
 						return false
 					}
 				}
@@ -432,6 +434,7 @@ func (pc *ParserContext) walkpass_csymbols() {
 		})
 	}
 	pc.csymbols = cnodes
+	// TODO need dedup
 }
 
 type canytype struct {
