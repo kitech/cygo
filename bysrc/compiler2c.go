@@ -127,6 +127,9 @@ func (c *g2nc) gentypeofs(pkg *ast.Package) {
 				c.outf("typedef %s %s;", structname, ne.Sel.Name).outnl()
 			}
 			c.outf("typedef __typeof__(%v) %v__ctype;", ne.Sel.Name, ne.Sel.Name).outnl()
+			// TODO 字段类型
+			c.outf("//typedef __typeof__(((%v){0}).foo) %v__foo__ctype;",
+				ne.Sel.Name, ne.Sel.Name).outnl()
 		}
 	}
 }
@@ -1690,8 +1693,13 @@ func (this *g2nc) genExpr2(scope *ast.Scope, e ast.Expr) {
 				// this.out(pkgo.Name())
 			}
 		}
+		// TODO 要查看是否有上级,否则无法判断包前缀
 		if strings.HasPrefix(idname, "_Cfunc_") || isglobalid(this.psctx, te) {
-			this.out(this.pkgpfx())
+			eobj := this.info.ObjectOf(te)
+			if eobj != nil && eobj.Pkg().Name() == "C" {
+			} else {
+				this.out(this.pkgpfx())
+			}
 		}
 		this.out(idname, "")
 	case *ast.ArrayType:
@@ -1825,7 +1833,11 @@ func (this *g2nc) genExpr2(scope *ast.Scope, e ast.Expr) {
 			case types.Uintptr:
 				this.out(te.Value)
 			default:
-				log.Println("unknown", t.String())
+				if isctydeftype2(t) {
+					this.out(te.Value)
+				} else {
+					log.Println("unknown", t.String())
+				}
 			}
 		default:
 			log.Println("unknown", t, reflect.TypeOf(t))
@@ -2360,7 +2372,7 @@ func (this *g2nc) genGenDecl(scope *ast.Scope, d *ast.GenDecl) {
 		case *ast.ValueSpec:
 			this.genValueSpec(scope, tspec, idx)
 		case *ast.ImportSpec:
-			log.Println("todo", reflect.TypeOf(d), reflect.TypeOf(spec), tspec.Path, tspec.Name)
+			// log.Println("todo", reflect.TypeOf(d), reflect.TypeOf(spec), tspec.Path, tspec.Name)
 			this.outf("// import %v by %s", tspec.Path, this.exprpos(tspec)).outnl().outnl()
 			// log.Println(tspec.Comment)
 		default:

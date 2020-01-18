@@ -24,3 +24,24 @@ func HackExtraBuiltin() {
 type Nilptr struct {
 	object
 }
+
+var ctypeno int = 200
+var ctypetys = map[string]Type{}
+
+func NewCtype(tyname string) Type {
+	if ty, ok := ctypetys[tyname]; ok {
+		return ty
+	}
+	no := ctypeno
+	ctypeno++
+
+	ty := &Basic{}
+	ty.name = tyname
+	ty.kind = BasicKind(no)
+	ty.info = BasicInfo(no) | IsOrdered | IsNumeric
+	ty.info = BasicInfo(no) | IsOrdered
+	ty.info = BasicInfo(no) | IsNumeric
+	ctypetys[tyname] = ty
+
+	return ty
+}
