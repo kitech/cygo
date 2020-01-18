@@ -44,7 +44,8 @@ type ParserContext struct {
 
 	csymbols  map[ast.Node]ast.ObjKind
 	ctypes    map[ast.Expr]types.Type
-	tmpvars   map[ast.Stmt][]ast.Node // => value node
+	cidents   map[*ast.Ident]types.TypeAndValue // 传播其他位置引用c类型返回值的变量的类型
+	tmpvars   map[ast.Stmt][]ast.Node           // => value node
 	gostmts   []*ast.GoStmt
 	chanops   []ast.Expr // *ast.SendStmt
 	closures  []*ast.FuncLit
@@ -529,6 +530,8 @@ func (pc *ParserContext) walkpass_resolve_ctypes1() {
 func (pc *ParserContext) walkpass_resolve_ctypes2() {
 	pkgs := pc.pkgs
 
+	// 需要一个带scope 的 AST 遍历
+	pc.cidents = map[*ast.Ident]types.TypeAndValue{}
 	for _, pkg := range pkgs {
 		astutil.Apply(pkg, func(c *astutil.Cursor) bool {
 			return true
@@ -548,14 +551,19 @@ func (pc *ParserContext) walkpass_resolve_ctypes2() {
 						tyandval.Type = csty2
 						pc.info.Types[le] = tyandval
 						pc.ctypes[le] = tyandval.Type
+						if idt, ok := le.(*ast.Ident); ok {
+							pc.cidents[idt] = tyandval
+						}
 					} else {
 						csty3 := pc.ctypes[re]
 						if csty3 != nil {
 							log.Println(idx, "canfixty", le, reftyof(le), csty2)
-							tyandval := types.TypeAndValue{} //caty, nil}
-							tyandval.Type = csty2
+							tyandval := types.TypeAndValue{Type: csty2} //caty, nil}
 							pc.info.Types[le] = tyandval
 							pc.ctypes[le] = tyandval.Type
+							if idt, ok := le.(*ast.Ident); ok {
+								pc.cidents[idt] = tyandval
+							}
 						} else {
 							log.Println(idx, "cannot fixty", le, reftyof(le), csty2, csty3, exprstr(re), reftyof(re))
 						}
@@ -569,12 +577,71 @@ func (pc *ParserContext) walkpass_resolve_ctypes2() {
 					}
 					log.Println("untyval", reftyof(name), exprstr(name))
 				}
+			case *ast.Ident:
+				if te.Name == "C" {
+					break
+				}
+				csty := pc.info.TypeOf(te)
+				if csty != nil && !isinvalidty2(csty) {
+					break
+				}
+				incidt := pc.cidents[te] // 名字相同，但实例不同的ident无法匹配
+				for idt, idty := range pc.cidents {
+					if idt.Name == te.Name {
+						if te.Obj != nil && te.Obj == idt.Obj {
+							incidt = idty
+						}
+						// log.Println("same name ident", idty, idt == te, incidt, te.Obj == idt.Obj)
+					}
+				}
+				if incidt.Type != nil {
+					pc.info.Types[te] = incidt
+					pc.ctypes[te] = incidt.Type
+					log.Println("fixtyidt", reftyof(te), exprstr(te), incidt, len(pc.cidents))
+				} else {
+					log.Println("untyidt", reftyof(te), exprstr(te), incidt, len(pc.cidents))
+				}
+			case *ast.BinaryExpr:
+				csty := pc.info.TypeOf(te)
+				if csty != nil && !isinvalidty2(csty) {
+					break
+				}
+				tyx := pc.info.TypeOf(te.X)
+				tyy := pc.info.TypeOf(te.Y)
+				var tyres types.Type
+				if isinvalidty2(tyx) || isinvalidty2(tyy) {
+					log.Println("not possible?")
+				}
+				if !isinvalidty2(tyx) {
+					tyres = tyx
+				}
+				if !isinvalidty2(tyy) {
+					tyres = tyy
+				}
+				pc.info.Types[te] = types.TypeAndValue{Type: tyres}
+				pc.ctypes[te] = tyres
+				if isinvalidty2(tyx) {
+					pc.info.Types[te.X] = types.TypeAndValue{Type: tyres}
+					pc.ctypes[te.X] = tyres
+				}
+				if isinvalidty2(tyy) {
+					pc.info.Types[te.Y] = types.TypeAndValue{Type: tyres}
+					pc.ctypes[te.Y] = tyres
+				}
+
+				log.Println("fixed untybinop", reftyof(te), exprstr(te), len(pc.cidents), tyx, tyy)
+
 			case ast.Expr:
 			}
 			return true
 		})
 	}
 
+}
+func newtyandval(typ types.Type) types.TypeAndValue {
+	tyandval := types.TypeAndValue{}
+	tyandval.Type = typ
+	return tyandval
 }
 func (pc *ParserContext) walkpass_resolve_ctypes3() {
 	pkgs := pc.pkgs

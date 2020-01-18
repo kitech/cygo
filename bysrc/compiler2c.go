@@ -1862,6 +1862,11 @@ func (this *g2nc) genExpr2(scope *ast.Scope, e ast.Expr) {
 			this.out("[")
 			this.genExpr(scope, te.Index)
 			this.out("]")
+		} else if isctydeftype2(varty) {
+			this.genExpr(scope, te.X)
+			this.out("[")
+			this.genExpr(scope, te.Index)
+			this.out("]")
 		} else if ismapty(varty.String()) {
 			if vo == nil {
 				this.genCxmapAddkv(scope, te.X, te.Index, nil)
@@ -1897,8 +1902,8 @@ func (this *g2nc) genExpr2(scope *ast.Scope, e ast.Expr) {
 			this.genExpr(scope, te.Index)
 			this.out("]")
 		} else {
-			log.Println("todo", te.X, te.Index)
-			log.Println("todo", reflect.TypeOf(te.X), varty.String(), this.exprpos(te.X))
+			log.Println("todo", te.X, te.Index, exprstr(te))
+			log.Println("todo", reftyof(te.X), varty.String(), this.exprpos(te.X))
 		}
 	case *ast.SliceExpr:
 		varty := this.info.TypeOf(te.X)
@@ -2165,7 +2170,7 @@ func (this *g2nc) exprTypeNameImpl(scope *ast.Scope, e ast.Expr) string {
 		if ie, ok := e.(*ast.IndexExpr); ok {
 			log.Println(exprstr(ie), ie.X, reftyof(ie.X), this.info.TypeOf(ie.X))
 			xty := this.info.TypeOf(ie.X)
-			if xty == nil || isinvalidty2(xty) {
+			if (xty == nil || isinvalidty2(xty)) || isctydeftype2(xty) {
 				// c type???
 				dimn := strings.Count(exprstr(ie), "[")
 				dimstr := strings.Repeat("[0]", dimn)
@@ -2181,8 +2186,7 @@ func (this *g2nc) exprTypeNameImpl(scope *ast.Scope, e ast.Expr) string {
 
 	goty := this.info.TypeOf(e)
 	if goty == nil {
-		log.Println(this.exprstr(e))
-		log.Panicln(e, this.exprpos(e), reflect.TypeOf(e))
+		log.Panicln(e, exprstr(e), reftyof(e), this.exprpos(e))
 	}
 	val := this.exprTypeNameImpl2(scope, goty, e)
 	if isinvalidty(val) {

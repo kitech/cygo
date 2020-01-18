@@ -80,6 +80,9 @@ func iscident(e ast.Expr) bool {
 	}
 	return false
 }
+func isctydeftype2(typ types.Type) bool {
+	return strings.HasSuffix(typ.String(), "__ctype")
+}
 func iscsel222(e ast.Expr) bool {
 	if se, ok := e.(*ast.SelectorExpr); ok {
 		if iscident(se.X) {
