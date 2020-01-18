@@ -76,9 +76,19 @@ func NewParserContext(path string, pkgrename string) *ParserContext {
 	return this
 }
 func (this *ParserContext) Init() error {
+	this.init_extra_builtin_types()
 	return this.Init_no_cgocmd()
 	// return this.Init_explict_cgo()
 }
+func (this *ParserContext) init_extra_builtin_types() {
+	// too late call here, so need modify go/types/ files directly
+	types.HackExtraBuiltin() // file: go/types/myhack.go
+	// tybno := types.UntypedNil
+	// tybinfo := types.IsUntyped
+	// vptrty := types.Basic{tybno << 1, tybinfo << 1, "voidptr"}
+	// types.Typ = append(types.Typ, vptrty)
+}
+
 func (this *ParserContext) Init_no_cgocmd() error {
 	bdpkgs, err := build.ImportDir(this.path, build.ImportComment)
 	gopp.ErrPrint(err)
@@ -413,8 +423,9 @@ func (pc *ParserContext) walkpass_csymbols() {
 						cnodes[c.Node()] = ast.Var
 					case *ast.CompositeLit:
 						cnodes[c.Node()] = ast.Var
+					case *ast.ValueSpec: // in const
 					default:
-						log.Panicln("not impl")
+						log.Panicln("not impl", reftyof(te.X), reftyof(te.Sel), te.X, te.Sel, reftyof(pe), pe)
 					}
 				}
 			case *ast.CallExpr:
@@ -426,7 +437,19 @@ func (pc *ParserContext) walkpass_csymbols() {
 						return false
 					}
 				}
-
+			case *ast.ValueSpec:
+				// in const
+				for i := 0; i < len(te.Names); i++ {
+					if len(te.Values) <= i {
+						break
+					}
+					value := te.Values[i]
+					if se, ok := value.(*ast.SelectorExpr); ok {
+						if iscident(se.X) {
+							cnodes[se] = ast.Var
+						}
+					}
+				}
 			}
 			return true
 		}, func(c *astutil.Cursor) bool {
@@ -477,7 +500,7 @@ func (pc *ParserContext) walkpass_resolve_ctypes1() {
 						pc.info.Types[se.Sel] = tyandval
 						ctypes[se] = caty
 						pn := c.Parent()
-						log.Println(reftyof(pn))
+						// log.Println(reftyof(pn))
 						switch pe := pn.(type) {
 						case *ast.CallExpr:
 							pc.info.Types[pe] = tyandval

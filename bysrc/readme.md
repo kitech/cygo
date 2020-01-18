@@ -13,4 +13,7 @@
 * struct 声明语法，去掉 type
 * 数组的声明，如果有初始化元素，则去掉类型部分. ints := [1, 2, 3]
 * varidict parameters
-* 
+* len(),cap()的写法试用方法方式
+* 需要定义几个常用的内置类型， unsafe.Pointer => voidptr, byteptr
+* 全引用的方式，不要出现指针类型
+

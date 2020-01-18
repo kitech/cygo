@@ -31,8 +31,14 @@ typedef float float32;
 typedef double float64;
 typedef uintptr_t uintptr;
 typedef unsigned int uint;
+typedef float f32;
+typedef double f64;
+typedef uint64_t u64;
+typedef int64_t i64;
+typedef uintptr_t usize;
 // typedef void* error;
 typedef void* voidptr;
+typedef char* byteptr;
 typedef int C_int;
 typedef unsigned int C_uint;
 

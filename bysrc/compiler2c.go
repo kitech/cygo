@@ -39,8 +39,8 @@ func (this *g2nc) genpkgs() {
 		this.curpkg = pkg.Name
 		this.pkgo = pkg
 
+		this.gentypeofs(pkg)
 		this.genpkg(pname, pkg)
-		this.gentypeofs()
 		this.calcClosureInfo(pkg.Scope, pkg)
 		this.calcDeferInfo(pkg.Scope, pkg)
 		this.genGostmtTypes(pkg.Scope, pkg)
@@ -95,8 +95,8 @@ func (this *g2nc) genfile(scope *ast.Scope, name string, f *ast.File) {
 	// 	this.genDecl(scope, d)
 	// }
 }
-func (c *g2nc) gentypeofs() {
-	c.out("// __typeof__ types ", fmt.Sprintf("%d", len(c.psctx.csymbols))).outnl()
+func (c *g2nc) gentypeofs(pkg *ast.Package) {
+	c.outf("// __typeof__ types %d in %v", len(c.psctx.csymbols), pkg.Name).outnl()
 	defer c.outnl()
 	for nx, _ := range c.psctx.csymbols {
 		switch ne := nx.(type) {
@@ -416,7 +416,7 @@ func (c *g2nc) genMainFunc(scope *ast.Scope) {
 	c.out("// globvars populate").outnl()
 	c.outf("%sglobvars_init()", c.pkgpfx()).outfh().outnl()
 	c.out("// all func init()").outnl()
-	c.outf("%sinit()", c.pkgpfx()).outfh().outnl()
+	c.outf("%spkginit()", c.pkgpfx()).outfh().outnl()
 	c.out("main_main()").outfh().outnl()
 	c.out("return 0").outfh().outnl()
 	c.out("}").outnl()
@@ -425,12 +425,12 @@ func (c *g2nc) genInitFuncs(scope *ast.Scope, pkg *ast.Package) {
 	for idx, fd := range c.psctx.initFuncs {
 		c.outf("// %s", c.exprpos(fd).String()).outnl()
 		c.out("static").outsp()
-		c.outf("void %sinit_%d()", c.pkgpfx(), idx)
+		c.outf("void %spkginit_%d()", c.pkgpfx(), idx)
 		c.genBlockStmt(scope, fd.Body)
 	}
-	c.outf("void %sinit(){", c.pkgpfx()).outnl()
+	c.outf("void %spkginit(){", c.pkgpfx()).outnl()
 	for idx, _ := range c.psctx.initFuncs {
-		c.outf("%sinit_%d()", c.pkgpfx(), idx).outfh().outnl()
+		c.outf("%spkginit_%d()", c.pkgpfx(), idx).outfh().outnl()
 	}
 	c.out("}").outnl().outnl()
 }
@@ -2537,7 +2537,8 @@ func (c *g2nc) genValueSpec(scope *ast.Scope, spec *ast.ValueSpec, validx int) {
 							log.Panicln("unexpected")
 						}
 					} else {
-						log.Panicln("unexpected")
+						// log.Panicln("unexpected", len(spec.Values))
+						c.out(vartystr)
 					}
 				} else {
 					c.out(vartystr)
@@ -2621,7 +2622,7 @@ func (c *g2nc) genInitGlobvars(scope *ast.Scope, pkg *ast.Package) {
 			c.outfh().outnl()
 		}
 	}
-	c.out("}")
+	c.out("}").outnl()
 }
 
 func (this *g2nc) outsp() *g2nc   { return this.out(" ") }
@@ -2653,6 +2654,14 @@ typedef uint32 _Ctype_uint;
 typedef int8 _Ctype_char;
 typedef float32 _Ctype_float;
 typedef _Ctype_long _Ctype_ptrdiff_t;
+typedef float f32;
+typedef double f64;
+typedef uint64_t u64;
+typedef int64_t i64;
+typedef uintptr_t usize;
+// typedef void* error;
+typedef void* voidptr;
+typedef char* byteptr;
 `
 	return precgodefs
 }
