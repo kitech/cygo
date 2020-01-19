@@ -584,8 +584,9 @@ func (pc *ParserContext) walkpass_fill_fakecpkg() {
 			f2 := types.NewField(token.NoPos, fcpkg, "field222", types.NewCtype("test222__ctype"), false)
 			fields := []*types.Var{f1, f2}
 			st1 := types.NewStruct(fields, nil)
-			obj := types.NewTypeName(token.NoPos, fcpkg, idtname+"_rc2", st1)
-			scope.Insert(obj)
+			stobj := types.NewTypeName(token.NoPos, fcpkg, idtname+"_rc2", nil)
+			stobj2 := types.NewNamed(stobj, st1, nil)
+			scope.Insert(stobj2.Obj())
 		} else {
 			scope.Insert(varx)
 		}
@@ -598,9 +599,10 @@ func (pc *ParserContext) walkpass_fill_fakecpkg() {
 		f1 := types.NewField(token.NoPos, fcpkg, "field111", types.NewCtype("test111"), false)
 		st1 := types.NewStruct([]*types.Var{f1}, nil)
 		// st2 := types.NewCtype("struct_hhhhhh")
-		obj := types.NewTypeName(token.NoPos, fcpkg, "struct_lllll", st1)
-		_ = obj
-		scope.Insert(obj)
+		stobj := types.NewTypeName(token.NoPos, fcpkg, "struct_lllll", nil)
+		stobj2 := types.NewNamed(stobj, st1, nil)
+		_ = stobj
+		scope.Insert(stobj2.Obj())
 	}
 	// gen struct type, with field that used
 	{
@@ -623,8 +625,10 @@ func (pc *ParserContext) walkpass_fill_fakecpkg() {
 			}
 			// stname += "_rc"
 			st1 := types.NewStruct(fldvars, nil)
-			stobj := types.NewTypeName(token.NoPos, fcpkg, stname, st1)
-			scope.Insert(stobj)
+			// keep NewTypeName's type arg nil, so next step get a valid struct type
+			stobj := types.NewTypeName(token.NoPos, fcpkg, stname, nil)
+			stobj2 := types.NewNamed(stobj, st1, nil)
+			scope.Insert(stobj2.Obj())
 		}
 	}
 	buf := bytes.NewBuffer(nil)

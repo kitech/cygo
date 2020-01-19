@@ -2548,6 +2548,8 @@ func (c *g2nc) genValueSpec(scope *ast.Scope, spec *ast.ValueSpec, validx int) {
 				c.out("HashTable*")
 			} else if ischanty2(varty) {
 				c.out("voidptr")
+			} else if strings.HasPrefix(vartystr, "C_struct_") {
+				c.out(vartystr[2:])
 			} else {
 				if isinvalidty(vartystr) {
 					if len(spec.Values) == 1 {
