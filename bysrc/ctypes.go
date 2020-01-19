@@ -51,6 +51,12 @@ func newcanytype2(idt ast.Expr) *canytype {
 func (caty *canytype) Underlying() types.Type { return caty.underty }
 func (caty *canytype) String() string         { return caty.name }
 
+func newtyandval(typ types.Type) types.TypeAndValue {
+	tyandval := types.TypeAndValue{}
+	tyandval.Type = typ
+	return tyandval
+}
+
 // must *ast.Ident
 func fakecfunc(funcnameidt ast.Expr, fcpkg *types.Package) *types.Func {
 	idtname := fmt.Sprintf("%v", funcnameidt)

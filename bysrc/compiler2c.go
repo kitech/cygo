@@ -128,8 +128,17 @@ func (c *g2nc) gentypeofs(pkg *ast.Package) {
 			}
 			c.outf("typedef __typeof__(%v) %v__ctype;", ne.Sel.Name, ne.Sel.Name).outnl()
 			// TODO 字段类型
-			c.outf("//typedef __typeof__(((%v){0}).foo) %v__foo__ctype;",
+			c.outf("//typedef __typeof__(((%v*)0)->foo) %v__foo__ctype;",
 				ne.Sel.Name, ne.Sel.Name).outnl()
+		case *ast.Ident:
+			// should be format struct_xxx.fieldxxx
+			segs := strings.Split(ne.Name, ".")
+			structname := strings.Replace(segs[0], "_", " ", 1)
+			c.outf("typedef %s %s;", structname, segs[0]).outnl() // fix map order problem
+			c.outf("typedef __typeof__(((%v*)0)->%v) %v__%v__ctype;",
+				segs[0], segs[1], segs[0], segs[1]).outnl()
+		default:
+			log.Println("wtfff", ne)
 		}
 	}
 }
@@ -2686,6 +2695,8 @@ func (this *g2nc) code() (string, string) {
 	code := ""
 	code += fmt.Sprintf("// %s of %s\n", this.psctx.bdpkgs.Dir, this.psctx.wkdir)
 	code += this.psctx.ccode
+	code += "/* fakec defs for " + this.psctx.bdpkgs.Dir + "\n" +
+		this.psctx.fcdefscc + "\n*/\n\n"
 	code += "#include <cxrtbase.h>\n\n"
 	code += this.genPrecgodefs() + "\n"
 	code += this.sb.String()
