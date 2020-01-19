@@ -10,7 +10,6 @@ import (
 	"go/token"
 	"go/types"
 	"gopp"
-	"io/ioutil"
 	"log"
 	"os"
 	"os/exec"
@@ -109,9 +108,9 @@ func (this *ParserContext) Init_no_cgocmd() error {
 	pkgs, err := parser.ParseDir(this.fset, this.path, this.dirFilter, 0|parser.AllErrors|parser.ParseComments)
 	gopp.ErrPrint(err)
 	this.pkgs = pkgs
+	gopp.Assert(len(pkgs) == 1, "wtttt", len(pkgs), this.path)
 	this.ccode = this.pickCCode()
 
-	// this.ccode = this.pickCCode()
 	this.walkpass_valid_files()
 	this.walkpass_flat_cursors()
 	this.walkpass_csymbols()
@@ -128,7 +127,8 @@ func (this *ParserContext) Init_no_cgocmd() error {
 	this.walkpass_flat_cursors()
 	this.walkpass_func_deps()
 	log.Println("pkgs", this.typkgs.Name(), "types:", len(this.info.Types),
-		"typedefs", len(this.typeDeclsm), "funcdefs", len(this.funcDeclsm))
+		"typedefs", len(this.typeDeclsm), "funcdefs", len(this.funcDeclsm),
+		"fakecdefs", len(this.csymbols))
 
 	this.walkpass_tmpvars()
 	this.walkpass_kvpairs()
@@ -215,8 +215,6 @@ func (this *ParserContext) Init_explict_cgo() error {
 	this.walkpass_globvars()
 
 	return err
-}
-func (pc *ParserContext) parse_prepare_cgo_preprocessor() {
 }
 
 // cgo preprocessor
@@ -513,7 +511,7 @@ func (pc *ParserContext) walkpass_fill_fakecpkg() {
 				if iscident(te.X) {
 					if inconst {
 					}
-					log.Println("got111", te.X, te.Sel, c.Index(), inconst)
+					// log.Println("got111", te.X, te.Sel, c.Index(), inconst)
 					v1 := fakecvar(te.Sel, fcpkg)
 					// scope.Insert(v1)
 					tmpidts[te.Sel] = v1
@@ -522,12 +520,11 @@ func (pc *ParserContext) walkpass_fill_fakecpkg() {
 						_, ok := c2.Node().(*ast.ValueSpec)
 						return ok
 					})
-					log.Println(valspx)
-					if valspx == nil {
+					if valspx == nil { // 不在赋值或者声明语句
 						break
 					}
 					valsp := valspx.(*ast.ValueSpec)
-					// assert(len(valsp.Values) == 1)
+					gopp.Assert(len(valsp.Values) == 1, "wtttt", len(valsp.Values))
 					blkst := upfind_blockstmt(pc, c, 0)
 					used := find_use_ident(pc, blkst, valsp.Names[0])
 					log.Println(used, len(blkst.List))
@@ -537,12 +534,6 @@ func (pc *ParserContext) walkpass_fill_fakecpkg() {
 						fldidt := ast.NewIdent(te.Sel.Name + "." + sele.Sel.Name)
 						pc.csymbols[fldidt] = ast.Var
 					}
-				} else {
-					obj := te.X.(*ast.Ident).Obj
-					decl := obj.Decl // TODO 遍历该Decl之后一个scope之内的ast，查找该ident出现的位置，并试图查到可能的结构体字段
-					valsp := decl.(*ast.ValueSpec)
-					une := valsp.Values[0].(*ast.UnaryExpr)
-					log.Println("wtsel", te.X, reftyof(te.X), te.Sel, c.Index(), obj, obj.Name, obj.Type, obj.Decl, obj.Kind, obj.Data, reftyof(decl), reftyof(valsp.Values[0]), reftyof(une.X))
 				}
 			case *ast.CallExpr:
 				fo := te.Fun
@@ -619,11 +610,17 @@ func (pc *ParserContext) walkpass_fill_fakecpkg() {
 			fldvars := []*types.Var{}
 			for _, fldname := range fldnames {
 				tyname := fmt.Sprintf("%s__%s__ctype", stname, fldname)
-				fvar := types.NewField(token.NoPos, fcpkg, fldname, types.NewCtype(tyname), false)
-				// fvar := types.NewVar(token.NoPos, fcpkg, fldname, types.NewCtype(tyname))
+				fldtyp := types.NewCtype(tyname)
+				// fvar := types.NewField(token.NoPos, fcpkg, fldname, fldtyp, false)
+				tpkg := fcpkg
+				for name, _ := range pkgs {
+					tpkg = types.NewPackage(pc.path, name)
+					break
+				}
+				// var 在建在当前包中!!!??? make go/types.LookupFieldOrMethod happy
+				fvar := types.NewVar(token.NoPos, tpkg, fldname, fldtyp)
 				fldvars = append(fldvars, fvar)
 			}
-			// stname += "_rc"
 			st1 := types.NewStruct(fldvars, nil)
 			// keep NewTypeName's type arg nil, so next step get a valid struct type
 			stobj := types.NewTypeName(token.NoPos, fcpkg, stname, nil)
@@ -634,8 +631,6 @@ func (pc *ParserContext) walkpass_fill_fakecpkg() {
 	buf := bytes.NewBuffer(nil)
 	buf.WriteString(pc.path + "\n")
 	scope.WriteTo(buf, 1, true)
-	log.Println(string(buf.Bytes()))
-	ioutil.WriteFile("./opkgs/fakecdefs.txt", buf.Bytes(), 0644)
 	pc.fcdefscc = "// " + strings.ReplaceAll(string(buf.Bytes()), "\n", "\n// ")
 }
 
