@@ -101,7 +101,7 @@ func (this *ParserContext) Init_no_cgocmd() error {
 	if len(bdpkgs.InvalidGoFiles) > 0 {
 		log.Fatalln("Have InvalidGoFiles", bdpkgs.InvalidGoFiles)
 	}
-	log.Println(bdpkgs.GoFiles)
+	log.Println(bdpkgs.GoFiles, bdpkgs.TestGoFiles)
 
 	// parser step 2, got ast/types
 	this.fset = token.NewFileSet()
@@ -526,6 +526,9 @@ func (pc *ParserContext) walkpass_fill_fakecpkg() {
 					valsp := valspx.(*ast.ValueSpec)
 					gopp.Assert(len(valsp.Values) == 1, "wtttt", len(valsp.Values))
 					blkst := upfind_blockstmt(pc, c, 0)
+					if blkst == nil {
+						break
+					}
 					used := find_use_ident(pc, blkst, valsp.Names[0])
 					log.Println(used, len(blkst.List))
 					for _, selex := range used {
@@ -602,10 +605,13 @@ func (pc *ParserContext) walkpass_fill_fakecpkg() {
 			switch ne := nx.(type) {
 			case *ast.Ident:
 				segs := strings.Split(ne.Name, ".")
+				if funk.Contains(cstructs[segs[0]], segs[1]) {
+					break
+				}
 				cstructs[segs[0]] = append(cstructs[segs[0]], segs[1])
 			}
 		}
-		log.Println(cstructs)
+		log.Println("fakec structs", cstructs)
 		for stname, fldnames := range cstructs {
 			fldvars := []*types.Var{}
 			for _, fldname := range fldnames {
@@ -635,6 +641,7 @@ func (pc *ParserContext) walkpass_fill_fakecpkg() {
 }
 
 func (pc *ParserContext) walkpass_resolve_ctypes() {
+	gopp.Assert(1 == 2, "waitdep")
 	pc.walkpass_resolve_ctypes1()
 	for e, t := range pc.ctypes {
 		log.Println(exprstr(e), t)
@@ -643,6 +650,7 @@ func (pc *ParserContext) walkpass_resolve_ctypes() {
 	pc.walkpass_resolve_ctypes3()
 }
 func (pc *ParserContext) walkpass_resolve_ctypes1() {
+	gopp.Assert(1 == 2, "waitdep")
 	pkgs := pc.pkgs
 
 	ctypes := map[ast.Expr]types.Type{}
@@ -693,6 +701,7 @@ func (pc *ParserContext) walkpass_resolve_ctypes1() {
 	pc.ctypes = ctypes
 }
 func (pc *ParserContext) walkpass_resolve_ctypes2() {
+	gopp.Assert(1 == 2, "waitdep")
 	pkgs := pc.pkgs
 
 	// 需要一个带scope 的 AST 遍历
@@ -804,6 +813,7 @@ func (pc *ParserContext) walkpass_resolve_ctypes2() {
 
 }
 func (pc *ParserContext) walkpass_resolve_ctypes3() {
+	gopp.Assert(1 == 2, "waitdep")
 	pkgs := pc.pkgs
 
 	for _, pkg := range pkgs {

@@ -325,6 +325,8 @@ func (c *g2nc) genPostFuncDecl(scope *ast.Scope, d *ast.FuncDecl) {
 	}
 }
 func (this *g2nc) genFuncDecl(scope *ast.Scope, fd *ast.FuncDecl) {
+	this.outf("// %v", this.exprpos(fd)).outnl()
+	this.clinema(fd)
 	if fd.Body == nil {
 		log.Println("decl only func", fd.Name)
 		if this.curpkg == "unsafe" && fd.Name.Name == "Sizeof" {
@@ -585,6 +587,7 @@ func (c *g2nc) genAssignStmt(scope *ast.Scope, s *ast.AssignStmt) {
 			}
 			c.outf("cxfree(%s)", tvname).outfh().outnl()
 		} else if iserrorty2(c.info.TypeOf(s.Lhs[i])) {
+			c.out("error*").outsp()
 			c.genExpr(scope, s.Lhs[i])
 			c.outeq()
 			if c.info.TypeOf(s.Rhs[i]) == c.info.TypeOf(s.Lhs[i]) {
@@ -1917,7 +1920,13 @@ func (this *g2nc) genExpr2(scope *ast.Scope, e ast.Expr) {
 				this.out("=")
 				this.genExpr(scope, vo.Data.(ast.Expr))
 			}
-		} else if isinvalidty2(varty) { // c type???
+		} else if isinvalidty2(varty) { // index of c type???
+			gopp.Assert(1 == 2, "waitdep", varty)
+			this.genExpr(scope, te.X)
+			this.out("[")
+			this.genExpr(scope, te.Index)
+			this.out("]")
+		} else if varty.String() == "byte" { // multiple dimission index of c type???
 			this.genExpr(scope, te.X)
 			this.out("[")
 			this.genExpr(scope, te.Index)
@@ -1965,6 +1974,7 @@ func (this *g2nc) genExpr2(scope *ast.Scope, e ast.Expr) {
 			selxty := this.info.TypeOf(te.X)
 			log.Println(selxty, reflect.TypeOf(selxty), te.X)
 			if selxty == nil {
+				gopp.Assert(1 == 2, "waitdep", te)
 				// c type?
 				this.out(". /* c struct selctorexpr */")
 			} else if isinvalidty2(selxty) { // package
@@ -1973,8 +1983,14 @@ func (this *g2nc) genExpr2(scope *ast.Scope, e ast.Expr) {
 				switch selxty.(type) {
 				case *types.Named:
 					this.out(".")
-				default:
+				case *types.Pointer:
 					this.out("->")
+				default:
+					if isctydeftype2(selxty) {
+						this.out(".")
+					} else {
+						this.out("->")
+					}
 				}
 			}
 		}
@@ -2191,8 +2207,19 @@ func (this *g2nc) exprTypeNameImpl(scope *ast.Scope, e ast.Expr) string {
 		if ie, ok := e.(*ast.IndexExpr); ok {
 			log.Println(exprstr(ie), ie.X, reftyof(ie.X), this.info.TypeOf(ie.X))
 			xty := this.info.TypeOf(ie.X)
+			gopp.Assert(xty != nil, "waitdep", ie)
 			if (xty == nil || isinvalidty2(xty)) || isctydeftype2(xty) {
 				// c type???
+				dimn := strings.Count(exprstr(ie), "[")
+				dimstr := strings.Repeat("[0]", dimn)
+				tope := ie.X
+				for i := 0; i < dimn-1; i++ {
+					ie2 := ie.X.(*ast.IndexExpr)
+					tope = ie2.X
+				}
+				return fmt.Sprintf("__typeof__(%s%s)", tope, dimstr)
+			} else if xty != nil && xty.String() == "byte" {
+				// multiple dimision index of c type???
 				dimn := strings.Count(exprstr(ie), "[")
 				dimstr := strings.Repeat("[0]", dimn)
 				tope := ie.X
@@ -2531,6 +2558,7 @@ func (c *g2nc) genValueSpec(scope *ast.Scope, spec *ast.ValueSpec, validx int) {
 		}
 
 		log.Println(varty, varname, reflect.TypeOf(varty))
+		c.clinema(spec)
 		vartystr := c.exprTypeNameImpl2(scope, varty, varname)
 		isconst := false
 		c.out(gopp.IfElseStr(isglobvar, "static", "")).outsp()
@@ -2667,6 +2695,12 @@ func (this *g2nc) out(ss ...string) *g2nc {
 func (this *g2nc) outf(format string, args ...interface{}) *g2nc {
 	s := fmt.Sprintf(format, args...)
 	this.out(s)
+	return this
+}
+func (this *g2nc) clinema(e ast.Node) *g2nc {
+	poso := this.exprpos(e) // file:row:col
+	fields := strings.Split(poso.String(), ":")
+	this.outf("// #line %s %s", fields[1], fields[0]).outnl()
 	return this
 }
 
