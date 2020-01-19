@@ -4,6 +4,7 @@
 * [ ] reflect
 * [ ] dynamic stack size
 * [ ] test code transpile to C???
+* [ ] defer in loop
 
 ### 关于C类型
 对于调用C函数的返回值类型， 一种typeof()，一种是使用C++的decltype()，一种手动声明函数，只需要返回值类型，像V语言中的实现一样。另外，还要知道一个 C.symbol是一个函数，还是变量，还是常量，还是类型。
@@ -23,3 +24,5 @@
 
 ### 语法树重写
 * [ ] 变量声明解构为每条语句一个变量，如果有多个的话
+* [ ] 末尾没有return的要补上
+

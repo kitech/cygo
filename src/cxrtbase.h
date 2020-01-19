@@ -19,6 +19,7 @@
 // typedef uint8_t bool;
 typedef uint8_t byte;
 typedef uint8_t uint8;
+typedef uint8_t uchar;
 typedef int8_t int8;
 typedef uint16_t uint16;
 typedef int16_t int16;
@@ -128,9 +129,19 @@ size_t cxhashtable_hash_str2(const char *key, int len);
 
 // cxarray begin
 Array* cxarray_new();
+Array* cxarray_new2(int cap);
 Array* cxarray_slice(Array* a0, int start, int end);
 void* cxarray_get_at(Array* a0, int idx);
 Array* cxarray_append(Array* a0, void* v);
+typedef struct cxarray2_s cxarray2;
+cxarray2* cxarray2_new(int cap, int elemsz);
+cxarray2* cxarray2_slice(cxarray2* a0, int start, int end);
+cxarray2* cxarray2_append(cxarray2* a0, void* v);
+uint8* cxarray2_get_at(cxarray2* a0, int idx);
+uint8* cxarray2_replace_at(cxarray2* a0, void* v, int idx, void*out);
 
+int cxarray2_size(cxarray2* a0);
+int cxarray2_capacity(cxarray2* a0);
+int cxarray2_elemsz(cxarray2* a0);
 #endif
 

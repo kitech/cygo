@@ -10,6 +10,7 @@ import (
 	"reflect"
 	"runtime/debug"
 	"strings"
+	"unsafe"
 
 	"github.com/thoas/go-funk"
 )
@@ -389,7 +390,8 @@ func (this *g2nc) genFuncDecl(scope *ast.Scope, fd *ast.FuncDecl) {
 	} else if fd.Body != nil {
 		gendeferprep := func() {
 			this.out("// int array").outnl()
-			this.out("Array* deferarr = cxarray_new()").outfh().outnl()
+			elemsz := "sizeof(int)"
+			this.outf("cxarray2* deferarr = cxarray2_new(1, %v)", elemsz).outfh().outnl()
 		}
 		scope = ast.NewScope(scope)
 		scope.Insert(ast.NewObj(ast.Fun, fd.Name.Name))
@@ -452,8 +454,25 @@ func (c *g2nc) genInitFuncs(scope *ast.Scope, pkg *ast.Package) {
 func (this *g2nc) genBlockStmt(scope *ast.Scope, stmt *ast.BlockStmt) {
 	this.out("{").outnl()
 	scope = ast.NewScope(scope)
+
+	tailreturn := false
+	var tailstmt ast.Stmt
 	for idx, s := range stmt.List {
 		this.genStmt(scope, s, idx)
+		if idx == len(stmt.List)-1 {
+			_, tailreturn = s.(*ast.ReturnStmt)
+			if !tailreturn {
+				tailstmt = s
+			}
+		}
+	}
+
+	pcn := this.psctx.cursors[stmt].Parent()
+	_, isfuncblk := pcn.(*ast.FuncDecl)
+	if isfuncblk {
+		if !tailreturn {
+			this.genDeferStmt(scope, tailstmt)
+		}
 	}
 	this.out("}").outnl()
 }
@@ -760,15 +779,14 @@ func (c *g2nc) genRangeStmt(scope *ast.Scope, s *ast.RangeStmt) {
 		keyidstr = gopp.IfElseStr(keyidstr == "_", "idx", keyidstr)
 
 		c.out("{").outnl()
-		c.outf("  for (int %s = 0; %s < array_size(%v); %s++) {",
+		c.outf("  for (int %s = 0; %s < cxarray2_size(%v); %s++) {",
 			keyidstr, keyidstr, s.X, keyidstr).outnl()
 		if s.Value != nil {
 			valtystr := c.exprTypeName(scope, s.Value)
 			c.outf("     %s %v = {0}", valtystr, s.Value).outfh().outnl()
 			var tmpvar = tmpvarname()
 			c.outf("    void* %s = {0}", tmpvar).outfh().outnl()
-			c.outf("    int rv = array_get_at(%v, %s, (void**)&%s)", s.X, keyidstr, tmpvar).outfh().outnl()
-			c.outf("    %v = (%v)(uintptr_t)%s", s.Value, valtystr, tmpvar).outfh().outnl()
+			c.outf("    %v = *cxarray2_get_at(%v, %s)", tmpvar, s.X, keyidstr).outfh().outnl()
 		}
 		c.genBlockStmt(scope, s.Body)
 		c.out("  }").outnl()
@@ -1038,6 +1056,17 @@ func (c *g2nc) genCallExprMake(scope *ast.Scope, te *ast.CallExpr) {
 			c.genExpr(scope, lenep)
 		}
 		c.out(")")
+	case *ast.ArrayType:
+		gopp.Assert(len(te.Args) > 0, "wtfff", len(te.Args))
+		acap := "1"
+		if len(te.Args) > 1 {
+			acap = te.Args[1].(*ast.BasicLit).Value
+		}
+		elemtya := te.Args[0].(*ast.ArrayType).Elt
+		log.Println(te.Args[0], reftyof(te.Args[0]), elemtya, reftyof(elemtya))
+		elemtyt := c.info.TypeOf(elemtya)
+		elemsz := (&types.StdSizes{}).Sizeof(elemtyt)
+		c.outf("cxarray2_new(%v, %v)", acap, elemsz)
 	default:
 		log.Println("unknown", itep, ity, lenep)
 	}
@@ -1065,11 +1094,11 @@ func (c *g2nc) genCallExprLen(scope *ast.Scope, te *ast.CallExpr) {
 	} else if isslicety(argty.String()) || isarrayty(argty.String()) {
 		funame := te.Fun.(*ast.Ident).Name
 		if funame == "len" {
-			c.outf("array_size(")
+			c.outf("cxarray2_size(")
 			c.genExpr(scope, arg0)
 			c.out(")")
 		} else if funame == "cap" {
-			c.out("array_capacity(")
+			c.out("cxarray2_capacity(")
 			c.genExpr(scope, arg0)
 			c.out(")")
 		} else {
@@ -1109,9 +1138,9 @@ func (c *g2nc) genCallExprAppend(scope *ast.Scope, te *ast.CallExpr) {
 				c.genExpr(scope, arg0)
 				c.outeq()
 			}
-			c.outf("cxarray_append(")
+			c.outf("cxarray2_append(")
 			c.genExpr(scope, arg0)
-			c.out(",")
+			c.out(", (void*)")
 			c.genExpr(scope, ae)
 			c.out(")").outfh().outnl()
 		}
@@ -1163,8 +1192,8 @@ func (c *g2nc) genCallExprPrintln(scope *ast.Scope, te *ast.CallExpr) {
 	}
 	// c.genExpr(scope, te.Fun)
 	c.out("println2")
-	c.out("(")
-	c.out("__FILE__, __LINE__, __func__", gopp.IfElseStr(len(te.Args) > 0, ",", "")).outnl()
+	c.out("(__FILE__, __LINE__, __func__")
+	c.out(gopp.IfElseStr(len(te.Args) > 0, ",", "")).outnl()
 	if len(te.Args) > 0 {
 		var tyfmts []string
 		for _, e1 := range te.Args {
@@ -1241,12 +1270,13 @@ func (c *g2nc) genCallExprNorm(scope *ast.Scope, te *ast.CallExpr) {
 	idt := newIdent(tmpvarname())
 	if isvardic && haslv {
 		c.out("{0}").outfh().outnl()
-		c.outf("Array* %s = cxarray_new()", idt.Name).outfh().outnl()
+		elemsz := unsafe.Sizeof(uintptr(0))
+		c.outf("cxarray2* %s = cxarray2_new(1, %v)", idt.Name, elemsz).outfh().outnl()
 		for idx, e1 := range te.Args {
 			if idx < goty.Params().Len()-1 {
 				continue
 			}
-			c.outf("array_add(%s, (void*)", idt.Name)
+			c.outf("cxarray2_append(%s, (void*)", idt.Name)
 			c.genExpr(scope, e1)
 			c.out(")")
 			c.outfh().outnl()
@@ -1588,11 +1618,15 @@ func (c *g2nc) genReturnStmt(scope *ast.Scope, e *ast.ReturnStmt) {
 	}
 	// c.outfh().outnl().outnl()
 }
+
+// defer 也许可以用 goto label实现
 func (c *g2nc) genDeferStmtSet(scope *ast.Scope, e *ast.DeferStmt) {
 	deferi := c.getdeferinfo(e)
-	c.outf("cxarray_append(deferarr, (void*)%d)", deferi.idx)
+	tvname := tmpvarname()
+	c.outf("int %s = %v", tvname, deferi.idx).outfh().outnl()
+	c.outf("cxarray2_append(deferarr, (void*)&%s)", tvname)
 }
-func (c *g2nc) genDeferStmt(scope *ast.Scope, e *ast.ReturnStmt) {
+func (c *g2nc) genDeferStmt(scope *ast.Scope, e ast.Stmt) {
 	dstfd := upfindFuncDeclNode(c.psctx, e, 0)
 	defers := []*ast.DeferStmt{}
 	for _, defero := range c.psctx.defers {
@@ -1603,16 +1637,17 @@ func (c *g2nc) genDeferStmt(scope *ast.Scope, e *ast.ReturnStmt) {
 		defers = append(defers, defero)
 	}
 	// log.Println("got defered return", len(defers))
+	c.outf("// defer section %v", len(defers)).outnl()
 	if len(defers) == 0 {
 		return
 	}
-	c.out("// defer section").outnl()
+
 	c.out("{").outnl()
-	c.out("int deferarrsz = array_size(deferarr)").outfh().outnl()
+	c.out("int deferarrsz = cxarray2_size(deferarr)").outfh().outnl()
 	c.out("for (int deferarri = deferarrsz-1; deferarri>=0; deferarri--)")
 	c.out("{").outnl()
 	c.out("uintptr_t deferarrn = 0").outfh().outnl()
-	c.out("array_get_at(deferarr, deferarri, (void**)&deferarrn)").outfh().outnl()
+	c.out("*(uintptr_t*)cxarray2_get_at(deferarr, deferarri)").outfh().outnl()
 	for i := 0; i < len(defers); i++ {
 		defero := defers[i]
 		c.out(gopp.IfElseStr(i > 0, "else", "")).outsp()
@@ -1797,7 +1832,14 @@ func (this *g2nc) genExpr2(scope *ast.Scope, e ast.Expr) {
 				gotyval := this.info.Types[te]
 				log.Println("temp var?", vo, this.exprpos(te), gotyval)
 			}
-			this.outf("cxarray_new()").outfh().outnl()
+			elemsz := unsafe.Sizeof(uintptr(0))
+			bety := this.info.TypeOf(be.Elt)
+			if bety.String() == "string" {
+			} else {
+				elemsz = uintptr((&types.StdSizes{}).Sizeof(bety))
+			}
+			gopp.Assert(elemsz > 0, "wtfff", elemsz, bety)
+			this.outf("cxarray2_new(1, %v)", elemsz).outfh().outnl()
 			for idx, ex := range te.Elts {
 				log.Println(vo == nil, ex, idx, this.exprpos(ex))
 				this.genCxarrAdd(scope, vo.Data, ex, idx)
@@ -1882,6 +1924,7 @@ func (this *g2nc) genExpr2(scope *ast.Scope, e ast.Expr) {
 		varty := this.info.TypeOf(te.X)
 		vo := scope.Lookup("varval")
 		if varty == nil { // c type ???
+			gopp.Assert(1 == 2, "waitdep", te)
 			this.genExpr(scope, te.X)
 			this.out("[")
 			this.genExpr(scope, te.Index)
@@ -1900,7 +1943,7 @@ func (this *g2nc) genExpr2(scope *ast.Scope, e ast.Expr) {
 		} else if isslicety(varty.String()) {
 			// get or set?
 			if vo == nil { // right value
-				this.genCxarrGet(scope, te.X, te.Index)
+				this.genCxarrGet(scope, te.X, te.Index, varty)
 			} else { // left value
 				this.genCxarrSet(scope, te.X, te.Index, vo.Data)
 			}
@@ -1954,12 +1997,12 @@ func (this *g2nc) genExpr2(scope *ast.Scope, e ast.Expr) {
 			}
 			this.out(")")
 		} else if isslicety2(varty) {
-			this.outf("cxarray_slice(%v, ", te.X)
+			this.outf("cxarray2_slice(%v, ", te.X)
 			this.genExpr(scope, lowe)
 			this.out(",")
 
 			if highe == nil {
-				this.outf("array_size(%v)", te.X)
+				this.outf("cxarray2_size(%v)", te.X)
 			} else {
 				this.genExpr(scope, te.High)
 			}
@@ -2109,7 +2152,7 @@ func (c *g2nc) genCxarrAdd(scope *ast.Scope, vnamex interface{}, ve ast.Expr, id
 	varobj := c.info.ObjectOf(vnamex.(*ast.Ident))
 	pkgpfx := gopp.IfElseStr(isglobalid(c.psctx, vnamex.(*ast.Ident)), varobj.Pkg().Name(), "")
 	pkgpfx = gopp.IfElseStr(pkgpfx == "", "", pkgpfx+"_")
-	c.outf("array_add(%s%v, (void*)(uintptr_t)%v)", pkgpfx,
+	c.outf("cxarray2_append(%s%v, (void*)&%v)", pkgpfx,
 		vnamex.(*ast.Ident).Name, valstr) // .outfh().outnl()
 }
 func (c *g2nc) genCxarrSet(scope *ast.Scope, vname ast.Expr, vidx ast.Expr, elem interface{}) {
@@ -2130,10 +2173,10 @@ func (c *g2nc) genCxarrSet(scope *ast.Scope, vname ast.Expr, vidx ast.Expr, elem
 		log.Println("todo", elem, reflect.TypeOf(elem))
 	}
 
-	c.outf("array_replace_at(%v, (void*)(uintptr_t)%v, %v, nilptr)",
+	c.outf("cxarray2_replace_at(%v, (void*)(uintptr_t)%v, %v, nilptr)",
 		vname, valstr, idxstr).outfh().outnl()
 }
-func (c *g2nc) genCxarrGet(scope *ast.Scope, vname ast.Expr, vidx ast.Expr) {
+func (c *g2nc) genCxarrGet(scope *ast.Scope, vname ast.Expr, vidx ast.Expr, varty types.Type) {
 	idxstr := ""
 
 	switch te := vidx.(type) {
@@ -2145,7 +2188,19 @@ func (c *g2nc) genCxarrGet(scope *ast.Scope, vname ast.Expr, vidx ast.Expr) {
 		log.Println("todo", vidx, reflect.TypeOf(vidx))
 	}
 
-	c.outf("cxarray_get_at(%v, %v)", vname, idxstr)
+	tystr := ""
+	switch elemty := varty.(*types.Slice).Elem().(type) {
+	default:
+		switch elemty.String() {
+		case "string":
+			tystr = "cxstring*"
+		default:
+			tystr = elemty.String()
+		}
+		log.Println(varty, reftyof(varty), elemty, reftyof(elemty))
+	}
+	c.outf("*(%v*)", tystr)
+	c.outf("cxarray2_get_at(%v, %v)", vname, idxstr)
 }
 func (this *g2nc) exprTypeName(scope *ast.Scope, e ast.Expr) string {
 	// log.Println(e, reflect.TypeOf(e))
@@ -2313,7 +2368,7 @@ func (this *g2nc) exprTypeNameImpl2(scope *ast.Scope, ety types.Type, e ast.Expr
 		if tystr == "[0]byte" {
 			return "void"
 		}
-		return "Array*"
+		return "cxarray2*"
 	case *types.Chan:
 		return "voidptr"
 	case *types.Map:
@@ -2441,7 +2496,8 @@ func (this *g2nc) genTypeSpec(scope *ast.Scope, spec *ast.TypeSpec) {
 				if isstrty2(fldty) {
 					this.outf("obj->%s = cxstring_new()", fldname.Name).outfh().outnl()
 				} else if isslicety2(fldty) {
-					this.outf("obj->%s = cxarray_new()", fldname.Name).outfh().outnl()
+					elemsz := unsafe.Sizeof(uintptr(0))
+					this.outf("obj->%s = cxarray2_new(1, %v)", fldname.Name, elemsz).outfh().outnl()
 				} else if ismapty2(fldty) {
 					this.outf("obj->%s = cxhashtable_new()", fldname.Name).outfh().outnl()
 				} else if ischanty2(fldty) {
@@ -2571,7 +2627,7 @@ func (c *g2nc) genValueSpec(scope *ast.Scope, spec *ast.ValueSpec, validx int) {
 			if isstrty2(varty) {
 				c.out("cxstring*")
 			} else if isarrayty2(varty) || isslicety2(varty) {
-				c.out("Array*")
+				c.out("cxarray2*")
 			} else if ismapty2(varty) {
 				c.out("HashTable*")
 			} else if ischanty2(varty) {
@@ -2626,7 +2682,8 @@ func (c *g2nc) genValueSpec(scope *ast.Scope, spec *ast.ValueSpec, validx int) {
 			} else if isstrty2(varty) {
 				c.out("cxstring_new()")
 			} else if isslicety2(varty) {
-				c.out("cxarray_new()")
+				elemsz := unsafe.Sizeof(uintptr(0))
+				c.outf("cxarray2_new(1, %v)", elemsz)
 			} else if ismapty2(varty) {
 				c.out("cxhashtable_new()")
 			} else if isstructty2(varty) {
