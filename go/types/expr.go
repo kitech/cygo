@@ -243,6 +243,9 @@ func representableConst(x constant.Value, check *Checker, typ *Basic, rounded *c
 			case Uint64:
 				return 0 <= x
 			default:
+				if typ.kind >= ctypebase {
+					return true
+				}
 				unreachable()
 			}
 		}

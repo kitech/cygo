@@ -214,6 +214,9 @@ func (x *operand) assignableTo(check *Checker, T Type, reason *string) bool {
 	if Identical(V, T) {
 		return true
 	}
+	if isCdefType(V) || isCdefType(T) {
+		return true
+	}
 
 	Vu := V.Underlying()
 	Tu := T.Underlying()

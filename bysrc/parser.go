@@ -101,7 +101,7 @@ func (this *ParserContext) Init_no_cgocmd() error {
 	if len(bdpkgs.InvalidGoFiles) > 0 {
 		log.Fatalln("Have InvalidGoFiles", bdpkgs.InvalidGoFiles)
 	}
-	log.Println(bdpkgs.GoFiles, bdpkgs.TestGoFiles)
+	log.Println(bdpkgs.Name, bdpkgs.GoFiles, bdpkgs.TestGoFiles)
 
 	// parser step 2, got ast/types
 	this.fset = token.NewFileSet()
@@ -518,18 +518,31 @@ func (pc *ParserContext) walkpass_fill_fakecpkg() {
 					// 怎么获对应的变量名
 					valspx := upfind_func(pc, c, 0, func(c2 *astutil.Cursor) bool {
 						_, ok := c2.Node().(*ast.ValueSpec)
+						if !ok {
+							_, ok = c2.Node().(*ast.AssignStmt)
+						}
 						return ok
 					})
 					if valspx == nil { // 不在赋值或者声明语句
 						break
 					}
-					valsp := valspx.(*ast.ValueSpec)
-					gopp.Assert(len(valsp.Values) == 1, "wtttt", len(valsp.Values))
+					var ale ast.Expr
+					switch valspe := valspx.(type) {
+					case *ast.ValueSpec:
+						gopp.Assert(len(valspe.Values) == 1, "wtttt", len(valspe.Values))
+						ale = valspe.Names[0]
+					case *ast.AssignStmt:
+						gopp.Assert(len(valspe.Rhs) == 1, "wtttt", len(valspe.Rhs))
+						ale = valspe.Lhs[0]
+					}
 					blkst := upfind_blockstmt(pc, c, 0)
 					if blkst == nil {
 						break
 					}
-					used := find_use_ident(pc, blkst, valsp.Names[0])
+					if _, ok := ale.(*ast.Ident); !ok {
+						break
+					}
+					used := find_use_ident(pc, blkst, ale.(*ast.Ident))
 					log.Println(used, len(blkst.List))
 					for _, selex := range used {
 						sele := selex.(*ast.SelectorExpr)

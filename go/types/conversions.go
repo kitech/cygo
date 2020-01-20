@@ -132,6 +132,12 @@ func (x *operand) convertibleTo(check *Checker, T Type) bool {
 	if isUnsafePointer(V) && (isPointer(Tu) || isUintptr(Tu)) {
 		return true
 	}
+	if isVoidptr(V) && (isPointer(Tu) || isUintptr(Tu)) {
+		return true
+	}
+	if isCdefType(V) || isCdefType(Tu) {
+		return true
+	}
 
 	return false
 }

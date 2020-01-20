@@ -25,7 +25,9 @@ type Nilptr struct {
 	object
 }
 
-var ctypeno int = 200
+const ctypebase = 200
+
+var ctypeno int = ctypebase
 var ctypetys = map[string]Type{}
 
 func NewCtype(tyname string) Type {
@@ -44,4 +46,23 @@ func NewCtype(tyname string) Type {
 	ctypetys[tyname] = ty
 
 	return ty
+}
+
+func isCdefType(typ Type) bool {
+	t, ok := typ.Underlying().(*Basic)
+	return ok && t.kind >= ctypebase
+}
+func isVoidptr(typ Type) bool {
+	// TODO(gri): Is this (typ.Underlying() instead of just typ) correct?
+	//            The spec does not say so, but gc claims it is. See also
+	//            issue 6326.
+	t, ok := typ.Underlying().(*Basic)
+	return ok && t.kind == Voidptr
+}
+func isByteptr(typ Type) bool {
+	// TODO(gri): Is this (typ.Underlying() instead of just typ) correct?
+	//            The spec does not say so, but gc claims it is. See also
+	//            issue 6326.
+	t, ok := typ.Underlying().(*Basic)
+	return ok && t.kind == Byteptr
 }

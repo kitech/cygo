@@ -1296,6 +1296,7 @@ func (c *g2nc) genCallExprNorm(scope *ast.Scope, te *ast.CallExpr) {
 			c.out("->")
 			c.genExpr(scope, selfn.Sel)
 		} else {
+			// log.Println(selfn.X, reftyof(selfn.X), c.info.TypeOf(selfn.X))
 			vartystr := c.exprTypeName(scope, selfn.X)
 			vartystr = strings.TrimRight(vartystr, "*")
 			c.out(vartystr + "_" + selfn.Sel.Name)
@@ -1922,7 +1923,7 @@ func (this *g2nc) genExpr2(scope *ast.Scope, e ast.Expr) {
 		varty := this.info.TypeOf(te.X)
 		vo := scope.Lookup("varval")
 		if varty == nil { // c type ???
-			gopp.Assert(1 == 2, "waitdep", te)
+			// gopp.Assert(1 == 2, "waitdep", te)
 			this.genExpr(scope, te.X)
 			this.out("[")
 			this.genExpr(scope, te.Index)
@@ -2203,7 +2204,7 @@ func (c *g2nc) genCxarrGet(scope *ast.Scope, vname ast.Expr, vidx ast.Expr, vart
 func (this *g2nc) exprTypeName(scope *ast.Scope, e ast.Expr) string {
 	// log.Println(e, reflect.TypeOf(e))
 	tyname := this.exprTypeNameImpl(scope, e)
-	log.Println(exprstr(e), reftyof(e), tyname)
+	// log.Println(exprstr(e), reftyof(e), tyname)
 	if tyname == "unknownty" {
 		// log.Panicln(tyname, e, reflect.TypeOf(e), this.exprpos(e))
 	}
@@ -2260,7 +2261,7 @@ func (this *g2nc) exprTypeNameImpl(scope *ast.Scope, e ast.Expr) string {
 		if ie, ok := e.(*ast.IndexExpr); ok {
 			log.Println(exprstr(ie), ie.X, reftyof(ie.X), this.info.TypeOf(ie.X))
 			xty := this.info.TypeOf(ie.X)
-			gopp.Assert(xty != nil, "waitdep", ie)
+			// gopp.Assert(xty != nil, "waitdep", ie)
 			if (xty == nil || isinvalidty2(xty)) || isctydeftype2(xty) {
 				// c type???
 				dimn := strings.Count(exprstr(ie), "[")
@@ -2287,6 +2288,14 @@ func (this *g2nc) exprTypeNameImpl(scope *ast.Scope, e ast.Expr) string {
 
 	goty := this.info.TypeOf(e)
 	if goty == nil {
+		if ie, ok := e.(*ast.CallExpr); ok {
+			log.Println(ie.Fun, reftyof(ie.Fun), this.info.TypeOf(ie.Fun))
+			if _, ok2 := ie.Fun.(*ast.ParenExpr); ok2 {
+				goty = this.info.TypeOf(ie.Fun)
+			}
+		}
+	}
+	if goty == nil {
 		log.Panicln(e, exprstr(e), reftyof(e), this.exprpos(e))
 	}
 	val := this.exprTypeNameImpl2(scope, goty, e)
@@ -2308,7 +2317,7 @@ func (this *g2nc) exprTypeNameImpl2(scope *ast.Scope, ety types.Type, e ast.Expr
 
 	goty := ety
 	tyval, isudty := this.strtypes[goty.String()]
-	// log.Println(goty, reftyof(goty), e, reftyof(e))
+	// log.Println(goty, reftyof(goty), e, reftyof(e), exprstr(e))
 
 	switch te := goty.(type) {
 	case *types.Basic:
@@ -2318,7 +2327,7 @@ func (this *g2nc) exprTypeNameImpl2(scope *ast.Scope, ety types.Type, e ast.Expr
 			if strings.Contains(te.Name(), "string") {
 				log.Println(te.Name())
 			}
-			// log.Println(te, reflect.TypeOf(e), te.Info(), te.Name(), te.Underlying(), reflect.TypeOf(te.Underlying()))
+			// log.Println(te, reftyof(e), te.Info(), te.Name(), te.Underlying(), reftyof(te.Underlying()))
 			return strings.Replace(te.String(), ".", "_", 1)
 			// return te.Name()
 		}
@@ -2338,6 +2347,9 @@ func (this *g2nc) exprTypeNameImpl2(scope *ast.Scope, ety types.Type, e ast.Expr
 			if strings.HasPrefix(tyname, "_Ctype_") {
 				return fmt.Sprintf("%s_%s", pkgo.Name(), tyname[7:])
 			}
+			if pkgo.Name() == "C" {
+				return fmt.Sprintf("%s", tyname)
+			}
 			return fmt.Sprintf("%s_%s", pkgo.Name(), teobj.Name())
 		case *types.Basic:
 			tyname := teobj.Name()
@@ -2354,12 +2366,12 @@ func (this *g2nc) exprTypeNameImpl2(scope *ast.Scope, ety types.Type, e ast.Expr
 			gopp.G_USED(ne)
 		}
 		log.Println("todo", teobj.Name(), reflect.TypeOf(undty), goty)
-		return "todo" + teobj.Name()
+		return "/*todo*/" + teobj.Name()
 		// return sign2rety(te.String())
 	case *types.Pointer:
 		tystr := this.exprTypeNameImpl2(scope, te.Elem(), e)
 		tystr += "*"
-		// log.Println(tystr)
+		// log.Println(tystr, reftyof(te.Elem()))
 		return tystr
 	case *types.Slice, *types.Array:
 		tystr := te.String()
@@ -2397,7 +2409,7 @@ func (this *g2nc) exprTypeNameImpl2(scope *ast.Scope, ety types.Type, e ast.Expr
 		}
 	default:
 		log.Println("todo", goty, exprstr(e), reftyof(goty), isudty, tyval, te, this.exprpos(e))
-		return te.String()
+		return te.String() + "/*todo*/"
 	}
 
 	panic("unreachable")
