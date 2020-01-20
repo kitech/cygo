@@ -138,3 +138,10 @@ int cxarray2_size(cxarray2* a0) { return a0->len; }
 int cxarray2_capacity(cxarray2* a0) { return a0->cap; }
 int cxarray2_elemsz(cxarray2* a0) { return a0->elemsz; }
 
+void cxarray2_appendn(cxarray2* a0, void* v, int n) {
+    int tlen = n * a0->elemsz;
+    cxarray2_expend(a0, n);
+    memcpy(a0->ptr, v, tlen);
+    a0->len += n;
+}
+

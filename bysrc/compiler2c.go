@@ -51,17 +51,21 @@ func (this *g2nc) genpkgs() {
 	}
 
 }
+
+const pkgsep = "__" // between pkg and type/function
+const mthsep = "_"  // between type and method
+
 func (c *g2nc) pkgpfx() string {
 	pfx := ""
 	if c.curpkg == "main" {
-		pfx = c.curpkg + "_"
+		pfx = c.curpkg + pkgsep
 	} else {
 		if c.psctx.pkgrename != "" {
 			pfx = c.psctx.pkgrename
 		} else {
 			pfx = c.curpkg
 		}
-		pfx += "_"
+		pfx += pkgsep
 	}
 	return pfx
 }
@@ -358,7 +362,7 @@ func (this *g2nc) genFuncDecl(scope *ast.Scope, fd *ast.FuncDecl) {
 	if fd.Recv != nil {
 		recvtystr := this.exprTypeName(scope, fd.Recv.List[0].Type)
 		recvtystr = strings.TrimRight(recvtystr, "*")
-		this.out(recvtystr + "_" + fd.Name.String())
+		this.out(recvtystr + mthsep + fd.Name.String())
 	} else {
 		this.out(pkgpfx + fdname)
 	}
@@ -437,7 +441,7 @@ func (c *g2nc) genMainFunc(scope *ast.Scope) {
 	c.outf("%sglobvars_init()", c.pkgpfx()).outfh().outnl()
 	c.out("// all func init()").outnl()
 	c.outf("%spkginit()", c.pkgpfx()).outfh().outnl()
-	c.out("main_main()").outfh().outnl()
+	c.outf("main%smain()", pkgsep).outfh().outnl()
 	c.out("return 0").outfh().outnl()
 	c.out("}").outnl()
 }
@@ -707,7 +711,7 @@ func (c *g2nc) genFiberStwrap(scope *ast.Scope, e *ast.CallExpr) {
 	c.out(funame+"_fiber", "(void* vpargs)").outnl()
 	c.out("{").outnl()
 	c.out(stname, "*args = (", stname, "*)vpargs").outfh().outnl()
-	c.out(gopp.IfElseStr(pkgo == nil, "", pkgo.Name()+"_"))
+	c.out(gopp.IfElseStr(pkgo == nil, "", pkgo.Name()+pkgsep))
 	c.out(funame, "(")
 	for idx, _ := range e.Args {
 		fldname := fmt.Sprintf("args->a%d", idx)
@@ -1318,7 +1322,7 @@ func (c *g2nc) genCallExprNorm(scope *ast.Scope, te *ast.CallExpr) {
 			c.genExpr(scope, fca.selfn.Sel)
 		} else if fca.ispkgsel {
 			c.genExpr(scope, fca.selfn.X)
-			c.out("_")
+			c.out(pkgsep)
 			c.out(fca.selfn.Sel.Name)
 		} else {
 			// log.Println(selfn.X, reftyof(selfn.X), c.info.TypeOf(selfn.X))
@@ -2337,7 +2341,7 @@ func (this *g2nc) exprTypeNameImpl2(scope *ast.Scope, ety types.Type, e ast.Expr
 
 	goty := ety
 	tyval, isudty := this.strtypes[goty.String()]
-	// log.Println(goty, reftyof(goty), e, reftyof(e), exprstr(e))
+	log.Println(goty, reftyof(goty), e, reftyof(e), exprstr(e))
 
 	switch te := goty.(type) {
 	case *types.Basic:
@@ -2355,28 +2359,28 @@ func (this *g2nc) exprTypeNameImpl2(scope *ast.Scope, ety types.Type, e ast.Expr
 		teobj := te.Obj()
 		pkgo := teobj.Pkg()
 		undty := te.Underlying()
-		// log.Println(teobj, pkgo, undty)
+		log.Println(teobj, pkgo, undty)
 		switch ne := undty.(type) {
 		case *types.Interface:
 			if pkgo == nil { // builtin???
 				return teobj.Name() + "*"
 			}
-			return fmt.Sprintf("%s_%s", pkgo.Name(), teobj.Name())
+			return fmt.Sprintf("%s%s%s", pkgo.Name(), pkgsep, teobj.Name())
 		case *types.Struct:
 			tyname := teobj.Name()
 			if strings.HasPrefix(tyname, "_Ctype_") {
-				return fmt.Sprintf("%s_%s", pkgo.Name(), tyname[7:])
+				return fmt.Sprintf("%s%s%s", pkgo.Name(), pkgsep, tyname[7:])
 			}
 			if pkgo.Name() == "C" {
 				return fmt.Sprintf("%s", tyname)
 			}
-			return fmt.Sprintf("%s_%s", pkgo.Name(), teobj.Name())
+			return fmt.Sprintf("%s%s%s", pkgo.Name(), pkgsep, teobj.Name())
 		case *types.Basic:
 			tyname := teobj.Name()
 			if strings.HasPrefix(tyname, "_Ctype_") {
 				return tyname[7:]
 			}
-			return fmt.Sprintf("%s_%s", pkgo.Name(), teobj.Name())
+			return fmt.Sprintf("%s%s%s", pkgo.Name(), pkgsep, teobj.Name())
 		case *types.Array:
 			tyname := teobj.Name()
 			if strings.HasPrefix(tyname, "_Ctype_") {
