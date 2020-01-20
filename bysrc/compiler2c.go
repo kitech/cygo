@@ -1241,56 +1241,61 @@ func (c *g2nc) genCallExprPrintln(scope *ast.Scope, te *ast.CallExpr) {
 		// c.outfh().outnl()
 	}
 }
-func (c *g2nc) genCallExprNorm(scope *ast.Scope, te *ast.CallExpr) {
-	// funame := te.Fun.(*ast.Ident).Name
-
-	selfn, isselfn := te.Fun.(*ast.SelectorExpr)
-	// isidt := false
-	iscfn := false
-	ispkgsel := false
-	isifacesel := false
-	if isselfn {
+func (c *g2nc) getCallExprAttr(scope *ast.Scope, te *ast.CallExpr) *FuncCallAttr {
+	fca := &FuncCallAttr{}
+	fca.selfn, fca.isselfn = te.Fun.(*ast.SelectorExpr)
+	if fca.isselfn {
 		// var selidt *ast.Ident
 		// selidt, isidt = selfn.X.(*ast.Ident)
 		// iscfn = isidt && selidt.Name == "C"
 		if iscsel(te.Fun) {
 			// selidt = selfn.Sel.(*ast.Ident)
 			// isidt = true
-			iscfn = true
+			fca.iscfn = true
 		} else {
-			selty := c.info.TypeOf(selfn.X)
-			ispkgsel = isinvalidty2(selty)
+			selty := c.info.TypeOf(fca.selfn.X)
+			fca.isrcver = !isinvalidty2(selty)
+			fca.ispkgsel = ispackage(c.psctx, fca.selfn.X)
 
-			selxty := c.info.TypeOf(selfn.X)
+			selxty := c.info.TypeOf(fca.selfn.X)
 			switch ne := selxty.(type) {
 			case *types.Named:
-				isifacesel = isiface2(ne.Underlying())
+				fca.isifacesel = isiface2(ne.Underlying())
 			}
 		}
 	}
 	gotyx := c.info.TypeOf(te.Fun)
-	isvardic := false
-	var goty *types.Signature
+	gopp.Assert(gotyx != nil, "wtfff", te.Fun)
 	if gotyx != nil {
 		goty1, ok := gotyx.(*types.Signature)
 		if ok {
-			goty = goty1
-			isvardic = goty.Variadic()
+			fca.fnty = goty1
+			fca.isvardic = goty1.Variadic()
 		} else {
 			log.Println(gotyx, reflect.TypeOf(gotyx), te.Fun)
 		}
 	}
 
 	// log.Println(te.Args, te.Fun, gotyx, reflect.TypeOf(gotyx), goty.Variadic())
-	haslv := c.psctx.kvpairs[te] != nil
+	lexpr := c.psctx.kvpairs[te]
+	fca.haslval = lexpr != nil
+	if lexpr != nil {
+		fca.lexpr = lexpr.(ast.Expr)
+	}
+
+	return fca
+}
+func (c *g2nc) genCallExprNorm(scope *ast.Scope, te *ast.CallExpr) {
+	// funame := te.Fun.(*ast.Ident).Name
+	fca := c.getCallExprAttr(scope, te)
 
 	idt := newIdent(tmpvarname())
-	if isvardic && haslv {
+	if fca.isvardic && fca.haslval {
 		c.out("{0}").outfh().outnl()
 		var elemsz interface{} = "sizeof(voidptr)"
 		c.outf("cxarray2* %s = cxarray2_new(1, %v)", idt.Name, elemsz).outfh().outnl()
 		for idx, e1 := range te.Args {
-			if idx < goty.Params().Len()-1 {
+			if idx < fca.fnty.Params().Len()-1 {
 				continue
 			}
 			c.outf("cxarray2_append(%s, (void*)&", idt.Name)
@@ -1298,24 +1303,28 @@ func (c *g2nc) genCallExprNorm(scope *ast.Scope, te *ast.CallExpr) {
 			c.out(")")
 			c.outfh().outnl()
 		}
-		c.genExpr(scope, c.psctx.kvpairs[te].(ast.Expr))
+		c.genExpr(scope, fca.lexpr)
 		c.outeq()
 	}
 
-	if isselfn {
-		if iscfn {
+	if fca.isselfn {
+		if fca.iscfn {
 			c.out("(")
-			c.genExpr(scope, selfn.Sel)
+			c.genExpr(scope, fca.selfn.Sel)
 			c.out(")")
-		} else if isifacesel {
-			c.genExpr(scope, selfn.X)
+		} else if fca.isifacesel {
+			c.genExpr(scope, fca.selfn.X)
 			c.out("->")
-			c.genExpr(scope, selfn.Sel)
+			c.genExpr(scope, fca.selfn.Sel)
+		} else if fca.ispkgsel {
+			c.genExpr(scope, fca.selfn.X)
+			c.out("_")
+			c.out(fca.selfn.Sel.Name)
 		} else {
 			// log.Println(selfn.X, reftyof(selfn.X), c.info.TypeOf(selfn.X))
-			vartystr := c.exprTypeName(scope, selfn.X)
+			vartystr := c.exprTypeName(scope, fca.selfn.X)
 			vartystr = strings.TrimRight(vartystr, "*")
-			c.out(vartystr + "_" + selfn.Sel.Name)
+			c.out(vartystr + "_" + fca.selfn.Sel.Name)
 		}
 	} else {
 		fnobj := c.info.ObjectOf(te.Fun.(*ast.Ident))
@@ -1327,13 +1336,14 @@ func (c *g2nc) genCallExprNorm(scope *ast.Scope, te *ast.CallExpr) {
 	}
 
 	c.out("(")
-	if isselfn && !iscfn && !ispkgsel {
-		c.genExpr(scope, selfn.X)
-		c.out(gopp.IfElseStr(isifacesel, "->data", ""))
+	// reciever this
+	if fca.isselfn && !fca.iscfn && !fca.ispkgsel && fca.isrcver {
+		c.genExpr(scope, fca.selfn.X)
+		c.out(gopp.IfElseStr(fca.isifacesel, "->data", ""))
 		c.out(gopp.IfElseStr(len(te.Args) > 0, ",", ""))
 	}
 	for idx, e1 := range te.Args {
-		if isvardic && idx == goty.Params().Len()-1 {
+		if fca.isvardic && idx == fca.fnty.Params().Len()-1 {
 			c.out(idt.Name)
 			break
 		}
@@ -1341,12 +1351,6 @@ func (c *g2nc) genCallExprNorm(scope *ast.Scope, te *ast.CallExpr) {
 		c.out(gopp.IfElseStr(idx == len(te.Args)-1, "", ", "))
 	}
 	c.out(")")
-
-	// check if real need, ;\n
-	cs := c.psctx.cursors[te]
-	if cs.Name() != "Args" {
-		// c.outfh().outnl()
-	}
 }
 func (c *g2nc) genTypeCtor(scope *ast.Scope, te *ast.CallExpr) {
 	switch be := te.Fun.(type) {

@@ -409,4 +409,31 @@ func isglobalid(pc *ParserContext, idt *ast.Ident) bool {
 	return false
 }
 
+func ispackage(pc *ParserContext, e ast.Expr) bool {
+	if idt, ok := e.(*ast.Ident); ok {
+		selobj := pc.info.ObjectOf(idt)
+		if selobj != nil && selobj.Pkg() != nil {
+			str := fmt.Sprintf("%v", selobj)
+			ispkgsel :=
+				strings.HasPrefix(str, "package ") && strings.Contains(str, ")")
+			return ispkgsel
+		}
+	}
+	return false
+}
+
 func reftyof(x interface{}) reflect.Type { return reflect.TypeOf(x) }
+
+type FuncCallAttr struct {
+	fnty       *types.Signature
+	isselfn    bool
+	selfn      *ast.SelectorExpr
+	idtfn      *ast.Ident
+	ispkgsel   bool
+	isrcver    bool
+	iscfn      bool
+	isifacesel bool
+	isvardic   bool
+	haslval    bool
+	lexpr      ast.Expr
+}
