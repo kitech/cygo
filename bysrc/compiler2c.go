@@ -105,10 +105,11 @@ func (c *g2nc) gentypeofs(pkg *ast.Package) {
 			fe := ne.Fun.(*ast.SelectorExpr)
 			iscty := false
 			if funk.Contains([]string{"int"}, fe.Sel.Name) {
-				iscty = true
+				// iscty = true
 				// break
 			}
 			if iscty {
+				gopp.Assert(1 == 2, "waitdep", fe)
 				c.outf("typedef __typeof__((%v)0) %v__ctype;", fe.Sel.Name, fe.Sel.Name).outnl()
 			} else {
 				c.outf("// typedef __typeof__((%v)(", fe.Sel.Name).outnl()
@@ -123,9 +124,12 @@ func (c *g2nc) gentypeofs(pkg *ast.Package) {
 				c.outf(")) %v__ctype;", fe.Sel.Name).outnl()
 			}
 		case *ast.SelectorExpr:
-			if strings.HasPrefix(ne.Sel.Name, "struct_") {
+			isstruct := strings.HasPrefix(ne.Sel.Name, "struct_")
+			if isstruct {
 				structname := strings.Replace(ne.Sel.Name, "_", " ", 1)
 				c.outf("typedef %s %s;", structname, ne.Sel.Name).outnl()
+			} else {
+				c.outf("typedef __typeof__(%v) %v__const__ctype;", ne.Sel.Name, ne.Sel.Name).outnl()
 			}
 			c.outf("typedef __typeof__(%v) %v__ctype;", ne.Sel.Name, ne.Sel.Name).outnl()
 			// TODO 字段类型

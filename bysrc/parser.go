@@ -486,16 +486,16 @@ func (pc *ParserContext) walkpass_fill_fakecpkg() {
 	fcpkg := pc.fcpkg
 	fcpkg.MarkComplete()
 	scope := fcpkg.Scope()
-	if false {
-		ty1 := types.NewCtype("close__ctype")
-		log.Println(ty1)
-		var1 := types.NewVar(token.NoPos, fcpkg, "", ty1)
-		f1rets := types.NewTuple(var1)
-		f1sig := types.NewSignature(nil, nil, f1rets, false)
-		f1 := types.NewFunc(token.NoPos, fcpkg, "close", f1sig)
-		scope.Insert(f1)
-		// return fcpkg, nil
+
+	type csyminfo struct {
+		idt      *ast.Ident
+		varo     *types.Var
+		isfunc   bool
+		isconst  bool
+		isstruct bool
+		isfield  bool
 	}
+
 	tmpidts := map[*ast.Ident]*types.Var{}
 	inconst := false
 	for _, pkg := range pkgs {
@@ -574,31 +574,36 @@ func (pc *ParserContext) walkpass_fill_fakecpkg() {
 			return true
 		})
 	}
-	log.Println(scope.Names())
+	{
+		idt := ast.NewIdent(fmt.Sprintf("demo_const_of_%s", pc.bdpkgs.Name))
+		cst1 := fakecconst(idt, fcpkg)
+		scope.Insert(cst1)
+	}
+	{
+		idt := ast.NewIdent(fmt.Sprintf("demo_var_of_%s", pc.bdpkgs.Name))
+		cst1 := fakecvar(idt, fcpkg)
+		scope.Insert(cst1)
+	}
+	{
+		idt := ast.NewIdent(fmt.Sprintf("demo_func_of_%s", pc.bdpkgs.Name))
+		cst1 := fakecfunc(idt, fcpkg)
+		scope.Insert(cst1)
+	}
+	log.Println(len(scope.Names()), scope.Names())
 	for idt, varx := range tmpidts {
 		idtname := idt.Name
 		if obj := scope.Lookup(idt.Name); obj != nil {
 			continue
 		}
 		if strings.HasPrefix(idtname, "struct_") {
-			// maybe type
-			namedst := fakecstruct(idt, fcpkg)
-			if false {
-				scope.Insert(namedst.Obj())
-			}
-			// ty := types.NewCtype(idtname)
-			f1 := types.NewField(token.NoPos, fcpkg, "field111", types.NewCtype("test111__ctype"), false)
-			f2 := types.NewField(token.NoPos, fcpkg, "field222", types.NewCtype("test222__ctype"), false)
-			fields := []*types.Var{f1, f2}
-			st1 := types.NewStruct(fields, nil)
-			stobj := types.NewTypeName(token.NoPos, fcpkg, idtname+"_rc2", nil)
-			stobj2 := types.NewNamed(stobj, st1, nil)
-			scope.Insert(stobj2.Obj())
 		} else {
 			scope.Insert(varx)
+			idtobj := ast.NewIdent(varx.Name() + "_asconst")
+			cst1 := fakecconst(idtobj, fcpkg)
+			scope.Insert(cst1)
 		}
 	}
-	log.Println(scope.Names())
+	log.Println(len(scope.Names()), scope.Names())
 	if filepath.Base(pc.path) == "unsafe" {
 		return
 	}

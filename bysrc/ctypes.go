@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"go/ast"
+	"go/constant"
 	"go/token"
 	"go/types"
 	"unsafe"
@@ -81,12 +82,20 @@ func fakecvar(varnameidt ast.Expr, fcpkg *types.Package) *types.Var {
 	return var1
 }
 
+func fakecconst(cstnameidt ast.Expr, fcpkg *types.Package) *types.Const {
+	idtname := fmt.Sprintf("%v", cstnameidt)
+	ty1 := types.NewCtype(fmt.Sprintf("%v__const__ctype", idtname))
+	var val1 constant.Value
+	cst1 := types.NewConst(token.NoPos, fcpkg, idtname, ty1, val1)
+	return cst1
+}
+
 func fakecstruct(stnameidt ast.Expr, fcpkg *types.Package) *types.Named {
 	idt := stnameidt.(*ast.Ident)
 	// assert(ok)
 	// idtname := fmt.Sprintf("%v", stnameidt)
 	st1 := types.NewStruct(nil, nil)
-	nty1 := types.NewTypeName(token.NoPos, fcpkg, idt.Name, st1)
+	nty1 := types.NewTypeName(token.NoPos, fcpkg, idt.Name, nil)
 	ty2 := types.NewNamed(nty1, st1, nil)
 	return ty2
 }
