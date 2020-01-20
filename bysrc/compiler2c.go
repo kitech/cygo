@@ -1065,7 +1065,8 @@ func (c *g2nc) genCallExprMake(scope *ast.Scope, te *ast.CallExpr) {
 		elemtya := te.Args[0].(*ast.ArrayType).Elt
 		log.Println(te.Args[0], reftyof(te.Args[0]), elemtya, reftyof(elemtya))
 		elemtyt := c.info.TypeOf(elemtya)
-		elemsz := (&types.StdSizes{}).Sizeof(elemtyt)
+		var elemsz interface{} = (&types.StdSizes{}).Sizeof(elemtyt)
+		elemsz = gopp.IfElse(elemsz == 0, "sizeof(voidptr)", elemsz)
 		c.outf("cxarray2_new(%v, %v)", acap, elemsz)
 	default:
 		log.Println("unknown", itep, ity, lenep)
@@ -1270,7 +1271,7 @@ func (c *g2nc) genCallExprNorm(scope *ast.Scope, te *ast.CallExpr) {
 	idt := newIdent(tmpvarname())
 	if isvardic && haslv {
 		c.out("{0}").outfh().outnl()
-		elemsz := unsafe.Sizeof(uintptr(0))
+		var elemsz interface{} = "sizeof(voidptr)"
 		c.outf("cxarray2* %s = cxarray2_new(1, %v)", idt.Name, elemsz).outfh().outnl()
 		for idx, e1 := range te.Args {
 			if idx < goty.Params().Len()-1 {
@@ -1832,13 +1833,10 @@ func (this *g2nc) genExpr2(scope *ast.Scope, e ast.Expr) {
 				gotyval := this.info.Types[te]
 				log.Println("temp var?", vo, this.exprpos(te), gotyval)
 			}
-			elemsz := unsafe.Sizeof(uintptr(0))
 			bety := this.info.TypeOf(be.Elt)
-			if bety.String() == "string" {
-			} else {
-				elemsz = uintptr((&types.StdSizes{}).Sizeof(bety))
-			}
-			gopp.Assert(elemsz > 0, "wtfff", elemsz, bety)
+			var elemsz interface{} = uintptr((&types.StdSizes{}).Sizeof(bety))
+			elemsz = gopp.IfElse(elemsz == 0, "sizeof(voidptr)", elemsz)
+			gopp.Assert(elemsz != 0, "wtfff", elemsz, bety)
 			this.outf("cxarray2_new(1, %v)", elemsz).outfh().outnl()
 			for idx, ex := range te.Elts {
 				log.Println(vo == nil, ex, idx, this.exprpos(ex))
@@ -2496,7 +2494,8 @@ func (this *g2nc) genTypeSpec(scope *ast.Scope, spec *ast.TypeSpec) {
 				if isstrty2(fldty) {
 					this.outf("obj->%s = cxstring_new()", fldname.Name).outfh().outnl()
 				} else if isslicety2(fldty) {
-					elemsz := unsafe.Sizeof(uintptr(0))
+					var elemsz interface{} = unsafe.Sizeof(uintptr(0))
+					elemsz = gopp.IfElse(elemsz == 0, "sizeof(voidptr)", elemsz)
 					this.outf("obj->%s = cxarray2_new(1, %v)", fldname.Name, elemsz).outfh().outnl()
 				} else if ismapty2(fldty) {
 					this.outf("obj->%s = cxhashtable_new()", fldname.Name).outfh().outnl()
@@ -2682,7 +2681,8 @@ func (c *g2nc) genValueSpec(scope *ast.Scope, spec *ast.ValueSpec, validx int) {
 			} else if isstrty2(varty) {
 				c.out("cxstring_new()")
 			} else if isslicety2(varty) {
-				elemsz := unsafe.Sizeof(uintptr(0))
+				var elemsz interface{} = unsafe.Sizeof(uintptr(0))
+				elemsz = gopp.IfElse(elemsz == 0, "sizeof(voidptr)", elemsz)
 				c.outf("cxarray2_new(1, %v)", elemsz)
 			} else if ismapty2(varty) {
 				c.out("cxhashtable_new()")
