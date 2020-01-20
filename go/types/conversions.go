@@ -135,7 +135,16 @@ func (x *operand) convertibleTo(check *Checker, T Type) bool {
 	if isVoidptr(V) && (isPointer(Tu) || isUintptr(Tu)) {
 		return true
 	}
-	if isCdefType(V) || isCdefType(Tu) {
+	if isByteptr(V) && (isPointer(Tu) || isUintptr(Tu)) {
+		return true
+	}
+	if isVoidptr(V) || isVoidptr(Vu) || isByteptr(V) || isByteptr(Tu) {
+		return true
+	}
+	if isVoidptr(T) || isVoidptr(Tu) || isByteptr(T) || isByteptr(Tu) {
+		return true
+	}
+	if isCdefType(V) || isCdefType(Tu) || isCdefType(Vu) || isCdefType(T) {
 		return true
 	}
 

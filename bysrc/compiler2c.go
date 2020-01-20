@@ -740,20 +740,32 @@ func (c *g2nc) genFiberWcall(scope *ast.Scope, e *ast.CallExpr) {
 
 func (c *g2nc) genForStmt(scope *ast.Scope, s *ast.ForStmt) {
 	isefor := s.Init == nil && s.Cond == nil && s.Post == nil // for {}
+	tmpv := tmpvarname()
+	c.outf("int %s = 0", tmpv).outfh().outnl()
 	c.out("for (")
-
 	c.genStmt(scope, s.Init, 0)
 	// c.out(";") // TODO ast.AssignStmt has put ;
 	if isefor {
 		// c.out(";")
 	}
-	c.genExpr(scope, s.Cond)
+	// c.genExpr(scope, s.Cond)
 	c.out(";")
-
 	c.out(")")
+
 	c.out("{")
+	c.outf("if (%s>0) {", tmpv).outnl()
+	c.genStmt(scope, s.Post, 2)
+	c.outf("} else { %s = 1; }", tmpv)
+	c.outf("if (")
+	if s.Cond == nil {
+		c.out("1")
+	} else {
+		c.genExpr(scope, s.Cond)
+	}
+	c.outf(") {\n /* goon */\n } else {break;}").outnl()
+
 	c.genBlockStmt(scope, s.Body)
-	c.genStmt(scope, s.Post, 2) // Post move to real post, to resolve ';' problem
+	// c.genStmt(scope, s.Post, 2) // Post move to real post, to resolve ';' problem
 	c.out("// TODO gc safepoint code").outnl()
 	c.out("}")
 }
@@ -1070,7 +1082,7 @@ func (c *g2nc) genCallExprMake(scope *ast.Scope, te *ast.CallExpr) {
 		log.Println(te.Args[0], reftyof(te.Args[0]), elemtya, reftyof(elemtya))
 		elemtyt := c.info.TypeOf(elemtya)
 		var elemsz interface{} = (&types.StdSizes{}).Sizeof(elemtyt)
-		elemsz = gopp.IfElse(elemsz == 0, "sizeof(voidptr)", elemsz)
+		elemsz = gopp.IfElse(elemsz == uintptr(0), "sizeof(voidptr)", elemsz)
 		c.outf("cxarray2_new(%v, %v)", acap, elemsz)
 	default:
 		log.Println("unknown", itep, ity, lenep)
@@ -1145,7 +1157,7 @@ func (c *g2nc) genCallExprAppend(scope *ast.Scope, te *ast.CallExpr) {
 			}
 			c.outf("cxarray2_append(")
 			c.genExpr(scope, arg0)
-			c.out(", (void*)")
+			c.out(", (void*)&")
 			c.genExpr(scope, ae)
 			c.out(")").outfh().outnl()
 		}
@@ -1281,7 +1293,7 @@ func (c *g2nc) genCallExprNorm(scope *ast.Scope, te *ast.CallExpr) {
 			if idx < goty.Params().Len()-1 {
 				continue
 			}
-			c.outf("cxarray2_append(%s, (void*)", idt.Name)
+			c.outf("cxarray2_append(%s, (void*)&", idt.Name)
 			c.genExpr(scope, e1)
 			c.out(")")
 			c.outfh().outnl()
@@ -1840,7 +1852,7 @@ func (this *g2nc) genExpr2(scope *ast.Scope, e ast.Expr) {
 			}
 			bety := this.info.TypeOf(be.Elt)
 			var elemsz interface{} = uintptr((&types.StdSizes{}).Sizeof(bety))
-			elemsz = gopp.IfElse(elemsz == 0, "sizeof(voidptr)", elemsz)
+			elemsz = gopp.IfElse(elemsz == uintptr(0), "sizeof(voidptr)", elemsz)
 			gopp.Assert(elemsz != 0, "wtfff", elemsz, bety)
 			this.outf("cxarray2_new(1, %v)", elemsz).outfh().outnl()
 			for idx, ex := range te.Elts {
@@ -2436,7 +2448,12 @@ func (this *g2nc) exprTypeFmt(scope *ast.Scope, e ast.Expr) string {
 			case types.Float32, types.Float64:
 				return "g" // wow
 				// return "f"
+			case types.Byteptr:
+				return "s"
+			case types.Voidptr:
+				return "p"
 			default:
+				log.Println(exprstr(e), te, te.Kind(), goty)
 				return "d"
 			}
 		}
@@ -2511,7 +2528,7 @@ func (this *g2nc) genTypeSpec(scope *ast.Scope, spec *ast.TypeSpec) {
 					this.outf("obj->%s = cxstring_new()", fldname.Name).outfh().outnl()
 				} else if isslicety2(fldty) {
 					var elemsz interface{} = unsafe.Sizeof(uintptr(0))
-					elemsz = gopp.IfElse(elemsz == 0, "sizeof(voidptr)", elemsz)
+					elemsz = gopp.IfElse(elemsz == uintptr(0), "sizeof(voidptr)", elemsz)
 					this.outf("obj->%s = cxarray2_new(1, %v)", fldname.Name, elemsz).outfh().outnl()
 				} else if ismapty2(fldty) {
 					this.outf("obj->%s = cxhashtable_new()", fldname.Name).outfh().outnl()
@@ -2698,7 +2715,7 @@ func (c *g2nc) genValueSpec(scope *ast.Scope, spec *ast.ValueSpec, validx int) {
 				c.out("cxstring_new()")
 			} else if isslicety2(varty) {
 				var elemsz interface{} = unsafe.Sizeof(uintptr(0))
-				elemsz = gopp.IfElse(elemsz == 0, "sizeof(voidptr)", elemsz)
+				elemsz = gopp.IfElse(elemsz == uintptr(0), "sizeof(voidptr)", elemsz)
 				c.outf("cxarray2_new(1, %v)", elemsz)
 			} else if ismapty2(varty) {
 				c.out("cxhashtable_new()")

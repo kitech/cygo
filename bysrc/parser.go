@@ -150,6 +150,7 @@ func (pc *ParserContext) pkgimperror(err error) {
 		strings.Contains(err.Error(), "too many arguments") ||
 		(strings.Contains(err.Error(), "cannot convert") &&
 			(strings.Contains(err.Error(), "__ctype "))) {
+		// log.Println(err)
 	} else {
 		log.Println(err)
 	}

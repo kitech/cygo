@@ -114,6 +114,7 @@ cxarray2* cxarray2_append(cxarray2* a0, void* v) {
     cxarray2_expend(a0, 1);
     int offset = a0->len * a0->elemsz;
     memcpy(a0->ptr+offset, v, a0->elemsz);
+    a0->len += 1;
     return a0;
 }
 
