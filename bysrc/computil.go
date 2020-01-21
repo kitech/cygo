@@ -121,6 +121,7 @@ func newLitFloat(v float32) *ast.BasicLit {
 func newIdent(v string) *ast.Ident {
 	idt := &ast.Ident{}
 	idt.Name = v
+	idt.NamePos = token.NoPos
 	return idt
 }
 

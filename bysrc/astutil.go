@@ -2,8 +2,11 @@ package main
 
 import (
 	"go/ast"
+	"go/token"
 	"log"
+	"path/filepath"
 	"reflect"
+	"strconv"
 
 	"golang.org/x/tools/go/ast/astutil"
 )
@@ -108,4 +111,18 @@ func upfindFuncDecl(pc *ParserContext, cs *astutil.Cursor, no int) *ast.FuncDecl
 	} else {
 		return upfindFuncDecl(pc, pcs, no+1)
 	}
+}
+
+func newimpspec(path string, name string) *ast.ImportSpec {
+	// &ast.ImportSpec{Path: &ast.BasicLit{Value: strconv.Quote("path/to/pkg")}}
+	if name == "" {
+		name = filepath.Base(path)
+	}
+	impspec := &ast.ImportSpec{}
+	impspec.Name = ast.NewIdent(name)
+	impspec.Path = &ast.BasicLit{}
+	impspec.Path.Kind = token.STRING
+	impspec.Path.Value = strconv.Quote(path)
+	impspec.Path.ValuePos = token.NoPos
+	return impspec
 }

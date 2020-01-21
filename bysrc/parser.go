@@ -73,6 +73,9 @@ func NewParserContext(path string, pkgrename string, builtin_psctx *ParserContex
 	this.info.Types = make(map[ast.Expr]types.TypeAndValue)
 	this.info.Defs = make(map[*ast.Ident]types.Object)
 	this.info.Uses = make(map[*ast.Ident]types.Object)
+	this.info.Scopes = make(map[ast.Node]*types.Scope)
+	this.info.Implicits = make(map[ast.Node]types.Object)
+
 	this.cursors = make(map[ast.Node]*astutil.Cursor)
 	this.grstargs = make(map[string]bool)
 	this.typeDeclsm = make(map[string]*ast.TypeSpec)
@@ -99,13 +102,14 @@ func (this *ParserContext) init_extra_builtin_types() {
 }
 
 func (this *ParserContext) Init_no_cgocmd() error {
+
 	bdpkgs, err := build.ImportDir(this.path, build.ImportComment)
 	gopp.ErrPrint(err)
 	this.bdpkgs = bdpkgs
 	if len(bdpkgs.InvalidGoFiles) > 0 {
 		log.Fatalln("Have InvalidGoFiles", bdpkgs.InvalidGoFiles)
 	}
-	log.Println(bdpkgs.Name, bdpkgs.GoFiles, bdpkgs.TestGoFiles)
+	log.Println(this.path, bdpkgs.Name, bdpkgs.GoFiles, bdpkgs.TestGoFiles)
 
 	// parser step 2, got ast/types
 	this.fset = token.NewFileSet()
@@ -119,10 +123,8 @@ func (this *ParserContext) Init_no_cgocmd() error {
 	this.walkpass_flat_cursors()
 	this.walkpass_csymbols()
 	// this.walkpass_prefill_ctypes() // before types.Config.Check
-	this.walkpass_fill_fakecpkg() // before types.Config.Check
-
-	this.conf.DisableUnusedImportCheck = true
-	this.conf.Error = this.pkgimperror
+	this.walkpass_fill_fakecpkg()   // before types.Config.Check
+	this.walkpass_fill_builtinpkg() // before types.Config.Check
 
 	this.walkpass_check()
 	// this.walkpass_resolve_ctypes()
@@ -171,6 +173,7 @@ func (this *ParserContext) Init_explict_cgo() error {
 	// parser step 1, got raw cgo c code
 	{
 		this.fset = token.NewFileSet()
+
 		pkgs, err := parser.ParseDir(this.fset, this.path, this.dirFilter, 0|parser.AllErrors|parser.ParseComments)
 		gopp.ErrPrint(err)
 		this.pkgs = pkgs
@@ -197,9 +200,6 @@ func (this *ParserContext) Init_explict_cgo() error {
 
 	// this.ccode = this.pickCCode()
 	this.walkpass_valid_files()
-
-	this.conf.DisableUnusedImportCheck = true
-	this.conf.Error = this.pkgimperror
 
 	this.walkpass_check()
 
@@ -267,6 +267,8 @@ func (pc *ParserContext) walkpass_cgo_processor() {
 }
 
 func (pc *ParserContext) walkpass_check() {
+	pc.conf.DisableUnusedImportCheck = true
+	pc.conf.Error = pc.pkgimperror
 	pc.conf.FakeImportC = true
 	pc.conf.FakeImportC = false
 	pc.conf.Importer = &mypkgimporter{pc.fcpkg}
@@ -661,6 +663,75 @@ func (pc *ParserContext) walkpass_fill_fakecpkg() {
 	buf.WriteString(pc.path + "\n")
 	scope.WriteTo(buf, 1, true)
 	pc.fcdefscc = "// " + strings.ReplaceAll(string(buf.Bytes()), "\n", "\n// ")
+}
+
+// before types.Config.Check
+func (pc *ParserContext) walkpass_fill_builtinpkg() {
+	if pc.builtin_psctx == nil {
+		return
+	}
+	pkgs := pc.pkgs
+	bipc := pc.builtin_psctx
+	bidefs := map[string]bool{}
+	for idt, obj := range bipc.info.Defs {
+		if obj == nil {
+			continue // package ident
+		}
+		bidefs[idt.Name] = true
+	}
+
+	for _, pkg := range pkgs {
+		for _, fio := range pkg.Files {
+			var gendecl *ast.GenDecl
+			for _, d := range fio.Decls {
+				switch dd := d.(type) {
+				case *ast.GenDecl:
+					gendecl = dd
+				}
+			}
+			if gendecl == nil {
+				gendecl = &ast.GenDecl{}
+				fio.Decls = append(fio.Decls, gendecl)
+			}
+
+			iSpec := newimpspec("cxrt/xgo/builtin", "")
+			gendecl.Specs = append(gendecl.Specs, iSpec)
+			ast.SortImports(pc.fset, fio)
+		}
+
+		astutil.Apply(pkg, func(c *astutil.Cursor) bool {
+			switch te := c.Node().(type) {
+			case *ast.Ident:
+				obj := te.Obj
+				if obj != nil {
+					break
+				}
+				if te.Name == pkg.Name {
+					break
+				}
+				_, inbi := bidefs[te.Name]
+				if !inbi {
+					break
+				}
+				log.Println(te, obj == nil, obj)
+				sele := &ast.SelectorExpr{}
+				sidt := newIdent("builtin")
+				sele.X = sidt
+				sele.Sel = te
+				c.Replace(sele)
+				// 把builtin的包ident添加上包前缀
+			default:
+				gopp.G_USED(te)
+			}
+			return true
+		}, func(c *astutil.Cursor) bool {
+			switch te := c.Node().(type) {
+			default:
+				gopp.G_USED(te)
+			}
+			return true
+		})
+	}
 }
 
 func (pc *ParserContext) walkpass_resolve_ctypes() {
