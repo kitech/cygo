@@ -966,6 +966,7 @@ func (c *g2nc) genCaseClauseIf(scope *ast.Scope, s *ast.CaseClause, idx int) {
 func (c *g2nc) genCallExpr(scope *ast.Scope, te *ast.CallExpr) {
 	// log.Println(te, te.Fun, reflect.TypeOf(te.Fun))
 	scope = putscope(scope, ast.Fun, "infncall", te.Fun)
+	fca := c.getCallExprAttr(scope, te)
 	switch be := te.Fun.(type) {
 	case *ast.Ident:
 		funame := be.Name
@@ -1018,6 +1019,19 @@ func (c *g2nc) genCallExpr(scope *ast.Scope, te *ast.CallExpr) {
 			}
 		}
 	case *ast.SelectorExpr:
+		if fca.isbuiltin &&
+			funk.Contains([]string{"sizeof", "alignof", "offsetof", "assert"},
+				fca.selfn.Sel.Name) {
+			selname := fca.selfn.Sel.Name
+			selname = gopp.IfElseStr(selname == "alignof", "_Alignof", selname)
+			c.outf("%s(", selname)
+			for idx, _ := range te.Args {
+				c.genExpr(scope, te.Args[idx])
+				c.out(gopp.IfElseStr(idx == 0 && len(te.Args) > 1, ",", ""))
+			}
+			c.out(")")
+			break
+		}
 		if c.funcistype(te.Fun) {
 			c.genTypeCtor(scope, te)
 		} else {
@@ -1266,6 +1280,9 @@ func (c *g2nc) getCallExprAttr(scope *ast.Scope, te *ast.CallExpr) *FuncCallAttr
 			case *types.Named:
 				fca.isifacesel = isiface2(ne.Underlying())
 			}
+		}
+		if idt, ok := fca.selfn.X.(*ast.Ident); ok {
+			fca.isbuiltin = idt.Name == "builtin"
 		}
 	}
 	gotyx := c.info.TypeOf(te.Fun)
@@ -2831,6 +2848,8 @@ func (this *g2nc) code() (string, string) {
 	code += this.psctx.ccode
 	code += "/* fakec defs for " + this.psctx.bdpkgs.Dir + "\n" +
 		this.psctx.fcdefscc + "\n*/\n\n"
+	code += "#include <stddef.h>\n"
+	code += "#include <stdalign.h>\n"
 	code += "#include <cxrtbase.h>\n\n"
 	code += this.genPrecgodefs() + "\n"
 	code += this.sb.String()

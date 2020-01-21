@@ -713,7 +713,16 @@ func (pc *ParserContext) walkpass_fill_builtinpkg() {
 				if !inbi {
 					break
 				}
-				log.Println(te, obj == nil, obj)
+				if _, ok := c.Parent().(*ast.SelectorExpr); ok {
+					break
+				}
+				if _, ok := c.Parent().(*ast.Ident); ok {
+					break
+				}
+				if _, ok := c.Parent().(*ast.FuncDecl); ok {
+					break
+				}
+				log.Println(te, obj == nil, obj, reftyof(c.Parent()))
 				sele := &ast.SelectorExpr{}
 				sidt := newIdent("builtin")
 				sele.X = sidt

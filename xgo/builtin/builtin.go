@@ -8,11 +8,7 @@ package builtin
 */
 import "C"
 
-type Nothing int
-
 func keep() {}
-
-func assert() {}
 
 // func panic()   {}
 func panicln() {}
@@ -23,6 +19,8 @@ func malloc() voidptr  { return nil }
 func realloc() voidptr { return nil }
 func free()            {}
 
-func sizeof() int   { return 0 }
-func alignof() int  { return 0 }
-func offsetof() int { return 0 }
+//[nomangle]
+func assert()
+func sizeof() int
+func alignof() int
+func offsetof() int
