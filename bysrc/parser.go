@@ -109,7 +109,8 @@ func (this *ParserContext) Init_no_cgocmd() error {
 	if len(bdpkgs.InvalidGoFiles) > 0 {
 		log.Fatalln("Have InvalidGoFiles", bdpkgs.InvalidGoFiles)
 	}
-	log.Println(this.path, bdpkgs.Name, bdpkgs.GoFiles, bdpkgs.TestGoFiles)
+	log.Println(this.path, bdpkgs.Name, bdpkgs.GoFiles, bdpkgs.TestGoFiles,
+		bdpkgs.CgoFiles, bdpkgs.CFiles, bdpkgs.CXXFiles)
 
 	// parser step 2, got ast/types
 	this.fset = token.NewFileSet()

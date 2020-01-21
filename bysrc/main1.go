@@ -28,7 +28,7 @@ func main() {
 	}
 
 	builtin_pkgpath := "../xgo/builtin"
-	pkgpaths := []string{builtin_pkgpath, fname}
+	pkgpaths := []string{fname, builtin_pkgpath}
 	psctxs := []*ParserContext{}
 	comps := []*g2nc{}
 	pkgrenames := map[string]string{} // path => rename
@@ -92,8 +92,15 @@ func main() {
 
 	code := ""
 	extname := ""
+	pkgclts := []string{}
 	for i := len(comps) - 1; i >= 0; i-- {
 		psctx := comps[i].psctx
+		if psctx.bdpkgs.Name == "main" {
+			comps[i].genCallPkgInits(pkgclts)
+		} else {
+			pkgclts = append(pkgclts, psctx.bdpkgs.Name)
+		}
+
 		str, ext := comps[i].code()
 		if psctx.path == builtin_pkgpath {
 			code = str + code // 最前置

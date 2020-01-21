@@ -7,6 +7,7 @@ import (
 	"go/types"
 	"gopp"
 	"log"
+	"path/filepath"
 	"reflect"
 	"runtime/debug"
 	"strings"
@@ -36,6 +37,8 @@ func (this *g2nc) genpkgs() {
 
 	// pkgs order?
 	for pname, pkg := range this.psctx.pkgs {
+		this.geninclude_cfiles(pkg)
+
 		pkg.Scope = ast.NewScope(nil)
 		this.curpkg = pkg.Name
 		this.pkgo = pkg
@@ -68,6 +71,17 @@ func (c *g2nc) pkgpfx() string {
 		pfx += pkgsep
 	}
 	return pfx
+}
+
+func (c *g2nc) geninclude_cfiles(pkg *ast.Package) {
+	c.outf("// cfiles %d in %v", len(c.psctx.bdpkgs.CFiles), pkg.Name).outnl()
+	for _, cfile := range c.psctx.bdpkgs.CFiles {
+		filename := c.psctx.path + "/" + cfile
+		filename2, err := filepath.Abs(filename)
+		gopp.ErrPrint(err, filename)
+		log.Println(filename2)
+		c.outf("#include \"%s\"", filename2).outnl()
+	}
 }
 
 func (this *g2nc) genpkg(name string, pkg *ast.Package) {
@@ -435,16 +449,20 @@ func (this *g2nc) genFuncDecl(scope *ast.Scope, fd *ast.FuncDecl) {
 }
 func (c *g2nc) genMainFunc(scope *ast.Scope) {
 	c.out("int main(int argc, char**argv) {").outnl()
-	c.out("cxrt_init_env()").outfh().outnl()
+	c.out("cxrt_init_env(argc, argv)").outfh().outnl()
 	c.out("// TODO arguments populate").outnl()
 	c.out("// globvars populate").outnl()
 	c.outf("%sglobvars_init()", c.pkgpfx()).outfh().outnl()
+	c.out("extern void cxall_pkginit()").outfh().outnl()
+	c.out("cxall_pkginit()").outfh().outnl()
 	c.out("// all func init()").outnl()
 	c.outf("%spkginit()", c.pkgpfx()).outfh().outnl()
 	c.outf("main%smain()", pkgsep).outfh().outnl()
 	c.out("return 0").outfh().outnl()
 	c.out("}").outnl()
 }
+
+// per package
 func (c *g2nc) genInitFuncs(scope *ast.Scope, pkg *ast.Package) {
 	for idx, fd := range c.psctx.initFuncs {
 		c.outf("// %s", c.exprpos(fd).String()).outnl()
@@ -457,6 +475,17 @@ func (c *g2nc) genInitFuncs(scope *ast.Scope, pkg *ast.Package) {
 		c.outf("%spkginit_%d()", c.pkgpfx(), idx).outfh().outnl()
 	}
 	c.out("}").outnl().outnl()
+}
+
+// all packages
+func (c *g2nc) genCallPkgInits(pkgs []string) {
+	c.out("void cxall_pkginit() {").outnl()
+	last := pkgs[len(pkgs)-1] // builtin
+	pkgs = append([]string{last}, pkgs[:len(pkgs)-1]...)
+	for _, pkg := range pkgs {
+		c.outf("  %s%spkginit()", pkg, pkgsep).outfh().outnl()
+	}
+	c.out("}").outnl()
 }
 
 func (this *g2nc) genBlockStmt(scope *ast.Scope, stmt *ast.BlockStmt) {

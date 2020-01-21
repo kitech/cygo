@@ -72,7 +72,7 @@ void println3(const char* origfilename, int origlineno, const char* filename, in
 // TODO
 #define gogorun
 
-extern void cxrt_init_env();
+extern void cxrt_init_env(int argc, char** argv);
 extern void cxrt_fiber_post(void (*fn)(void*), void*arg);
 extern void* cxrt_chan_new(int sz);
 extern void cxrt_chan_send(void*ch, void*arg);

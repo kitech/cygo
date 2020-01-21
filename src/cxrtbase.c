@@ -19,7 +19,7 @@ extern int hchan_len(hchan* hc);
 extern int hchan_send(hchan* hc, void* data);
 extern int hchan_recv(hchan* hc, void** pdata);
 
-
+char** cxargv = {0};
 extern void GC_allow_register_threads();
 static void cxrt_init_gc_env() {
     GC_set_free_space_divisor(50); // default 3
@@ -32,11 +32,12 @@ void cxrt_init_routine_env() {
 }
 
 static time_t cxrt_inited = 0;
-void cxrt_init_env() {
+void cxrt_init_env(int argc, char** argv) {
     if (cxrt_inited > 0) {
         printf("%s:%d %s already inited %d\n", __FILE__, __LINE__, __FUNCTION__, cxrt_inited);
         return;
     }
+    cxargv = argv;
     cxrt_inited = time(0);
     // cxrt_init_gc_env();
     crn_init_and_wait_done();
