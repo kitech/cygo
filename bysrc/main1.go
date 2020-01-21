@@ -27,12 +27,14 @@ func main() {
 		log.Fatalln("Not a dir", fname)
 	}
 
-	pkgpaths := []string{fname}
+	builtin_pkgpath := "../xgo/builtin"
+	pkgpaths := []string{builtin_pkgpath, fname}
 	psctxs := []*ParserContext{}
 	comps := []*g2nc{}
 	pkgrenames := map[string]string{} // path => rename
 	dedups := map[string]bool{}       // pkgpath =>
 
+	var builtin_psctx *ParserContext
 	gopaths := gopp.Gopaths()
 	gopaths = append(gopaths, runtime.GOROOT())
 
@@ -45,14 +47,17 @@ func main() {
 			fname = segs[0]
 			pkgrename = segs[1]
 		}
-
 		if _, ok := dedups[fname]; ok {
 			log.Println("already gened", fname)
 			continue
 		}
-		psctx, g2n := dogen(fname, pkgrename)
+
+		psctx, g2n := dogen(fname, pkgrename, builtin_psctx)
 		psctxs = append(psctxs, psctx)
 		comps = append(comps, g2n)
+		if fname == builtin_pkgpath {
+			builtin_psctx = psctx
+		}
 
 		imprenames := psctx.getImportNameMap()
 		for path, rename := range imprenames {
@@ -88,8 +93,13 @@ func main() {
 	code := ""
 	extname := ""
 	for i := len(comps) - 1; i >= 0; i-- {
+		psctx := comps[i].psctx
 		str, ext := comps[i].code()
-		code += str
+		if psctx.path == builtin_pkgpath {
+			code = str + code // 最前置
+		} else {
+			code += str
+		}
 		extname = ext
 	}
 	fname := "opkgs/foo." + extname
@@ -101,8 +111,8 @@ func clangfmt(fname string) {
 	err := cmdo.Run()
 	gopp.ErrPrint(err, fname)
 }
-func dogen(fname string, pkgrename string) (*ParserContext, *g2nc) {
-	psctx := NewParserContext(fname, pkgrename)
+func dogen(fname string, pkgrename string, builtin_psctx *ParserContext) (*ParserContext, *g2nc) {
+	psctx := NewParserContext(fname, pkgrename, builtin_psctx)
 	err := psctx.Init()
 	if err != nil && !strings.Contains(err.Error(), "declared but not used") {
 		gopp.ErrPrint(err)

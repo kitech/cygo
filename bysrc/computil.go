@@ -432,6 +432,7 @@ type FuncCallAttr struct {
 	ispkgsel   bool
 	isrcver    bool
 	iscfn      bool
+	isbuiltin  bool
 	isifacesel bool
 	isvardic   bool
 	haslval    bool

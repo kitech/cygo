@@ -1,5 +1,5 @@
 package main
 
 func main() {
-	sz := sizeof(int)
+	sz := /*builtin.*/ asizeof(int)
 }

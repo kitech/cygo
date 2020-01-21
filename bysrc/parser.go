@@ -24,17 +24,19 @@ import (
 )
 
 type ParserContext struct {
-	path      string
-	wkdir     string // for cgo
-	pkgrename string
-	fset      *token.FileSet
-	pkgs      map[string]*ast.Package
-	files     []*ast.File
-	typkgs    *types.Package
-	conf      types.Config
-	info      types.Info
-	cursors   map[ast.Node]*astutil.Cursor
-	grstargs  map[string]bool // goroutines packed arguments structure
+	path          string
+	wkdir         string // for cgo
+	pkgrename     string
+	builtin_psctx *ParserContext
+
+	fset     *token.FileSet
+	pkgs     map[string]*ast.Package
+	files    []*ast.File
+	typkgs   *types.Package
+	conf     types.Config
+	info     types.Info
+	cursors  map[ast.Node]*astutil.Cursor
+	grstargs map[string]bool // goroutines packed arguments structure
 
 	typeDeclsm    map[string]*ast.TypeSpec
 	typeDeclsv    []*ast.TypeSpec
@@ -62,10 +64,12 @@ type ParserContext struct {
 	fcdefscc string // fake C defs content
 }
 
-func NewParserContext(path string, pkgrename string) *ParserContext {
+func NewParserContext(path string, pkgrename string, builtin_psctx *ParserContext) *ParserContext {
 	this := &ParserContext{}
 	this.path = path
 	this.pkgrename = pkgrename
+	this.builtin_psctx = builtin_psctx
+
 	this.info.Types = make(map[ast.Expr]types.TypeAndValue)
 	this.info.Defs = make(map[*ast.Ident]types.Object)
 	this.info.Uses = make(map[*ast.Ident]types.Object)
