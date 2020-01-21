@@ -450,8 +450,12 @@ func (pc *ParserContext) walkpass_csymbols() {
 					case *ast.CompositeLit:
 						cnodes[c.Node()] = ast.Var
 					case *ast.ValueSpec: // in const
+					case *ast.BinaryExpr:
+						cnodes[c.Node()] = ast.Var
+					case *ast.TypeSpec:
+						cnodes[c.Node()] = ast.Var
 					default:
-						log.Panicln("not impl", reftyof(te.X), reftyof(te.Sel), te.X, te.Sel, reftyof(pe), pe)
+						log.Panicln("not impl", reftyof(te.X), reftyof(te.Sel), te.X, te.Sel, reftyof(pe), pe, exprpos(pc, pe))
 					}
 				}
 			case *ast.CallExpr:
@@ -1239,6 +1243,10 @@ func (pc *ParserContext) walkpass_kvpairs() {
 		astutil.Apply(pkg, func(c *astutil.Cursor) bool {
 			switch te := c.Node().(type) {
 			case *ast.AssignStmt:
+				if len(te.Lhs) > len(te.Rhs) {
+					// multirets
+					break
+				}
 				for idx, le := range te.Lhs {
 					kvpairs[le] = te.Rhs[idx]
 					kvpairs[te.Rhs[idx]] = le

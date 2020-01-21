@@ -609,7 +609,14 @@ func (c *g2nc) genAssignStmt(scope *ast.Scope, s *ast.AssignStmt) {
 			c.outfh().outnl()
 			for idx, te := range s.Lhs {
 				c.out(c.exprTypeName(scope, te)).outsp()
-				c.out(te.(*ast.Ident).Name).outeq()
+				switch xe := te.(type) {
+				case *ast.Ident:
+					c.out(xe.Name).outeq()
+				case *ast.SelectorExpr:
+					c.genExpr(scope, xe)
+				default:
+					log.Panicln(te, reftyof(te), exprstr(te))
+				}
 				c.out(tvname).out("->").out(tmpvarname2(idx)).outfh().outnl()
 			}
 			c.outf("cxfree(%s)", tvname).outfh().outnl()
@@ -1094,7 +1101,14 @@ func (c *g2nc) genCallExprMake(scope *ast.Scope, te *ast.CallExpr) {
 		gopp.Assert(len(te.Args) > 0, "wtfff", len(te.Args))
 		acap := "1"
 		if len(te.Args) > 1 {
-			acap = te.Args[1].(*ast.BasicLit).Value
+			switch elme := te.Args[1].(type) {
+			case *ast.BasicLit:
+				acap = elme.Value
+			case *ast.Ident:
+				acap = elme.Name
+			default:
+				log.Panicln(elme, reftyof(elme), exprstr(te), exprpos(c.psctx, te))
+			}
 		}
 		elemtya := te.Args[0].(*ast.ArrayType).Elt
 		log.Println(te.Args[0], reftyof(te.Args[0]), elemtya, reftyof(elemtya))
@@ -1286,7 +1300,9 @@ func (c *g2nc) getCallExprAttr(scope *ast.Scope, te *ast.CallExpr) *FuncCallAttr
 		}
 	}
 	gotyx := c.info.TypeOf(te.Fun)
-	gopp.Assert(gotyx != nil, "wtfff", te.Fun)
+	if gotyx == nil {
+		log.Println(gotyx != nil, "wtfff", te.Fun, exprstr(te.Fun), exprpos(c.psctx, te))
+	}
 	if gotyx != nil {
 		goty1, ok := gotyx.(*types.Signature)
 		if ok {
@@ -2337,6 +2353,13 @@ func (this *g2nc) exprTypeNameImpl(scope *ast.Scope, e ast.Expr) string {
 		}
 	}
 	if goty == nil {
+		log.Println(e, exprstr(e), reftyof(e), this.exprpos(e))
+		if exprstr(e) == "(bad expr)" {
+			return "int"
+		}
+		if exprstr(e) == mthsep {
+			return "int"
+		}
 		log.Panicln(e, exprstr(e), reftyof(e), this.exprpos(e))
 	}
 	val := this.exprTypeNameImpl2(scope, goty, e)
