@@ -116,7 +116,7 @@ func main() {
 	clangfmt(fname)
 }
 func clangfmt(fname string) {
-	cmdo := exec.Command("clang-format", "-i", fname)
+	cmdo := exec.Command("clang-format", "-i", fname, "--style", "WebKit")
 	err := cmdo.Run()
 	gopp.ErrPrint(err, fname)
 }

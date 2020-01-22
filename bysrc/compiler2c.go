@@ -889,11 +889,14 @@ func (c *g2nc) genIncDecStmt(scope *ast.Scope, s *ast.IncDecStmt) {
 	}
 }
 func (c *g2nc) genBranchStmt(scope *ast.Scope, s *ast.BranchStmt) {
-	c.out(s.Tok.String())
-	if s.Label != nil {
-		c.out(s.Label.Name)
+	if s.Tok == token.FALLTHROUGH {
+		c.out("gxtvnextcase = 1; break")
+	} else {
+		c.out(s.Tok.String())
+		if s.Label != nil {
+			c.out(s.Label.Name)
+		}
 	}
-	c.outfh().outnl()
 }
 func (c *g2nc) genDeclStmt(scope *ast.Scope, s *ast.DeclStmt) {
 	c.genDecl(scope, s.Decl)
@@ -923,7 +926,8 @@ func (c *g2nc) genSwitchStmt(scope *ast.Scope, s *ast.SwitchStmt) {
 	case *types.Basic:
 		switch tty.Kind() {
 		case types.Int:
-			c.genSwitchStmtNum(scope, s)
+			// c.genSwitchStmtNum(scope, s)
+			c.genSwitchStmtAsIf(scope, s)
 		default:
 			log.Println("unknown", tagty, reflect.TypeOf(tagty))
 		}
@@ -1012,6 +1016,48 @@ func (c *g2nc) genCaseClauseIf(scope *ast.Scope, s *ast.CaseClause, idx int) {
 
 // TODO c switch too weak, use c if stmt
 func (c *g2nc) genSwitchStmtAsIf(scope *ast.Scope, s *ast.SwitchStmt) {
+	c.out("{ // switch asif").outnl()
+	if s.Init != nil {
+		c.genStmt(scope, s.Init, 0)
+	}
+	lst := s.Body.List
+	tmplabs := []string{}
+	for range lst {
+		tmplabs = append(tmplabs, tmpvarname())
+	}
+	for idx, stmtx := range lst {
+		stmt := stmtx.(*ast.CaseClause)
+		log.Println(stmt, reftyof(stmt))
+		c.outf(gopp.IfElseStr(idx > 0, "else", "")).outsp()
+		c.outf("// %v", exprpos(c.psctx, stmt)).outnl()
+		c.outf("if (")
+		for idx2, exprx := range stmt.List {
+			c.genExpr(scope, s.Tag)
+			c.out(token.EQL.String())
+			c.genExpr(scope, exprx)
+			c.out(gopp.IfElseStr(idx2 < len(stmt.List)-1, "||", ""))
+		}
+		if len(stmt.List) == 0 { //default
+			c.out("1")
+		}
+		c.outf(") {").outnl()
+		c.outf("%s:", tmplabs[idx]).outfh().outnl()
+		c.outf("int gxtvnextcase = 0").outfh().outnl()
+		c.outf("do {").outnl()
+		for idx2, s2 := range stmt.Body {
+			c.genStmt(scope, s2, idx2)
+		}
+		c.outf("} while(0)").outfh().outnl()
+		c.outf("if (gxtvnextcase==1) {").outnl()
+		if idx >= len(lst)-1 {
+			c.outf("// goto %s+1", tmplabs[idx]).outnl()
+		} else {
+			c.outf("goto %s", tmplabs[idx+1]).outfh().outnl()
+		}
+		c.outf("}").outnl()
+		c.outf("}").outnl()
+	}
+	c.out("}").outnl()
 }
 
 func (c *g2nc) genCallExpr(scope *ast.Scope, te *ast.CallExpr) {
