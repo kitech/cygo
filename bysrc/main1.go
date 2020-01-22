@@ -96,6 +96,7 @@ func main() {
 	for i := len(comps) - 1; i >= 0; i-- {
 		psctx := comps[i].psctx
 		if psctx.bdpkgs.Name == "main" {
+			comps[i].genCallPkgGlobvarsInits(pkgclts)
 			comps[i].genCallPkgInits(pkgclts)
 		} else {
 			pkgclts = append(pkgclts, psctx.bdpkgs.Name)

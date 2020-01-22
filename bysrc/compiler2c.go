@@ -452,6 +452,8 @@ func (c *g2nc) genMainFunc(scope *ast.Scope) {
 	c.out("cxrt_init_env(argc, argv)").outfh().outnl()
 	c.out("// TODO arguments populate").outnl()
 	c.out("// globvars populate").outnl()
+	c.out("extern void cxall_globvars_init()").outfh().outnl()
+	c.out("cxall_globvars_init()").outfh().outnl()
 	c.outf("%sglobvars_init()", c.pkgpfx()).outfh().outnl()
 	c.out("extern void cxall_pkginit()").outfh().outnl()
 	c.out("cxall_pkginit()").outfh().outnl()
@@ -478,6 +480,15 @@ func (c *g2nc) genInitFuncs(scope *ast.Scope, pkg *ast.Package) {
 }
 
 // all packages
+func (c *g2nc) genCallPkgGlobvarsInits(pkgs []string) {
+	c.out("void cxall_globvars_init() {").outnl()
+	last := pkgs[len(pkgs)-1] // builtin
+	pkgs = append([]string{last}, pkgs[:len(pkgs)-1]...)
+	for _, pkg := range pkgs {
+		c.outf("  %s%sglobvars_init()", pkg, pkgsep).outfh().outnl()
+	}
+	c.out("}").outnl()
+}
 func (c *g2nc) genCallPkgInits(pkgs []string) {
 	c.out("void cxall_pkginit() {").outnl()
 	last := pkgs[len(pkgs)-1] // builtin
@@ -2262,30 +2273,21 @@ func (c *g2nc) genCxarrSet(scope *ast.Scope, vname ast.Expr, vidx ast.Expr, elem
 		vname, valstr, idxstr).outfh().outnl()
 }
 func (c *g2nc) genCxarrGet(scope *ast.Scope, vname ast.Expr, vidx ast.Expr, varty types.Type) {
-	idxstr := ""
-
-	switch te := vidx.(type) {
-	case *ast.BasicLit:
-		idxstr = te.Value
-	case *ast.Ident:
-		idxstr = te.Name
-	default:
-		log.Println("todo", vidx, reflect.TypeOf(vidx))
+	var elemty types.Type
+	switch arrty := varty.(type) {
+	case *types.Slice:
+		elemty = arrty.Elem()
+	case *types.Array:
+		elemty = arrty.Elem()
 	}
-
-	tystr := ""
-	switch elemty := varty.(*types.Slice).Elem().(type) {
-	default:
-		switch elemty.String() {
-		case "string":
-			tystr = "cxstring*"
-		default:
-			tystr = elemty.String()
-		}
-		log.Println(varty, reftyof(varty), elemty, reftyof(elemty))
-	}
+	tystr := c.exprTypeName(scope, vname)
+	tystr = c.exprTypeNameImpl2(scope, elemty, nil)
 	c.outf("*(%v*)", tystr)
-	c.outf("cxarray2_get_at(%v, %v)", vname, idxstr)
+	c.outf("cxarray2_get_at(")
+	c.genExpr(scope, vname)
+	c.out(",")
+	c.genExpr(scope, vidx)
+	c.out(")").outnl()
 }
 func (this *g2nc) exprTypeName(scope *ast.Scope, e ast.Expr) string {
 	// log.Println(e, reflect.TypeOf(e))
@@ -2466,7 +2468,13 @@ func (this *g2nc) exprTypeNameImpl2(scope *ast.Scope, ety types.Type, e ast.Expr
 		tystr += "*"
 		// log.Println(tystr, reftyof(te.Elem()))
 		return tystr
-	case *types.Slice, *types.Array:
+	case *types.Slice:
+		tystr := te.String()
+		if tystr == "[0]byte" {
+			return "void"
+		}
+		return "cxarray2*"
+	case *types.Array:
 		tystr := te.String()
 		if tystr == "[0]byte" {
 			return "void"
@@ -2729,7 +2737,7 @@ func (c *g2nc) genValueSpec(scope *ast.Scope, spec *ast.ValueSpec, validx int) {
 		c.out(gopp.IfElseStr(isglobvar, "static", "")).outsp()
 		if strings.HasPrefix(varty.String(), "untyped ") {
 			isconst = true
-			c.out("/*const*/").outsp()
+			c.out(gopp.IfElseStr(isglobvar, "/*const*/", "const")).outsp()
 			c.out(sign2rety(varty.String())).outsp()
 		} else {
 			c.out("/*var*/").outsp()
@@ -2837,9 +2845,11 @@ func (c *g2nc) genInitGlobvars(scope *ast.Scope, pkg *ast.Package) {
 			}
 			c.out("//", c.exprpos(name).String()).outnl()
 			assigno := &ast.AssignStmt{}
-			assigno.Tok = token.EQL
+			assigno.Tok = token.ASSIGN
 			assigno.Lhs = []ast.Expr{name}
-			assigno.Rhs = []ast.Expr{varo.Values[idx]}
+			if idx < len(varo.Values) {
+				assigno.Rhs = []ast.Expr{varo.Values[idx]}
+			}
 			c.genAssignStmt(scope, assigno)
 			c.outfh().outnl()
 		}

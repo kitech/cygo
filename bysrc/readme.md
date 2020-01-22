@@ -24,6 +24,7 @@
 * [x] assert, sizeof, alignof, offsetof 内置
 * [ ] union 支持
 * [ ] := range => in
+* [ ] 内置的string要有更多的方法，用单独的strings包有点麻烦
 
 ### 语法树重写
 * [ ] 变量声明解构为每条语句一个变量，如果有多个的话

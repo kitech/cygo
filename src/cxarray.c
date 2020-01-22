@@ -88,6 +88,7 @@ cxarray2* cxarray2_new(int cap, int elemsz) {
 }
 
 cxarray2* cxarray2_slice(cxarray2* a0, int start, int end) {
+    assert(a0 != nilptr);
     assert(start >= 0);
     assert(end >= 0);
     assert(end >= start);
@@ -110,6 +111,7 @@ void cxarray2_expend(cxarray2* a0, int n) {
     }
 }
 cxarray2* cxarray2_append(cxarray2* a0, void* v) {
+    assert(a0 != nilptr);
     assert( v != nilptr);
     cxarray2_expend(a0, 1);
     int offset = a0->len * a0->elemsz;
@@ -119,6 +121,7 @@ cxarray2* cxarray2_append(cxarray2* a0, void* v) {
 }
 
 uint8* cxarray2_get_at(cxarray2* a0, int idx) {
+    assert(a0 != nilptr);
     assert(idx < a0->len);
 
     int offset = idx * a0->elemsz;
@@ -127,6 +130,7 @@ uint8* cxarray2_get_at(cxarray2* a0, int idx) {
     return out;
 }
 uint8* cxarray2_replace_at(cxarray2* a0, void* v, int idx, void*out) {
+    assert(a0 != nilptr);
     int offset = idx * a0->elemsz;
     if (out != nilptr) {
         memcpy(out, a0->ptr+offset, a0->elemsz);
@@ -139,6 +143,7 @@ int cxarray2_capacity(cxarray2* a0) { return a0->cap; }
 int cxarray2_elemsz(cxarray2* a0) { return a0->elemsz; }
 
 void cxarray2_appendn(cxarray2* a0, void* v, int n) {
+    assert(a0 != nilptr);
     int tlen = n * a0->elemsz;
     cxarray2_expend(a0, n);
     memcpy(a0->ptr, v, tlen);

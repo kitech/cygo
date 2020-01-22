@@ -47,6 +47,8 @@ typedef unsigned int C_uint;
 #define iota 0
 
 typedef struct _type {
+    int tyid;
+    char* tystr;
     void* reserver;
 } _type;
 typedef struct cxeface {
