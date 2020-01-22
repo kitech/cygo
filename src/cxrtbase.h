@@ -10,6 +10,7 @@
 #include <unistd.h>
 #include <stdint.h>
 #include <stdbool.h>
+#include <stdalign.h>
 #include <errno.h>
 #include <sys/socket.h>
 
@@ -40,27 +41,43 @@ typedef uintptr_t usize;
 // typedef void* error;
 typedef void* voidptr;
 typedef char* byteptr;
+typedef char* charptr; // with tailing 0
 typedef int C_int;
 typedef unsigned int C_uint;
 
 #define nilptr NULL
 #define iota 0
 
-typedef struct _type {
-    int tyid;
-    char* tystr;
-    void* reserver;
-} _type;
+typedef uint8 metaflag;
+typedef int typealg;
+typedef struct _metatype {
+    usize size;
+    voidptr ptrdata;
+    uint32 hash;
+    metaflag tflag;
+    uint8 align;
+    uint8 fieldalign;
+    uint8 kind;
+    typealg alg;
+    byteptr gcdata;
+    charptr tystr;
+    voidptr ptr2this;
+} _metatype;
 typedef struct cxeface {
-    _type* _type; // _type
-    void* data;
+    _metatype* _type; // _type
+    voidptr data;
 } cxeface;
-typedef struct itab {
-    void* reserver;
-} itab;
+typedef struct ifacetab {
+    voidptr inner; // interfacetype*
+    _metatype* _type;
+    struct ifacetab* link;
+    int32 bad;
+    int32 inhash;
+    usize fun[1];
+} ifacetab;
 typedef struct cxiface {
-    itab* itab; // itab
-    void* data;
+    ifacetab* itab; // itab
+    voidptr data;
 } cxiface;
 cxeface cxeface_new_of2(void* data, int sz);
 

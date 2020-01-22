@@ -2600,6 +2600,14 @@ func (this *g2nc) genTypeSpec(scope *ast.Scope, spec *ast.TypeSpec) {
 		this.genFieldList(scope, te.Fields, false, true, ";", false)
 		this.out("}").outfh().outnl()
 		this.outnl()
+		this.outf("static const _metatype %s%s_metatype = {", this.pkgpfx(), specname)
+		this.outnl()
+		this.outf(".kind = %d,", reflect.Struct).outnl()
+		this.outf(".size = sizeof(%s%s),", this.pkgpfx(), specname).outnl()
+		this.outf(".size = alignof(%s%s),", this.pkgpfx(), specname).outnl()
+		this.outf(".tystr = \"%s%s\"", this.pkgpfx(), specname).outnl()
+		this.out("}").outfh().outnl()
+		this.outnl()
 		this.out("static").outsp()
 		this.outf("%s%s* %s%s_new_zero() {",
 			this.pkgpfx(), specname, this.pkgpfx(), specname).outnl()
@@ -2902,6 +2910,41 @@ typedef void* voidptr;
 typedef char* byteptr;
 `
 	return precgodefs
+}
+
+func (c *g2nc) genBuiltinTypesMetatype() string {
+	s := "#include <stdalign.h>\n"
+	s += "#include <cxrtbase.h>\n"
+	bitypes := append(types.Typ, types.TypeAlias()...)
+	for idx, bityp := range bitypes {
+		tyname := bityp.Name()
+		if strings.Contains(tyname, " ") {
+			// untyped
+			continue
+		}
+		if strings.HasPrefix(tyname, "complex") {
+			continue
+		}
+		if tyname == "Pointer" {
+			continue
+		}
+
+		// tyname = gopp.IfElseStr(tyname == "string", "charptr", tyname)
+		s += fmt.Sprintf("static const _metatype %s_metatype = {", tyname)
+		s += fmt.Sprintf(".kind = %d,\n", bityp.Kind())
+		if tyname == "string" {
+			s += fmt.Sprintf(".size = sizeof(%s),\n", "charptr")
+			s += fmt.Sprintf(".size = alignof(%s),\n", "charptr")
+		} else {
+			s += fmt.Sprintf(".size = sizeof(%s),\n", tyname)
+			s += fmt.Sprintf(".size = alignof(%s),\n", tyname)
+		}
+		s += fmt.Sprintf(".tystr = \"%s\"\n", tyname)
+		s += fmt.Sprintf("}; // %d\n", idx)
+	}
+
+	s += "\n"
+	return s
 }
 
 func (this *g2nc) code() (string, string) {

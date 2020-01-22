@@ -66,3 +66,5 @@ func isByteptr(typ Type) bool {
 	t, ok := typ.Underlying().(*Basic)
 	return ok && t.kind == Byteptr
 }
+
+func TypeAlias() []*Basic { return aliases[:] }

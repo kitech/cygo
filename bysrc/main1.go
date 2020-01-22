@@ -110,6 +110,7 @@ func main() {
 		}
 		extname = ext
 	}
+	code = comps[0].genBuiltinTypesMetatype() + code
 	fname := "opkgs/foo." + extname
 	ioutil.WriteFile(fname, []byte(code), 0644)
 	clangfmt(fname)
