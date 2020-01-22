@@ -427,6 +427,7 @@ func reftyof(x interface{}) reflect.Type { return reflect.TypeOf(x) }
 
 type FuncCallAttr struct {
 	fnty       *types.Signature
+	prmty      *types.Tuple
 	isselfn    bool
 	selfn      *ast.SelectorExpr
 	idtfn      *ast.Ident

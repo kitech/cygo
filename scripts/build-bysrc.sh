@@ -11,7 +11,10 @@ go get -v golang.org/x/tools/go/ast/astutil
 go get -v golang.org/x/tools/go/packages
 go get -v github.com/kitech/goplusplus
 cp -a $GOPATH/src/github.com/kitech/goplusplus $GOPATH/src/gopp
-ln -sv $PWD/go $GOPATH/src
+ln -sv $PWD $GOPATH/src/
+sudo mv $GOROOT/src/go{,.bak}
+sudo ln -sv $PWD/go $GOROOT/src/
+
 
 cd bysrc
 export CGO_ENABLED=1

@@ -1398,6 +1398,7 @@ func (c *g2nc) getCallExprAttr(scope *ast.Scope, te *ast.CallExpr) *FuncCallAttr
 		if ok {
 			fca.fnty = goty1
 			fca.isvardic = goty1.Variadic()
+			fca.prmty = goty1.Params()
 		} else {
 			log.Println(gotyx, reflect.TypeOf(gotyx), te.Fun)
 		}
@@ -1470,15 +1471,13 @@ func (c *g2nc) genCallExprNorm(scope *ast.Scope, te *ast.CallExpr) {
 		c.out(gopp.IfElseStr(len(te.Args) > 0, ",", ""))
 	}
 
-	fnsig := fca.fnty
-	fnprms := fnsig.Params()
 	for idx, e1 := range te.Args {
 		if fca.isvardic && idx == fca.fnty.Params().Len()-1 {
 			c.out(idt.Name)
 			break
 		}
-		if fnprms != nil {
-			prmn := fnprms.At(idx).Type()
+		if fca.prmty != nil {
+			prmn := fca.prmty.At(idx).Type()
 			if _, ok := prmn.(*types.Interface); ok {
 				c.out("cxrt_type2eface(&")
 				tyname := c.exprTypeName(scope, e1)
