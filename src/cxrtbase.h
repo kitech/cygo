@@ -88,6 +88,8 @@ void println3(const char* origfilename, int origlineno, const char* filename, in
               const char* funcname, const char* fmt, ...);
 #define unsafe_Sizeof(x) sizeof(x)
 
+cxeface* cxrt_type2eface(voidptr _type, voidptr data);
+
 // TODO
 #define gogorun
 

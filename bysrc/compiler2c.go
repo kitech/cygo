@@ -1010,6 +1010,10 @@ func (c *g2nc) genCaseClauseIf(scope *ast.Scope, s *ast.CaseClause, idx int) {
 	}
 }
 
+// TODO c switch too weak, use c if stmt
+func (c *g2nc) genSwitchStmtAsIf(scope *ast.Scope, s *ast.SwitchStmt) {
+}
+
 func (c *g2nc) genCallExpr(scope *ast.Scope, te *ast.CallExpr) {
 	// log.Println(te, te.Fun, reflect.TypeOf(te.Fun))
 	scope = putscope(scope, ast.Fun, "infncall", te.Fun)
@@ -1419,12 +1423,33 @@ func (c *g2nc) genCallExprNorm(scope *ast.Scope, te *ast.CallExpr) {
 		c.out(gopp.IfElseStr(fca.isifacesel, "->data", ""))
 		c.out(gopp.IfElseStr(len(te.Args) > 0, ",", ""))
 	}
+
+	fnsig := fca.fnty
+	fnprms := fnsig.Params()
 	for idx, e1 := range te.Args {
 		if fca.isvardic && idx == fca.fnty.Params().Len()-1 {
 			c.out(idt.Name)
 			break
 		}
-		c.genExpr(scope, e1)
+		if fnprms != nil {
+			prmn := fnprms.At(idx).Type()
+			if _, ok := prmn.(*types.Interface); ok {
+				c.out("cxrt_type2eface(&")
+				tyname := c.exprTypeName(scope, e1)
+				if strings.Contains(tyname, "cxstring") {
+					c.out("string")
+				} else {
+					c.out(tyname)
+				}
+				c.out("_metatype, &")
+				c.genExpr(scope, e1)
+				c.out(")")
+			} else {
+				c.genExpr(scope, e1)
+			}
+		} else {
+			c.genExpr(scope, e1)
+		}
 		c.out(gopp.IfElseStr(idx == len(te.Args)-1, "", ", "))
 	}
 	c.out(")")
@@ -2423,7 +2448,11 @@ func (this *g2nc) exprTypeNameImpl2(scope *ast.Scope, ety types.Type, e ast.Expr
 				log.Println(te.Name())
 			}
 			// log.Println(te, reftyof(e), te.Info(), te.Name(), te.Underlying(), reftyof(te.Underlying()))
-			return strings.Replace(te.String(), ".", "_", 1)
+			tystr := strings.Replace(te.String(), ".", "_", 1)
+			if strings.HasPrefix(tystr, "untyped ") {
+				tystr = tystr[8:]
+			}
+			return tystr
 			// return te.Name()
 		}
 	case *types.Named:
@@ -2706,13 +2735,21 @@ func putscope(scope *ast.Scope, k ast.ObjKind, name string, value interface{}) *
 	return pscope
 }
 
+// TODO depcreate
 var vp1stval ast.Expr
 var vp1stty types.Type
 var vp1stidx int
 
 func (c *g2nc) genValueSpec(scope *ast.Scope, spec *ast.ValueSpec, validx int) {
+	cs := c.psctx.cursors[spec]
+	pcs := cs.Parent()
+	isconst := false
+	if d, ok := pcs.(*ast.GenDecl); ok {
+		isconst = d.Tok == token.CONST
+	}
+	isglobvar := c.psctx.isglobal(spec)
+
 	for idx, varname := range spec.Names {
-		isglobvar := c.psctx.isglobal(varname)
 		varty := c.info.TypeOf(spec.Type)
 		if varty == nil && idx < len(spec.Values) {
 			varty = c.info.TypeOf(spec.Values[idx])
@@ -2741,11 +2778,9 @@ func (c *g2nc) genValueSpec(scope *ast.Scope, spec *ast.ValueSpec, validx int) {
 		log.Println(varty, varname, reflect.TypeOf(varty))
 		c.clinema(spec)
 		vartystr := c.exprTypeNameImpl2(scope, varty, varname)
-		isconst := false
 		c.out(gopp.IfElseStr(isglobvar, "static", "")).outsp()
+		c.out(gopp.IfElseStr(isconst, "const", "")).outsp()
 		if strings.HasPrefix(varty.String(), "untyped ") {
-			isconst = true
-			c.out(gopp.IfElseStr(isglobvar, "/*const*/", "const")).outsp()
 			c.out(sign2rety(varty.String())).outsp()
 		} else {
 			c.out("/*var*/").outsp()

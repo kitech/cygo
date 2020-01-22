@@ -41,8 +41,6 @@ const (
 	Complex128
 	String
 	UnsafePointer
-	Voidptr
-	Byteptr
 
 	// types for untyped values
 	UntypedBool
@@ -52,6 +50,9 @@ const (
 	UntypedComplex
 	UntypedString
 	UntypedNil
+
+	Voidptr
+	Byteptr
 
 	// aliases
 	Byte = Uint8

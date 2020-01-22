@@ -1227,6 +1227,24 @@ func (pc *ParserContext) walkpass_tmpvars() {
 						pc.info.Types[vsp2.Lhs[0]] = tyval
 					}
 				}
+			case *ast.CallExpr:
+				for idx, aex := range te.Args {
+					switch ae := aex.(type) {
+					case *ast.BasicLit:
+						vsp2 := &ast.AssignStmt{}
+						vsp2.Lhs = []ast.Expr{newIdent(tmpvarname())}
+						vsp2.Rhs = []ast.Expr{ae}
+						vsp2.Tok = token.DEFINE
+						vsp2.TokPos = c.Node().Pos()
+						te.Args[idx] = vsp2.Lhs[0]
+						// c.Replace(vsp2.Lhs[0])
+						stmt := upfindstmt(pc, c, 0)
+						tmpvars[stmt] = append(tmpvars[stmt], vsp2)
+						tyval := types.TypeAndValue{}
+						tyval.Type = pc.info.TypeOf(ae)
+						pc.info.Types[vsp2.Lhs[0]] = tyval
+					}
+				}
 			default:
 				gopp.G_USED(te)
 			}

@@ -165,3 +165,12 @@ pid_t cxgettid() {
 #endif
 }
 
+cxeface* cxrt_type2eface(voidptr _type, voidptr data) {
+    _metatype* mty = (_metatype*)_type;
+    cxeface* efc = (cxeface*)cxmalloc(sizeof(cxeface));
+    efc->_type = _type;
+    efc->data = cxmemdup(data, mty->size);
+    return efc;
+}
+
+

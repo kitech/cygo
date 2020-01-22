@@ -439,3 +439,18 @@ type FuncCallAttr struct {
 	haslval    bool
 	lexpr      ast.Expr
 }
+
+type ValspecAttr struct {
+	spec   *ast.ValueSpec
+	validx int // used to auto calc const value
+
+	isconst   bool
+	isglobal  bool
+	candefine bool // isconst && integer
+	// canstatic bool // isglobal
+	valty types.Type
+
+	vp1stval ast.Expr
+	vp1stty  types.Type
+	vp1stidx int
+}
