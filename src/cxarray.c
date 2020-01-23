@@ -69,13 +69,6 @@ Array* cxarray_append(Array* a0, void* v) {
 }
 
 // with element size
-typedef struct cxarray2_s {
-    uint8* ptr;
-    int len;
-    int cap;
-    int elemsz;
-} cxarray2;
-
 cxarray2* cxarray2_new(int cap, int elemsz) {
     assert(elemsz > 0);
     cap = cap <= 0 ? 1 : cap;

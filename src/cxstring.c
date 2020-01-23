@@ -322,3 +322,4 @@ cxstring* GoString(char* s) {
 cxstring* GoStringN(char* s, int n) {
     return cxstring_new_cstr2(s, n);
 }
+

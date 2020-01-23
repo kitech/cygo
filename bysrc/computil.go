@@ -455,3 +455,49 @@ type ValspecAttr struct {
 	vp1stty  types.Type
 	vp1stidx int
 }
+
+type Annotation struct {
+	original string
+
+	// go:
+	nosplit        bool
+	nowritebarrier bool
+	systemstack    bool
+	linkname       string
+	noinline       bool
+
+	exported   bool
+	exportname string
+}
+
+func newAnnotation(cmts *ast.CommentGroup) *Annotation {
+	ant := &Annotation{}
+	if cmts == nil {
+		return ant
+	}
+
+	for _, cmt := range cmts.List {
+		ant.original += cmt.Text
+		lines := strings.Split(cmt.Text, "\n")
+		for _, line := range lines {
+			if strings.HasPrefix(line, "//go:nosplit") {
+				ant.nosplit = true
+			} else if strings.HasPrefix(line, "//go:nowritebarrier") {
+				ant.nowritebarrier = true
+			} else if strings.HasPrefix(line, "//go:systemstack") {
+				ant.systemstack = true
+			} else if strings.HasPrefix(line, "//go:noinline") {
+				ant.noinline = true
+			} else if strings.HasPrefix(line, "//go:linkname") {
+				fields := strings.Split(line, " ")
+				ant.linkname = fields[1]
+			} else if strings.HasPrefix(line, "//export") {
+				fields := strings.Split(line, " ")
+				ant.exported = true
+				ant.exportname = fields[1]
+			}
+		}
+	}
+
+	return ant
+}

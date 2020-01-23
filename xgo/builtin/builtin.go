@@ -15,12 +15,25 @@ func panicln() {}
 func fatal()   {}
 func fatalln() {}
 
-func malloc() voidptr  { return nil }
-func realloc() voidptr { return nil }
-func free()            {}
+func malloc3(sz int) voidptr {
+	ptr := C.cxmalloc(sz)
+	return ptr
+}
+func realloc3(ptr voidptr, sz int) voidptr {
+	ptr2 := C.cxrealloc(ptr, sz)
+	return ptr2
+}
+func free3(ptr voidptr) {
+	C.cxfree(ptr)
+}
 
 //[nomangle]
 func assert()
 func sizeof() int
 func alignof() int
 func offsetof() int
+
+//export hehe_exped
+func hehe(a int, b string) int {
+	return 0
+}

@@ -330,7 +330,7 @@ func (c *g2nc) genPreFuncDecl(scope *ast.Scope, d *ast.FuncDecl) {
 		c.outnl()
 	}
 }
-func (c *g2nc) genPostFuncDecl(scope *ast.Scope, d *ast.FuncDecl) {
+func (c *g2nc) genPostFuncDecl(scope *ast.Scope, fd *ast.FuncDecl) {
 	// gen fiber wrapper funcs
 	for _, gostmt := range c.psctx.gostmts {
 		// how compare called func is current func
@@ -338,7 +338,7 @@ func (c *g2nc) genPostFuncDecl(scope *ast.Scope, d *ast.FuncDecl) {
 		mat := false
 		switch te := fe.(type) {
 		case *ast.Ident:
-			mat = te.Name == d.Name.Name
+			mat = te.Name == fd.Name.Name
 		default:
 			log.Println("todo", fe, reflect.TypeOf(fe))
 		}
@@ -346,8 +346,32 @@ func (c *g2nc) genPostFuncDecl(scope *ast.Scope, d *ast.FuncDecl) {
 			c.genFiberStwrap(scope, gostmt.Call)
 		}
 	}
+	ant := newAnnotation(fd.Doc)
+	if ant.exported {
+		c.genFieldList(scope, fd.Type.Results, true, false, "", false)
+		c.outsp().out(ant.exportname).out("(")
+		c.genFieldList(scope, fd.Type.Params, false, true, ",", true)
+		c.out(") {").outnl()
+		if fd.Type.Results != nil {
+			c.out("return").outsp()
+		}
+		c.out(c.pkgpfx(), fd.Name.Name).out("(")
+		for idx1, prm := range fd.Type.Params.List {
+			for idx2, name := range prm.Names {
+				c.out(name.Name)
+				if idx2 == len(prm.Names)-1 && idx1 == len(fd.Type.Params.List)-1 {
+				} else {
+					c.out(",")
+				}
+			}
+		}
+		c.out(")").outfh().outnl()
+		c.out("}").outnl()
+	}
 }
 func (this *g2nc) genFuncDecl(scope *ast.Scope, fd *ast.FuncDecl) {
+	ant := newAnnotation(fd.Doc)
+	this.outf("// %v", ant.original).outnl()
 	this.outf("// %v", this.exprpos(fd)).outnl()
 	this.clinema(fd)
 	if fd.Body == nil {
@@ -1547,8 +1571,11 @@ func (c *g2nc) genTypeCtor(scope *ast.Scope, te *ast.CallExpr) {
 					c.outf("cxstring_new_cstr2((%v)->ptr, (%v)->len)", ce.Name, ce.Name)
 				} else if iscstrty2(varty) {
 					c.outf("cxstring_new_cstr(%v)", ce.Name)
+				} else if funk.Contains(
+					[]string{"voidptr", "charptr", "byteptr"}, varty.String()) {
+					c.outf("cxstring_new_cstr(%v)", ce.Name)
 				} else {
-					c.outf("cxstring_new_char(%v)", ce.Name)
+					c.outf("cxstring_new_char(%v) %v", ce.Name)
 				}
 			default:
 				log.Println("todo", te.Fun, ce)

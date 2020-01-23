@@ -117,10 +117,16 @@ void* cxmemdup(void* ptr, int sz);
 
 // cxstring begin
 typedef struct cxstring { char* ptr; int len; } cxstring;
+typedef struct cxarray2_s {
+    uint8* ptr;  int len;  int cap;  int elemsz;
+} cxarray2;
+
+
 // typedef struct cxstring string;
 cxstring* cxstring_new();
 cxstring* cxstring_new_cstr(char* s);
 cxstring* cxstring_new_cstr2(char* s, int len);
+cxstring* cxstring_new_char(char ch);
 cxstring* cxstring_add(cxstring* s0, cxstring* s1);
 int cxstring_len(cxstring* s);
 cxstring* cxstring_sub(cxstring* s0, int start, int end);
@@ -129,11 +135,13 @@ bool cxstring_ne(cxstring* s0, cxstring* s1);
 char* CString(cxstring* s);
 cxstring* GoString(char* s);
 cxstring* GoStringN(char* s, int n);
-cxstring* cxstring_new_char(char ch);
 cxstring* cxstring_dup(cxstring* s);
 int cxstring_cmp(cxstring* s0, cxstring* s1);
 void panic(cxstring* s);
 void panicln(cxstring*s);
+
+extern cxarray2* cxstring_split(cxstring* s0, cxstring* s1);
+extern cxarray2* cxstring_splitch(cxstring* s0, int s1);
 // cxstring end
 
 typedef struct error {
@@ -154,7 +162,7 @@ Array* cxarray_new2(int cap);
 Array* cxarray_slice(Array* a0, int start, int end);
 void* cxarray_get_at(Array* a0, int idx);
 Array* cxarray_append(Array* a0, void* v);
-typedef struct cxarray2_s cxarray2;
+
 cxarray2* cxarray2_new(int cap, int elemsz);
 cxarray2* cxarray2_slice(cxarray2* a0, int start, int end);
 cxarray2* cxarray2_append(cxarray2* a0, void* v);
