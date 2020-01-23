@@ -399,7 +399,7 @@ func (this *g2nc) genFuncDecl(scope *ast.Scope, fd *ast.FuncDecl) {
 		for idx1, arge := range fd.Type.Params.List {
 			_, isptrty := arge.Type.(*ast.StarExpr)
 			for idx2, name := range arge.Names {
-				this.out(gopp.IfElseStr(isptrty, "(void*)", ""))
+				this.out(gopp.IfElseStr(isptrty, "(voidptr)", ""))
 				this.outf("%s", name.Name)
 				if idx1 == fd.Type.Params.NumFields()-1 && idx2 == len(arge.Names)-1 {
 				} else {
@@ -755,7 +755,7 @@ func (c *g2nc) genFiberStwrap(scope *ast.Scope, e *ast.CallExpr) {
 	c.out("static").outsp()
 	c.out("void").outsp()
 	c.out(gopp.IfElseStr(pkgo == nil, "", pkgo.Name()+"_"))
-	c.out(funame+"_fiber", "(void* vpargs)").outnl()
+	c.out(funame+"_fiber", "(voidptr vpargs)").outnl()
 	c.out("{").outnl()
 	c.out(stname, "*args = (", stname, "*)vpargs").outfh().outnl()
 	c.out(gopp.IfElseStr(pkgo == nil, "", pkgo.Name()+pkgsep))
@@ -852,7 +852,7 @@ func (c *g2nc) genRangeStmt(scope *ast.Scope, s *ast.RangeStmt) {
 			valtystr := c.exprTypeName(scope, s.Value)
 			c.outf("     %s %v = {0}", valtystr, s.Value).outfh().outnl()
 			var tmpvar = tmpvarname()
-			c.outf("    void* %s = {0}", tmpvar).outfh().outnl()
+			c.outf("    voidptr %s = {0}", tmpvar).outfh().outnl()
 			c.outf("    %v = *cxarray2_get_at(%v, %s)", tmpvar, s.X, keyidstr).outfh().outnl()
 		}
 		c.genBlockStmt(scope, s.Body)
@@ -1283,7 +1283,7 @@ func (c *g2nc) genCallExprAppend(scope *ast.Scope, te *ast.CallExpr) {
 			}
 			c.outf("cxarray2_append(")
 			c.genExpr(scope, arg0)
-			c.out(", (void*)&")
+			c.out(", (voidptr)&")
 			c.genExpr(scope, ae)
 			c.out(")").outfh().outnl()
 		}
@@ -1313,7 +1313,7 @@ func (c *g2nc) genCallExprDelete(scope *ast.Scope, te *ast.CallExpr) {
 		}
 		c.outf("hashtable_remove(")
 		c.genExpr(scope, arg0)
-		c.outf(", (void*)(uintptr_t)%s, 0)", keystr).outfh().outnl()
+		c.outf(", (voidptr)(uintptr_t)%s, 0)", keystr).outfh().outnl()
 	} else {
 		log.Println("todo", te.Args, argty)
 	}
@@ -1687,7 +1687,7 @@ func (c *g2nc) genRecvStmt(scope *ast.Scope, e ast.Expr) {
 	}
 
 	c.out("{")
-	c.out("void* rvx = cxrt_chan_recv(")
+	c.out("voidptr rvx = cxrt_chan_recv(")
 	c.genExpr(scope, e)
 	c.out(")").outfh().outnl()
 	c.out(" // c = rv->v").outfh().outnl()
@@ -1826,7 +1826,7 @@ func (c *g2nc) genDeferStmtSet(scope *ast.Scope, e *ast.DeferStmt) {
 	deferi := c.getdeferinfo(e)
 	tvname := tmpvarname()
 	c.outf("int %s = %v", tvname, deferi.idx).outfh().outnl()
-	c.outf("cxarray2_append(deferarr, (void*)&%s)", tvname)
+	c.outf("cxarray2_append(deferarr, (voidptr)&%s)", tvname)
 }
 func (c *g2nc) genDeferStmt(scope *ast.Scope, e ast.Stmt) {
 	dstfd := upfindFuncDeclNode(c.psctx, e, 0)
@@ -1922,7 +1922,7 @@ func (c *g2nc) genExpr(scope *ast.Scope, e ast.Expr) {
 				case *types.Interface:
 					c.out(tmpvar)
 				default: // convert
-					c.outf("cxeface_new_of2((void*)&%s, sizeof(%s))", tmpvar, tmpvar)
+					c.outf("cxeface_new_of2((voidptr)&%s, sizeof(%s))", tmpvar, tmpvar)
 				}
 				return
 			}
@@ -2124,7 +2124,7 @@ func (this *g2nc) genExpr2(scope *ast.Scope, e ast.Expr) {
 			this.genExpr(scope, te.Y)
 		}
 	case *ast.ChanType:
-		this.out("void*")
+		this.out("voidptr")
 	case *ast.IndexExpr:
 		varty := this.info.TypeOf(te.X)
 		vo := scope.Lookup("varval")
@@ -2334,7 +2334,7 @@ func (c *g2nc) genCxmapAddkv(scope *ast.Scope, vnamex interface{}, ke ast.Expr, 
 		log.Println(vnamex, reflect.TypeOf(vnamex))
 	}
 
-	c.outf("hashtable_add(%v, (void*)(uintptr_t)%v, (void*)(uintptr_t)%s)",
+	c.outf("hashtable_add(%v, (voidptr)(uintptr_t)%v, (voidptr)(uintptr_t)%s)",
 		varstr, keystr, valstr) // .outfh().outnl()
 }
 func (c *g2nc) genCxarrAdd(scope *ast.Scope, vnamex interface{}, ve ast.Expr, idx int) {
@@ -2357,7 +2357,7 @@ func (c *g2nc) genCxarrAdd(scope *ast.Scope, vnamex interface{}, ve ast.Expr, id
 	varobj := c.info.ObjectOf(vnamex.(*ast.Ident))
 	pkgpfx := gopp.IfElseStr(isglobalid(c.psctx, vnamex.(*ast.Ident)), varobj.Pkg().Name(), "")
 	pkgpfx = gopp.IfElseStr(pkgpfx == "", "", pkgpfx+"_")
-	c.outf("cxarray2_append(%s%v, (void*)&%v)", pkgpfx,
+	c.outf("cxarray2_append(%s%v, (voidptr)&%v)", pkgpfx,
 		vnamex.(*ast.Ident).Name, valstr) // .outfh().outnl()
 }
 func (c *g2nc) genCxarrSet(scope *ast.Scope, vname ast.Expr, vidx ast.Expr, elem interface{}) {
@@ -2378,7 +2378,7 @@ func (c *g2nc) genCxarrSet(scope *ast.Scope, vname ast.Expr, vidx ast.Expr, elem
 		log.Println("todo", elem, reflect.TypeOf(elem))
 	}
 
-	c.outf("cxarray2_replace_at(%v, (void*)(uintptr_t)%v, %v, nilptr)",
+	c.outf("cxarray2_replace_at(%v, (voidptr)(uintptr_t)%v, %v, nilptr)",
 		vname, valstr, idxstr).outfh().outnl()
 }
 func (c *g2nc) genCxarrGet(scope *ast.Scope, vname ast.Expr, vidx ast.Expr, varty types.Type) {
@@ -2878,6 +2878,10 @@ func (c *g2nc) genValueSpec(scope *ast.Scope, spec *ast.ValueSpec, validx int) {
 				c.out("voidptr")
 			} else if strings.HasPrefix(vartystr, "C_struct_") {
 				c.out(vartystr[2:])
+			} else if strings.Contains(vartystr, "func(") {
+				tyname := tmpvarname()
+				c.outf("typedef void*(*%s)()", tyname).outfh().outnl()
+				c.out(tyname)
 			} else {
 				if isinvalidty(vartystr) {
 					if len(spec.Values) == 1 {
