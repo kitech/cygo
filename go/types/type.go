@@ -51,20 +51,9 @@ const (
 	UntypedString
 	UntypedNil
 
-	Voidptr
-	Byteptr
-
 	// aliases
 	Byte = Uint8
 	Rune = Int32
-
-	Usize = Uintptr
-	F32   = Float32
-	F64   = Float64
-	U64   = Uint64
-	I64   = Int64
-	U8    = Uint8
-	I8    = Int8
 )
 
 // BasicInfo is a set of flags describing properties of a basic type.

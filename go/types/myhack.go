@@ -1,30 +1,69 @@
 package types
 
-import "log"
+const (
+	Voidptr = UntypedNil + 1
+	Byteptr = UntypedNil + 2
+	Charptr = UntypedNil + 3
 
-// too late
+	// aliases
+
+	Usize = Uintptr
+	F32   = Float32
+	F64   = Float64
+	U64   = Uint64
+	I64   = Int64
+	U8    = Uint8
+	I8    = Int8
+)
+
+func init() {
+	// too early
+	// HackExtraBuiltin()
+}
+
+// too late, call in universe.go:190 init(), before defPredxxx
 func HackExtraBuiltin() {
-	if true {
-		return
+	hetyp := []*Basic{
+		{Voidptr, IsPointer | IsBoolean, "voidptr"},
+		{Byteptr, IsPointer | IsBoolean, "byteptr"},
+		{Charptr, IsPointer | IsBoolean, "charptr"},
 	}
-	tybno := UntypedNil
-	tybinfo := IsUntyped
-	{
-		vptrty := &Basic{tybno << 1, tybinfo << 1, "voidptr"}
-		Typ = append(Typ, vptrty)
+	for _, typ := range hetyp {
+		Typ = append(Typ, typ)
 	}
-	{
-		vptrty := &Basic{tybno << 2, tybinfo << 2, "byteptr"}
-		Typ = append(Typ, vptrty)
+
+	// modify var aliases = [...] => []
+	healias := []*Basic{
+		{Usize, IsInteger | IsUnsigned | IsPointer, "usize"},
+		{F32, IsFloat, "f32"},
+		{F64, IsFloat, "f64"},
+		{U64, IsInteger | IsUnsigned, "u64"},
+		{I64, IsInteger, "i64"},
 	}
-	log.Println("222222222")
+	for _, typ := range healias {
+		aliases = append(aliases, typ)
+	}
+
+	def(&Nilofc{object{name: "nilofc", typ: Typ[UntypedNil], color_: black}})
+	def(&Cnil{object{name: "cnil", typ: Typ[UntypedNil], color_: black}})
+	def(&Cnull{object{name: "cnull", typ: Typ[UntypedNil], color_: black}})
+	// log.Println("222222222")
 }
 
 // Nil represents the predeclared value nil.
-type Nilptr struct {
+type Nilofc struct {
+	object
+}
+type Cnil struct {
+	object
+}
+type Cnull struct {
 	object
 }
 
+func TypeAlias() []*Basic { return aliases[:] }
+
+///
 const ctypebase = 200
 
 var ctypeno int = ctypebase
@@ -40,9 +79,9 @@ func NewCtype(tyname string) Type {
 	ty := &Basic{}
 	ty.name = tyname
 	ty.kind = BasicKind(no)
-	ty.info = BasicInfo(no) | IsOrdered | IsNumeric
-	ty.info = BasicInfo(no) | IsOrdered
-	ty.info = BasicInfo(no) | IsNumeric
+	ty.info = BasicInfo(no) | IsOrdered | IsNumeric | IsPointer
+	// ty.info = BasicInfo(no) | IsOrdered
+	// ty.info = BasicInfo(no) | IsNumeric
 	ctypetys[tyname] = ty
 
 	return ty
@@ -66,5 +105,3 @@ func isByteptr(typ Type) bool {
 	t, ok := typ.Underlying().(*Basic)
 	return ok && t.kind == Byteptr
 }
-
-func TypeAlias() []*Basic { return aliases[:] }

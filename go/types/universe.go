@@ -53,8 +53,6 @@ var Typ = []*Basic{
 	Complex128:    {Complex128, IsComplex, "complex128"},
 	String:        {String, IsString, "string"},
 	UnsafePointer: {UnsafePointer, 0, "Pointer"},
-	Voidptr:       {Voidptr, IsPointer, "voidptr"},
-	Byteptr:       {Byteptr, IsPointer, "byteptr"},
 
 	UntypedBool:    {UntypedBool, IsBoolean | IsUntyped, "untyped bool"},
 	UntypedInt:     {UntypedInt, IsInteger | IsUntyped, "untyped int"},
@@ -65,14 +63,9 @@ var Typ = []*Basic{
 	UntypedNil:     {UntypedNil, IsUntyped, "untyped nil"},
 }
 
-var aliases = [...]*Basic{
+var aliases = []*Basic{
 	{Byte, IsInteger | IsUnsigned, "byte"},
 	{Rune, IsInteger, "rune"},
-	{Usize, IsInteger | IsUnsigned | IsPointer, "usize"},
-	{F32, IsFloat, "f32"},
-	{F64, IsFloat, "f64"},
-	{U64, IsInteger | IsUnsigned, "u64"},
-	{I64, IsInteger, "i64"},
 }
 
 func defPredeclaredTypes() {
@@ -199,6 +192,7 @@ func init() {
 	Unsafe = NewPackage("unsafe", "unsafe")
 	Unsafe.complete = true
 
+	HackExtraBuiltin()
 	defPredeclaredTypes()
 	defPredeclaredConsts()
 	defPredeclaredNil()

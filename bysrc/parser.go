@@ -94,7 +94,7 @@ func (this *ParserContext) Init() error {
 }
 func (this *ParserContext) init_extra_builtin_types() {
 	// too late call here, so need modify go/types/ files directly
-	types.HackExtraBuiltin() // file: go/types/myhack.go
+	// types.HackExtraBuiltin() // file: go/types/myhack.go
 	// tybno := types.UntypedNil
 	// tybinfo := types.IsUntyped
 	// vptrty := types.Basic{tybno << 1, tybinfo << 1, "voidptr"}

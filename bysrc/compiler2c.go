@@ -1111,6 +1111,8 @@ func (c *g2nc) genCallExpr(scope *ast.Scope, te *ast.CallExpr) {
 			}
 			if isclos {
 				c.genCallExprClosure(scope, te, fnlit)
+			} else if fca.isvardic {
+				c.genCallExprVaridic(scope, te)
 			} else {
 				c.genCallExprNorm(scope, te)
 			}
@@ -1131,6 +1133,8 @@ func (c *g2nc) genCallExpr(scope *ast.Scope, te *ast.CallExpr) {
 		}
 		if c.funcistype(te.Fun) {
 			c.genTypeCtor(scope, te)
+		} else if fca.isvardic {
+			c.genCallExprVaridic(scope, te)
 		} else {
 			c.genCallExprNorm(scope, te)
 		}
@@ -1416,21 +1420,43 @@ func (c *g2nc) getCallExprAttr(scope *ast.Scope, te *ast.CallExpr) *FuncCallAttr
 func (c *g2nc) genCallExprNorm(scope *ast.Scope, te *ast.CallExpr) {
 	// funame := te.Fun.(*ast.Ident).Name
 	fca := c.getCallExprAttr(scope, te)
+	// gopp.Assert(!fca.isvardic, "moved", te.Fun)
 
-	idt := newIdent(tmpvarname())
+	idt := newIdent(tmpvarname()) // store variadic args in array
 	if fca.isvardic && fca.haslval {
 		c.out("{0}").outfh().outnl()
+	}
+	if fca.isvardic {
 		var elemsz interface{} = "sizeof(voidptr)"
 		c.outf("cxarray2* %s = cxarray2_new(1, %v)", idt.Name, elemsz).outfh().outnl()
+		prmty := fca.fnty.Params()
+		elemty := prmty.At(prmty.Len() - 1).Type().(*types.Slice).Elem()
+		// log.Println(te.Fun, prmty, reftyof(prmty), prmty.Len(), elemty, reftyof(elemty))
 		for idx, e1 := range te.Args {
 			if idx < fca.fnty.Params().Len()-1 {
-				continue
+				continue // non variadic arg
 			}
-			c.outf("cxarray2_append(%s, (void*)&", idt.Name)
-			c.genExpr(scope, e1)
-			c.out(")")
+			switch elty := elemty.(type) {
+			case *types.Interface:
+				tyname := c.exprTypeName(scope, e1)
+				if tyname == "cxstring*" {
+					tyname = "string"
+				}
+				tvar := tmpvarname()
+				c.outf("voidptr %s= cxrt_type2eface((voidptr)&%s_metatype, (voidptr)&", tvar, tyname)
+				c.genExpr(scope, e1)
+				c.out(")").outfh().outnl()
+				c.outf("cxarray2_append(%s, &%s)", idt.Name, tvar)
+			default:
+				_ = elty
+				c.outf("cxarray2_append(%s, (voidptr)&", idt.Name)
+				c.genExpr(scope, e1)
+				c.out(")")
+			}
 			c.outfh().outnl()
 		}
+	}
+	if fca.haslval {
 		c.genExpr(scope, fca.lexpr)
 		c.outeq()
 	}
@@ -1476,17 +1502,18 @@ func (c *g2nc) genCallExprNorm(scope *ast.Scope, te *ast.CallExpr) {
 			c.out(idt.Name)
 			break
 		}
+
 		if fca.prmty != nil {
 			prmn := fca.prmty.At(idx).Type()
 			if _, ok := prmn.(*types.Interface); ok {
-				c.out("cxrt_type2eface(&")
+				c.out("cxrt_type2eface((voidptr)&")
 				tyname := c.exprTypeName(scope, e1)
 				if strings.Contains(tyname, "cxstring") {
 					c.out("string")
 				} else {
 					c.out(tyname)
 				}
-				c.out("_metatype, &")
+				c.out("_metatype, (voidptr)&")
 				c.genExpr(scope, e1)
 				c.out(")")
 			} else {
@@ -1498,6 +1525,12 @@ func (c *g2nc) genCallExprNorm(scope *ast.Scope, te *ast.CallExpr) {
 		c.out(gopp.IfElseStr(idx == len(te.Args)-1, "", ", "))
 	}
 	c.out(")")
+}
+func (c *g2nc) genCallExprVaridic(scope *ast.Scope, te *ast.CallExpr) {
+	// funame := te.Fun.(*ast.Ident).Name
+	fca := c.getCallExprAttr(scope, te)
+	gopp.Assert(fca.isvardic, "must", te.Fun)
+	c.genCallExprNorm(scope, te)
 }
 func (c *g2nc) genTypeCtor(scope *ast.Scope, te *ast.CallExpr) {
 	switch be := te.Fun.(type) {
@@ -1864,10 +1897,10 @@ func (this *g2nc) genTypeExpr(scope *ast.Scope, e ast.Expr) {
 	this.out(this.exprTypeName(scope, e))
 }
 
-func (this *g2nc) genExpr(scope *ast.Scope, e ast.Expr) {
+func (c *g2nc) genExpr(scope *ast.Scope, e ast.Expr) {
 	varname := scope.Lookup("varname")
 	if varname != nil {
-		vartyp := this.info.TypeOf(varname.Data.(ast.Expr))
+		vartyp := c.info.TypeOf(varname.Data.(ast.Expr))
 		log.Println(vartyp, varname)
 		if iseface2(vartyp) {
 			_, iscallexpr := e.(*ast.CallExpr)
@@ -1875,21 +1908,27 @@ func (this *g2nc) genExpr(scope *ast.Scope, e ast.Expr) {
 			// _, lisidt := varname.Data.(ast.Expr).(*ast.Ident)
 			if !iscallexpr && !isidt {
 				// vartyp2 := reflect.TypeOf(varname.Data.(ast.Expr))
-				this.out("(cxeface){0}").outfh().outnl()
+				c.out("(cxeface*){0}").outfh().outnl()
 
 				tmpvar := tmpvarname()
-				this.out(this.exprTypeName(scope, e), tmpvar, "=")
+				c.out(c.exprTypeName(scope, e), tmpvar, "=")
 				ns := putscope(scope, ast.Var, "varname", newIdent(tmpvar))
-				this.genExpr2(ns, e)
-				this.outfh().outnl()
-				this.genExpr2(scope, varname.Data.(ast.Expr))
-				this.outeq()
-				this.outf("cxeface_new_of2((void*)&%s, sizeof(%s))", tmpvar, tmpvar)
+				c.genExpr2(ns, e)
+				c.outfh().outnl()
+				c.genExpr2(scope, varname.Data.(ast.Expr))
+				c.outeq()
+				ety := c.info.TypeOf(e)
+				switch ety.(type) {
+				case *types.Interface:
+					c.out(tmpvar)
+				default: // convert
+					c.outf("cxeface_new_of2((void*)&%s, sizeof(%s))", tmpvar, tmpvar)
+				}
 				return
 			}
 		}
 	}
-	this.genExpr2(scope, e)
+	c.genExpr2(scope, e)
 }
 func (this *g2nc) genExpr2(scope *ast.Scope, e ast.Expr) {
 	// log.Println(reflect.TypeOf(e), e)
