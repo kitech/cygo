@@ -132,7 +132,9 @@ uint8* cxarray2_replace_at(cxarray2* a0, void* v, int idx, void*out) {
     return (uint8*) out;
 }
 int cxarray2_size(cxarray2* a0) { return a0->len; }
+int cxarray2_len(cxarray2* a0) { return a0->len; }
 int cxarray2_capacity(cxarray2* a0) { return a0->cap; }
+int cxarray2_cap(cxarray2* a0) { return a0->cap; }
 int cxarray2_elemsz(cxarray2* a0) { return a0->elemsz; }
 
 void cxarray2_appendn(cxarray2* a0, void* v, int n) {

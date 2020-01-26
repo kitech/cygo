@@ -171,7 +171,9 @@ uint8* cxarray2_replace_at(cxarray2* a0, void* v, int idx, void*out);
 void cxarray2_appendn(cxarray2* a0, void* v, int n);
 
 int cxarray2_size(cxarray2* a0);
+int cxarray2_len(cxarray2* a0);
 int cxarray2_capacity(cxarray2* a0);
+int cxarray2_cap(cxarray2* a0);
 int cxarray2_elemsz(cxarray2* a0);
 #endif
 

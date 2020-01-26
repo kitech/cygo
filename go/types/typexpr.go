@@ -201,7 +201,7 @@ func (check *Checker) funcType(sig *Signature, recvPar *ast.FieldList, ftyp *ast
 					}
 				}
 			} else {
-				err = "basic or unnamed type"
+				// err = "basic or unnamed type"
 			}
 			if err != "" {
 				check.errorf(recv.pos, "invalid receiver %s (%s)", recv.typ, err)

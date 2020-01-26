@@ -1,5 +1,7 @@
 package types
 
+import "go/token"
+
 const (
 	Voidptr = UntypedNil + 1
 	Byteptr = UntypedNil + 2
@@ -48,7 +50,123 @@ func HackExtraBuiltin() {
 	def(&Cnil{object{name: "cnil", typ: Typ[UntypedNil], color_: black}})
 	def(&Cnull{object{name: "cnull", typ: Typ[UntypedNil], color_: black}})
 	// log.Println("222222222")
+
+	fillBasicMethods()
 }
+
+func fillBasicMethods() {
+	{ // string.len() int
+		var sig *Signature
+		recv := NewVar(token.NoPos, nil, "this", Typ[String])
+		var params *Tuple
+		r0 := NewVar(token.NoPos, nil, "", Typ[Int])
+		results := NewTuple(r0)
+		sig = NewSignature(recv, params, results, false)
+		m1 := NewFunc(token.NoPos, nil, "len", sig)
+		strmths = append(strmths, m1)
+	}
+	{ // string.split(sep string) []string
+		var sig *Signature
+		recv := NewVar(token.NoPos, nil, "this", Typ[String])
+		arg0 := NewVar(token.NoPos, nil, "sep", Typ[String])
+		params := NewTuple(arg0)
+		r0 := NewVar(token.NoPos, nil, "", NewSlice(Typ[Int]))
+		results := NewTuple(r0)
+		sig = NewSignature(recv, params, results, false)
+		m1 := NewFunc(token.NoPos, nil, "split", sig)
+		strmths = append(strmths, m1)
+	}
+	{ // string.trimsp() string
+		var sig *Signature
+		recv := NewVar(token.NoPos, nil, "this", Typ[String])
+		var params *Tuple
+		r0 := NewVar(token.NoPos, nil, "", Typ[String])
+		results := NewTuple(r0)
+		sig = NewSignature(recv, params, results, false)
+		m1 := NewFunc(token.NoPos, nil, "trimsp", sig)
+		strmths = append(strmths, m1)
+	}
+
+	{ // array.len() int
+		var sig *Signature
+		recv := NewVar(token.NoPos, nil, "this", NewSlice(nil))
+		var params *Tuple
+		r0 := NewVar(token.NoPos, nil, "", Typ[Int])
+		results := NewTuple(r0)
+		sig = NewSignature(recv, params, results, false)
+		m1 := NewFunc(token.NoPos, nil, "len", sig)
+		arrmths = append(arrmths, m1)
+	}
+	{ // array.cap() int
+		var sig *Signature
+		recv := NewVar(token.NoPos, nil, "this", NewSlice(nil))
+		var params *Tuple
+		r0 := NewVar(token.NoPos, nil, "", Typ[Int])
+		results := NewTuple(r0)
+		sig = NewSignature(recv, params, results, false)
+		m1 := NewFunc(token.NoPos, nil, "cap", sig)
+		arrmths = append(arrmths, m1)
+	}
+
+	{ // map.len() int
+		var sig *Signature
+		recv := NewVar(token.NoPos, nil, "this", NewMap(nil, nil))
+		var params *Tuple
+		r0 := NewVar(token.NoPos, nil, "", Typ[Int])
+		results := NewTuple(r0)
+		sig = NewSignature(recv, params, results, false)
+		m1 := NewFunc(token.NoPos, nil, "len", sig)
+		mapmths = append(mapmths, m1)
+	}
+	{ // map.cap() int
+		var sig *Signature
+		recv := NewVar(token.NoPos, nil, "this", NewMap(nil, nil))
+		var params *Tuple
+		r0 := NewVar(token.NoPos, nil, "", Typ[Int])
+		results := NewTuple(r0)
+		sig = NewSignature(recv, params, results, false)
+		m1 := NewFunc(token.NoPos, nil, "cap", sig)
+		mapmths = append(mapmths, m1)
+	}
+
+	{ // int.repr() string
+		var sig *Signature
+		recv := NewVar(token.NoPos, nil, "this", Typ[Int])
+		var params *Tuple
+		r0 := NewVar(token.NoPos, nil, "", Typ[String])
+		results := NewTuple(r0)
+		sig = NewSignature(recv, params, results, false)
+		m1 := NewFunc(token.NoPos, nil, "repr", sig)
+		intmths = append(intmths, m1)
+	}
+	{ // float32.repr() string
+		var sig *Signature
+		recv := NewVar(token.NoPos, nil, "this", Typ[Float32])
+		var params *Tuple
+		r0 := NewVar(token.NoPos, nil, "", Typ[String])
+		results := NewTuple(r0)
+		sig = NewSignature(recv, params, results, false)
+		m1 := NewFunc(token.NoPos, nil, "repr", sig)
+		intmths = append(intmths, m1)
+	}
+	{ // float64.repr() string
+		var sig *Signature
+		recv := NewVar(token.NoPos, nil, "this", Typ[Float64])
+		var params *Tuple
+		r0 := NewVar(token.NoPos, nil, "", Typ[String])
+		results := NewTuple(r0)
+		sig = NewSignature(recv, params, results, false)
+		m1 := NewFunc(token.NoPos, nil, "repr", sig)
+		intmths = append(intmths, m1)
+	}
+
+	println(len(strmths), len(arrmths), len(mapmths))
+}
+
+var strmths = []*Func{}
+var arrmths = []*Func{}
+var mapmths = []*Func{}
+var intmths = []*Func{}
 
 // Nil represents the predeclared value nil.
 type Nilofc struct {

@@ -37,3 +37,26 @@ func offsetof() int
 func hehe(a int, b string) int {
 	return 0
 }
+
+type mirstring struct {
+	ptr voidptr
+	len int
+}
+
+func (s string) split(sep string) []string {
+	return nil
+}
+func (s string) trimsp() string {
+	return s
+}
+
+func (i int) repr() string {
+	return ""
+}
+
+func (i float64) repr() string {
+	return ""
+}
+func (i float32) repr() string {
+	return ""
+}
