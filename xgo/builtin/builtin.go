@@ -26,6 +26,12 @@ func realloc3(ptr voidptr, sz int) voidptr {
 func free3(ptr voidptr) {
 	C.cxfree(ptr)
 }
+func strdup3(ptr voidptr) voidptr {
+	return C.cxstrdup(ptr)
+}
+func strndup3(ptr voidptr, n int) voidptr {
+	return C.cxstrndup(ptr, n)
+}
 
 //[nomangle]
 func assert()
@@ -41,6 +47,19 @@ func hehe(a int, b string) int {
 type mirstring struct {
 	ptr voidptr
 	len int
+}
+
+func gostring(ptr byteptr) string {
+	return string(ptr)
+}
+func gostring_clone(ptr byteptr) string {
+	ptr2 := strdup3(ptr)
+	return string(ptr2)
+}
+func gostringn(ptr byteptr, n int) string {
+	s := string(ptr)
+	s.len = n
+	return s
 }
 
 func (s string) cstr() byteptr {
@@ -153,13 +172,46 @@ func (s string) replaceall(old string, new string) string {
 }
 
 func (s string) toupper() string {
-	return s
+	slen := s.len()
+	ns := ""
+	for i := 0; i < slen; i++ {
+		ch := s[i]
+		if ch >= 'a' && ch <= 'z' {
+			ch2 := ch - 32
+			ns += string(ch2)
+		} else {
+			ns += string(ch)
+		}
+	}
+	return ns
 }
 func (s string) tolower() string {
-	return s
+	slen := s.len()
+	ns := ""
+	for i := 0; i < slen; i++ {
+		ch := s[i]
+		if ch >= 'A' && ch <= 'Z' {
+			ch2 := ch + 32
+			ns += string(ch2)
+		} else {
+			ns += string(ch)
+		}
+	}
+	return ns
 }
 func (s string) totitle() string {
-	return s
+	slen := s.len()
+	ns := ""
+	for i := 0; i < slen; i++ {
+		ch := s[i]
+		if i == 0 && ch >= 'a' && ch <= 'z' {
+			ch2 := ch - 32
+			ns += string(ch2)
+		} else {
+			ns += string(ch)
+		}
+	}
+	return ns
 }
 
 func (s string) tomd5() string {
@@ -176,63 +228,96 @@ func (s string) tohex() string {
 }
 
 func (s string) toint() int {
-	return 0
+	rv := C.atoi(s.ptr)
+	return rv
 }
 func (s string) tof32() f32 {
-	return 0
+	rv := C.atof(s.ptr)
+	return rv
 }
 func (s string) tof64() f64 {
-	return 0
+	rv := C.atof(s.ptr)
+	return rv
 }
 func (s string) tobool() bool {
 	return s == "true"
 }
 
 func (i int) repr() string {
-	return ""
+	mem := malloc3(32)
+	C.sprintf(mem, "%d", i)
+	return gostring(mem)
 }
 
 func (i float64) repr() string {
-	return ""
+	mem := malloc3(32)
+	C.sprintf(mem, "%g", i)
+	return gostring(mem)
 }
 func (i float32) repr() string {
-	return ""
+	mem := malloc3(32)
+	C.sprintf(mem, "%g", i)
+	return gostring(mem)
 }
 
 func (i int16) repr() string {
-	return ""
+	mem := malloc3(32)
+	C.sprintf(mem, "%d", i)
+	return gostring(mem)
 }
 func (i int8) repr() string {
-	return ""
+	mem := malloc3(32)
+	C.sprintf(mem, "%d", i)
+	return gostring(mem)
 }
 func (i int32) repr() string {
-	return ""
+	mem := malloc3(32)
+	C.sprintf(mem, "%d", i)
+	return gostring(mem)
 }
 func (i int64) repr() string {
-	return ""
+	mem := malloc3(32)
+	C.sprintf(mem, "%ld", i)
+	return gostring(mem)
 }
 func (i uint8) repr() string {
-	return ""
+	mem := malloc3(32)
+	C.sprintf(mem, "%d", i)
+	return gostring(mem)
 }
 func (i uint16) repr() string {
-	return ""
+	mem := malloc3(32)
+	C.sprintf(mem, "%d", i)
+	return gostring(mem)
 }
 func (i uint32) repr() string {
-	return ""
+	mem := malloc3(32)
+	C.sprintf(mem, "%d", i)
+	return gostring(mem)
 }
 func (i uint64) repr() string {
-	return ""
+	mem := malloc3(32)
+	C.sprintf(mem, "%ld", i)
+	return gostring(mem)
 }
 func (i usize) repr() string {
-	return ""
+	mem := malloc3(32)
+	C.sprintf(mem, "%ld", i)
+	return gostring(mem)
 }
 
 func (i voidptr) repr() string {
-	return ""
+	mem := malloc3(32)
+	C.sprintf(mem, "%p", i)
+	return gostring(mem)
 }
 func (i byteptr) repr() string {
-	return ""
+	mem := malloc3(32)
+	C.sprintf(mem, "%p", i)
+	return gostring(mem)
 }
 func (i charptr) repr() string {
-	return ""
+	mem := malloc3(32)
+	C.sprintf(mem, "%p", i)
+	return gostring(mem)
 }

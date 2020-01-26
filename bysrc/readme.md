@@ -20,11 +20,13 @@
 * varidict parameters
 * 全引用的方式，不要出现指针类型
 * [x] 需要定义几个常用的内置类型， unsafe.Pointer => voidptr, byteptr
-* [ ] len(),cap()的写法使用方法方式
+* [x] len(),cap()的写法使用方法方式
 * [x] assert, sizeof, alignof, offsetof 内置
 * [ ] union 支持
 * [ ] := range => in
-* [ ] 内置的string要有更多的方法，用单独的strings包有点麻烦
+* [x] 内置的string要有更多的方法，用单独的strings包有点麻烦
+* [x] 内置的int/float要有更多的方法
+* [ ] string和array似乎可以全在builtin中用go语法实现了。
 
 ### 语法树重写
 * [ ] 变量声明解构为每条语句一个变量，如果有多个的话
