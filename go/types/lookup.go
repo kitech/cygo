@@ -188,27 +188,23 @@ func lookupFieldOrMethod(T Type, addressable bool, pkg *Package, name string) (o
 			case *Basic:
 				if t.kind == String {
 					if i, m := lookupMethod(strmths, nil, name); m != nil {
-						log.Println("got method", i, name)
 						obj = m
 						index = concat(e.index, i)
 					}
 				} else if t.kind == Int ||
 					t.kind == Float32 || t.kind == Float64 {
 					if i, m := lookupMethod(intmths, nil, name); m != nil {
-						log.Println("got method", i, name)
 						obj = m
 						index = concat(e.index, i)
 					}
 				}
 			case *Slice:
 				if i, m := lookupMethod(arrmths, nil, name); m != nil {
-					log.Println("got method", i, name)
 					obj = m
 					index = concat(e.index, i)
 				}
 			case *Map:
 				if i, m := lookupMethod(mapmths, nil, name); m != nil {
-					log.Println("got method", i, name)
 					obj = m
 					index = concat(e.index, i)
 				}

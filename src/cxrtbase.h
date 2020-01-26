@@ -139,6 +139,7 @@ cxstring* cxstring_dup(cxstring* s);
 int cxstring_cmp(cxstring* s0, cxstring* s1);
 void panic(cxstring* s);
 void panicln(cxstring*s);
+extern cxstring* cxstring_replace(cxstring* s0, cxstring* old, cxstring* new, int count);
 
 extern cxarray2* cxstring_split(cxstring* s0, cxstring* s1);
 extern cxarray2* cxstring_splitch(cxstring* s0, int s1);

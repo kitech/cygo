@@ -727,12 +727,16 @@ func (pc *ParserContext) walkpass_fill_builtinpkg() {
 				if _, ok := c.Parent().(*ast.FuncDecl); ok {
 					break
 				}
+				if funk.Contains([]string{"len", "cap"}, te.Name) {
+					break
+				}
 				log.Println(te, obj == nil, obj, reftyof(c.Parent()))
 				sele := &ast.SelectorExpr{}
 				sidt := newIdent("builtin")
 				sele.X = sidt
 				sele.Sel = te
 				c.Replace(sele)
+
 				// 把builtin的包ident添加上包前缀
 			default:
 				gopp.G_USED(te)

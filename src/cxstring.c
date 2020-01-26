@@ -121,7 +121,7 @@ cxstring* cxstring_bool(_Bool v) {
 }
 
 
-int cxstring_index(cxstring* s0, cxstring* sub) {
+int cxstring_index2(cxstring* s0, cxstring* sub) {
     char* pos = memmem(s0->ptr, s0->len, sub->ptr, sub->len);
     if (pos == 0) return -1;
     return pos - s0->ptr;

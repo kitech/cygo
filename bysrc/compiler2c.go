@@ -1575,7 +1575,7 @@ func (c *g2nc) genTypeCtor(scope *ast.Scope, te *ast.CallExpr) {
 					[]string{"voidptr", "charptr", "byteptr"}, varty.String()) {
 					c.outf("cxstring_new_cstr(%v)", ce.Name)
 				} else {
-					c.outf("cxstring_new_char(%v) %v", ce.Name)
+					c.outf("cxstring_new_char(%v)", ce.Name)
 				}
 			default:
 				log.Println("todo", te.Fun, ce)
