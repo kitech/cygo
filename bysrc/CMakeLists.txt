@@ -9,6 +9,7 @@ endif()
 include(../cxrt.cmake)
 
 add_executable(genoe opkgs/foo.c)
+include_directories("/usr/lib/libffi-3.2.1/include")
 target_link_libraries(genoe -L. cxrt crn -lcurl -ldwarf -lelf ${cxrt_ldflags})
 
 # add_executable(co1 co1.c ../corona-c/coro.c)

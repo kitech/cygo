@@ -121,26 +121,16 @@ func (c *g2nc) gentypeofs(pkg *ast.Package) {
 		switch ne := nx.(type) {
 		case *ast.CallExpr:
 			fe := ne.Fun.(*ast.SelectorExpr)
-			iscty := false
-			if funk.Contains([]string{"int"}, fe.Sel.Name) {
-				// iscty = true
-				// break
-			}
-			if iscty {
-				gopp.Assert(1 == 2, "waitdep", fe)
-				c.outf("typedef __typeof__((%v)0) %v__ctype;", fe.Sel.Name, fe.Sel.Name).outnl()
-			} else {
-				c.outf("// typedef __typeof__((%v)(", fe.Sel.Name).outnl()
-				c.outf("typedef __typeof__((%v)(", fe.Sel.Name)
-				for idx, _ := range ne.Args {
-					c.out("0")
-					if idx == len(ne.Args)-1 {
-					} else {
-						c.out(",")
-					}
+			c.outf("typedef __typeof__((%v)(", fe.Sel.Name)
+			for idx, _ := range ne.Args {
+				c.out("0")
+				if idx == len(ne.Args)-1 {
+				} else {
+					c.out(",")
 				}
-				c.outf(")) %v__ctype;", fe.Sel.Name).outnl()
 			}
+			c.outf(")) %v__ctype;", fe.Sel.Name).outnl()
+			c.outf("typedef __typeof__(%v) %v__cfunc_type", fe.Sel, fe.Sel).outfh().outnl()
 		case *ast.SelectorExpr:
 			isstruct := strings.HasPrefix(ne.Sel.Name, "struct_")
 			if isstruct {
@@ -150,9 +140,6 @@ func (c *g2nc) gentypeofs(pkg *ast.Package) {
 				c.outf("typedef __typeof__(%v) %v__const__ctype;", ne.Sel.Name, ne.Sel.Name).outnl()
 			}
 			c.outf("typedef __typeof__(%v) %v__ctype;", ne.Sel.Name, ne.Sel.Name).outnl()
-			// TODO 字段类型
-			c.outf("//typedef __typeof__(((%v*)0)->foo) %v__foo__ctype;",
-				ne.Sel.Name, ne.Sel.Name).outnl()
 		case *ast.Ident:
 			// should be format struct_xxx.fieldxxx
 			segs := strings.Split(ne.Name, ".")
@@ -505,6 +492,7 @@ func (c *g2nc) genInitFuncs(scope *ast.Scope, pkg *ast.Package) {
 
 // all packages
 func (c *g2nc) genCallPkgGlobvarsInits(pkgs []string) {
+	gopp.Assert(len(pkgs) > 0, "wtfff", len(pkgs)) // builtin
 	c.out("void cxall_globvars_init() {").outnl()
 	last := pkgs[len(pkgs)-1] // builtin
 	pkgs = append([]string{last}, pkgs[:len(pkgs)-1]...)
@@ -1217,23 +1205,19 @@ func (c *g2nc) genCallExprMake(scope *ast.Scope, te *ast.CallExpr) {
 		c.out(")")
 	case *ast.ArrayType:
 		gopp.Assert(len(te.Args) > 0, "wtfff", len(te.Args))
-		acap := "1"
-		if len(te.Args) > 1 {
-			switch elme := te.Args[1].(type) {
-			case *ast.BasicLit:
-				acap = elme.Value
-			case *ast.Ident:
-				acap = elme.Name
-			default:
-				log.Panicln(elme, reftyof(elme), exprstr(te), exprpos(c.psctx, te))
-			}
-		}
 		elemtya := te.Args[0].(*ast.ArrayType).Elt
-		log.Println(te.Args[0], reftyof(te.Args[0]), elemtya, reftyof(elemtya))
+		// log.Println(te.Args[0], reftyof(te.Args[0]), elemtya, reftyof(elemtya))
 		elemtyt := c.info.TypeOf(elemtya)
 		var elemsz interface{} = (&types.StdSizes{}).Sizeof(elemtyt)
 		elemsz = gopp.IfElse(elemsz == uintptr(0), "sizeof(voidptr)", elemsz)
-		c.outf("cxarray2_new(%v, %v)", acap, elemsz)
+		elemsz = gopp.IfElse(elemsz == int64(0), "sizeof(voidptr)", elemsz)
+		c.outf("cxarray2_new(")
+		if len(te.Args) > 1 {
+			c.genExpr(scope, te.Args[1])
+		} else {
+			c.out("1")
+		}
+		c.outf(", %v)", elemsz)
 	default:
 		log.Println("unknown", itep, ity, lenep)
 	}
@@ -1480,9 +1464,11 @@ func (c *g2nc) genCallExprNorm(scope *ast.Scope, te *ast.CallExpr) {
 			c.outfh().outnl()
 		}
 	}
-	if fca.haslval {
+	if fca.isvardic && fca.haslval {
+		c.out("/*222*/")
 		c.genExpr(scope, fca.lexpr)
 		c.outeq()
+		c.out("/*111*/")
 	}
 
 	if fca.isselfn {

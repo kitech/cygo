@@ -48,6 +48,12 @@ type mirstring struct {
 	ptr voidptr
 	len int
 }
+type mirarray2 struct {
+	ptr      voidptr
+	len      int
+	cap      int
+	elemsize int
+}
 
 func gostring(ptr byteptr) string {
 	return string(ptr)
@@ -102,6 +108,18 @@ func (a []string) join(sep string) string {
 		return s
 }
 */
+
+//export cxarray2_join
+func cxarray2_join(arr []string, sep string) string {
+	s := ""
+	for i := 0; i < len(arr); i++ {
+		s += arr[i]
+		if i < len(arr)-1 {
+			s += sep
+		}
+	}
+	return s
+}
 
 func (s string) index(sep string) int {
 	res := -1

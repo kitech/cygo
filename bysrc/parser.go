@@ -429,6 +429,7 @@ func astcs_upper(c *astutil.Cursor) *astutil.Cursor {
 func (pc *ParserContext) walkpass_csymbols() {
 	pkgs := pc.pkgs
 
+	cfuncs := map[ast.Node]ast.ObjKind{}
 	cnodes := map[ast.Node]ast.ObjKind{}
 	for _, pkg := range pkgs {
 		astutil.Apply(pkg, func(c *astutil.Cursor) bool {
@@ -437,35 +438,14 @@ func (pc *ParserContext) walkpass_csymbols() {
 				if iscident(te.X) {
 					// log.Println("got111", te.X, te.Sel, c.Index())
 					// log.Println(c.Parent(), reflect.TypeOf(c.Parent()))
-					switch pe := c.Parent().(type) {
-					case *ast.CallExpr:
-						// log.Println("got111", te.X, te.Sel, c.Index(), c.Parent(), exprstr(c.Parent().(ast.Expr)))
-						if iscident(pe.Fun.(*ast.SelectorExpr).X) {
-							cnodes[c.Parent()] = ast.Fun
-						}
-						// cnodes[c.Node()] = ast.Var
-						// cnodes[c.Node()] = ast.Con
-						// cnodes[c.Node()] = ast.Typ
-					case *ast.AssignStmt:
-						cnodes[c.Node()] = ast.Var
-					case *ast.CompositeLit:
-						cnodes[c.Node()] = ast.Var
-					case *ast.ValueSpec: // in const
-					case *ast.BinaryExpr:
-						cnodes[c.Node()] = ast.Var
-					case *ast.TypeSpec:
-						cnodes[c.Node()] = ast.Var
-					default:
-						log.Panicln("not impl", reftyof(te.X), reftyof(te.Sel), te.X, te.Sel, reftyof(pe), pe, exprpos(pc, pe))
-					}
+					cnodes[c.Node()] = ast.Var
 				}
 			case *ast.CallExpr:
 				fo := te.Fun
 				if fe, ok := fo.(*ast.SelectorExpr); ok {
 					if iscident(fe.X) {
-						cnodes[c.Node()] = ast.Fun
+						cfuncs[c.Node()] = ast.Fun
 						// log.Println("got222", exprstr(fe.X), fe.X, fe.Sel)
-						return false
 					}
 				}
 			case *ast.ValueSpec:
@@ -487,8 +467,30 @@ func (pc *ParserContext) walkpass_csymbols() {
 			return true
 		})
 	}
-	pc.csymbols = cnodes
-	// TODO need dedup
+
+	res := map[ast.Node]ast.ObjKind{}
+	seens := map[string]bool{}
+	for nx, _ := range cnodes {
+		n := nx.(*ast.SelectorExpr)
+		if _, exist := seens[n.Sel.Name]; exist {
+			continue // dedup
+		}
+		seens[n.Sel.Name] = true
+		found := false
+		for fx, _ := range cfuncs {
+			f := fx.(*ast.CallExpr)
+			sel := f.Fun.(*ast.SelectorExpr)
+			if sel.Sel.Name == n.Sel.Name {
+				found = true
+				res[f] = ast.Fun
+				break
+			}
+		}
+		if !found {
+			res[nx] = ast.Var
+		}
+	}
+	pc.csymbols = res
 }
 
 // before types.Config.Check
@@ -538,29 +540,34 @@ func (pc *ParserContext) walkpass_fill_fakecpkg() {
 					if valspx == nil { // 不在赋值或者声明语句
 						break
 					}
-					var ale ast.Expr
+					var ales []ast.Expr
 					switch valspe := valspx.(type) {
 					case *ast.ValueSpec:
-						gopp.Assert(len(valspe.Values) == 1, "wtttt", len(valspe.Values))
-						ale = valspe.Names[0]
+						for idx, _ := range valspe.Names {
+							ales = append(ales, valspe.Names[idx])
+						}
 					case *ast.AssignStmt:
-						gopp.Assert(len(valspe.Rhs) == 1, "wtttt", len(valspe.Rhs))
-						ale = valspe.Lhs[0]
+						for idx, _ := range valspe.Lhs {
+							ales = append(ales, valspe.Lhs[idx])
+						}
 					}
 					blkst := upfind_blockstmt(pc, c, 0)
 					if blkst == nil {
 						break
 					}
-					if _, ok := ale.(*ast.Ident); !ok {
-						break
-					}
-					used := find_use_ident(pc, blkst, ale.(*ast.Ident))
-					log.Println(used, len(blkst.List))
-					for _, selex := range used {
-						sele := selex.(*ast.SelectorExpr)
-						log.Println(sele, exprstr(sele), te.Sel)
-						fldidt := ast.NewIdent(te.Sel.Name + "." + sele.Sel.Name)
-						pc.csymbols[fldidt] = ast.Var
+					for idx, ale := range ales {
+						if _, ok := ale.(*ast.Ident); !ok {
+							continue
+						}
+
+						used := find_use_ident(pc, blkst, ale.(*ast.Ident))
+						log.Println(idx, used, len(blkst.List))
+						for _, selex := range used {
+							sele := selex.(*ast.SelectorExpr)
+							log.Println(idx, sele, exprstr(sele), te.Sel)
+							fldidt := ast.NewIdent(te.Sel.Name + "." + sele.Sel.Name)
+							pc.csymbols[fldidt] = ast.Var
+						}
 					}
 				}
 			case *ast.CallExpr:
