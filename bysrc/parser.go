@@ -1254,6 +1254,48 @@ func (pc *ParserContext) walkpass_tmpvars() {
 						tyval := types.TypeAndValue{}
 						tyval.Type = pc.info.TypeOf(ae)
 						pc.info.Types[vsp2.Lhs[0]] = tyval
+					case *ast.CallExpr:
+						vsp2 := &ast.AssignStmt{}
+						vsp2.Lhs = []ast.Expr{newIdent(tmpvarname())}
+						vsp2.Rhs = []ast.Expr{ae}
+						vsp2.Tok = token.DEFINE
+						vsp2.TokPos = c.Node().Pos()
+						te.Args[idx] = vsp2.Lhs[0]
+						// c.Replace(vsp2.Lhs[0])
+						stmt := upfindstmt(pc, c, 0)
+						tmpvars[stmt] = append(tmpvars[stmt], vsp2)
+						tyval := types.TypeAndValue{}
+						tyval.Type = pc.info.TypeOf(ae)
+						pc.info.Types[vsp2.Lhs[0]] = tyval
+					default:
+						// log.Println(ae, reftyof(ae))
+					}
+				}
+			case *ast.AssignStmt: // processing _ name
+				for idx, ae := range te.Lhs {
+					aidt, ok := ae.(*ast.Ident)
+					if !ok {
+						continue
+					}
+					if aidt.Name == "_" {
+						tidt := ast.NewIdent(tmpvarname())
+						te.Lhs[idx] = tidt
+						tyval := types.TypeAndValue{}
+						tyval.Type = pc.info.TypeOf(te.Rhs[idx])
+						if tyval.Type == nil {
+							tyval.Type = types.Typ[types.Int]
+						}
+						pc.info.Types[te.Lhs[idx]] = tyval
+						pc.info.Types[tidt] = tyval
+
+						// stmt := upfindstmt(pc, c, 0)
+						stmt := te
+						valsp := &ast.ValueSpec{}
+						valsp.Names = []*ast.Ident{tidt}
+						valsp.Type = te.Rhs[idx]
+						//valsp.Values = []ast.Expr{ast.NewIdent("nilptr")}
+						tmpvars[stmt] = append(tmpvars[stmt], valsp)
+						pc.cursors[valsp] = c
 					}
 				}
 			default:

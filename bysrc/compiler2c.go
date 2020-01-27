@@ -426,6 +426,18 @@ func (this *g2nc) genFuncDecl(scope *ast.Scope, fd *ast.FuncDecl) {
 			elemsz := "sizeof(int)"
 			this.outf("cxarray2* deferarr = cxarray2_new(1, %v)", elemsz).outfh().outnl()
 		}
+		gennamedrets := func() {
+			this.out("//named returns").outnl()
+			if fd.Type.Results == nil {
+				return
+			}
+			for _, fld := range fd.Type.Results.List {
+				for _, name := range fld.Names {
+					this.out(this.exprTypeName(scope, fld.Type)).outsp()
+					this.out(name.Name).outeq().out("{0}").outfh().outnl()
+				}
+			}
+		}
 		scope = ast.NewScope(scope)
 		scope.Insert(ast.NewObj(ast.Fun, fd.Name.Name))
 		if ismret {
@@ -433,12 +445,8 @@ func (this *g2nc) genFuncDecl(scope *ast.Scope, fd *ast.FuncDecl) {
 			tvidt := newIdent(tvname)
 			this.multirets[fd] = tvidt
 			this.out("{").outnl()
-			for _, fld := range fd.Type.Results.List {
-				for _, name := range fld.Names {
-					this.out(this.exprTypeName(scope, fld.Type)).outsp()
-					this.out(name.Name).outeq().out("{0}").outfh().outnl()
-				}
-			}
+			gennamedrets()
+
 			this.outf("%s_multiret_arg*", fd.Name.Name).outsp().out(tvname)
 			this.outeq().outsp()
 			this.outf("cxmalloc(sizeof(%s_multiret_arg))", fd.Name.Name).outfh().outnl()
@@ -450,6 +458,7 @@ func (this *g2nc) genFuncDecl(scope *ast.Scope, fd *ast.FuncDecl) {
 		} else {
 			this.out("{").outnl()
 			gendeferprep()
+			gennamedrets()
 			this.genBlockStmt(scope, fd.Body)
 			this.out("}").outnl()
 		}
@@ -2375,7 +2384,6 @@ func (c *g2nc) genCxarrAdd(scope *ast.Scope, vnamex interface{}, ve ast.Expr, id
 }
 func (c *g2nc) genCxarrSet(scope *ast.Scope, vname ast.Expr, vidx ast.Expr, elem interface{}) {
 	idxstr := ""
-	valstr := ""
 
 	switch te := vidx.(type) {
 	case *ast.BasicLit:
@@ -2384,15 +2392,11 @@ func (c *g2nc) genCxarrSet(scope *ast.Scope, vname ast.Expr, vidx ast.Expr, elem
 		log.Println("todo", vidx, reflect.TypeOf(vidx))
 	}
 
-	switch te := elem.(type) {
-	case *ast.BasicLit:
-		valstr = te.Value
-	default:
-		log.Println("todo", elem, reflect.TypeOf(elem))
-	}
-
-	c.outf("cxarray2_replace_at(%v, (voidptr)(uintptr_t)%v, %v, nilptr)",
-		vname, valstr, idxstr).outfh().outnl()
+	c.outf("cxarray2_replace_at(")
+	c.genExpr(scope, vname)
+	c.outf(", (voidptr)(uintptr)")
+	c.genExpr(scope, elem.(ast.Expr))
+	c.outf(", %v, nilptr)", idxstr).outfh().outnl()
 }
 func (c *g2nc) genCxarrGet(scope *ast.Scope, vname ast.Expr, vidx ast.Expr, varty types.Type) {
 	var elemty types.Type
@@ -2854,7 +2858,8 @@ func (c *g2nc) genValueSpec(scope *ast.Scope, spec *ast.ValueSpec, validx int) {
 		if varty == nil && validx > 0 {
 			varty = vp1stty
 		}
-		if varty == nil && strings.HasPrefix(types.ExprString(spec.Values[0]), "C.") {
+		if varty == nil && idx < len(spec.Values) &&
+			strings.HasPrefix(types.ExprString(spec.Values[0]), "C.") {
 			varty = types.Typ[types.UntypedInt]
 		}
 		if varty == nil {
@@ -2953,13 +2958,14 @@ func (c *g2nc) genValueSpec(scope *ast.Scope, spec *ast.ValueSpec, validx int) {
 				tystr = strings.Trim(tystr, "*")
 				c.outf("%s_new_zero()", tystr)
 			} else {
-				c.out("{0} /* 222 */")
+				c.outf("{0} /* 222 */")
 			}
 		}
 
-		if isglobvar {
+		if isglobvar || strings.HasPrefix(varname.Name, "gxtv") {
 			c.outfh().outnl()
 		}
+		// c.out("/*333*/").outnl()
 	}
 
 }
@@ -3021,7 +3027,11 @@ func (this *g2nc) outf(format string, args ...interface{}) *g2nc {
 func (this *g2nc) clinema(e ast.Node) *g2nc {
 	poso := this.exprpos(e) // file:row:col
 	fields := strings.Split(poso.String(), ":")
-	this.outf("// #line %s %s", fields[1], fields[0]).outnl()
+	if len(fields) > 1 {
+		this.outf("// #line %s %s", fields[1], fields[0]).outnl()
+	} else {
+		this.outf("// #line %v", fields).outnl()
+	}
 	return this
 }
 
@@ -3041,6 +3051,7 @@ typedef double f64;
 typedef uint64_t u64;
 typedef int64_t i64;
 typedef uintptr_t usize;
+typedef uintptr_t uintptr;
 // typedef void* error;
 typedef void* voidptr;
 typedef char* byteptr;
