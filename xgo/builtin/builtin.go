@@ -32,6 +32,9 @@ func strdup3(ptr voidptr) voidptr {
 func strndup3(ptr voidptr, n int) voidptr {
 	return C.cxstrndup(ptr, n)
 }
+func memcpy3(dst voidptr, src voidptr, n int) {
+	C.memcpy(dst, src, n)
+}
 
 //[nomangle]
 func assert()
@@ -47,12 +50,6 @@ func hehe(a int, b string) int {
 type mirstring struct {
 	ptr voidptr
 	len int
-}
-type mirarray2 struct {
-	ptr      voidptr
-	len      int
-	cap      int
-	elemsize int
 }
 
 func gostring(ptr byteptr) string {

@@ -11,7 +11,7 @@ char* cxstring_unrefpp(cxstring** spp) {
 */
 import "C"
 
-// import "gopp/xstrings"
+// import "xgo/xstrings"
 
 const skip_depth = 4
 const pkgsep = "__"
@@ -36,11 +36,19 @@ func dummy(args ...interface{}) {
 
 func Println(args ...interface{}) {
 	printx2(true, args...)
-	// dummy(args...) // not work
+}
+func Infoln(args ...interface{}) {
+	printx2(true, args...)
+}
+func Warnln(args ...interface{}) {
+	printx2(true, args...)
+}
+func Errorln(args ...interface{}) {
+	printx2(true, args...)
 }
 
 func Fatalln(args ...interface{}) {
-
+	printx2(true, args...)
 }
 
 func Printf(format string, args ...interface{}) {

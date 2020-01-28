@@ -15,3 +15,11 @@ func (mu *Mutex) Lock() {
 func (mu *Mutex) Unlock() {
 	C.pthread_mutex_unlock(&mu.lock)
 }
+
+type Once struct {
+	did int
+}
+
+func (once *Once) Do( /* todo f func()*/ ) {
+
+}

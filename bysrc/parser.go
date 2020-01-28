@@ -34,6 +34,7 @@ type ParserContext struct {
 	files    []*ast.File
 	typkgs   *types.Package
 	conf     types.Config
+	chkerrs  []error
 	info     types.Info
 	cursors  map[ast.Node]*astutil.Cursor
 	grstargs map[string]bool // goroutines packed arguments structure
@@ -127,7 +128,10 @@ func (this *ParserContext) Init_no_cgocmd() error {
 	this.walkpass_fill_fakecpkg()   // before types.Config.Check
 	this.walkpass_fill_builtinpkg() // before types.Config.Check
 
-	this.walkpass_check()
+	this.walkpass_check() // semantics check
+	if this.chkerrs != nil {
+		os.Exit(-1)
+	}
 	// this.walkpass_resolve_ctypes()
 	// this.walkpass_flat_cursors() // move move previous
 	// this.walkpass_clean_cgodecl()
@@ -160,6 +164,10 @@ func (pc *ParserContext) pkgimperror(err error) {
 		// log.Println(err)
 	} else {
 		log.Println(err)
+		// must stop error
+		if strings.Contains(err.Error(), "could not import") {
+			pc.chkerrs = append(pc.chkerrs, err)
+		}
 	}
 }
 func (this *ParserContext) Init_explict_cgo() error {

@@ -52,7 +52,16 @@ func zone() int {
 	return rv
 }
 
-func (t *Time) Format() {
+func (t *Time) Unix() int64 {
+	return t.unix
+}
+
+func (t *Time) Format(format string) string {
+	return ""
+}
+
+// yyyy-mm-dd hh:MM:ss.iii
+func (t *Time) Format1(withms bool) string {
 
 }
 

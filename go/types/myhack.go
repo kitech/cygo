@@ -14,6 +14,10 @@ const (
 	F64   = Float64
 	U64   = Uint64
 	I64   = Int64
+	U32   = Uint32
+	I32   = Int32
+	U16   = Uint16
+	I16   = Int16
 	U8    = Uint8
 	I8    = Int8
 )
@@ -41,6 +45,10 @@ func HackExtraBuiltin() {
 		{F64, IsFloat, "f64"},
 		{U64, IsInteger | IsUnsigned, "u64"},
 		{I64, IsInteger, "i64"},
+		{U32, IsInteger | IsUnsigned, "u32"},
+		{I32, IsInteger, "i32"},
+		{U16, IsInteger | IsUnsigned, "u16"},
+		{I16, IsInteger, "i16"},
 	}
 	for _, typ := range healias {
 		aliases = append(aliases, typ)

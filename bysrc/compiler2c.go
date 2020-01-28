@@ -99,6 +99,15 @@ func (this *g2nc) genfile(scope *ast.Scope, name string, f *ast.File) {
 	*/
 
 	// non-func decls
+	this.outf("// predefs %v", 111).outnl()
+	for _, d := range f.Decls {
+		switch r := d.(type) {
+		case *ast.GenDecl:
+			this.genPredefTypeDecl(scope, r)
+			if r == nil {
+			}
+		}
+	}
 	for _, d := range f.Decls {
 		switch r := d.(type) {
 		case *ast.FuncDecl:
@@ -775,7 +784,7 @@ func (c *g2nc) genFiberStwrap(scope *ast.Scope, e *ast.CallExpr) {
 	stname := funame + "_fiber_args"
 	c.out("static").outsp()
 	c.out("void").outsp()
-	c.out(gopp.IfElseStr(pkgo == nil, "", pkgo.Name()+"_"))
+	c.out(gopp.IfElseStr(pkgo == nil, "", pkgo.Name()+pkgsep))
 	c.out(funame+"_fiber", "(voidptr vpargs)").outnl()
 	c.out("{").outnl()
 	c.out(stname, "*args = (", stname, "*)vpargs").outfh().outnl()
@@ -805,8 +814,8 @@ func (c *g2nc) genFiberWcall(scope *ast.Scope, e *ast.CallExpr) {
 		c.genExpr(scope, arg)
 		c.outfh().outnl()
 	}
-	pkgpfx := gopp.IfElseStr(pkgo == nil, "", pkgo.Name())
-	c.outf("cxrt_fiber_post(%s_%s, args)", pkgpfx, wfname).outfh().outnl()
+	pkgpfx := gopp.IfElseStr(pkgo == nil, "", pkgo.Name()+pkgsep)
+	c.outf("cxrt_fiber_post(%s%s, args)", pkgpfx, wfname).outfh().outnl()
 	c.out("}").outnl()
 }
 
@@ -856,25 +865,35 @@ func (c *g2nc) genRangeStmt(scope *ast.Scope, s *ast.RangeStmt) {
 		c.out(")").outfh().outnl()
 		c.out("  TableEntry *entry").outfh().outnl()
 		c.out("  while (hashtable_iter_next(&htiter, &entry) != CC_ITER_END) {").outnl()
-		c.outf("    %s %v = entry->key", keytystr, s.Key).outfh().outnl()
-		c.outf("    %s %v = entry->value", valtystr, s.Value).outfh().outnl()
+		keyvname := fmt.Sprintf("%v", s.Key)
+		keyvname = gopp.IfElseStr(keyvname == "_", tmpvarname(), keyvname)
+		c.outf("    %s %v = entry->key", keytystr, keyvname).outfh().outnl()
+		valvname := fmt.Sprintf("%v", s.Value)
+		valvname = gopp.IfElseStr(valvname == "_", tmpvarname(), valvname)
+		c.outf("    %s %v = entry->value", valtystr, valvname).outfh().outnl()
 		c.genBlockStmt(scope, s.Body)
 		c.out("  }").outnl()
 		c.out("// TODO gc safepoint code").outnl()
 		c.out("}").outnl()
 	case *types.Slice:
 		keyidstr := fmt.Sprintf("%v", s.Key)
-		keyidstr = gopp.IfElseStr(keyidstr == "_", "idx", keyidstr)
+		keyidstr = gopp.IfElseStr(keyidstr == "_", tmpvarname(), keyidstr)
 
 		c.out("{").outnl()
-		c.outf("  for (int %s = 0; %s < cxarray2_size(%v); %s++) {",
-			keyidstr, keyidstr, s.X, keyidstr).outnl()
+		tmparrsz := tmpvarname()
+		c.outf("int %v = cxarray2_size(", tmparrsz)
+		c.genExpr(scope, s.X)
+		c.out(")").outfh().outnl()
+		c.outf("  for (int %s = 0; %s < %v; %s++) {",
+			keyidstr, keyidstr, tmparrsz, keyidstr).outnl()
 		if s.Value != nil {
 			valtystr := c.exprTypeName(scope, s.Value)
 			c.outf("     %s %v = {0}", valtystr, s.Value).outfh().outnl()
 			var tmpvar = tmpvarname()
 			c.outf("    voidptr %s = {0}", tmpvar).outfh().outnl()
-			c.outf("    %v = *cxarray2_get_at(%v, %s)", tmpvar, s.X, keyidstr).outfh().outnl()
+			c.outf("    %v = *cxarray2_get_at(", tmpvar)
+			c.genExpr(scope, s.X)
+			c.outf(", %s)", keyidstr).outfh().outnl()
 		}
 		c.genBlockStmt(scope, s.Body)
 		c.out("  }").outnl()
@@ -2368,26 +2387,17 @@ func (c *g2nc) genCxmapAddkv(scope *ast.Scope, vnamex interface{}, ke ast.Expr, 
 }
 func (c *g2nc) genCxarrAdd(scope *ast.Scope, vnamex interface{}, ve ast.Expr, idx int) {
 	// log.Println(vnamex, ve, idx)
-	valstr := ""
-	switch be := ve.(type) {
-	case *ast.BasicLit:
-		switch be.Kind {
-		case token.STRING:
-			valstr = fmt.Sprintf("cxstring_new_cstr(%v)", be.Value)
-		case token.INT:
-			valstr = be.Value
-		default:
-			log.Println("todo", ve, idx, reflect.TypeOf(ve))
-		}
-	default:
-		log.Println("unknown", ve, reflect.TypeOf(ve))
-	}
+	tyname := c.exprTypeName(scope, ve)
+	tmpname := tmpvarname()
+	c.outf("%v %v = ", tyname, tmpname)
+	c.genExpr(scope, ve)
+	c.outfh().outnl()
 
 	varobj := c.info.ObjectOf(vnamex.(*ast.Ident))
 	pkgpfx := gopp.IfElseStr(isglobalid(c.psctx, vnamex.(*ast.Ident)), varobj.Pkg().Name(), "")
-	pkgpfx = gopp.IfElseStr(pkgpfx == "", "", pkgpfx+"_")
-	c.outf("cxarray2_append(%s%v, (voidptr)&%v)", pkgpfx,
-		vnamex.(*ast.Ident).Name, valstr) // .outfh().outnl()
+	pkgpfx = gopp.IfElseStr(pkgpfx == "", "", pkgpfx+pkgsep)
+	c.outf("cxarray2_append(%s%v, ", pkgpfx, vnamex.(*ast.Ident).Name)
+	c.outf("(voidptr)&%v)", tmpname) // .outfh().outnl()
 }
 func (c *g2nc) genCxarrSet(scope *ast.Scope, vname ast.Expr, vidx ast.Expr, elem interface{}) {
 	idxstr := ""
@@ -2707,6 +2717,19 @@ func (this *g2nc) exprTypeFmt(scope *ast.Scope, e ast.Expr) string {
 	panic("unreachable")
 }
 
+func (c *g2nc) genPredefTypeDecl(scope *ast.Scope, d *ast.GenDecl) {
+	for _, spec := range d.Specs {
+		switch tspec := spec.(type) {
+		case *ast.TypeSpec:
+			switch tspec.Type.(type) {
+			case *ast.StructType:
+				specname := tspec.Name.Name
+				c.outf("typedef struct %s%s %s%s",
+					c.pkgpfx(), specname, c.pkgpfx(), specname).outfh().outnl()
+			}
+		}
+	}
+}
 func (this *g2nc) genGenDecl(scope *ast.Scope, d *ast.GenDecl) {
 	// log.Println(d.Tok, d.Specs, len(d.Specs), d.Tok.IsKeyword(), d.Tok.IsLiteral(), d.Tok.IsOperator())
 	for idx, spec := range d.Specs {
@@ -2986,18 +3009,21 @@ func (c *g2nc) genInitGlobvars(scope *ast.Scope, pkg *ast.Package) {
 			_ = idx
 			keepon := false
 			gotyx := c.info.TypeOf(name)
-			log.Println(gotyx)
+			log.Println(gotyx, name)
 			switch goty := gotyx.(type) {
 			case *types.Basic:
 				if isstrty2(goty) {
 					keepon = true
 				}
-			case *types.Array, *types.Slice, *types.Map:
+			case *types.Slice:
+				keepon = true
+			case *types.Array, *types.Map:
 				keepon = true
 			default:
 				gopp.G_USED(goty)
 			}
 			if !keepon {
+				c.out("// soon ", exprstr(name), " ", c.exprpos(name).String()).outnl()
 				continue
 			}
 			c.out("//", c.exprpos(name).String()).outnl()
@@ -3053,6 +3079,10 @@ typedef uint32 _Ctype_uint;
 typedef int8 _Ctype_char;
 typedef float32 _Ctype_float;
 typedef _Ctype_long _Ctype_ptrdiff_t;
+typedef uint32_t u32;
+typedef int32_t i32;
+typedef uint16_t u16;
+typedef int16_t i16;
 typedef float f32;
 typedef double f64;
 typedef uint64_t u64;

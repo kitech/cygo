@@ -9,9 +9,11 @@ package xnet
 */
 import "C"
 import (
-	"gopp/xstrconv"
-	"gopp/xstrings"
+	"xgo/xstrconv"
+	"xgo/xstrings"
 )
+
+func Keep() {}
 
 type Socket struct {
 	fd   int

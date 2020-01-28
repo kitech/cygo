@@ -5,10 +5,9 @@ package rand
 #include <time.h>
 */
 import "C"
-import "unsafe"
 
 func dummying() {
-	var p unsafe.Pointer
+	var p voidptr
 }
 
 func init() {
@@ -17,4 +16,9 @@ func init() {
 
 func Int() int {
 	return C.rand()
+}
+
+func Intn(n int) int {
+	rv := C.rand()
+	return rv % n
 }

@@ -19,6 +19,8 @@ const (
 	// __func__ = C.__func__ // not work
 )
 
+func Keep() {}
+
 func Init() {
 	C.GC_init()
 }
@@ -138,4 +140,57 @@ func GetMemoryUse() int    { return C.GC_get_memory_use() }
 func GetNonGCBytes() int   { return C.GC_get_non_gc_bytes() }
 func GetTotalBytes() int   { return C.GC_get_total_bytes() }
 
-func Keep() {}
+type Stats struct {
+	Version      uint
+	Verstr       string
+	GCno         int
+	FreeBytes    int
+	HeapSize     int
+	BytesSinceGC int
+	MemoryUse    int
+	NonGCBytes   int
+	TotalBytes   int
+}
+
+func GetGCStats() *Stats {
+	st := &Stats{}
+	st.GCno = GetGCNo()
+	st.FreeBytes = GetFreeBytes()
+	st.HeapSize = GetHeapSize()
+	st.BytesSinceGC = GetBytesSinceGC()
+	st.MemoryUse = GetMemoryUse()
+	st.NonGCBytes = GetNonGCBytes()
+	st.TotalBytes = GetTotalBytes()
+	st.Version = Version()
+
+	return st
+}
+
+// repr to lines
+func (st *Stats) Lines() []string {
+	lines := []string{}
+	s := "gcno = " + st.GCno.repr()
+	lines = append(lines, s)
+	s = "free bytes = " + st.FreeBytes.repr()
+	lines = append(lines, s)
+	s = "heap size = " + st.HeapSize.repr()
+	lines = append(lines, s)
+	s = "bytes since GC = " + st.BytesSinceGC.repr()
+	lines = append(lines, s)
+	s = "memory use = " + st.MemoryUse.repr()
+	lines = append(lines, s)
+	return lines
+}
+
+// repr to lines
+func (st *Stats) Tomap() map[string]string {
+	var m = map[string]string{}
+	// TODO compiler
+	// m["gcno"] = st.GCno.repr()
+	// m["free bytes"] = st.FreeBytes.repr()
+	// m["heap size"] = st.HeapSize.repr()
+	// m["bytes since GC"] = st.BytesSinceGC.repr()
+	// m["memory use"] = st.MemoryUse.repr()
+
+	return m
+}

@@ -14,19 +14,22 @@
 效果还不错。
 
 ### 关于语法
-* struct 声明语法，去掉 type
-* 数组的声明，如果有初始化元素，则去掉类型部分. ints := [1, 2, 3]
-* map的声明，如果有初始化元素，则去掉类型部分. ints := {"a":1, "b":2, "c":3}
-* varidict parameters
-* 全引用的方式，不要出现指针类型
+* [ ] struct 声明语法，去掉 type
+* [ ] 数组的声明，如果有初始化元素，则去掉类型部分. ints := [1, 2, 3]
+* [ ] map的声明，如果有初始化元素，则去掉类型部分. ints := {"a":1, "b":2, "c":3}
+* [x] varidict parameters
+* [ ] 全引用的方式，不要出现指针类型
 * [x] 需要定义几个常用的内置类型， unsafe.Pointer => voidptr, byteptr
-* [x] len(),cap()的写法使用方法方式
+* [x] len(), cap()的写法使用方法方式
 * [x] assert, sizeof, alignof, offsetof 内置
 * [ ] union 支持
 * [ ] := range => in
 * [x] 内置的string要有更多的方法，用单独的strings包有点麻烦
-* [x] 内置的int/float要有更多的方法
+* [x] 内置的int/float要有更多的转换方法
+* [ ] 结构体的通用 repr 函数
 * [ ] string和array似乎可以全在builtin中用go语法实现了。
+* [ ] func type parameters
+* [ ] type order graph
 
 ### 语法树重写
 * [ ] 变量声明解构为每条语句一个变量，如果有多个的话

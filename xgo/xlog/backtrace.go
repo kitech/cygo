@@ -11,7 +11,7 @@ package xlog
 */
 import "C"
 import (
-	"gopp/xstrings"
+	"xgo/xstrings"
 )
 
 type Frame struct {
