@@ -1455,6 +1455,14 @@ func (c *g2nc) genCallExprNorm(scope *ast.Scope, te *ast.CallExpr) {
 			}
 			switch elty := elemty.(type) {
 			case *types.Interface:
+				e1tyx := c.info.TypeOf(e1)
+				if e1ty, ok1 := e1tyx.(*types.Slice); ok1 {
+					if _, ok2 := e1ty.Elem().(*types.Interface); ok2 {
+						c.outf("%s", idt.Name).outeq()
+						c.genExpr(scope, e1)
+						break
+					}
+				}
 				tyname := c.exprTypeName(scope, e1)
 				if tyname == "cxstring*" {
 					tyname = "string"
@@ -2015,8 +2023,7 @@ func (this *g2nc) genExpr2(scope *ast.Scope, e ast.Expr) {
 			keepop = false
 			varname := scope.Lookup("varname")
 
-			tyobj := this.info.ObjectOf(t2.Type.(*ast.Ident))
-			goty := tyobj.Type().(*types.Named).Underlying().(*types.Struct)
+			goty := this.info.TypeOf(t2).(*types.Named).Underlying().(*types.Struct)
 			for idx, elmx := range t2.Elts {
 				// log.Println(elmx, goty, goty.Field(idx), reflect.TypeOf(elmx))
 				switch elme := elmx.(type) {
@@ -2734,7 +2741,7 @@ func (this *g2nc) genTypeSpec(scope *ast.Scope, spec *ast.TypeSpec) {
 		this.outnl()
 		this.outf(".kind = %d,", reflect.Struct).outnl()
 		this.outf(".size = sizeof(%s%s),", this.pkgpfx(), specname).outnl()
-		this.outf(".size = alignof(%s%s),", this.pkgpfx(), specname).outnl()
+		this.outf(".align = alignof(%s%s),", this.pkgpfx(), specname).outnl()
 		this.outf(".tystr = \"%s%s\"", this.pkgpfx(), specname).outnl()
 		this.out("}").outfh().outnl()
 		this.outnl()
@@ -3081,10 +3088,10 @@ func (c *g2nc) genBuiltinTypesMetatype() string {
 		s += fmt.Sprintf(".kind = %d,\n", bityp.Kind())
 		if tyname == "string" {
 			s += fmt.Sprintf(".size = sizeof(%s),\n", "charptr")
-			s += fmt.Sprintf(".size = alignof(%s),\n", "charptr")
+			s += fmt.Sprintf(".align = alignof(%s),\n", "charptr")
 		} else {
 			s += fmt.Sprintf(".size = sizeof(%s),\n", tyname)
-			s += fmt.Sprintf(".size = alignof(%s),\n", tyname)
+			s += fmt.Sprintf(".align = alignof(%s),\n", tyname)
 		}
 		s += fmt.Sprintf(".tystr = \"%s\"\n", tyname)
 		s += fmt.Sprintf("}; // %d\n", idx)

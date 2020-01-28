@@ -14,7 +14,7 @@ add_library(cxrt STATIC  ${mydir}/src/cxrtbase.c
   )
 
 set(cltcdir ${party3dir}/cltc/src) # need ln cltc/src/include cltc/src/collectc
-include_directories(${mydir}/corona-c ${party3dir}/picoev ${cltcdir}/include ${cltcdir})
+include_directories(${mydir}/corona-c ${cltcdir}/include ${cltcdir})
 set(corona_c_srcs
   ${mydir}/corona-c/coro.c
 	${mydir}/corona-c/corowp.c
@@ -67,7 +67,8 @@ set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -fstack-protector -fstack-protector-all")
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -DGC_THREADS")
 #set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -DGC_DEBUG")
 set(corona_c_flags "-DNRDEBUG -DCORO_STACKALLOC -DCORO_UCONTEXT -DHAVE_UCONTEXT_H -DHAVE_SETJMP_H -DHAVE_SIGALTSTACK -fstack-usage")
-set(CMAKE_CXX_FLAGS "-nostdlib -fno-rtti -fno-rtti -fno-exceptions")
+#set(CMAKE_CXX_FLAGS "-nostdlib -fno-rtti -fno-exceptions")
+set(CMAKE_CXX_FLAGS "-fno-rtti -fno-exceptions")
 #set(CMAKE_CXX_COMPILER "cc")
 
 set_target_properties(crn PROPERTIES COMPILE_FLAGS ${corona_c_flags})

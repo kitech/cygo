@@ -27,7 +27,18 @@ func main() {
 		log.Fatalln("Not a dir", fname)
 	}
 
-	builtin_pkgpath := "../xgo/builtin"
+	gopaths := gopp.Gopaths()
+	builtin_imppath := "cxrt/xgo/builtin"
+	builtin_pkgpath := ""
+	for _, gopath := range gopaths {
+		pkgpath := gopath + "/src/" + builtin_imppath
+		if gopp.FileExist(pkgpath) {
+			builtin_pkgpath = pkgpath
+			break
+		}
+	}
+	gopp.Assert(builtin_pkgpath != "", "not found", builtin_imppath)
+
 	pkgpaths := []string{builtin_pkgpath, fname}
 	psctxs := []*ParserContext{}
 	comps := []*g2nc{}
@@ -35,7 +46,6 @@ func main() {
 	dedups := map[string]bool{}       // pkgpath =>
 
 	var builtin_psctx *ParserContext
-	gopaths := gopp.Gopaths()
 	gopaths = append(gopaths, runtime.GOROOT())
 
 	for len(pkgpaths) > 0 {

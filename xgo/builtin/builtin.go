@@ -263,79 +263,79 @@ func (s string) tobool() bool {
 
 func (i int) repr() string {
 	mem := malloc3(32)
-	C.sprintf(mem, "%d", i)
+	C.sprintf(mem, "%d".ptr, i)
 	return gostring(mem)
 }
 
 func (i float64) repr() string {
 	mem := malloc3(32)
-	C.sprintf(mem, "%g", i)
+	C.sprintf(mem, "%g".ptr, i)
 	return gostring(mem)
 }
 func (i float32) repr() string {
 	mem := malloc3(32)
-	C.sprintf(mem, "%g", i)
+	C.sprintf(mem, "%g".ptr, i)
 	return gostring(mem)
 }
 
 func (i int16) repr() string {
 	mem := malloc3(32)
-	C.sprintf(mem, "%d", i)
+	C.sprintf(mem, "%d".ptr, i)
 	return gostring(mem)
 }
 func (i int8) repr() string {
 	mem := malloc3(32)
-	C.sprintf(mem, "%d", i)
+	C.sprintf(mem, "%d".ptr, i)
 	return gostring(mem)
 }
 func (i int32) repr() string {
 	mem := malloc3(32)
-	C.sprintf(mem, "%d", i)
+	C.sprintf(mem, "%d".ptr, i)
 	return gostring(mem)
 }
 func (i int64) repr() string {
 	mem := malloc3(32)
-	C.sprintf(mem, "%ld", i)
+	C.sprintf(mem, "%ld".ptr, i)
 	return gostring(mem)
 }
 func (i uint8) repr() string {
 	mem := malloc3(32)
-	C.sprintf(mem, "%d", i)
+	C.sprintf(mem, "%d".ptr, i)
 	return gostring(mem)
 }
 func (i uint16) repr() string {
 	mem := malloc3(32)
-	C.sprintf(mem, "%d", i)
+	C.sprintf(mem, "%d".ptr, i)
 	return gostring(mem)
 }
 func (i uint32) repr() string {
 	mem := malloc3(32)
-	C.sprintf(mem, "%d", i)
+	C.sprintf(mem, "%d".ptr, i)
 	return gostring(mem)
 }
 func (i uint64) repr() string {
 	mem := malloc3(32)
-	C.sprintf(mem, "%ld", i)
+	C.sprintf(mem, "%ld".ptr, i)
 	return gostring(mem)
 }
 func (i usize) repr() string {
 	mem := malloc3(32)
-	C.sprintf(mem, "%ld", i)
+	C.sprintf(mem, "%ld".ptr, i)
 	return gostring(mem)
 }
 
 func (i voidptr) repr() string {
 	mem := malloc3(32)
-	C.sprintf(mem, "%p", i)
+	C.sprintf(mem, "%p".ptr, i)
 	return gostring(mem)
 }
 func (i byteptr) repr() string {
 	mem := malloc3(32)
-	C.sprintf(mem, "%p", i)
+	C.sprintf(mem, "%p".ptr, i)
 	return gostring(mem)
 }
 func (i charptr) repr() string {
 	mem := malloc3(32)
-	C.sprintf(mem, "%p", i)
+	C.sprintf(mem, "%p".ptr, i)
 	return gostring(mem)
 }
