@@ -27,15 +27,24 @@ func free3(ptr voidptr) {
 	C.cxfree(ptr)
 }
 func strdup3(ptr voidptr) voidptr {
+	if ptr == nil {
+		return nil
+	}
 	return C.cxstrdup(ptr)
 }
 func strndup3(ptr voidptr, n int) voidptr {
+	if ptr == nil {
+		return nil
+	}
 	return C.cxstrndup(ptr, n)
 }
 func memcpy3(dst voidptr, src voidptr, n int) {
 	C.memcpy(dst, src, n)
 }
 func memdup3(src voidptr, n int) voidptr {
+	if src == nil {
+		return nil
+	}
 	dst := malloc3(n + 1)
 	C.memcpy(dst, src, n)
 	return dst
@@ -78,13 +87,22 @@ type mirstring struct {
 }
 
 func gostring(ptr byteptr) string {
+	if ptr == nil {
+		return ""
+	}
 	return string(ptr)
 }
 func gostring_clone(ptr byteptr) string {
+	if ptr == nil {
+		return ""
+	}
 	ptr2 := strdup3(ptr)
 	return string(ptr2)
 }
 func gostringn(ptr byteptr, n int) string {
+	if ptr == nil {
+		return ""
+	}
 	s := string(ptr)
 	s.len = n
 	return s
