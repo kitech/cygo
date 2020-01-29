@@ -55,8 +55,9 @@ func (this *g2nc) genpkgs() {
 
 }
 
-const pkgsep = "__" // between pkg and type/function
-const mthsep = "_"  // between type and method
+const pkgsep = "__"  // between pkg and type/function
+const mthsep = "_"   // between type and method
+const cuzero = "{0}" // pointer, array, struct?
 
 func (c *g2nc) pkgpfx() string {
 	pfx := ""
@@ -443,7 +444,7 @@ func (this *g2nc) genFuncDecl(scope *ast.Scope, fd *ast.FuncDecl) {
 			for _, fld := range fd.Type.Results.List {
 				for _, name := range fld.Names {
 					this.out(this.exprTypeName(scope, fld.Type)).outsp()
-					this.out(name.Name).outeq().out("{0}").outfh().outnl()
+					this.out(name.Name).outeq().out(cuzero).outfh().outnl()
 				}
 			}
 		}
@@ -888,9 +889,9 @@ func (c *g2nc) genRangeStmt(scope *ast.Scope, s *ast.RangeStmt) {
 			keyidstr, keyidstr, tmparrsz, keyidstr).outnl()
 		if s.Value != nil {
 			valtystr := c.exprTypeName(scope, s.Value)
-			c.outf("     %s %v = {0}", valtystr, s.Value).outfh().outnl()
+			c.outf("     %s %v = %v", valtystr, s.Value, cuzero).outfh().outnl()
 			var tmpvar = tmpvarname()
-			c.outf("    voidptr %s = {0}", tmpvar).outfh().outnl()
+			c.outf("    voidptr %s = %v", tmpvar, cuzero).outfh().outnl()
 			c.outf("    %v = *cxarray2_get_at(", tmpvar)
 			c.genExpr(scope, s.X)
 			c.outf(", %s)", keyidstr).outfh().outnl()
@@ -911,7 +912,7 @@ func (c *g2nc) genRangeStmt(scope *ast.Scope, s *ast.RangeStmt) {
 			c.out("{").outnl()
 			c.outf("  for (int %s = 0; %s < (%v)->len; %s++) {",
 				keyidstr, keyidstr, s.X, keyidstr).outnl()
-			c.outf("     %s %v = {0}", valtystr, s.Value).outfh().outnl()
+			c.outf("     %s %v = %v", valtystr, s.Value, cuzero).outfh().outnl()
 			c.outf("    %v = (%v->ptr)[%s]", s.Value, s.X, keyidstr).outfh().outnl()
 			c.genBlockStmt(scope, s.Body)
 			c.out("  }").outnl()
@@ -1506,7 +1507,7 @@ func (c *g2nc) genCallExprNorm(scope *ast.Scope, te *ast.CallExpr) {
 
 	idt := newIdent(tmpvarname()) // store variadic args in array
 	if fca.isvardic && fca.haslval {
-		c.out("{0}").outfh().outnl()
+		c.out(cuzero).outfh().outnl()
 	}
 	if fca.isvardic {
 		var elemsz interface{} = "sizeof(voidptr)"
@@ -1778,7 +1779,7 @@ func (c *g2nc) genRecvStmt(scope *ast.Scope, e ast.Expr) {
 
 	varobj := scope.Lookup("varname")
 	if varobj != nil {
-		c.outeq().out("{0}").outfh().outnl()
+		c.outeq().out(cuzero).outfh().outnl()
 	}
 
 	c.out("{")
@@ -2003,7 +2004,7 @@ func (c *g2nc) genExpr(scope *ast.Scope, e ast.Expr) {
 			// _, lisidt := varname.Data.(ast.Expr).(*ast.Ident)
 			if !iscallexpr && !isidt {
 				// vartyp2 := reflect.TypeOf(varname.Data.(ast.Expr))
-				c.out("(cxeface*){0}").outfh().outnl()
+				c.outf("(cxeface*)%v", cuzero).outfh().outnl()
 
 				tmpvar := tmpvarname()
 				c.out(c.exprTypeName(scope, e), tmpvar, "=")
@@ -2492,7 +2493,7 @@ func (c *g2nc) genCxmapGetkv(scope *ast.Scope, vnamex interface{}, ke ast.Expr, 
 	if varobj == nil {
 		c.outf("voidptr %v =", tmpname).outsp()
 	}
-	c.out("{0}").outfh().outnl()
+	c.out(cuzero).outfh().outnl()
 
 	c.outf("int %v =", tmpvarname()).outsp()
 	c.outf("hashtable_get(%v, (voidptr)(uintptr)%v,", varstr, keystr)
@@ -3083,7 +3084,7 @@ func (c *g2nc) genValueSpec(scope *ast.Scope, spec *ast.ValueSpec, validx int) {
 			scope = putscope(scope, ast.Var, "varname", varname)
 			if isglobvar && (isstrty2(varty) || isslicety2(varty) ||
 				isarrayty2(varty) || isstructty2(varty) || ismapty2(varty)) {
-				c.out("{0}")
+				c.out(cuzero)
 			} else {
 				c.genExpr(scope, spec.Values[idx])
 			}
@@ -3095,7 +3096,7 @@ func (c *g2nc) genValueSpec(scope *ast.Scope, spec *ast.ValueSpec, validx int) {
 				c.outf("+%d", validx)
 				c.outf("-%d", vp1stidx)
 			} else if isglobvar {
-				c.out("{0} /* 111 */") // must constant for c
+				c.outf("%v /* 111 */", cuzero) // must constant for c
 			} else if isstrty2(varty) {
 				c.out("cxstring_new()")
 			} else if isslicety2(varty) {
@@ -3109,7 +3110,7 @@ func (c *g2nc) genValueSpec(scope *ast.Scope, spec *ast.ValueSpec, validx int) {
 				tystr = strings.Trim(tystr, "*")
 				c.outf("%s_new_zero()", tystr)
 			} else {
-				c.outf("{0} /* 222 */")
+				c.outf("%v /* 222 */", cuzero)
 			}
 		}
 
