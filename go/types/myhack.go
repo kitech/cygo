@@ -304,7 +304,57 @@ func fillBasicMethods() {
 		r0 := NewVar(token.NoPos, nil, "", Typ[Int])
 		results := NewTuple(r0)
 		sig = NewSignature(recv, params, results, false)
-		m1 := NewFunc(token.NoPos, nil, "int", sig)
+		m1 := NewFunc(token.NoPos, nil, "toint", sig)
+		strmths = append(strmths, m1)
+	}
+	{ // string.isdigit() bool
+		var sig *Signature
+		recv := NewVar(token.NoPos, nil, "this", Typ[String])
+		var params *Tuple
+		r0 := NewVar(token.NoPos, nil, "", Typ[Bool])
+		results := NewTuple(r0)
+		sig = NewSignature(recv, params, results, false)
+		m1 := NewFunc(token.NoPos, nil, "isdigit", sig)
+		strmths = append(strmths, m1)
+	}
+	{ // string.isnumber() bool
+		var sig *Signature
+		recv := NewVar(token.NoPos, nil, "this", Typ[String])
+		var params *Tuple
+		r0 := NewVar(token.NoPos, nil, "", Typ[Bool])
+		results := NewTuple(r0)
+		sig = NewSignature(recv, params, results, false)
+		m1 := NewFunc(token.NoPos, nil, "isnumber", sig)
+		strmths = append(strmths, m1)
+	}
+	{ // string.isprintable() bool
+		var sig *Signature
+		recv := NewVar(token.NoPos, nil, "this", Typ[String])
+		var params *Tuple
+		r0 := NewVar(token.NoPos, nil, "", Typ[Bool])
+		results := NewTuple(r0)
+		sig = NewSignature(recv, params, results, false)
+		m1 := NewFunc(token.NoPos, nil, "isprintable", sig)
+		strmths = append(strmths, m1)
+	}
+	{ // string.ishex() bool
+		var sig *Signature
+		recv := NewVar(token.NoPos, nil, "this", Typ[String])
+		var params *Tuple
+		r0 := NewVar(token.NoPos, nil, "", Typ[Bool])
+		results := NewTuple(r0)
+		sig = NewSignature(recv, params, results, false)
+		m1 := NewFunc(token.NoPos, nil, "ishex", sig)
+		strmths = append(strmths, m1)
+	}
+	{ // string.isascii() bool
+		var sig *Signature
+		recv := NewVar(token.NoPos, nil, "this", Typ[String])
+		var params *Tuple
+		r0 := NewVar(token.NoPos, nil, "", Typ[Bool])
+		results := NewTuple(r0)
+		sig = NewSignature(recv, params, results, false)
+		m1 := NewFunc(token.NoPos, nil, "isascii", sig)
 		strmths = append(strmths, m1)
 	}
 
@@ -326,6 +376,16 @@ func fillBasicMethods() {
 		results := NewTuple(r0)
 		sig = NewSignature(recv, params, results, false)
 		m1 := NewFunc(token.NoPos, nil, "cap", sig)
+		arrmths = append(arrmths, m1)
+	}
+	{ // array.ptr() voidptr
+		var sig *Signature
+		recv := NewVar(token.NoPos, nil, "this", NewSlice(nil))
+		var params *Tuple
+		r0 := NewVar(token.NoPos, nil, "", Typ[Voidptr])
+		results := NewTuple(r0)
+		sig = NewSignature(recv, params, results, false)
+		m1 := NewFunc(token.NoPos, nil, "ptr", sig)
 		arrmths = append(arrmths, m1)
 	}
 	{ // array.join() string

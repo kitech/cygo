@@ -35,6 +35,11 @@ func strndup3(ptr voidptr, n int) voidptr {
 func memcpy3(dst voidptr, src voidptr, n int) {
 	C.memcpy(dst, src, n)
 }
+func memdup3(src voidptr, n int) voidptr {
+	dst := malloc3(n + 1)
+	C.memcpy(dst, src, n)
+	return dst
+}
 
 //[nomangle]
 func assert()
@@ -47,6 +52,26 @@ func hehe(a int, b string) int {
 	return 0
 }
 
+func cerrclr() {
+	C.errno = 0
+}
+func cerrno() int {
+	return C.errno
+}
+func cerrmsg() string {
+	emsg := C.strerror(C.errno)
+	return gostring(emsg)
+}
+func cerrmsgof(no int) string {
+	emsg := C.strerror(no)
+	return gostring(emsg)
+}
+func prtcerr(pfx string) {
+	pfx = pfx + cerrmsg()
+	println(pfx)
+}
+
+///
 type mirstring struct {
 	ptr voidptr
 	len int
@@ -258,6 +283,67 @@ func (s string) tobool() bool {
 	return s == "true"
 }
 
+func (s string) isdigit() bool {
+	slen := s.len()
+	for i := 0; i < slen; i++ {
+		ch := s[i]
+		if ch >= '0' && ch <= '9' {
+		} else {
+			return false
+		}
+	}
+	return true
+}
+func (s string) isnumber() bool {
+	slen := s.len()
+	for i := 0; i < slen; i++ {
+		ch := s[i]
+		if (ch >= '0' && ch <= '9') || ch == '.' {
+		} else {
+			return false
+		}
+	}
+	return true
+}
+func (s string) isprintable() bool {
+	slen := s.len()
+	for i := 0; i < slen; i++ {
+		ch := s[i]
+		if ch >= '0' && ch <= '9' {
+		} else if ch >= 'A' && ch <= 'Z' {
+		} else if ch >= 'a' && ch <= 'z' {
+		} else {
+			return false
+		}
+	}
+	return true
+}
+func (s string) ishex() bool {
+	slen := s.len()
+	for i := 0; i < slen; i++ {
+		ch := s[i]
+		if ch >= '0' && ch <= '9' {
+		} else if ch >= 'A' && ch <= 'F' {
+		} else if ch >= 'a' && ch <= 'f' {
+		} else {
+			return false
+		}
+	}
+	return true
+}
+func (s string) isascii() bool {
+	slen := s.len()
+	for i := 0; i < slen; i++ {
+		ch := s[i]
+		if ch < 128 {
+		} else {
+			return false
+		}
+	}
+	return true
+}
+
+///
 func (i int) repr() string {
 	mem := malloc3(32)
 	C.sprintf(mem, "%d".ptr, i)

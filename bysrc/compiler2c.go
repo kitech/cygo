@@ -968,6 +968,8 @@ func (c *g2nc) genSwitchStmt(scope *ast.Scope, s *ast.SwitchStmt) {
 		case types.Int:
 			// c.genSwitchStmtNum(scope, s)
 			c.genSwitchStmtAsIf(scope, s)
+		case types.String:
+			c.genSwitchStmtStr(scope, s)
 		default:
 			log.Println("unknown", tagty, reflect.TypeOf(tagty))
 		}
@@ -988,6 +990,50 @@ func (c *g2nc) genSwitchStmtNum(scope *ast.Scope, s *ast.SwitchStmt) {
 }
 func (c *g2nc) genSwitchStmtStr(scope *ast.Scope, s *ast.SwitchStmt) {
 	log.Println(s.Tag)
+	c.out("{ // switch str").outnl()
+	if s.Init != nil {
+		c.genStmt(scope, s.Init, 0)
+	}
+	lst := s.Body.List
+	tmplabs := []string{}
+	for range lst {
+		tmplabs = append(tmplabs, tmpvarname())
+	}
+	for idx, stmtx := range lst {
+		stmt := stmtx.(*ast.CaseClause)
+		log.Println(stmt, reftyof(stmt))
+		c.outf(gopp.IfElseStr(idx > 0, "else", "")).outsp()
+		c.outf("// %v", exprpos(c.psctx, stmt)).outnl()
+		c.outf("if (")
+		for idx2, exprx := range stmt.List {
+			c.out("cxstring_eq(")
+			c.genExpr(scope, s.Tag)
+			c.out(",")
+			c.genExpr(scope, exprx)
+			c.out(")")
+			c.out(gopp.IfElseStr(idx2 < len(stmt.List)-1, "||", ""))
+		}
+		if len(stmt.List) == 0 { //default
+			c.out("1")
+		}
+		c.outf(") {").outnl()
+		c.outf("%s:", tmplabs[idx]).outfh().outnl()
+		c.outf("int gxtvnextcase = 0").outfh().outnl()
+		c.outf("do {").outnl()
+		for idx2, s2 := range stmt.Body {
+			c.genStmt(scope, s2, idx2)
+		}
+		c.outf("} while(0)").outfh().outnl()
+		c.outf("if (gxtvnextcase==1) {").outnl()
+		if idx >= len(lst)-1 {
+			c.outf("// goto %s+1", tmplabs[idx]).outnl()
+		} else {
+			c.outf("goto %s", tmplabs[idx+1]).outfh().outnl()
+		}
+		c.outf("}").outnl()
+		c.outf("}").outnl()
+	}
+	c.out("}").outnl()
 }
 func (c *g2nc) genCaseClause(scope *ast.Scope, s *ast.CaseClause, idx int) {
 	log.Println(s.List, s.Body)
@@ -2911,7 +2957,8 @@ func (c *g2nc) genValueSpec(scope *ast.Scope, spec *ast.ValueSpec, validx int) {
 		c.clinema(spec)
 		vartystr := c.exprTypeNameImpl2(scope, varty, varname)
 		c.out(gopp.IfElseStr(isglobvar, "static", "")).outsp()
-		c.out(gopp.IfElseStr(isconst, "const", "")).outsp()
+		// comment for less warning of const qualify
+		c.out(gopp.IfElseStr(isconst, "/*const*/", "")).outsp()
 		if strings.HasPrefix(varty.String(), "untyped ") {
 			c.out(sign2rety(varty.String())).outsp()
 		} else {
