@@ -2497,13 +2497,13 @@ func (c *g2nc) genCxmapGetkv(scope *ast.Scope, vnamex interface{}, ke ast.Expr, 
 
 	c.outf("int %v =", tmpvarname()).outsp()
 	c.outf("hashtable_get(%v, (voidptr)(uintptr)%v,", varstr, keystr)
-	c.out("(voidptr*)&(")
+	c.out("(voidptr*)(&(")
 	if varobj == nil {
 		c.outf("%v", tmpname)
 	} else {
 		c.outf("%v", varobj.Data)
 	}
-	c.outf("))") // .outfh().outnl()
+	c.outf(")))") // .outfh().outnl()
 }
 
 func (c *g2nc) genCxarrAdd(scope *ast.Scope, vnamex interface{}, ve ast.Expr, idx int) {
