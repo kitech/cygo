@@ -46,6 +46,21 @@ func cpurl2(cu *cparsed_url) *Url {
 
 	return uo
 }
+func (uo *Url) Portno0() int {
+	if uo.Port != 0 {
+		return uo.Port.toint()
+	}
+	scheme := uo.Scheme.tolower()
+	switch scheme {
+	case "http":
+		return 80
+	case "https":
+		return 443
+	case "ftp":
+		return 21
+	}
+	return uo.Port
+}
 
 func ParseUrl(u string) *Url {
 	uo1 := C.xnet_parse_url(u.cstr())

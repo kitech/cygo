@@ -85,13 +85,30 @@ func (c *g2nc) geninclude_cfiles(pkg *ast.Package) {
 	}
 }
 
-func (this *g2nc) genpkg(name string, pkg *ast.Package) {
+func (c *g2nc) genpkg(name string, pkg *ast.Package) {
 	log.Println("processing package", name)
 	for name, f := range pkg.Files {
-		this.genfile(pkg.Scope, name, f)
+		c.genPredefsFile(pkg.Scope, name, f)
+	}
+	for name, f := range pkg.Files {
+		c.genfile(pkg.Scope, name, f)
 	}
 }
-func (this *g2nc) genfile(scope *ast.Scope, name string, f *ast.File) {
+func (c *g2nc) genPredefsFile(scope *ast.Scope, name string, f *ast.File) {
+	log.Println("processing", name)
+	c.outf("// predefs %v", 111).outnl()
+	for _, d := range f.Decls {
+		switch r := d.(type) {
+		case *ast.GenDecl:
+			c.genPredefTypeDecl(scope, r)
+			if r == nil {
+			}
+		}
+	}
+	c.outnl()
+}
+
+func (c *g2nc) genfile(scope *ast.Scope, name string, f *ast.File) {
 	log.Println("processing", name)
 	/*
 		for idx, cmto := range f.Comments {
@@ -100,20 +117,11 @@ func (this *g2nc) genfile(scope *ast.Scope, name string, f *ast.File) {
 	*/
 
 	// non-func decls
-	this.outf("// predefs %v", 111).outnl()
-	for _, d := range f.Decls {
-		switch r := d.(type) {
-		case *ast.GenDecl:
-			this.genPredefTypeDecl(scope, r)
-			if r == nil {
-			}
-		}
-	}
 	for _, d := range f.Decls {
 		switch r := d.(type) {
 		case *ast.FuncDecl:
 		default:
-			this.genDecl(scope, d)
+			c.genDecl(scope, d)
 			if r == nil {
 			}
 		}
@@ -121,7 +129,7 @@ func (this *g2nc) genfile(scope *ast.Scope, name string, f *ast.File) {
 
 	// decls order?
 	// for _, d := range f.Decls {
-	// 	this.genDecl(scope, d)
+	// 	c.genDecl(scope, d)
 	// }
 }
 func (c *g2nc) gentypeofs(pkg *ast.Package) {
@@ -2844,6 +2852,7 @@ func (c *g2nc) genPredefTypeDecl(scope *ast.Scope, d *ast.GenDecl) {
 		case *ast.TypeSpec:
 			switch tspec.Type.(type) {
 			case *ast.StructType:
+				c.outf("// %v", exprpos(c.psctx, tspec)).outnl()
 				specname := tspec.Name.Name
 				c.outf("typedef struct %s%s %s%s",
 					c.pkgpfx(), specname, c.pkgpfx(), specname).outfh().outnl()
