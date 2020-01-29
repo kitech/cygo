@@ -1395,7 +1395,7 @@ func (c *g2nc) genCallExprDelete(scope *ast.Scope, te *ast.CallExpr) {
 		}
 		c.outf("hashtable_remove(")
 		c.genExpr(scope, arg0)
-		c.outf(", (voidptr)(uintptr_t)%s, 0)", keystr).outfh().outnl()
+		c.outf(", (voidptr)(uintptr)%s, 0)", keystr).outfh().outnl()
 	} else {
 		log.Println("todo", te.Args, argty)
 	}
@@ -1943,8 +1943,8 @@ func (c *g2nc) genDeferStmt(scope *ast.Scope, e ast.Stmt) {
 	c.out("int deferarrsz = cxarray2_size(deferarr)").outfh().outnl()
 	c.out("for (int deferarri = deferarrsz-1; deferarri>=0; deferarri--)")
 	c.out("{").outnl()
-	c.out("uintptr_t deferarrn = 0").outfh().outnl()
-	c.out("*(uintptr_t*)cxarray2_get_at(deferarr, deferarri)").outfh().outnl()
+	c.out("uintptr deferarrn = 0").outfh().outnl()
+	c.out("*(uintptr*)cxarray2_get_at(deferarr, deferarri)").outfh().outnl()
 	for i := 0; i < len(defers); i++ {
 		defero := defers[i]
 		c.out(gopp.IfElseStr(i > 0, "else", "")).outsp()
@@ -2235,7 +2235,7 @@ func (this *g2nc) genExpr2(scope *ast.Scope, e ast.Expr) {
 			this.out("]")
 		} else if ismapty(varty.String()) {
 			if vo == nil {
-				this.genCxmapAddkv(scope, te.X, te.Index, nil)
+				this.genCxmapGetkv(scope, te.X, te.Index, nil)
 			} else {
 				this.genCxmapAddkv(scope, te.X, te.Index, vo.Data)
 			}
@@ -2378,6 +2378,7 @@ func (this *g2nc) genExpr2(scope *ast.Scope, e ast.Expr) {
 	}
 }
 func (c *g2nc) genCxmapAddkv(scope *ast.Scope, vnamex interface{}, ke ast.Expr, vei interface{}) {
+	// vei == nil, then get
 	keystr := ""
 	switch be := ke.(type) {
 	case *ast.BasicLit:
@@ -2428,9 +2429,82 @@ func (c *g2nc) genCxmapAddkv(scope *ast.Scope, vnamex interface{}, ke ast.Expr, 
 		log.Println(vnamex, reflect.TypeOf(vnamex))
 	}
 
-	c.outf("hashtable_add(%v, (voidptr)(uintptr_t)%v, (voidptr)(uintptr_t)%s)",
-		varstr, keystr, valstr) // .outfh().outnl()
+	c.outf("hashtable_add(%v, (voidptr)(uintptr)%v,", varstr, keystr)
+	c.out("(voidptr)(uintptr)(")
+	switch ve := vei.(type) {
+	case ast.Expr:
+		c.genExpr(scope, ve)
+	default:
+		if valstr == "" {
+			c.outf("%v", vei)
+		} else {
+			c.out(valstr)
+		}
+	}
+	c.outf(")) /* %v */", valstr) // .outfh().outnl()
 }
+func (c *g2nc) genCxmapGetkv(scope *ast.Scope, vnamex interface{}, ke ast.Expr, vei interface{}) {
+	// vei == nil, then get
+	gopp.Assert(vei == nil, "wtfff", vei)
+
+	keystr := ""
+	switch be := ke.(type) {
+	case *ast.BasicLit:
+		switch be.Kind {
+		case token.STRING:
+			keystr = fmt.Sprintf("cxstring_new_cstr(%s)", be.Value)
+		default:
+			// log.Println("unknown index key kind", be.Kind)
+			keystr = fmt.Sprintf("%v", be.Value)
+		}
+	case *ast.Ident:
+		varty := c.info.TypeOf(ke)
+		switch varty.String() {
+		case "string":
+			keystr = be.Name
+		default:
+			log.Println("unknown", varty, ke)
+		}
+	case *ast.SelectorExpr:
+		varty := c.info.TypeOf(ke)
+		switch varty.String() {
+		case "string":
+			sym := fmt.Sprintf("%v->%v", be.X, be.Sel)
+			keystr = sym
+		default:
+			log.Println("unknown", varty, ke)
+		}
+	default:
+		log.Println("unknown index key", ke, reflect.TypeOf(ke))
+	}
+
+	varstr := fmt.Sprintf("%v", vnamex)
+	switch be := vnamex.(type) {
+	case *ast.Ident:
+	case *ast.SelectorExpr:
+		varstr = fmt.Sprintf("%v->%v", be.X, be.Sel)
+	default:
+		log.Println(vnamex, reflect.TypeOf(vnamex))
+	}
+
+	varobj := scope.Lookup("varname")
+	tmpname := tmpvarname()
+	if varobj == nil {
+		c.outf("voidptr %v =", tmpname).outsp()
+	}
+	c.out("{0}").outfh().outnl()
+
+	c.outf("int %v =", tmpvarname()).outsp()
+	c.outf("hashtable_get(%v, (voidptr)(uintptr)%v,", varstr, keystr)
+	c.out("(voidptr*)&(")
+	if varobj == nil {
+		c.outf("%v", tmpname)
+	} else {
+		c.outf("%v", varobj.Data)
+	}
+	c.outf("))") // .outfh().outnl()
+}
+
 func (c *g2nc) genCxarrAdd(scope *ast.Scope, vnamex interface{}, ve ast.Expr, idx int) {
 	// log.Println(vnamex, ve, idx)
 	tyname := c.exprTypeName(scope, ve)

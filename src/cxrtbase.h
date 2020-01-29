@@ -90,7 +90,7 @@ cxeface cxeface_new_of2(void* data, int sz);
 void println2(const char* filename, int lineno, const char* funcname, const char* fmt, ...);
 void println3(const char* origfilename, int origlineno, const char* filename, int lineno,
               const char* funcname, const char* fmt, ...);
-#define unsafe_Sizeof(x) sizeof(x)
+#define unsafe_Sizeof(x) sizeof(x) // TODO depcreat
 
 cxeface* cxrt_type2eface(voidptr _type, voidptr data);
 

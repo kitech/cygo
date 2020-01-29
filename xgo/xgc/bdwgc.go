@@ -185,12 +185,11 @@ func (st *Stats) Lines() []string {
 // repr to lines
 func (st *Stats) Tomap() map[string]string {
 	var m = map[string]string{}
-	// TODO compiler
-	// m["gcno"] = st.GCno.repr()
-	// m["free bytes"] = st.FreeBytes.repr()
-	// m["heap size"] = st.HeapSize.repr()
-	// m["bytes since GC"] = st.BytesSinceGC.repr()
-	// m["memory use"] = st.MemoryUse.repr()
+	m["gcno"] = st.GCno.repr()
+	m["free bytes"] = st.FreeBytes.repr()
+	m["heap size"] = st.HeapSize.repr()
+	m["bytes since GC"] = st.BytesSinceGC.repr()
+	m["memory use"] = st.MemoryUse.repr()
 
 	return m
 }
