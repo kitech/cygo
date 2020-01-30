@@ -88,7 +88,7 @@ func fillBasicMethods() {
 		recv := NewVar(token.NoPos, nil, "this", Typ[String])
 		arg0 := NewVar(token.NoPos, nil, "sep", Typ[String])
 		params := NewTuple(arg0)
-		r0 := NewVar(token.NoPos, nil, "", NewSlice(Typ[Int]))
+		r0 := NewVar(token.NoPos, nil, "", NewSlice(Typ[String]))
 		results := NewTuple(r0)
 		sig = NewSignature(recv, params, results, false)
 		m1 := NewFunc(token.NoPos, nil, "split", sig)

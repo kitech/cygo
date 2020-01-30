@@ -58,6 +58,7 @@ func (this *g2nc) genpkgs() {
 const pkgsep = "__"  // between pkg and type/function
 const mthsep = "_"   // between type and method
 const cuzero = "{0}" // pointer, array, struct?
+const cmtpfx = "//"
 
 func (c *g2nc) pkgpfx() string {
 	pfx := ""
@@ -216,7 +217,7 @@ func (c *g2nc) genChanTypes(scope *ast.Scope, pkg *ast.Package) {
 	// te: ast.SendStmt.Chan/ast.UnaryExpr.X
 	for _, te := range c.psctx.chanops {
 		goty := c.info.TypeOf(te)
-		gopp.Assert(ischanty2(goty), "")
+		gopp.Assert(ischanty2(goty), "must chan")
 		if _, ok := gottys[goty.String()]; ok {
 			continue
 		}
@@ -381,9 +382,7 @@ func (this *g2nc) genFuncDecl(scope *ast.Scope, fd *ast.FuncDecl) {
 	this.clinema(fd)
 	if fd.Body == nil {
 		log.Println("decl only func", fd.Name)
-		if this.curpkg == "unsafe" && fd.Name.Name == "Sizeof" {
-			this.out("//")
-		}
+		this.out(gopp.IfElseStr(this.curpkg == "unsafe", "//", ""))
 		this.out("extern").outsp()
 		// return
 	}
@@ -2695,7 +2694,7 @@ func (this *g2nc) exprTypeNameImpl2(scope *ast.Scope, ety types.Type, e ast.Expr
 				log.Println(te.Name())
 			}
 			// log.Println(te, reftyof(e), te.Info(), te.Name(), te.Underlying(), reftyof(te.Underlying()))
-			tystr := strings.Replace(te.String(), ".", "_", 1)
+			tystr := strings.Replace(te.String(), ".", pkgsep, 1)
 			if strings.HasPrefix(tystr, "untyped ") {
 				tystr = tystr[8:]
 			}

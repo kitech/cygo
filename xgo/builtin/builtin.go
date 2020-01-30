@@ -50,14 +50,29 @@ func memdup3(src voidptr, n int) voidptr {
 	return dst
 }
 
+//export hehe_exped
+func hehe(a int, b string) int {
+	return 0
+}
+
 //[nomangle]
 func assert()
 func sizeof() int
 func alignof() int
 func offsetof() int
 
-//export hehe_exped
-func hehe(a int, b string) int {
+//export unsafe__Sizeof111
+func unsafe__Sizeof111(a int) int {
+	return 0
+}
+
+//export unsafe__Alignof111
+func unsafe__Alignof111(a int) int {
+	return 0
+}
+
+//export unsafe__Offsetof111
+func unsafe__Offsetof111(a int) int {
 	return 0
 }
 

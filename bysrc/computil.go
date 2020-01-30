@@ -417,6 +417,7 @@ func ispackage(pc *ParserContext, e ast.Expr) bool {
 			str := fmt.Sprintf("%v", selobj)
 			ispkgsel :=
 				strings.HasPrefix(str, "package ") && strings.Contains(str, ")")
+			ispkgsel = strings.HasPrefix(str, "package ")
 			return ispkgsel
 		}
 	}
@@ -477,7 +478,8 @@ func newAnnotation(cmts *ast.CommentGroup) *Annotation {
 	}
 
 	for _, cmt := range cmts.List {
-		ant.original += cmt.Text
+		cmtpfx := gopp.IfElseStr(strings.HasPrefix(cmt.Text, "//"), "", "// ")
+		ant.original += cmtpfx + cmt.Text + "\n"
 		lines := strings.Split(cmt.Text, "\n")
 		for _, line := range lines {
 			if strings.HasPrefix(line, "//go:nosplit") {

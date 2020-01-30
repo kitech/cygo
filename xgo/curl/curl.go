@@ -14,6 +14,7 @@ type Curl struct {
 	headers_    map[string]string
 	timeoutms_  int
 	url_        string
+	connonly_   bool
 }
 
 var inited = false
@@ -106,14 +107,27 @@ func (ch *Curl) user_agent(ua string) *Curl {
 }
 func (ch *Curl) header_line(line string) *Curl {
 	fields := line.split(":")
-	// ch.headers_[fields[0]] = fields[1] // TODO compiler
+	k := fields[0]
+	v := fields[1]
+	ch.headers_[k] = v
+	// ch.headers_[fields[0]] = fields[1] // TODO compiler, dead cycle
 	return ch
 }
 func (ch *Curl) headers(hdrs map[string]string) *Curl {
 	for k, v := range hdrs {
-
+		ch.headers_[k] = v
 	}
 	return ch
+}
+func (ch *Curl) connonly(v bool) *Curl {
+	ch.connonly_ = v
+	return ch
+}
+func (ch *Curl) recv() {
+	C.curl_easy_recv(ch.cobj, nil, 0, nil)
+}
+func (ch *Curl) send() {
+	C.curl_easy_send(ch.cobj, nil, 0, nil)
 }
 
 func (ch *Curl) prepare() {
@@ -126,6 +140,9 @@ func (ch *Curl) prepare() {
 	}
 	if ch.timeoutms_ > 0 {
 		ch.setopt(C.CURLOPT_TIMEOUT, ch.timeoutms_)
+	}
+	if ch.connonly_ {
+		ch.setopt(C.CURLOPT_CONNECT_ONLY, 1)
 	}
 }
 
@@ -183,7 +200,8 @@ const (
 )
 
 const (
-	OK = C.CURLE_OK
+	OK    = C.CURLE_OK
+	AGAIN = C.CURLE_AGAIN
 )
 
 var (

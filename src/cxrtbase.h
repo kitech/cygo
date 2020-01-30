@@ -84,15 +84,16 @@ typedef struct cxiface {
     voidptr data;
 } cxiface;
 cxeface cxeface_new_of2(void* data, int sz);
+cxeface* cxrt_type2eface(voidptr _type, voidptr data);
 
 // utils
 // void println(const char* fmt, ...);
 void println2(const char* filename, int lineno, const char* funcname, const char* fmt, ...);
 void println3(const char* origfilename, int origlineno, const char* filename, int lineno,
               const char* funcname, const char* fmt, ...);
-#define unsafe_Sizeof(x) sizeof(x) // TODO depcreat
-
-cxeface* cxrt_type2eface(voidptr _type, voidptr data);
+#define unsafe__Sizeof(x) sizeof(x) // TODO depcreat
+#define unsafe__Alignof(x) alignof(x) // TODO depcreat
+// #define unsafe__Offsetof(x) offsetof(int, x) // TODO depcreat
 
 // TODO
 #define gogorun
