@@ -75,6 +75,7 @@ cxstring* cxstring_add(cxstring* s0, cxstring* s1) {
 }
 
 cxstring* cxstring_sub(cxstring* s0, int start, int end) {
+    assert(s0 != nilptr);
     cxstring* ns = cxstring_new();
     int rlen = end - start;
     char* rs = cxmalloc(rlen+1);

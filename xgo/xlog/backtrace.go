@@ -71,7 +71,7 @@ func line2frame(line string) *Frame {
 
 	return frm
 }
-func lines2frame2(lines []string) []*Frame {
+func lines2frames(lines []string) []*Frame {
 	res := []*Frame{}
 	for idx := 0; idx < lines.len(); idx++ {
 		line := lines[idx]
@@ -88,7 +88,7 @@ func lines2frame2(lines []string) []*Frame {
 // backtrace without file/line
 func Backtrace() []*Frame {
 	lines := BacktraceLines()
-	frms := lines2frame2(lines)
+	frms := lines2frames(lines)
 	return frms
 }
 

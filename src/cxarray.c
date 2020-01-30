@@ -113,17 +113,19 @@ cxarray2* cxarray2_append(cxarray2* a0, void* v) {
     return a0;
 }
 
-uint8* cxarray2_get_at(cxarray2* a0, int idx) {
+voidptr* cxarray2_get_at(cxarray2* a0, int idx) {
     assert(a0 != nilptr);
     assert(idx < a0->len);
 
     int offset = idx * a0->elemsz;
-    uint8* out = 0;
+    voidptr* out = 0;
     out = a0->ptr+offset;
     return out;
 }
 uint8* cxarray2_replace_at(cxarray2* a0, void* v, int idx, void*out) {
     assert(a0 != nilptr);
+    assert(idx < a0->len);
+
     int offset = idx * a0->elemsz;
     if (out != nilptr) {
         memcpy(out, a0->ptr+offset, a0->elemsz);

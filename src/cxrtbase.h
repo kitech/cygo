@@ -172,7 +172,7 @@ Array* cxarray_append(Array* a0, void* v);
 cxarray2* cxarray2_new(int cap, int elemsz);
 cxarray2* cxarray2_slice(cxarray2* a0, int start, int end);
 cxarray2* cxarray2_append(cxarray2* a0, void* v);
-uint8* cxarray2_get_at(cxarray2* a0, int idx);
+voidptr* cxarray2_get_at(cxarray2* a0, int idx);
 uint8* cxarray2_replace_at(cxarray2* a0, void* v, int idx, void*out);
 void cxarray2_appendn(cxarray2* a0, void* v, int n);
 

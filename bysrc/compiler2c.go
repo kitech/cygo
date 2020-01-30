@@ -899,9 +899,10 @@ func (c *g2nc) genRangeStmt(scope *ast.Scope, s *ast.RangeStmt) {
 			c.outf("     %s %v = %v", valtystr, s.Value, cuzero).outfh().outnl()
 			var tmpvar = tmpvarname()
 			c.outf("    voidptr %s = %v", tmpvar, cuzero).outfh().outnl()
-			c.outf("    %v = *cxarray2_get_at(", tmpvar)
+			c.outf("    %v = *(%v*)cxarray2_get_at(", tmpvar, valtystr)
 			c.genExpr(scope, s.X)
 			c.outf(", %s)", keyidstr).outfh().outnl()
+			c.outf("%v = %v", s.Value, tmpvar).outfh().outnl()
 		}
 		c.genBlockStmt(scope, s.Body)
 		c.out("  }").outnl()

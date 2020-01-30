@@ -184,7 +184,7 @@ func (s string) index(sep string) int {
 		if i+seplen > slen {
 			break
 		}
-		//s1 := s[i : i+seplen]
+		// s1 := s[i : i+seplen]
 		if s[i:i+seplen] == sep {
 			res = i
 			break
@@ -198,7 +198,8 @@ func (s string) left(sep string) string {
 	if pos < 0 {
 		return ""
 	}
-	return s[0:pos]
+	ns := s[0:pos]
+	return ns
 }
 func (s string) right(sep string) string {
 	pos := s.index(sep)
