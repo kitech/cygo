@@ -81,6 +81,7 @@ func (p *parser) init(fset *token.FileSet, filename string, src []byte, mode Mod
 
 	p.mode = mode
 	p.trace = mode&Trace != 0 // for convenience (p.trace is used frequently)
+	// p.trace = true
 
 	p.next()
 }
@@ -747,7 +748,15 @@ func (p *parser) parseStructType() *ast.StructType {
 		defer un(trace(p, "StructType"))
 	}
 
-	pos := p.expect(token.STRUCT)
+	var pos token.Pos
+	switch p.tok {
+	case token.LBRACE:
+		pos = p.pos
+	default:
+		pos1 := p.expect(token.STRUCT)
+		pos = pos1
+	}
+
 	lbrace := p.expect(token.LBRACE)
 	scope := ast.NewScope(nil) // struct scope
 	var list []*ast.Field
@@ -2380,7 +2389,14 @@ func (p *parser) parseTypeSpec(doc *ast.CommentGroup, _ token.Token, _ int) ast.
 		spec.Assign = p.pos
 		p.next()
 	}
-	spec.Type = p.parseType()
+
+	switch p.tok {
+	case token.LBRACE:
+		spec.Type = p.parseStructType()
+	default: // token.STRUCT
+		spec.Type = p.parseType()
+	}
+
 	p.expectSemi() // call before accessing p.linecomment
 	spec.Comment = p.lineComment
 
@@ -2479,6 +2495,8 @@ func (p *parser) parseDecl(sync map[token.Token]bool) ast.Decl {
 		f = p.parseValueSpec
 
 	case token.TYPE:
+		f = p.parseTypeSpec
+	case token.STRUCT:
 		f = p.parseTypeSpec
 
 	case token.FUNC:
