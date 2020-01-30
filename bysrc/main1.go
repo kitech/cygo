@@ -109,6 +109,20 @@ func main() {
 			pkgclts = append(pkgclts, psctx.bdpkgs.Name)
 		}
 	}
+	// TODO packages depgraph
+	unsafepkg_code := ""
+	builtinpkg_code := ""
+	for i := len(comps) - 1; i >= 0; i-- {
+		psctx := comps[i].psctx
+
+		str, _ := comps[i].code()
+		if psctx.path == builtin_pkgpath {
+			builtinpkg_code = str
+		}
+		if strings.HasSuffix(psctx.path, "/unsafe") {
+			unsafepkg_code = str
+		}
+	}
 	for i := len(comps) - 1; i >= 0; i-- {
 		psctx := comps[i].psctx
 		if psctx.bdpkgs.Name == "main" {
@@ -117,14 +131,16 @@ func main() {
 		}
 
 		str, ext := comps[i].code()
-		if psctx.path == builtin_pkgpath {
-			code = str + code // 最前置
+		if strings.HasSuffix(psctx.path, "/unsafe") {
+		} else if psctx.path == builtin_pkgpath {
+			// code = str + code // 最前置
 		} else {
 			code += str
 		}
 		extname = ext
 	}
 	code = comps[0].genBuiltinTypesMetatype() + code
+	code = unsafepkg_code + "\n" + builtinpkg_code + "\n" + code
 	fname := "opkgs/foo." + extname
 	ioutil.WriteFile(fname, []byte(code), 0644)
 	clangfmt(fname)

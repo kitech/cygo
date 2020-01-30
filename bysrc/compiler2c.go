@@ -2034,7 +2034,7 @@ func (c *g2nc) genExpr(scope *ast.Scope, e ast.Expr) {
 	c.genExpr2(scope, e)
 }
 func (this *g2nc) genExpr2(scope *ast.Scope, e ast.Expr) {
-	// log.Println(reflect.TypeOf(e), e)
+	// log.Println(reftyof(e), e)
 	switch te := e.(type) {
 	case *ast.Ident:
 		idname := te.Name
@@ -2322,13 +2322,13 @@ func (this *g2nc) genExpr2(scope *ast.Scope, e ast.Expr) {
 		} else {
 			this.genExpr(scope, te.X)
 			selxty := this.info.TypeOf(te.X)
-			log.Println(selxty, reflect.TypeOf(selxty), te.X)
+			log.Println(selxty, reflect.TypeOf(selxty), te.X, te.Sel)
 			if selxty == nil {
 				gopp.Assert(1 == 2, "waitdep", te)
 				// c type?
 				this.out(". /* c struct selctorexpr */")
-			} else if isinvalidty2(selxty) { // package
-				this.out("_")
+			} else if isinvalidty2(selxty) && ispackage(this.psctx, te.X) { // package
+				this.out(pkgsep)
 			} else {
 				switch selxty.(type) {
 				case *types.Named:
@@ -2344,7 +2344,8 @@ func (this *g2nc) genExpr2(scope *ast.Scope, e ast.Expr) {
 				}
 			}
 		}
-		this.genExpr(scope, te.Sel)
+		// this.genExpr(scope, te.Sel)
+		this.out(te.Sel.Name)
 		this.outsp()
 	case *ast.StarExpr:
 		idt, isidt := te.X.(*ast.Ident)
@@ -2655,6 +2656,10 @@ func (this *g2nc) exprTypeNameImpl(scope *ast.Scope, e ast.Expr) string {
 		}
 	}
 	if goty == nil {
+		if te, ok := e.(*ast.StarExpr); ok {
+			goty = this.info.TypeOf(te.X)
+			log.Println(e, exprstr(e), reftyof(e), this.exprpos(e), goty, reftyof(goty))
+		}
 		log.Println(e, exprstr(e), reftyof(e), this.exprpos(e))
 		if exprstr(e) == "(bad expr)" {
 			return "int"
@@ -3265,7 +3270,7 @@ func (this *g2nc) code() (string, string) {
 	code := ""
 	code += fmt.Sprintf("// %s of %s\n", this.psctx.bdpkgs.Dir, this.psctx.wkdir)
 	code += this.psctx.ccode
-	code += "/* fakec defs for " + this.psctx.bdpkgs.Dir + "\n" +
+	code += "/* fake cdefs for " + this.psctx.bdpkgs.Dir + "\n" +
 		this.psctx.fcdefscc + "\n*/\n\n"
 	code += "#include <stddef.h>\n"
 	code += "#include <stdalign.h>\n"

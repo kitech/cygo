@@ -6,7 +6,9 @@
 
 package types
 
-import "go/constant"
+import (
+	"go/constant"
+)
 
 // Conversion type-checks the conversion T(x).
 // The result is in x.
@@ -125,7 +127,12 @@ func (x *operand) convertibleTo(check *Checker, T Type) bool {
 
 	// package unsafe:
 	// "any pointer or value of underlying type uintptr can be converted into a unsafe.Pointer"
-	if (isPointer(Vu) || isUintptr(Vu)) && isUnsafePointer(T) {
+	if (isPointer(Vu) || isUintptr(Vu)) &&
+		(isUnsafePointer(T) || isVoidptr(T)) {
+		return true
+	}
+	if (isPointer(V) || isUintptr(V) || isVoidptr(V) || isUnsafePointer(V)) &&
+		(isPointer(T) || isUnsafePointer(T) || isVoidptr(T) || isUintptr(T)) {
 		return true
 	}
 	// "and vice versa"

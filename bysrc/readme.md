@@ -30,6 +30,7 @@
 * [ ] string和array似乎可以全在builtin中用go语法实现了。
 * [ ] func type parameters
 * [ ] type order graph
+* [ ] for 循环中占位符号省略
 
 ### 语法树重写
 * [ ] 变量声明解构为每条语句一个变量，如果有多个的话

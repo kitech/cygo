@@ -388,6 +388,17 @@ func fillBasicMethods() {
 		m1 := NewFunc(token.NoPos, nil, "ptr", sig)
 		arrmths = append(arrmths, m1)
 	}
+	{ // array.append()
+		var sig *Signature
+		recv := NewVar(token.NoPos, nil, "this", NewSlice(Typ[Voidptr]))
+		arg0 := NewVar(token.NoPos, nil, "elem", Typ[Voidptr])
+		params := NewTuple(arg0)
+		r0 := NewVar(token.NoPos, nil, "", NewSlice(Typ[Voidptr]))
+		results := NewTuple(r0)
+		sig = NewSignature(recv, params, results, false)
+		m1 := NewFunc(token.NoPos, nil, "append", sig)
+		arrmths = append(arrmths, m1)
+	}
 	{ // array.join() string
 		var sig *Signature
 		recv := NewVar(token.NoPos, nil, "this", NewSlice(Typ[String]))
