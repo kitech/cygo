@@ -1194,12 +1194,14 @@ func (c *g2nc) genCallExpr(scope *ast.Scope, te *ast.CallExpr) {
 				return upfindsym(s.Outer, id, lvl+1)
 			}
 			isclos := false
+			_, isfnvar := te.Fun.(*ast.Ident)
 			var fnlit *ast.FuncLit
 			gotyx := c.info.TypeOf(te.Fun)
+			// log.Println(gotyx, reftyof(gotyx), te.Fun, reftyof(te.Fun))
 			switch gotyx.(type) {
 			case *types.Signature:
 				symve := upfindsym(scope, be, 0)
-				isclos = symve != nil
+				isclos = symve != nil && !isfnvar
 				if isclos {
 					fnlit = symve.(*ast.FuncLit)
 				}
@@ -1470,11 +1472,10 @@ func (c *g2nc) getCallExprAttr(scope *ast.Scope, te *ast.CallExpr) *FuncCallAttr
 			// isidt = true
 			fca.iscfn = true
 		} else {
-			selty := c.info.TypeOf(fca.selfn.X)
-			fca.isrcver = !isinvalidty2(selty)
+			selxty := c.info.TypeOf(fca.selfn.X)
+			fca.isrcver = !isinvalidty2(selxty)
 			fca.ispkgsel = ispackage(c.psctx, fca.selfn.X)
 
-			selxty := c.info.TypeOf(fca.selfn.X)
 			switch ne := selxty.(type) {
 			case *types.Named:
 				fca.isifacesel = isiface2(ne.Underlying())
@@ -1505,6 +1506,19 @@ func (c *g2nc) getCallExprAttr(scope *ast.Scope, te *ast.CallExpr) *FuncCallAttr
 	if lexpr != nil {
 		fca.lexpr = lexpr.(ast.Expr)
 	}
+
+	_, fca.isclos = te.Fun.(*ast.FuncLit)
+	var fnobj types.Object
+	switch fe := te.Fun.(type) {
+	case *ast.SelectorExpr:
+		fnobj = c.info.ObjectOf(fe.Sel)
+	case *ast.Ident:
+		fnobj = c.info.ObjectOf(fe)
+	}
+	if fnobj != nil {
+		_, fca.isfnvar = fnobj.(*types.Var)
+	}
+	// log.Println(te.Fun, reftyof(te.Fun), fnobj, reftyof(fnobj), fca.isfnvar)
 
 	return fca
 }
@@ -3064,7 +3078,7 @@ func (c *g2nc) genValueSpec(scope *ast.Scope, spec *ast.ValueSpec, validx int) {
 				c.out(vartystr[2:])
 			} else if strings.Contains(vartystr, "func(") {
 				tyname := tmpvarname()
-				c.outf("typedef void*(*%s)()", tyname).outfh().outnl()
+				c.outf("typedef voidptr (*%s)()", tyname).outfh().outnl()
 				c.out(tyname)
 			} else {
 				if isinvalidty(vartystr) {
@@ -3228,6 +3242,7 @@ typedef uintptr_t uintptr;
 // typedef void* error;
 typedef void* voidptr;
 typedef char* byteptr;
+typedef void voidty;
 `
 	return precgodefs
 }

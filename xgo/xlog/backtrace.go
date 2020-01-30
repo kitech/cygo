@@ -97,7 +97,10 @@ func Callers() []*Frame {
 	frms := Backtrace()
 	for idx := 0; idx < frms.len(); idx++ {
 		frm := frms[idx]
-		file, lineno := addr2line1(frm.Funcaddr)
+		// file, lineno := addr2line1(frm.Funcaddr) // TODO crash
+		// file, lineno := "unimpl", 0 // TODO compiler
+		file := "unimpl"
+		lineno := 0
 		frm.File = file
 		frm.Lineno = lineno
 		frm.Line = lineno.repr()

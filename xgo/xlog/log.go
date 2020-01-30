@@ -295,6 +295,15 @@ func fmtstrbykind(kind int, dato *voidptr) *variant {
 
 	mem := malloc3(64)
 	switch kind {
+	case Bool:
+		fmtstr = "%d"
+		ok := (int)(*dato) == 1
+		fmtstr2 := "%s"
+		if ok {
+			C.sprintf(mem, fmtstr2.ptr, "true".ptr)
+		} else {
+			C.sprintf(mem, fmtstr2.ptr, "false".ptr)
+		}
 	case Int, Int16, Int32, Uint, Uint16, Uint32:
 		fmtstr = "%d"
 		C.sprintf(mem, fmtstr.ptr, (int)(*dato))
@@ -318,8 +327,8 @@ func fmtstrbykind(kind int, dato *voidptr) *variant {
 		valpp = cxstring_unrefpp2(dato)
 		mem = *valpp
 	default:
-		fmtstr = "un%d"
-		C.sprintf(mem, fmtstr.ptr, *(dato))
+		fmtstr = "unkmt%d"
+		C.sprintf(mem, "unkmt-%d-%d".ptr, kind, *(dato))
 	}
 	varval.fmtstr = fmtstr
 	varval.valpp = valpp

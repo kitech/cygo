@@ -41,6 +41,11 @@ const (
 	Charptr
 )
 
+const (
+	truestr  = "true"
+	falsestr = "false"
+)
+
 type Metatype struct {
 	Size       uintptr // type size
 	Ptrdata    uintptr // size of memory prefix holding all pointers

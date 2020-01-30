@@ -46,6 +46,7 @@ typedef uintptr_t uintptr;
 typedef void* voidptr;
 typedef char* byteptr;
 typedef char* charptr; // with tailing 0
+typedef void voidty;
 typedef int C_int;
 typedef unsigned int C_uint;
 
