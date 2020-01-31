@@ -311,8 +311,11 @@ func fmtstrbykind(kind int, dato *voidptr) *variant {
 		fmtstr = "%ld"
 		C.sprintf(mem, fmtstr.ptr, (int64)(*dato))
 	case Uint64:
-		fmtstr = "%uld"
+		fmtstr = "%lu"
 		C.sprintf(mem, fmtstr.ptr, (uint64)(*dato))
+	case Uintptr:
+		fmtstr = "%lu"
+		C.sprintf(mem, fmtstr.ptr, (uintptr)(*dato))
 	case Float32, Float64:
 		fmtstr = "%g"
 		C.sprintf(mem, fmtstr.ptr, *((*float64)(dato)))

@@ -161,6 +161,8 @@ error* error_new_zero();
 HashTable* cxhashtable_new();
 size_t cxhashtable_hash_str(const char *key);
 size_t cxhashtable_hash_str2(const char *key, int len);
+int HashTable_len(HashTable* ht);
+int HashTable_cap(HashTable* ht);
 // cxhashtable end
 
 // cxarray begin

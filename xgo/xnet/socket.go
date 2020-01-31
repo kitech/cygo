@@ -162,7 +162,8 @@ func (info *AddrInfo) getip() string {
 
 func fd_set_nonblocking(fd int, isNonBlocking bool) bool {
 	flags := C.fcntl(fd, C.F_GETFL, 0)
-	old := (flags & C.O_NONBLOCK) > 0
+	oldv := flags & C.O_NONBLOCK
+	old := oldv > 0
 	if isNonBlocking == old {
 		return old
 	}

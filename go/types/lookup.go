@@ -191,7 +191,15 @@ func lookupFieldOrMethod(T Type, addressable bool, pkg *Package, name string) (o
 						obj = m
 						index = concat(e.index, i)
 					}
-				} else if t.kind == Int ||
+				} else if t.kind == Int || t.kind == Rune ||
+					t.kind == Bool || t.kind == Byte ||
+					t.kind == Uintptr || t.kind == Usize ||
+					t.kind == Voidptr || t.kind == Byteptr ||
+					t.kind == Charptr || t.kind == Wideptr ||
+					t.kind == Int64 || t.kind == Uint64 ||
+					t.kind == Int32 || t.kind == Uint32 ||
+					t.kind == Int16 || t.kind == Uint16 ||
+					t.kind == Int8 || t.kind == Uint8 ||
 					t.kind == Float32 || t.kind == Float64 {
 					if i, m := lookupMethod(intmths, nil, name); m != nil {
 						obj = m
@@ -208,6 +216,8 @@ func lookupFieldOrMethod(T Type, addressable bool, pkg *Package, name string) (o
 					obj = m
 					index = concat(e.index, i)
 				}
+			default:
+				// log.Println(typ, reflect.TypeOf(typ))
 			}
 		}
 

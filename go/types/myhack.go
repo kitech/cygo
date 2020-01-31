@@ -6,6 +6,7 @@ const (
 	Voidptr = UntypedNil + 1
 	Byteptr = UntypedNil + 2
 	Charptr = UntypedNil + 3
+	Wideptr = UntypedNil + 4
 
 	// aliases
 
@@ -33,6 +34,7 @@ func HackExtraBuiltin() {
 		{Voidptr, IsPointer | IsBoolean, "voidptr"},
 		{Byteptr, IsPointer | IsBoolean, "byteptr"},
 		{Charptr, IsPointer | IsBoolean, "charptr"},
+		{Wideptr, IsPointer | IsBoolean, "wideptr"},
 	}
 	for _, typ := range hetyp {
 		Typ = append(Typ, typ)
@@ -455,10 +457,8 @@ func fillBasicMethods() {
 		for _, ty := range []BasicKind{
 			Bool, Int, Int8, Int16, Int32, Int64,
 			Uint, Uint8, Uint16, Uint32, Uint64,
-			Uintptr,
-			Float32, Float64,
-			Rune, Usize,
-			Voidptr, Byteptr, Charptr} {
+			Uintptr, Float32, Float64,
+			Byte, Rune, Usize, Voidptr, Byteptr, Charptr} {
 			var sig *Signature
 			recv := NewVar(token.NoPos, nil, "this", Typ[ty])
 			var params *Tuple

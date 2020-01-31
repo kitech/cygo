@@ -520,6 +520,7 @@ func (pc *ParserContext) walkpass_fill_fakecpkg() {
 		isconst  bool
 		isstruct bool
 		isfield  bool
+		istype   bool
 	}
 
 	tmpidts := map[*ast.Ident]*types.Var{}
@@ -537,7 +538,13 @@ func (pc *ParserContext) walkpass_fill_fakecpkg() {
 				if iscident(te.X) {
 					if inconst {
 					}
-					// log.Println("got111", te.X, te.Sel, c.Index(), inconst)
+					pn := c.Parent()
+					var atye ast.Expr
+					if fe, ok := pn.(*ast.Field); ok {
+						atye = fe.Type
+					}
+					istype := atye == te
+					log.Println("got111", te.X, te.Sel, c.Index(), inconst, reftyof(pn), atye, reftyof(atye), atye == te, istype)
 					v1 := fakecvar(te.Sel, fcpkg)
 					// scope.Insert(v1)
 					tmpidts[te.Sel] = v1
@@ -643,6 +650,13 @@ func (pc *ParserContext) walkpass_fill_fakecpkg() {
 		st1 := types.NewStruct([]*types.Var{f1}, nil)
 		// st2 := types.NewCtype("struct_hhhhhh")
 		stobj := types.NewTypeName(token.NoPos, fcpkg, "struct_lllll", nil)
+		stobj2 := types.NewNamed(stobj, st1, nil)
+		_ = stobj
+		scope.Insert(stobj2.Obj())
+	}
+	{
+		st1 := types.Typ[types.Voidptr]
+		stobj := types.NewTypeName(token.NoPos, fcpkg, "socklenttt", nil)
 		stobj2 := types.NewNamed(stobj, st1, nil)
 		_ = stobj
 		scope.Insert(stobj2.Obj())

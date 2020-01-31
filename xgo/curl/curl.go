@@ -15,6 +15,12 @@ type Curl struct {
 	timeoutms_  int
 	url_        string
 	connonly_   bool
+	uapolicy_   int
+
+	// result
+	rcvlen usize
+	errbuf voidptr
+	rsp    *Response
 }
 
 var inited = false
@@ -36,6 +42,7 @@ func New() *Curl {
 	cuh := &Curl{}
 	cobj := C.curl_easy_init()
 	cuh.cobj = cobj
+	cuh.rsp = &Response{}
 
 	C.cxrt_set_finalizer(cuh, curlobj_finalizer)
 	return cuh
@@ -80,15 +87,6 @@ func (ch *Curl) perform() int {
 	return rv
 }
 
-func (ch *Curl) setopt(opt int, val voidptr /*unsafe.Pointer*/) int {
-	rv := C.curl_easy_setopt(ch.cobj, opt, 2)
-	return rv
-}
-func (ch *Curl) Getinfo(opt int, val voidptr /*unsafe.Pointer*/) int {
-	rv := C.curl_easy_getinfo(ch.cobj, opt, val)
-	return rv
-}
-
 func (ch *Curl) seturl(u string) *Curl {
 	ch.url_ = u
 	return ch
@@ -105,6 +103,10 @@ func (ch *Curl) user_agent(ua string) *Curl {
 	ch.user_agent_ = ua
 	return ch
 }
+func (ch *Curl) uapolicy(uap int) *Curl {
+	ch.uapolicy_ = uap
+}
+
 func (ch *Curl) header_line(line string) *Curl {
 	fields := line.split(":")
 	k := fields[0]
@@ -130,6 +132,86 @@ func (ch *Curl) send() {
 	C.curl_easy_send(ch.cobj, nil, 0, nil)
 }
 
+func (ch *Curl) setopt(opt int, val voidptr /*unsafe.Pointer*/) int {
+	rv := C.curl_easy_setopt(ch.cobj, opt, val)
+	return rv
+}
+
+func header_cltcb(buf voidptr, size usize, nitem usize, cbval voidptr) usize {
+	assert(size == 1)
+	ch := (*Curl)(cbval)
+	rsp := ch.rsp
+	// xlog.Println(size, nitem, cbval)
+	s := gostringn(buf, nitem)
+	// xlog.Println(size, nitem, cbval, s)
+	kv := s.split(": ")
+	if kv.len() != 2 {
+		// first line
+		rsp.Stline = s.trimsp()
+	} else {
+		// rsp.Headers[kv[0]] = kv[1] // TODO compiler
+		k := kv[0]
+		v := kv[1]
+		v = v.trimsp()
+		rsp.Headers[k] = v
+		// xlog.Println(size, nitem, cbval, k, v, s.trimsp())
+	}
+
+	return nitem
+}
+
+func send_cltcb(buf voidptr, size usize, nitem usize, cbval voidptr) usize {
+	assert(size == 1)
+	ch := (*Curl)(cbval)
+	rsp := ch.rsp
+
+	return nitem
+}
+func recv_cltcb(buf voidptr, size usize, nitem usize, cbval voidptr) usize {
+	assert(size == 1)
+	ch := (*Curl)(cbval)
+	rsp := ch.rsp
+
+	ch.rcvlen += nitem
+	s := gostringn(buf, nitem)
+	rsp.Data += s
+
+	return nitem
+}
+
+func debug_cltcb(chobj voidptr, type_ int, data charptr, size usize, cbval voidptr) int {
+	switch type_ {
+	case C.CURLINFO_TEXT:
+	case C.CURLINFO_HEADER_OUT:
+	case C.CURLINFO_DATA_OUT:
+	case C.CURLINFO_SSL_DATA_OUT:
+	case C.CURLINFO_HEADER_IN:
+	case C.CURLINFO_DATA_IN:
+	case C.CURLINFO_SSL_DATA_IN:
+	default:
+	}
+	return 0
+}
+
+func (ch *Curl) setoptfunc(opt int, fnptr voidptr, cbval voidptr) int {
+	rv := ch.setopt(opt, fnptr)
+	switch opt {
+	case C.CURLOPT_READFUNCTION:
+		ch.setopt(C.CURLOPT_READDATA, cbval)
+	// case C.CURLOPT_WRITEFUNCTION:
+	// ch.setopt(C.CURLOPT_WRITEDATA, cbval)
+	case C.CURLOPT_HEADERFUNCTION:
+		ch.setopt(C.CURLOPT_HEADERDATA, cbval)
+	case C.CURLOPT_DEBUGFUNCTION:
+		ch.setopt(C.CURLOPT_DEBUGDATA, cbval)
+		// case C.CURLOPT_RESOLVER_START_FUNCTION:
+		// ch.setopt(C.CURLOPT_RESOLVER_START_DATA, cbval)
+	default:
+		assert(1 == 2)
+	}
+	return rv
+}
+
 func (ch *Curl) prepare() {
 	ch.setopt(C.CURLOPT_URL, ch.url_.cstr())
 	if ch.verbose_ {
@@ -137,6 +219,12 @@ func (ch *Curl) prepare() {
 	}
 	if ch.user_agent_ != "" {
 		ch.setopt(C.CURLOPT_USERAGENT, ch.user_agent_.cstr())
+	} else {
+		if ch.uapolicy_ == UAP_HUMAN {
+			ua := rand_humanua()
+			ch.setopt(C.CURLOPT_USERAGENT, ua.cstr())
+		} else if ch.uapolicy_ == UAP_RANDOM {
+		}
 	}
 	if ch.timeoutms_ > 0 {
 		ch.setopt(C.CURLOPT_TIMEOUT, ch.timeoutms_)
@@ -144,6 +232,26 @@ func (ch *Curl) prepare() {
 	if ch.connonly_ {
 		ch.setopt(C.CURLOPT_CONNECT_ONLY, 1)
 	}
+	hdrlst := NewSlist()
+	for k, v := range ch.headers_ {
+		line := k + ": " + v
+		hdrlst.Append(line)
+	}
+	// ch.setopt(C.CUROPT_HTTPHEADER, hdrlst.Cobj)
+
+	ch.setopt(C.CURLOPT_HEADERFUNCTION, header_cltcb)
+	ch.setopt(C.CURLOPT_HEADERDATA, ch)
+	ch.setopt(C.CURLOPT_READFUNCTION, recv_cltcb)
+	ch.setopt(C.CURLOPT_READDATA, ch)
+	if false {
+		// a := C.CURLOPT_WRITEDATA // why compiler error?
+		// ch.setopt(C.CURLOPT_WRITEFUNCTION, send_cltcb)
+		// ch.setopt(C.CURLOPT_WRITEDATA, ch)
+	}
+	ch.errbuf = malloc3(C.CURL_ERROR_SIZE + 1)
+	ch.setopt(C.CURLOPT_ERRORBUFFER, ch.errbuf)
+	ch.setopt(C.CURLOPT_DEBUGFUNCTION, debug_cltcb)
+	ch.setopt(C.CURLOPT_DEBUGDATA, ch)
 }
 
 func (ch *Curl) prepmethod(method string) {
@@ -158,36 +266,127 @@ func (ch *Curl) prepmethod(method string) {
 		ch.setopt(C.CURLOPT_CUSTOMREQUEST, method.cstr())
 	}
 }
-func (ch *Curl) do(method string) int {
+func (ch *Curl) doreq(method string) int {
 	ch.prepare()
 	ch.prepmethod(method)
 	rv := ch.perform()
+	ch.rsp.Ret = rv
 	return rv
 }
 
-func (ch *Curl) Get() {
-	ch.do(GET)
+func (ch *Curl) Get() *Response {
+	ch.doreq(GET)
+	return ch.getresp()
 }
-func (ch *Curl) Post() {
-	ch.do(POST)
+func (ch *Curl) Post() *Response {
+	ch.doreq(POST)
+	return ch.getresp()
 }
-func (ch *Curl) Put() {
-	ch.do(PUT)
+func (ch *Curl) Put() *Response {
+	ch.doreq(PUT)
+	return ch.getresp()
 }
-func (ch *Curl) Delete() {
-	ch.do(DELETE)
+func (ch *Curl) Delete() *Response {
+	ch.doreq(DELETE)
+	return ch.getresp()
 }
-func (ch *Curl) Options() {
-	ch.do(OPTIONS)
+func (ch *Curl) Options() *Response {
+	ch.doreq(OPTIONS)
+	return ch.getresp()
 }
-func (ch *Curl) Propfind() {
-	ch.do(PROPFIND)
+func (ch *Curl) Propfind() *Response {
+	ch.doreq(PROPFIND)
+	return ch.getresp()
 }
 
-func Get(u string) {
+func (ch *Curl) Request(method string) *Response {
+	ch.doreq(method)
+	return ch.getresp()
+}
+
+func Get(u string) *Response {
 	ch := New()
 	ch.seturl(u)
-	ch.Get()
+	ch.doreq(GET)
+	return ch.getresp()
+}
+
+func (ch *Curl) Getinfo(opt int, val voidptr /*unsafe.Pointer*/) int {
+	rv := C.curl_easy_getinfo(ch.cobj, opt, val)
+	return rv
+}
+
+func (ch *Curl) getresp() *Response {
+	rsp := ch.rsp
+	ch.Getinfo(C.CURLINFO_RESPONSE_CODE, &rsp.Stcode)
+	ch.Getinfo(C.CURLINFO_CONTENT_LENGTH_DOWNLOAD_T, &rsp.Cclen)
+	if rsp.Cclen == -1 {
+		if ch.rcvlen > 0 {
+			rsp.Cclen = ch.rcvlen
+		}
+	}
+	rsp.Errmsg = gostring(ch.errbuf)
+	return rsp
+}
+
+type Request struct {
+	Method string
+	Requrl string
+}
+
+type Response struct {
+	Ret     int
+	Stcode  int
+	Stline  string
+	Errmsg  string
+	Cclen   int64
+	Headers map[string]string
+	Data    string
+
+	reqobj *Request
+}
+
+// network ok?
+func (rsp *Response) Ok() { return rsp.Ret == OK }
+
+// protocol ok?
+func (rsp *Response) Is10x() {
+	return rsp.Stcode >= 100 && rsp.Stcode < 200
+}
+func (rsp *Response) Is20x() {
+	return rsp.Stcode >= 200 && rsp.Stcode < 300
+}
+func (rsp *Response) Is30x() {
+	return rsp.Stcode >= 300 && rsp.Stcode < 400
+}
+func (rsp *Response) Is40x() {
+	return rsp.Stcode >= 400 && rsp.Stcode < 500
+}
+func (rsp *Response) Is50x() {
+	return rsp.Stcode >= 500 && rsp.Stcode < 600
+}
+
+func (rsp *Response) Relocation() string {
+	for k, v := range rsp.Headers {
+		k1 := k.tolower()
+		if k1 == "location" {
+			v1 := v
+			if v1.prefixed("//") {
+				return "https:" + v1
+			} else {
+				return v1
+			}
+		}
+	}
+	return ""
+}
+
+func (rsp *Response) Repr1() string {
+	str := "ret=" + rsp.Ret.repr() + " "
+	str += "stcode=" + rsp.Stcode.repr() + " "
+	str += "cclen=" + rsp.Cclen.repr() + " "
+	str += "hdrcnt=" + rsp.Headers.len().repr() + " "
+	return str
 }
 
 const (
@@ -202,6 +401,8 @@ const (
 const (
 	OK    = C.CURLE_OK
 	AGAIN = C.CURLE_AGAIN
+
+	// t1 = C.CURLOPT_HTTPPOST
 )
 
 var (
@@ -209,9 +410,11 @@ var (
 )
 
 func init() {
-
+	if 1 == 1 {
+	}
 }
 func init() {
-
+	if 1 == 2 {
+	}
 }
 func Keep() {}

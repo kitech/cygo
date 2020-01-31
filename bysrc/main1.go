@@ -144,6 +144,7 @@ func main() {
 	fname := "opkgs/foo." + extname
 	ioutil.WriteFile(fname, []byte(code), 0644)
 	clangfmt(fname)
+	log.Println("gencode lines", strings.Count(code, "\n"))
 }
 func clangfmt(fname string) {
 	cmdo := exec.Command("clang-format", "-i", fname, "--style", "WebKit")

@@ -91,3 +91,10 @@ size_t cxhashtable_hash_str(const char *key) {
 size_t cxhashtable_hash_str2(const char *key, int len) {
     return hashtable_hash_string(key, len, 0);
 }
+
+int HashTable_len(HashTable* ht) {
+    return hashtable_size(ht);
+}
+int HashTable_cap(HashTable* ht) {
+    return hashtable_capacity(ht);
+}
