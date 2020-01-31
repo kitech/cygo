@@ -31,9 +31,9 @@ func init() {
 // too late, call in universe.go:190 init(), before defPredxxx
 func HackExtraBuiltin() {
 	hetyp := []*Basic{
-		{Voidptr, IsPointer | IsBoolean, "voidptr"},
-		{Byteptr, IsPointer | IsBoolean, "byteptr"},
-		{Charptr, IsPointer | IsBoolean, "charptr"},
+		{Voidptr, IsPointer | IsBoolean | IsNumeric, "voidptr"},
+		{Byteptr, IsPointer | IsBoolean | IsNumeric, "byteptr"},
+		{Charptr, IsPointer | IsBoolean | IsNumeric, "charptr"},
 		{Wideptr, IsPointer | IsBoolean, "wideptr"},
 	}
 	for _, typ := range hetyp {
@@ -83,6 +83,17 @@ func fillBasicMethods() {
 		results := NewTuple(r0)
 		sig = NewSignature(recv, params, results, false)
 		m1 := NewFunc(token.NoPos, nil, "cstr", sig)
+		strmths = append(strmths, m1)
+	}
+	{ // string.ptr() byteptr
+		// virtual ptr() method, just write as s.ptr is ok
+		var sig *Signature
+		recv := NewVar(token.NoPos, nil, "this", Typ[String])
+		var params *Tuple
+		r0 := NewVar(token.NoPos, nil, "", Typ[Byteptr])
+		results := NewTuple(r0)
+		sig = NewSignature(recv, params, results, false)
+		m1 := NewFunc(token.NoPos, nil, "ptr", sig)
 		strmths = append(strmths, m1)
 	}
 	{ // string.split(sep string) []string
@@ -532,4 +543,11 @@ func isByteptr(typ Type) bool {
 	//            issue 6326.
 	t, ok := typ.Underlying().(*Basic)
 	return ok && t.kind == Byteptr
+}
+func isCharptr(typ Type) bool {
+	// TODO(gri): Is this (typ.Underlying() instead of just typ) correct?
+	//            The spec does not say so, but gc claims it is. See also
+	//            issue 6326.
+	t, ok := typ.Underlying().(*Basic)
+	return ok && t.kind == Charptr
 }

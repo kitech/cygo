@@ -47,7 +47,7 @@ func cpurl2(cu *cparsed_url) *Url {
 	return uo
 }
 func (uo *Url) Portno0() int {
-	if uo.Port != 0 {
+	if uo.Port.toint() != 0 {
 		return uo.Port.toint()
 	}
 	scheme := uo.Scheme.tolower()
@@ -59,7 +59,7 @@ func (uo *Url) Portno0() int {
 	case "ftp":
 		return 21
 	}
-	return uo.Port
+	return uo.Port.toint()
 }
 
 func ParseUrl(u string) *Url {

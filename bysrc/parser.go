@@ -163,6 +163,7 @@ func (pc *ParserContext) pkgimperror(err error) {
 	if strings.Contains(err.Error(), "declared but not used") ||
 		strings.Contains(err.Error(), "not exported by package C") ||
 		strings.Contains(err.Error(), "too many arguments") ||
+		strings.Contains(err.Error(), "not exported by package") ||
 		(strings.Contains(err.Error(), "cannot convert") &&
 			(strings.Contains(err.Error(), "__ctype "))) {
 		// log.Println(err)
@@ -505,6 +506,24 @@ func (pc *ParserContext) walkpass_csymbols() {
 	pc.csymbols = res
 }
 
+type csyminfo struct {
+	idt      *ast.Ident
+	varo     *types.Var
+	funo     *types.Func
+	isfunc   bool
+	isconst  bool
+	isstruct bool
+	isfield  bool
+	istype   bool
+}
+
+func newcsyminfo(idt *ast.Ident, varo *types.Var) *csyminfo {
+	csi := &csyminfo{}
+	csi.idt = idt
+	csi.varo = varo
+	return csi
+}
+
 // before types.Config.Check
 func (pc *ParserContext) walkpass_fill_fakecpkg() {
 	pkgs := pc.pkgs
@@ -513,17 +532,8 @@ func (pc *ParserContext) walkpass_fill_fakecpkg() {
 	fcpkg.MarkComplete()
 	scope := fcpkg.Scope()
 
-	type csyminfo struct {
-		idt      *ast.Ident
-		varo     *types.Var
-		isfunc   bool
-		isconst  bool
-		isstruct bool
-		isfield  bool
-		istype   bool
-	}
-
 	tmpidts := map[*ast.Ident]*types.Var{}
+	tmpidts2 := map[*ast.Ident]*csyminfo{}
 	inconst := false
 	for _, pkg := range pkgs {
 		astutil.Apply(pkg, func(c *astutil.Cursor) bool {
@@ -536,18 +546,21 @@ func (pc *ParserContext) walkpass_fill_fakecpkg() {
 				}
 			case *ast.SelectorExpr:
 				if iscident(te.X) {
-					if inconst {
-					}
 					pn := c.Parent()
 					var atye ast.Expr
 					if fe, ok := pn.(*ast.Field); ok {
 						atye = fe.Type
 					}
-					istype := atye == te
-					log.Println("got111", te.X, te.Sel, c.Index(), inconst, reftyof(pn), atye, reftyof(atye), atye == te, istype)
+					istype := atye == te // 是否是在type的位置上
+					// log.Println("got111", te.X, te.Sel, c.Index(), inconst, reftyof(pn), atye, reftyof(atye), atye == te, istype)
 					v1 := fakecvar(te.Sel, fcpkg)
 					// scope.Insert(v1)
 					tmpidts[te.Sel] = v1
+					csi := newcsyminfo(te.Sel, v1)
+					csi.istype = istype
+					csi.isconst = inconst
+					tmpidts2[te.Sel] = csi
+
 					// 怎么获对应的变量名
 					valspx := upfind_func(pc, c, 0, func(c2 *astutil.Cursor) bool {
 						_, ok := c2.Node().(*ast.ValueSpec)
@@ -586,6 +599,9 @@ func (pc *ParserContext) walkpass_fill_fakecpkg() {
 							log.Println(idx, sele, exprstr(sele), te.Sel)
 							fldidt := ast.NewIdent(te.Sel.Name + "." + sele.Sel.Name)
 							pc.csymbols[fldidt] = ast.Var
+							csi := newcsyminfo(fldidt, nil)
+							csi.isfield = true
+							tmpidts2[fldidt] = csi
 						}
 					}
 				}
@@ -596,6 +612,10 @@ func (pc *ParserContext) walkpass_fill_fakecpkg() {
 						// log.Println("got222", exprstr(fe.X), fe.X, fe.Sel)
 						f1 := fakecfunc(fe.Sel, fcpkg)
 						scope.Insert(f1)
+						csi := newcsyminfo(fe.Sel, nil)
+						csi.isfunc = true
+						csi.funo = f1
+						tmpidts2[fe.Sel] = csi
 					}
 				}
 			case *ast.ValueSpec:
@@ -633,7 +653,17 @@ func (pc *ParserContext) walkpass_fill_fakecpkg() {
 		if obj := scope.Lookup(idt.Name); obj != nil {
 			continue
 		}
+		csi := tmpidts2[idt]
 		if strings.HasPrefix(idtname, "struct_") {
+		} else if csi != nil && csi.istype {
+			// log.Println("gen fakectype", csi.idt)
+			st1 := types.Typ[types.Voidptr]
+			// st1 := types.Typ[types.UnsafePointer]
+			// st1 := types.NewCtype(idtname + "__ctype")
+			stobj := types.NewTypeName(token.NoPos, fcpkg, idtname, nil)
+			stobj2 := types.NewNamed(stobj, st1, nil)
+			_ = stobj
+			scope.Insert(stobj2.Obj())
 		} else {
 			scope.Insert(varx)
 			idtobj := ast.NewIdent(varx.Name() + "_asconst")
@@ -665,6 +695,7 @@ func (pc *ParserContext) walkpass_fill_fakecpkg() {
 	{
 		var cstructs = map[string][]string{} // struct name => field name
 		for nx, _ := range pc.csymbols {
+			// log.Println(nx, reftyof(nx))
 			switch ne := nx.(type) {
 			case *ast.Ident:
 				segs := strings.Split(ne.Name, ".")
@@ -672,6 +703,14 @@ func (pc *ParserContext) walkpass_fill_fakecpkg() {
 					break
 				}
 				cstructs[segs[0]] = append(cstructs[segs[0]], segs[1])
+			case *ast.SelectorExpr:
+				// C.struct_timeval
+				selname := ne.Sel.Name
+				if strings.HasPrefix(selname, "struct_") {
+					if _, ok := cstructs[selname]; !ok {
+						cstructs[selname] = nil
+					}
+				}
 			}
 		}
 		log.Println("fakec structs", cstructs)

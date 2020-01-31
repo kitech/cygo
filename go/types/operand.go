@@ -214,12 +214,22 @@ func (x *operand) assignableTo(check *Checker, T Type, reason *string) bool {
 	if Identical(V, T) {
 		return true
 	}
-	if isCdefType(V) || isCdefType(T) {
-		return true
-	}
 
 	Vu := V.Underlying()
 	Tu := T.Underlying()
+
+	if isCdefType(V) || isCdefType(T) {
+		return true
+	}
+	if isCdefType(Vu) || isCdefType(Tu) {
+		return true
+	}
+	if isVoidptr(T) || isByteptr(T) || isCharptr(T) {
+		return true
+	}
+	if isVoidptr(V) || isByteptr(V) || isCharptr(V) {
+		return true
+	}
 
 	// x is an untyped value representable by a value of type T
 	// TODO(gri) This is borrowing from checker.convertUntyped and

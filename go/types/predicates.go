@@ -103,7 +103,13 @@ func Comparable(T Type) bool {
 func hasNil(typ Type) bool {
 	switch t := typ.Underlying().(type) {
 	case *Basic:
-		return t.kind == UnsafePointer
+		switch t.kind {
+		case UnsafePointer, Voidptr, Byteptr, Charptr:
+			return true
+		}
+		if t.kind >= ctypebase {
+			return true
+		}
 	case *Slice, *Pointer, *Signature, *Interface, *Map, *Chan:
 		return true
 	}
@@ -143,6 +149,9 @@ func identical(x, y Type, cmpTags bool, p *ifacePair) bool {
 		// aliases, thus we cannot solely rely on the x == y check
 		// above. See also comment in TypeName.IsAlias.
 		if y, ok := y.(*Basic); ok {
+			if x.kind >= ctypebase || y.kind >= ctypebase {
+				return true
+			}
 			return x.kind == y.kind
 		}
 

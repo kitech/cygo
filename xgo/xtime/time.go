@@ -43,6 +43,10 @@ func Now() *Time {
 	rv := C.gettimeofday(tv, 0)
 	uts := C.time(0)
 	t := &Time{}
+	sec := tv.tv_sec
+	usec := tv.tv_usec
+	newts := sec*US + usec
+	t.unix = newts
 	// t.unix = tv.tv_sec*US + tv.tv_usec // TODO compiler
 	t.unix = uts * US
 	t.zone = zone()
@@ -71,7 +75,7 @@ func (t *Time) Format(format string) string {
 
 // yyyy-mm-dd hh:MM:ss.iii
 func (t *Time) Format1(withms bool) string {
-
+	return ""
 }
 
 func ParseIso(s string) *Time {
@@ -105,6 +109,7 @@ func newtimeritem(timeout Duration, f voidptr) *timeritem {
 	item.timeout = timeout
 	item.f = f
 	item.btime = C.time(0)
+	return item
 }
 
 var tmrman *timerman
@@ -130,7 +135,7 @@ func timerman_dotask_proc1() {
 	nowts := C.time(0)
 	tmrman.lock()
 	for _, item := range tmrman.items {
-		if (item.btime + item.timeout) >= nowts {
+		if (item.btime + int64(item.timeout)) >= nowts {
 			readys = append(readys, item)
 		} else {
 			lefts = append(lefts, item)

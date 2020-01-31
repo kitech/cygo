@@ -117,7 +117,7 @@ type AddrInfo struct {
 func (ai *AddrInfo) clone() *AddrInfo {
 	newai := &AddrInfo{}
 	*newai = *ai
-	newai.ai_next = 0
+	newai.ai_next = nil
 	if ai.ai_canonname != nil {
 		s := gostring(ai.ai_canonname)
 		newai.ai_canonname = memdup3(ai.ai_canonname, s.len())
@@ -160,9 +160,15 @@ func (info *AddrInfo) getip() string {
 	return iptmp
 }
 
+func cfcntl(fd int, opt int, val int) int {
+	flagsx := C.fcntl(fd, C.F_GETFL, 0)
+	return flagsx
+}
+
 func fd_set_nonblocking(fd int, isNonBlocking bool) bool {
-	flags := C.fcntl(fd, C.F_GETFL, 0)
-	oldv := flags & C.O_NONBLOCK
+	flags := cfcntl(fd, C.F_GETFL, 0)
+	var onb int = C.O_NONBLOCK
+	oldv := flags & onb
 	old := oldv > 0
 	if isNonBlocking == old {
 		return old
@@ -170,7 +176,7 @@ func fd_set_nonblocking(fd int, isNonBlocking bool) bool {
 
 	var newflags int
 	if isNonBlocking {
-		newflags = flags | C.O_NONBLOCK
+		newflags = flags | onb
 	} else {
 		// newflags = flags & ~C.O_NONBLOCK
 	}

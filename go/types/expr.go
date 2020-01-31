@@ -246,6 +246,10 @@ func representableConst(x constant.Value, check *Checker, typ *Basic, rounded *c
 				if typ.kind >= ctypebase {
 					return true
 				}
+				switch typ.kind {
+				case Voidptr, Byteptr, Charptr:
+					return true
+				}
 				unreachable()
 			}
 		}

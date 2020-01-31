@@ -198,14 +198,14 @@ func (ch *Curl) setoptfunc(opt int, fnptr voidptr, cbval voidptr) int {
 	switch opt {
 	case C.CURLOPT_READFUNCTION:
 		ch.setopt(C.CURLOPT_READDATA, cbval)
-	// case C.CURLOPT_WRITEFUNCTION:
-	// ch.setopt(C.CURLOPT_WRITEDATA, cbval)
+	case C.CURLOPT_WRITEFUNCTION:
+		ch.setopt(C.CURLOPT_WRITEDATA, cbval)
 	case C.CURLOPT_HEADERFUNCTION:
 		ch.setopt(C.CURLOPT_HEADERDATA, cbval)
 	case C.CURLOPT_DEBUGFUNCTION:
 		ch.setopt(C.CURLOPT_DEBUGDATA, cbval)
-		// case C.CURLOPT_RESOLVER_START_FUNCTION:
-		// ch.setopt(C.CURLOPT_RESOLVER_START_DATA, cbval)
+	case C.CURLOPT_RESOLVER_START_FUNCTION:
+		ch.setopt(C.CURLOPT_RESOLVER_START_DATA, cbval)
 	default:
 		assert(1 == 2)
 	}
@@ -237,16 +237,15 @@ func (ch *Curl) prepare() {
 		line := k + ": " + v
 		hdrlst.Append(line)
 	}
-	// ch.setopt(C.CUROPT_HTTPHEADER, hdrlst.Cobj)
+	ch.setopt(C.CURLOPT_HTTPHEADER, hdrlst.Cobj)
 
 	ch.setopt(C.CURLOPT_HEADERFUNCTION, header_cltcb)
 	ch.setopt(C.CURLOPT_HEADERDATA, ch)
 	ch.setopt(C.CURLOPT_READFUNCTION, recv_cltcb)
 	ch.setopt(C.CURLOPT_READDATA, ch)
 	if false {
-		// a := C.CURLOPT_WRITEDATA // why compiler error?
-		// ch.setopt(C.CURLOPT_WRITEFUNCTION, send_cltcb)
-		// ch.setopt(C.CURLOPT_WRITEDATA, ch)
+		ch.setopt(C.CURLOPT_WRITEFUNCTION, send_cltcb)
+		ch.setopt(C.CURLOPT_WRITEDATA, ch)
 	}
 	ch.errbuf = malloc3(C.CURL_ERROR_SIZE + 1)
 	ch.setopt(C.CURLOPT_ERRORBUFFER, ch.errbuf)

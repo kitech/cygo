@@ -2194,6 +2194,7 @@ func (this *g2nc) genExpr2(scope *ast.Scope, e ast.Expr) {
 		}
 		this.genCallExpr(scope, te)
 	case *ast.BasicLit:
+		// log.Println(e, exprstr(e), reftyof(e), te.Value)
 		ety := this.info.TypeOf(e)
 		if ety == nil { // we created
 			this.out(te.Value)
@@ -2211,17 +2212,19 @@ func (this *g2nc) genExpr2(scope *ast.Scope, e ast.Expr) {
 				this.out(te.Value)
 			case types.Uint8, types.Int8, types.Uint32, types.Int32:
 				this.out(te.Value)
-			case types.Uintptr:
+			case types.Uintptr, types.Voidptr:
 				this.out(te.Value)
 			default:
 				if isctydeftype2(t) {
 					this.out(te.Value)
 				} else {
+					this.outf("unknown %v", e)
 					log.Println("unknown", t.String())
 				}
 			}
 		default:
-			log.Println("unknown", t, reflect.TypeOf(t))
+			this.outf("unknown %v", e)
+			log.Println("unknown", e, t, reflect.TypeOf(t))
 		}
 	case *ast.BinaryExpr:
 		opty := this.info.TypeOf(te.X)
@@ -2403,6 +2406,7 @@ func (this *g2nc) genExpr2(scope *ast.Scope, e ast.Expr) {
 		closi := this.getclosinfo(te)
 		this.out(closi.fnname).outfh().outnl()
 	default:
+		this.outf("unknown %v", e)
 		log.Println("unknown", reflect.TypeOf(e), e, te)
 	}
 }
