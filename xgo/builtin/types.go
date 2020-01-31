@@ -90,3 +90,13 @@ func (efc *Eface) Toint() int {
 	p = (*int)(unsafe.Pointer(*efc.Data))
 	return *p
 }
+
+type MethodObject struct {
+	Ptr  voidptr // func pointer
+	This voidptr
+}
+
+type Wideptr struct {
+	Ptr voidptr
+	Obj voidptr
+}

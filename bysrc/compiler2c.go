@@ -91,6 +91,7 @@ func (c *g2nc) genpkg(name string, pkg *ast.Package) {
 	for name, f := range pkg.Files {
 		c.genPredefsFile(pkg.Scope, name, f)
 	}
+	c.genFunctypesDecl(pkg.Scope)
 	for name, f := range pkg.Files {
 		c.genfile(pkg.Scope, name, f)
 	}
@@ -1997,7 +1998,11 @@ func (this *g2nc) genFieldList(scope *ast.Scope, flds *ast.FieldList,
 	for idx, fld := range flds.List {
 		_, _ = idx, fld
 		log.Println(fld.Type, this.exprTypeName(scope, fld.Type))
-		this.genTypeExpr(scope, fld.Type)
+		if tyname, ok := this.psctx.functypes[fld.Type]; ok {
+			this.out(tyname)
+		} else {
+			this.genTypeExpr(scope, fld.Type)
+		}
 		this.outsp()
 		if withname && len(fld.Names) > 0 {
 			this.genExpr(scope, fld.Names[0])
@@ -2789,8 +2794,21 @@ func (this *g2nc) exprTypeNameImpl2(scope *ast.Scope, ety types.Type, e ast.Expr
 			}
 		case *ast.Ident:
 			return te.String()
+		case *ast.FuncType:
+			if tyname, ok := this.psctx.functypes[fe]; ok {
+				return tyname + "/*111*/"
+			}
 		}
-		return te.String()
+		for fntyx, tyname := range this.psctx.functypes {
+			fnty := this.info.TypeOf(fntyx)
+			// log.Println(te.String(), fmt.Sprintf("%v", fnty), te == fnty, tyname)
+			if te == fnty {
+				return tyname + fmt.Sprintf("/*222 %v*/", te.String())
+			}
+		}
+
+		// log.Println(reftyof(e), exprstr(e), reftyof(te))
+		return te.String() + "/* 333 */"
 	case *types.Interface:
 		return "cxeface*"
 	case *types.Tuple:
@@ -2878,6 +2896,39 @@ func (c *g2nc) genPredefTypeDecl(scope *ast.Scope, d *ast.GenDecl) {
 			}
 		}
 	}
+}
+func (c *g2nc) genFunctypesDecl(scope *ast.Scope) {
+	c.outf("// functypes %d in %v", len(c.psctx.functypes), c.pkgpfx()).outnl()
+	for fntyx, name := range c.psctx.functypes {
+		fnty := fntyx.(*ast.FuncType)
+		c.outf("// %v %v", exprstr(fnty), name).outnl()
+		retcnt := 0
+		if fnty.Results != nil {
+			retcnt = len(fnty.Results.List)
+		}
+		if retcnt > 1 {
+			log.Fatalln("not support multirets functypes", exprpos(c.psctx, fntyx))
+			c.outf("// notimpl multirets").outnl().out("//").outsp()
+		}
+		c.outf("typedef").outsp()
+		if fnty.Results != nil {
+			for idx, fldo := range fnty.Results.List {
+				tystr := c.exprTypeName(scope, fldo.Type)
+				c.outf("%v%s", tystr, gopp.IfElseStr(idx == retcnt-1, "", ","))
+			}
+		} else {
+			c.outf("void").outsp()
+		}
+		c.outf("(*%v)(", name)
+		prmcnt := len(fnty.Params.List)
+		for idx, fldo := range fnty.Params.List {
+			tystr := c.exprTypeName(scope, fldo.Type)
+			c.outf("%v%s", tystr, gopp.IfElseStr(idx == prmcnt-1, "", ","))
+		}
+		c.out(")")
+		c.outfh().outnl()
+	}
+	c.outnl()
 }
 func (this *g2nc) genGenDecl(scope *ast.Scope, d *ast.GenDecl) {
 	// log.Println(d.Tok, d.Specs, len(d.Specs), d.Tok.IsKeyword(), d.Tok.IsLiteral(), d.Tok.IsOperator())

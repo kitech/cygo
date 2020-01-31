@@ -196,6 +196,13 @@ func tmpvarname() string {
 func tmpvarname2(idx int) string {
 	return fmt.Sprintf("gxtv%d", idx)
 }
+func tmptyname() string {
+	tmpvarno++
+	return fmt.Sprintf("gxty%d", tmpvarno)
+}
+func tmptyname2(idx int) string {
+	return fmt.Sprintf("gxty%d", idx)
+}
 
 // idt is ast.CallExpr.Fun
 func funcistypedep(idt ast.Expr) bool {

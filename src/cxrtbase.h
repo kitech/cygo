@@ -126,7 +126,7 @@ typedef struct cxstring { char* ptr; int len; } cxstring;
 typedef struct cxarray2_s {
     uint8* ptr;  int len;  int cap;  int elemsz;
 } cxarray2;
-
+typedef struct wideptr { voidptr ptr; voidptr obj; } wideptr;
 
 // typedef struct cxstring string;
 cxstring* cxstring_new();
