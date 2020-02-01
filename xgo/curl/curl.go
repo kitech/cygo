@@ -105,6 +105,7 @@ func (ch *Curl) user_agent(ua string) *Curl {
 }
 func (ch *Curl) uapolicy(uap int) *Curl {
 	ch.uapolicy_ = uap
+	return ch
 }
 
 func (ch *Curl) header_line(line string) *Curl {
@@ -346,22 +347,22 @@ type Response struct {
 }
 
 // network ok?
-func (rsp *Response) Ok() { return rsp.Ret == OK }
+func (rsp *Response) Ok() bool { return rsp.Ret == OK }
 
 // protocol ok?
-func (rsp *Response) Is10x() {
+func (rsp *Response) Is10x() bool {
 	return rsp.Stcode >= 100 && rsp.Stcode < 200
 }
-func (rsp *Response) Is20x() {
+func (rsp *Response) Is20x() bool {
 	return rsp.Stcode >= 200 && rsp.Stcode < 300
 }
-func (rsp *Response) Is30x() {
+func (rsp *Response) Is30x() bool {
 	return rsp.Stcode >= 300 && rsp.Stcode < 400
 }
-func (rsp *Response) Is40x() {
+func (rsp *Response) Is40x() bool {
 	return rsp.Stcode >= 400 && rsp.Stcode < 500
 }
-func (rsp *Response) Is50x() {
+func (rsp *Response) Is50x() bool {
 	return rsp.Stcode >= 500 && rsp.Stcode < 600
 }
 

@@ -170,7 +170,9 @@ func (pc *ParserContext) pkgimperror(err error) {
 	} else {
 		log.Println(err)
 		// must stop error
-		if strings.Contains(err.Error(), "could not import") {
+		if strings.Contains(err.Error(), "could not import") ||
+			strings.Contains(err.Error(), "no result values expected") ||
+			strings.Contains(err.Error(), "missing return") {
 			pc.chkerrs = append(pc.chkerrs, err)
 		}
 	}

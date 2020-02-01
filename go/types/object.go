@@ -172,7 +172,14 @@ func (obj *object) sameId(pkg *Package, name string) bool {
 		return pkg == obj.pkg
 	}
 	// pkg != nil && obj.pkg != nil
-	return pkg.path == obj.pkg.path
+	samepkg := pkg.path == obj.pkg.path
+	if samepkg {
+		return true
+	}
+	if !obj.Exported() {
+		return true
+	}
+	return false
 }
 
 // A PkgName represents an imported Go package.

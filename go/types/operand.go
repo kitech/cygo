@@ -286,5 +286,15 @@ func (x *operand) assignableTo(check *Checker, T Type, reason *string) bool {
 		}
 	}
 
+	if isInteger(V) && isInteger(T) {
+		return true
+	}
+	if isPointer(V) && isPointer(T) {
+		return true
+	}
+	if isCdefType(V) || isCdefType(T) {
+		return true
+	}
+
 	return false
 }

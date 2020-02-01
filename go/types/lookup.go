@@ -186,7 +186,7 @@ func lookupFieldOrMethod(T Type, addressable bool, pkg *Package, name string) (o
 					indirect = e.indirect
 				}
 			case *Basic:
-				if t.kind == String {
+				if t.kind == String || t.kind == UntypedString {
 					if i, m := lookupMethod(strmths, nil, name); m != nil {
 						obj = m
 						index = concat(e.index, i)

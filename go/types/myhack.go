@@ -464,6 +464,37 @@ func fillBasicMethods() {
 		mapmths = append(mapmths, m1)
 	}
 
+	{ // byte.isspace() bool
+		var sig *Signature
+		recv := NewVar(token.NoPos, nil, "this", Typ[Byte])
+		var params *Tuple
+		r0 := NewVar(token.NoPos, nil, "", Typ[Bool])
+		results := NewTuple(r0)
+		sig = NewSignature(recv, params, results, false)
+		m1 := NewFunc(token.NoPos, nil, "isspace", sig)
+		intmths = append(intmths, m1)
+	}
+	{ // byte.isdigit() bool
+		var sig *Signature
+		recv := NewVar(token.NoPos, nil, "this", Typ[Byte])
+		var params *Tuple
+		r0 := NewVar(token.NoPos, nil, "", Typ[Bool])
+		results := NewTuple(r0)
+		sig = NewSignature(recv, params, results, false)
+		m1 := NewFunc(token.NoPos, nil, "isdigit", sig)
+		intmths = append(intmths, m1)
+	}
+	{ // byte.isnumber() bool
+		var sig *Signature
+		recv := NewVar(token.NoPos, nil, "this", Typ[Byte])
+		var params *Tuple
+		r0 := NewVar(token.NoPos, nil, "", Typ[Bool])
+		results := NewTuple(r0)
+		sig = NewSignature(recv, params, results, false)
+		m1 := NewFunc(token.NoPos, nil, "isnumber", sig)
+		intmths = append(intmths, m1)
+	}
+
 	{
 		for _, ty := range []BasicKind{
 			Bool, Int, Int8, Int16, Int32, Int64,

@@ -37,3 +37,7 @@
 * [ ] 末尾没有return的要补上
 * [ ] 现在的ast在插入删除语句上有点弱 
 
+
+### 类似项目
+* https://github.com/DQNEO/minigo
+
