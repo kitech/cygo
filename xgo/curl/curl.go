@@ -4,6 +4,8 @@ package curl
 #include <curl/curl.h>
 #include <curl/easy.h>
 #include <cxrtbase.h>
+
+CURL* curl_easy_init();
 */
 import "C"
 
@@ -314,6 +316,10 @@ func Get(u string) *Response {
 func (ch *Curl) Getinfo(opt int, val voidptr /*unsafe.Pointer*/) int {
 	rv := C.curl_easy_getinfo(ch.cobj, opt, val)
 	return rv
+}
+func (ch *Curl) Strerror(code int) string {
+	rv := C.curl_easy_strerror(code)
+	return gostring(rv)
 }
 
 func (ch *Curl) getresp() *Response {

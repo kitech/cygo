@@ -33,6 +33,7 @@ type cparser1 struct {
 	ppsrcfile string
 	ppsrc     []byte
 	pplines   []string
+	clrlines  []string
 
 	prsit *sitter.Parser
 	trn   *sitter.Tree
@@ -83,16 +84,33 @@ func rmoldtccppfiles() {
 }
 func (cp *cparser1) parsestr(code string) bool {
 	rmoldtccppfiles()
-	filename := fmt.Sprintf("/tmp/tcctrspp.%d.c", rand.Intn(10000000)+50000)
+	filename := fmt.Sprintf("/tmp/tcctrspp.%s.%d.c", cp.name, rand.Intn(10000000)+50000)
 	curprocppfiles[filename] = 1
 
-	err := tccpp(code, filename, nil)
+	incdirs := []string{"/home/me/oss/src/cxrt/src",
+		"/home/me/oss/src/cxrt/3rdparty/cltc/src",
+		"/home/me/oss/src/cxrt/3rdparty/tcc"}
+	code = "#include <stdio.h>\n" + code
+	code = "#include <stdlib.h>\n" + code
+	code = "#include <string.h>\n" + code
+	code = "#include <errno.h>\n" + code
+	code = "#include <pthread.h>\n" + code
+	code = "#include <cxrtbase.h>\n" + code
+	err := tccpp(code, filename, incdirs)
 	gopp.ErrPrint(err, filename)
 
 	bcc, err := ioutil.ReadFile(filename)
 	gopp.ErrPrint(err, filename)
 	cp.ppsrc = bcc
 	// defer os.Remove(filename)
+
+	// clean code to make tree sitter happy
+	cp.pplines = strings.Split(string(cp.ppsrc), "\n")
+	cp.cltfiles()
+	bcc = []byte(strings.Join(cp.clrlines, "\n"))
+	cp.ppsrc = bcc
+	cp.pplines = cp.clrlines
+	cp.clrlines = nil
 
 	trn := cp.prsit.Parse(bcc)
 	cp.trn = trn
@@ -109,11 +127,12 @@ func (cp *cparser1) fill_hotfixs() {
 	cp.enums["__LINE__"] = "int"
 	cp.vars["__FILE__"] = "char*"
 	cp.vars["errno"] = "int"
+	cp.funcs["close"] = "int"
 }
 func (cp *cparser1) collect() {
-	cp.pplines = strings.Split(string(cp.ppsrc), "\n")
+	// cp.pplines = strings.Split(string(cp.ppsrc), "\n")
+	// cp.cltfiles()
 	cp.fill_hotfixs()
-	cp.cltfiles()
 	cp.cltdefines()
 	cp.walk(cp.trn.RootNode(), 0)
 	results := map[string]interface{}{
@@ -167,7 +186,7 @@ func (cp *cparser1) walk(n *sitter.Node, lvl int) {
 			cp.vars[funcname] = functype
 		}
 
-		if false {
+		if true {
 			log.Println(n.Type(), n.ChildCount(), declkind, len(txt), txt)
 		}
 
@@ -208,7 +227,7 @@ func (cp *cparser1) walk(n *sitter.Node, lvl int) {
 		fldname, tystr := getvarname(txt)
 		cp.structs[stname][fldname] = stfield{fldname, tystr}
 		fldcnt := len(cp.structs[stname])
-		if true {
+		if false {
 			log.Println(n.Type(), len(txt), txt, ppn.Type(), instruct, stname, fldcnt, "//")
 		}
 	case "type_definition": // typedef xxx yyy;
@@ -222,7 +241,10 @@ func (cp *cparser1) walk(n *sitter.Node, lvl int) {
 			// TODO
 		} else {
 			fields := strings.Split(txt, " ")
-			cp.types[fields[len(fields)-1]] = strings.Join(fields[1:len(fields)-1], " ")
+			tyname := fields[len(fields)-1]
+			realty := strings.Join(fields[1:len(fields)-1], " ")
+			// log.Println(n.Type(), len(fields), fields, tyname, realty)
+			cp.types[tyname] = realty
 		}
 		if false {
 			log.Println(n.Type(), len(txt), txt)
@@ -241,6 +263,7 @@ func (cp *cparser1) walk(n *sitter.Node, lvl int) {
 		if false {
 			log.Println(n.Type(), pn.Type(), ppn.Type(), pppn.Type(), len(txt), txt)
 		}
+	case "translation_unit": // full text
 	default:
 		txt := cp.exprtxt(n)
 		if false {
@@ -286,6 +309,7 @@ func (cp *cparser1) exprtxt(n *sitter.Node) string {
 }
 
 func (cp *cparser1) cltfiles() {
+	clrlines := []string{} // without # line and make tree sitter happy
 	for idx, line := range cp.pplines {
 		if strings.HasPrefix(line, "# ") {
 			// log.Println("header file?", idx, line)
@@ -294,9 +318,12 @@ func (cp *cparser1) cltfiles() {
 			if _, ok := cp.files[hdrfile]; !ok {
 				cp.files[hdrfile] = idx
 			}
+		} else {
+			clrlines = append(clrlines, line)
 		}
 	}
-	log.Println("files", len(cp.files))
+	cp.clrlines = clrlines
+	log.Println("files", len(cp.files), "left", len(clrlines))
 }
 
 func (cp *cparser1) cltdefines() {
@@ -488,35 +515,81 @@ func (cp *cparser1) symtype(sym string) (tystr string, tyobj types.Type) {
 	}
 
 	if infunc {
-		tystr, tyobj = ctype2go(sym, tystr1)
+		tystr, tyobj = cp.ctype2go(sym, tystr1)
 		return
 	}
 
 	if intype {
-		tystr, tyobj = ctype2go(sym, tystr2)
+		tystr, tyobj = cp.ctype2go(sym, tystr2)
 		return
 	}
 
 	if invar {
-		tystr, tyobj = ctype2go(sym, tystr3)
+		tystr, tyobj = cp.ctype2go(sym, tystr3)
 		return
 	}
 
 	return
 }
 
-func ctype2go(sym, tystr string) (tystr2 string, tyobj types.Type) {
-	log.Println(sym, tystr)
+func (cp *cparser1) ctype2go(sym, tystr string) (tystr2 string, tyobj types.Type) {
+	log.Println(cp.name, sym, tystr)
+	tystr = strings.TrimSpace(tystr)
 	tystr2 = tystr
+
 	switch tystr {
 	case "char*":
 		tyobj = types.Typ[types.Byteptr]
 	case "char**":
 		tyobj = types.NewPointer(types.Typ[types.Byteptr])
+	case "void *", "void*", "void":
+		tyobj = types.Typ[types.Voidptr]
+	case "int*":
+		tyobj = types.NewPointer(types.Typ[types.Int])
 	case "long int":
 		tyobj = types.Typ[types.Int64]
+	case "long long int":
+		tyobj = types.Typ[types.Int64]
+	case "unsigned long":
+		tyobj = types.Typ[types.Uint64]
+	case "unsigned", "unsigned int":
+		tyobj = types.Typ[types.Uint]
 	case "int":
 		tyobj = types.Typ[types.Int]
+	case "uint16_t":
+		tyobj = types.Typ[types.Uint16]
+	case "size_t":
+		tyobj = types.Typ[types.Usize]
+	case "time_t":
+		tyobj = types.Typ[types.Usize]
+	case "double":
+		tyobj = types.Typ[types.Float64]
+	case "float":
+		tyobj = types.Typ[types.Float32]
+
+	default:
+		if strings.HasPrefix(tystr, "struct ") && strings.HasSuffix(tystr, "*") {
+			tyobj = types.Typ[types.Voidptr]
+			return
+		}
+		if strings.HasSuffix(tystr, "*") {
+			starcnt := strings.Count(tystr, "*")
+			canty := strings.TrimRight(tystr, "*")
+			undty := cp.types[canty]
+			if undty != "" {
+				newty := undty + strings.Repeat("*", starcnt)
+				log.Println(sym, tystr, "=>", newty)
+				return cp.ctype2go(sym, newty)
+			}
+		}
+		undty := cp.types[tystr]
+		if strings.HasPrefix(undty, "enum {") {
+			tyobj = types.Typ[types.Int]
+			return
+		} else if undty != "" {
+			return cp.ctype2go(sym, undty)
+		}
+		log.Println(cp.name, tystr, cp.types[tystr])
 	}
 	return
 }

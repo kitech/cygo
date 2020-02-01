@@ -619,6 +619,14 @@ func (pc *ParserContext) walkpass_fill_fakecpkg() {
 						// log.Println("got222", exprstr(fe.X), fe.X, fe.Sel)
 						f1 := fakecfunc(fe.Sel, fcpkg)
 						scope.Insert(f1)
+						tystr, tyobj := pc.cpr.symtype(fe.Sel.Name)
+						if tyobj == nil {
+							log.Println(pkg.Name, "not found ctype", fe.Sel, tystr)
+						} else {
+							selidt := ast.NewIdent(fe.Sel.Name + "_ofcp")
+							f2 := fakecfunc2(selidt, fcpkg, tyobj)
+							scope.Insert(f2)
+						}
 						csi := newcsyminfo(fe.Sel, nil)
 						csi.isfunc = true
 						csi.funo = f1
@@ -679,6 +687,10 @@ func (pc *ParserContext) walkpass_fill_fakecpkg() {
 			ctystr, ctyobj := pc.cpr.symtype(idtname)
 			if ctyobj == nil {
 				log.Println(pc.bdpkgs.Name, idtname, ctystr, ctyobj)
+			} else {
+				idtobj := ast.NewIdent(varx.Name() + "_ofcp")
+				cst1 := types.NewConst(token.NoPos, fcpkg, idtobj.Name, ctyobj, nil)
+				scope.Insert(cst1)
 			}
 		}
 	}

@@ -73,6 +73,20 @@ func fakecfunc(funcnameidt ast.Expr, fcpkg *types.Package) *types.Func {
 	f1 := types.NewFunc(token.NoPos, fcpkg, idtname, f1sig)
 	return f1
 }
+func fakecfunc2(funcnameidt ast.Expr, fcpkg *types.Package, rety types.Type) *types.Func {
+	idtname := fmt.Sprintf("%v", funcnameidt)
+	ty1 := rety
+	var1 := types.NewVar(token.NoPos, fcpkg, "", ty1)
+	f1rets := types.NewTuple(var1)
+	iftype := types.NewInterfaceType(nil, nil)
+	iflst := types.NewSlice(iftype)
+	var2 := types.NewVar(token.NoPos, fcpkg, "args", iflst)
+	prms := types.NewTuple(var2)
+	prms = nil // fix some array like gened out, don't use variadic signature
+	f1sig := types.NewSignature(nil, prms, f1rets, false)
+	f1 := types.NewFunc(token.NoPos, fcpkg, idtname, f1sig)
+	return f1
+}
 
 // must *ast.Ident
 func fakecvar(varnameidt ast.Expr, fcpkg *types.Package) *types.Var {
@@ -85,6 +99,13 @@ func fakecvar(varnameidt ast.Expr, fcpkg *types.Package) *types.Var {
 func fakecconst(cstnameidt ast.Expr, fcpkg *types.Package) *types.Const {
 	idtname := fmt.Sprintf("%v", cstnameidt)
 	ty1 := types.NewCtype(fmt.Sprintf("%v__const__ctype", idtname))
+	var val1 constant.Value
+	cst1 := types.NewConst(token.NoPos, fcpkg, idtname, ty1, val1)
+	return cst1
+}
+func fakecconst2(cstnameidt ast.Expr, fcpkg *types.Package, typ types.Type) *types.Const {
+	idtname := fmt.Sprintf("%v", cstnameidt)
+	ty1 := typ
 	var val1 constant.Value
 	cst1 := types.NewConst(token.NoPos, fcpkg, idtname, ty1, val1)
 	return cst1

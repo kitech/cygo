@@ -1,7 +1,8 @@
 package xstrings
 
 /*
- */
+#include <stdlib.h>
+*/
 import "C"
 
 func Split(s string, sep string) []string {
