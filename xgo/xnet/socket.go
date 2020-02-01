@@ -7,6 +7,7 @@ package xnet
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include <netdb.h>
+#include <fcntl.h>
 */
 import "C"
 import (

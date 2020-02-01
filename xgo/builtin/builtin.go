@@ -5,6 +5,7 @@ package builtin
 /*
 #include <stdlib.h>
 #include <stdio.h>
+#include <errno.h>
 */
 import "C"
 
