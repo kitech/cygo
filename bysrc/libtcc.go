@@ -163,52 +163,41 @@ func restorestdout(cfp *C.FILE) {
 
 ///
 func tccpp(codebuf string, filename string, incdirs []string) error {
-	srcfile := filename + ".nopp.c"
-	err := ioutil.WriteFile(srcfile, []byte(codebuf), 0644)
-	gopp.ErrPrint(err, filename)
-	defer os.Remove(srcfile)
-
-	// filename += ".fly.c"
+	if true {
+		return tccppfly(codebuf, filename, incdirs)
+	} else {
+		return tccppcmd(codebuf, filename, incdirs)
+	}
+}
+func tccppfly(codebuf string, filename string, incdirs []string) error {
 	tcc := newTcc()
 	rv := tcc.AddSysIncdir("/usr/include")
-	// tcc.AddSysIncdir("/usr/lib/gcc/x86_64-pc-linux-gnu/9.2.0/include")
 	tcc.AddSysIncdir("/usr/lib/tcc/include")
 	tcc.AddIncdirs(incdirs...)
 	tcc.AddLibdir("/usr/lib")
-	// tcc.AddLibdir("/usr/lib/gcc/x86_64-pc-linux-gnu/9.2.0")
 	tcc.AddLib("c")
 	// rv := tcc.AddFile("/usr/lib/crtn.o")
 	// log.Println(rv)
-	// rv = tcc.SetOutputFile(filename)
+	// rv = tcc.SetOutputFile(filename) // crash use with -E
 	// log.Println(rv, filename)
 	// tcc.SetOutputType(TCC_OUTPUT_PREPROCESS)
 	// tcc.SetOutputType(TCC_OUTPUT_MEMORY)
 	tcc.SetOptions("-o " + filename)
 	tcc.SetOptions("-v -E")
 
-	// rv = tcc.SetOutputFile(filename)
-	// log.Println(rv, filename)
-
 	cfp := redirstdout2file(filename)
 	rv = tcc.CompileStr(codebuf)
 	restorestdout(cfp)
 	log.Println(rv, filename)
+	tcc.delete()
 
-	// argv := []string{"-o", filename}
-	// argc := len(argv)
-	// argc = 0
-	// log.Println(argv)
-	// tcc.SetOptions(strings.Join(argv, " "))
-	// rv = tcc.Run(argc, argv)
-	// log.Println("saved", rv, filename, gopp.FileSize(filename))
 	if rv < 0 {
 		return fmt.Errorf("run error %d", rv)
 	}
-	log.Println("saved", filename, gopp.FileSize(filename))
 	return nil
 }
 
-func tccpp2(codebuf string, filename string, incdirs []string) error {
+func tccppcmd(codebuf string, filename string, incdirs []string) error {
 	srcfile := filename + ".nopp.c"
 	err := ioutil.WriteFile(srcfile, []byte(codebuf), 0644)
 	gopp.ErrPrint(err, filename)

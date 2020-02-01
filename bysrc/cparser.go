@@ -37,13 +37,18 @@ type cparser1 struct {
 	prsit *sitter.Parser
 	trn   *sitter.Tree
 
-	files   map[string]int      // filepath => lineno, reorder
-	defines map[string]ast.Expr // name => value
-	enums   map[string]string   // name => value
-	vars    map[string]string   // name => type
-	funcs   map[string]string   // name => return type
-	structs map[string][]string // name => fields
-	types   map[string]string   // name => primitive type
+	files   map[string]int         // filepath => lineno, reorder
+	defines map[string]ast.Expr    // name => value
+	enums   map[string]string      // name => value
+	vars    map[string]string      // name => type
+	funcs   map[string]string      // name => return type
+	structs map[string]stfieldlist // name => fields
+	types   map[string]string      // name => primitive type
+}
+type stfieldlist map[string]stfield
+type stfield struct {
+	name  string
+	tystr string
 }
 
 func newcparser1(name string) *cparser1 {
@@ -57,7 +62,7 @@ func newcparser1(name string) *cparser1 {
 	cp.enums = map[string]string{}
 	cp.vars = map[string]string{}
 	cp.funcs = map[string]string{}
-	cp.structs = map[string][]string{}
+	cp.structs = map[string]stfieldlist{}
 	cp.types = map[string]string{}
 	return cp
 }
@@ -81,8 +86,6 @@ func (cp *cparser1) parsestr(code string) bool {
 	filename := fmt.Sprintf("/tmp/tcctrspp.%d.c", rand.Intn(10000000)+50000)
 	curprocppfiles[filename] = 1
 
-	// err := tccpp2(code, filename, nil)
-	// gopp.ErrPrint(err)
 	err := tccpp(code, filename, nil)
 	gopp.ErrPrint(err, filename)
 
@@ -131,9 +134,8 @@ func (cp *cparser1) walk(n *sitter.Node, lvl int) {
 
 	switch n.Type() {
 	case "declaration":
-		if txt == "" {
-			break
-		}
+		gopp.Assert(len(txt) > 0, "wtfff", txt)
+
 		// log.Println(n.Type(), n.ChildCount(), len(txt), txt)
 		isfunc := false
 		nc := int(n.ChildCount())
@@ -177,35 +179,41 @@ func (cp *cparser1) walk(n *sitter.Node, lvl int) {
 		fields := strings.Split(txt, " ")
 		cp.enums[fields[0]] = strings.Join(fields[1:], " ")
 	case "struct_specifier":
-		if txt == "" {
-			break
-		}
+		gopp.Assert(len(txt) > 0, "wtfff", txt)
 		if _, ok := cp.structs[txt]; ok {
 			break
 		}
 
-		nc := int(n.ChildCount())
-		for i := 0; i < nc; i++ {
-			nx := n.Child(i)
-			log.Println(n.Type(), len(txt), txt, i, nx.Type())
-		}
-		cp.structs[txt] = nil
+		stname := strings.Split(txt, "{")[0]
+		stname = strings.TrimSpace(stname)
+		cp.structs[stname] = stfieldlist{}
 		log.Println(n.Type(), len(txt), txt)
 	case "field_declaration":
-		if txt == "" {
-			break
-		}
+		gopp.Assert(len(txt) > 0, "wtfff", txt)
 
 		pn := n.Parent()   // field_declaration_list
 		ppn := pn.Parent() // struct_specifier
-		stname := cp.exprtxt(ppn)
-		if true {
-			log.Println(n.Type(), len(txt), txt, stname, "//")
-		}
-	case "type_definition": // typedef xxx yyy;
-		if txt == "" {
+		if ppn.Type() == "translation_unit" ||
+			ppn.Type() == "union_specifier" {
 			break
 		}
+		gopp.Assert(ppn.Type() == "struct_specifier", "wtfff", ppn.Type())
+
+		stbody := cp.exprtxt(ppn)
+		stname := strings.Split(stbody, "{")[0]
+		stname = strings.TrimSpace(stname)
+		_, instruct := cp.structs[stname]
+		gopp.Assert(instruct, "wtfff", stname)
+
+		fldname, tystr := getvarname(txt)
+		cp.structs[stname][fldname] = stfield{fldname, tystr}
+		fldcnt := len(cp.structs[stname])
+		if true {
+			log.Println(n.Type(), len(txt), txt, ppn.Type(), instruct, stname, fldcnt, "//")
+		}
+	case "type_definition": // typedef xxx yyy;
+		gopp.Assert(len(txt) > 0, "wtfff", txt)
+
 		txt = strings.TrimRight(txt, ";")
 		txt = strings.TrimSpace(txt)
 		// func type
@@ -256,8 +264,19 @@ func (cp *cparser1) exprtxt(n *sitter.Node) string {
 		isfirst := i == bpos.Row
 		islast := i == epos.Row
 		line := cp.pplines[i]
+		bcol := int(bpos.Column)
+		ecol := int(epos.Column)
 		if isfirst && islast {
-			txt = line[int(bpos.Column):int(epos.Column)]
+			txt = line[bcol:ecol]
+		} else if isfirst {
+			txt = line[bcol:]
+		} else if islast {
+			txt += line[:ecol]
+		} else {
+			if strings.HasPrefix(line, "#") {
+			} else {
+				txt += line
+			}
 		}
 		if i >= epos.Row {
 			break
