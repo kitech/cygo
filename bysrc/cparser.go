@@ -21,6 +21,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	sitter "github.com/smacker/go-tree-sitter"
 	trspc "github.com/smacker/go-tree-sitter/c"
@@ -68,6 +69,64 @@ func newcparser1(name string) *cparser1 {
 	return cp
 }
 
+const (
+	csym_non = iota
+	csym_file
+	csym_define
+	csym_enum
+	csym_var
+	csym_func
+	csym_struct
+	csym_type
+)
+
+func csym_kind2str(kind int) string {
+	kinds := map[int]string{
+		csym_non:    "non",
+		csym_file:   "file",
+		csym_define: "define",
+		csym_enum:   "enum",
+		csym_var:    "var",
+		csym_func:   "func",
+		csym_struct: "struct",
+		csym_type:   "type",
+	}
+	if str, ok := kinds[kind]; ok {
+		return str
+	}
+	return fmt.Sprintf("csymunk%d", kind)
+}
+
+type csymdata struct {
+	kind   int
+	name   string
+	tyval  string
+	define ast.Expr
+	struc  stfieldlist
+}
+
+func newcsymdata(name string, kind int) *csymdata {
+	d := &csymdata{}
+	d.name = name
+	d.kind = kind
+	return d
+}
+
+// 当前进程有效
+type cparser1cache struct {
+	ppfiles map[string]int // filepath => 1
+	csyms   map[string]*csymdata
+}
+
+func newcparser1cache() *cparser1cache {
+	cpc := &cparser1cache{}
+	cpc.ppfiles = map[string]int{}
+	cpc.csyms = map[string]*csymdata{}
+	return cpc
+}
+
+var cp1cache = newcparser1cache()
+
 // 当前进程生成的preprocessor文件表
 var curprocppfiles = map[string]int{}
 
@@ -96,8 +155,10 @@ func (cp *cparser1) parsestr(code string) bool {
 	code = "#include <errno.h>\n" + code
 	code = "#include <pthread.h>\n" + code
 	code = "#include <cxrtbase.h>\n" + code
+	btime := time.Now()
 	err := tccpp(code, filename, incdirs)
 	gopp.ErrPrint(err, filename)
+	log.Println("tccpp", time.Since(btime))
 
 	bcc, err := ioutil.ReadFile(filename)
 	gopp.ErrPrint(err, filename)
@@ -105,15 +166,19 @@ func (cp *cparser1) parsestr(code string) bool {
 	// defer os.Remove(filename)
 
 	// clean code to make tree sitter happy
+	btime = time.Now()
 	cp.pplines = strings.Split(string(cp.ppsrc), "\n")
 	cp.cltfiles()
 	bcc = []byte(strings.Join(cp.clrlines, "\n"))
 	cp.ppsrc = bcc
 	cp.pplines = cp.clrlines
 	cp.clrlines = nil
+	log.Println("clrpp", time.Since(btime))
 
+	btime = time.Now()
 	trn := cp.prsit.Parse(bcc)
 	cp.trn = trn
+	log.Println("trsit parse", time.Since(btime))
 
 	cp.collect()
 	return true
@@ -128,13 +193,22 @@ func (cp *cparser1) fill_hotfixs() {
 	cp.vars["__FILE__"] = "char*"
 	cp.vars["errno"] = "int"
 	cp.funcs["close"] = "int"
+	csi := newcsymdata("__LINE__", csym_enum)
+	cp1cache.csyms[csi.name] = csi
+	csi = newcsymdata("__FILE__", csym_var)
+	cp1cache.csyms[csi.name] = csi
+	csi = newcsymdata("errno", csym_var)
+	cp1cache.csyms[csi.name] = csi
+	csi = newcsymdata("close", csym_func)
+	cp1cache.csyms[csi.name] = csi
 }
 func (cp *cparser1) collect() {
 	// cp.pplines = strings.Split(string(cp.ppsrc), "\n")
 	// cp.cltfiles()
 	cp.fill_hotfixs()
 	cp.cltdefines()
-	cp.walk(cp.trn.RootNode(), 0)
+	btime := time.Now()
+	cp.walk(cp.trn.RootNode(), 0) // TODO slow
 	results := map[string]interface{}{
 		"files":   len(cp.files),
 		"defines": len(cp.defines),
@@ -144,12 +218,27 @@ func (cp *cparser1) collect() {
 		"structs": len(cp.structs),
 		"types":   len(cp.types),
 	}
-	log.Println(cp.name, results)
+	log.Println(cp.name, results, time.Since(btime))
 }
 
 func (cp *cparser1) walk(n *sitter.Node, lvl int) {
-	txt := cp.exprtxt(n)
-	txt = strings.TrimSpace(txt)
+	var txt string
+
+	switch n.Type() {
+	case "declaration":
+		fallthrough
+	case "enumerator":
+		fallthrough
+	case "struct_specifier":
+		fallthrough
+	case "field_declaration":
+		fallthrough
+	case "type_definition": // typedef xxx yyy;
+		fallthrough
+	case "assignment_expression":
+		txt = cp.exprtxt(n)
+		txt = strings.TrimSpace(txt)
+	}
 
 	switch n.Type() {
 	case "declaration":
@@ -179,24 +268,39 @@ func (cp *cparser1) walk(n *sitter.Node, lvl int) {
 			funcname, functype := getfuncname(txt)
 			// log.Println(n.Type(), declkind, functype, "//", funcname, txt+"//")
 			cp.funcs[funcname] = functype
+			csi := newcsymdata(funcname, csym_func)
+			csi.tyval = functype
+			cp1cache.csyms[funcname] = csi
 		} else {
 			// var
 			funcname, functype := getvarname(txt)
 			// log.Println(n.Type(), declkind, functype, "//", funcname, txt+"//", )
 			cp.vars[funcname] = functype
+			csi := newcsymdata(funcname, csym_var)
+			csi.tyval = functype
+			cp1cache.csyms[funcname] = csi
 		}
 
-		if true {
+		if false {
 			log.Println(n.Type(), n.ChildCount(), declkind, len(txt), txt)
 		}
 
 	case "enumerator":
-		txt := cp.exprtxt(n)
 		if false {
 			log.Println(n.Type(), len(txt), txt)
 		}
-		fields := strings.Split(txt, " ")
-		cp.enums[fields[0]] = strings.Join(fields[1:], " ")
+		ipos := strings.Index(txt, " ")
+		var fld0, fld1 string
+		if ipos < 0 {
+			fld0 = txt
+		} else {
+			fld0 = txt[0:ipos]
+			fld1 = txt[ipos+1:]
+		}
+		cp.enums[fld0] = fld1
+		csi := newcsymdata(fld0, csym_enum)
+		csi.tyval = fld1
+		cp1cache.csyms[fld0] = csi
 	case "struct_specifier":
 		gopp.Assert(len(txt) > 0, "wtfff", txt)
 		if _, ok := cp.structs[txt]; ok {
@@ -206,7 +310,12 @@ func (cp *cparser1) walk(n *sitter.Node, lvl int) {
 		stname := strings.Split(txt, "{")[0]
 		stname = strings.TrimSpace(stname)
 		cp.structs[stname] = stfieldlist{}
-		log.Println(n.Type(), len(txt), txt)
+		csi := newcsymdata(stname, csym_struct)
+		csi.struc = stfieldlist{}
+		cp1cache.csyms[stname] = csi
+		if false {
+			log.Println(n.Type(), len(txt), txt)
+		}
 	case "field_declaration":
 		gopp.Assert(len(txt) > 0, "wtfff", txt)
 
@@ -227,6 +336,8 @@ func (cp *cparser1) walk(n *sitter.Node, lvl int) {
 		fldname, tystr := getvarname(txt)
 		cp.structs[stname][fldname] = stfield{fldname, tystr}
 		fldcnt := len(cp.structs[stname])
+		csi := cp1cache.csyms[stname]
+		csi.struc[fldname] = stfield{fldname, tystr}
 		if false {
 			log.Println(n.Type(), len(txt), txt, ppn.Type(), instruct, stname, fldcnt, "//")
 		}
@@ -245,6 +356,9 @@ func (cp *cparser1) walk(n *sitter.Node, lvl int) {
 			realty := strings.Join(fields[1:len(fields)-1], " ")
 			// log.Println(n.Type(), len(fields), fields, tyname, realty)
 			cp.types[tyname] = realty
+			csi := newcsymdata(tyname, csym_type)
+			csi.tyval = realty
+			cp1cache.csyms[tyname] = csi
 		}
 		if false {
 			log.Println(n.Type(), len(txt), txt)
@@ -259,14 +373,17 @@ func (cp *cparser1) walk(n *sitter.Node, lvl int) {
 		if err == nil {
 			idtname := strings.TrimSpace(fields[0])
 			cp.defines[idtname] = ve
+			csi := newcsymdata(idtname, csym_define)
+			csi.define = ve
+			cp1cache.csyms[idtname] = csi
 		}
 		if false {
 			log.Println(n.Type(), pn.Type(), ppn.Type(), pppn.Type(), len(txt), txt)
 		}
 	case "translation_unit": // full text
 	default:
-		txt := cp.exprtxt(n)
 		if false {
+			txt := cp.exprtxt(n)
 			log.Println(n.Type(), len(txt), txt)
 		}
 	}
@@ -309,6 +426,7 @@ func (cp *cparser1) exprtxt(n *sitter.Node) string {
 }
 
 func (cp *cparser1) cltfiles() {
+	btime := time.Now()
 	clrlines := []string{} // without # line and make tree sitter happy
 	for idx, line := range cp.pplines {
 		if strings.HasPrefix(line, "# ") {
@@ -323,11 +441,17 @@ func (cp *cparser1) cltfiles() {
 		}
 	}
 	cp.clrlines = clrlines
-	log.Println("files", len(cp.files), "left", len(clrlines))
+	log.Println("files", len(cp.files), "left", len(clrlines), time.Since(btime))
 }
 
 func (cp *cparser1) cltdefines() {
+	btime := time.Now()
 	for hdrfile, _ := range cp.files {
+		if _, ok := cp1cache.ppfiles[hdrfile]; ok {
+			// continue
+		}
+		cp1cache.ppfiles[hdrfile] = 1
+
 		bcc, err := ioutil.ReadFile(hdrfile)
 		gopp.ErrPrint(err, hdrfile)
 		lines := strings.Split(string(bcc), "\n")
@@ -359,6 +483,9 @@ func (cp *cparser1) cltdefines() {
 			if err == nil {
 				// log.Println(ve, reftyof(ve), codeline)
 				cp.defines[defname] = ve
+				csi := newcsymdata(defname, csym_define)
+				csi.define = ve
+				cp1cache.csyms[defname] = csi
 			} else {
 				// log.Println(ve, reftyof(ve), defname, codeline, line)
 				if !strings.Contains(defval, " ") {
@@ -369,7 +496,7 @@ func (cp *cparser1) cltdefines() {
 			}
 		}
 	}
-	log.Println("defines", len(cp.defines))
+	log.Println("defines", len(cp.defines), time.Since(btime))
 }
 
 func trimcomment1(line string) string {
@@ -384,30 +511,33 @@ func refmtdefineline(line string) string {
 	str := ""
 	lastsp := false
 	lastsharp := false
+	var lastch rune
 	for _, ch := range line {
-		t := string(ch)
-		if t == " " {
+		if ch == ' ' {
 			if lastsp {
 			} else if lastsharp {
 			} else {
-				str += t
+				str += string(ch)
 			}
-		} else if t == "\t" {
+		} else if ch == '\t' {
 			if !lastsp {
 				str += " "
 			}
 			lastsp = true
 		} else {
-			str += t
+			str += string(ch)
 			lastsp = false
 		}
-		if t == "#" {
+		if ch == '#' {
 			lastsharp = true
 		} else {
 			lastsharp = false
 		}
+		lastch = ch
 	}
-	str = strings.TrimSpace(str)
+	if lastch == ' ' {
+		str = strings.TrimSpace(str)
+	}
 	return str
 }
 
@@ -473,8 +603,11 @@ func (cp *cparser1) symtype(sym string) (tystr string, tyobj types.Type) {
 	tystr1, infunc := cp.funcs[sym]
 	tystr2, intype := cp.types[sym]
 	tystr3, invar := cp.vars[sym]
+	csi, incache := cp1cache.csyms[sym]
+	_ = csi
 	log.Println(cp.name, sym, "indefine", indefine, "inenums", inenum,
-		"infuncs", infunc, "intypes", intype, "invars", invar)
+		"infuncs", infunc, "intypes", intype, "invars", invar,
+		"incache", incache)
 
 	if indefine {
 		switch ety := defexpr.(type) {
