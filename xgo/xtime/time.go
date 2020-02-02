@@ -47,7 +47,7 @@ func Now() *Time {
 	usec := tv.tv_usec
 	newts := sec*US + usec
 	t.unix = newts
-	// t.unix = tv.tv_sec*US + tv.tv_usec // TODO compiler
+	t.unix = tv.tv_sec*US + tv.tv_usec
 	t.unix = uts * US
 	t.zone = zone()
 	return t

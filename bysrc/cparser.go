@@ -42,10 +42,12 @@ type cparser1 struct {
 
 	hdrfiles map[string]int // filepath => lineno, reorder
 }
-type stfieldlist map[string]stfield
+type stfieldlist map[string]*stfield
 type stfield struct {
 	name  string
 	tystr string
+	tyobj types.Type
+	idx   int
 }
 
 func newcparser1(name string) *cparser1 {
@@ -121,6 +123,7 @@ func newcparser1cache() *cparser1cache {
 }
 
 func (cp1c *cparser1cache) add(kind int, symname string, tyvalx interface{}) {
+	symname = strings.Replace(symname, " ", "_", -1)
 	if _, ok := cp1c.csyms[symname]; ok {
 		return
 	}
@@ -136,9 +139,15 @@ func (cp1c *cparser1cache) add(kind int, symname string, tyvalx interface{}) {
 	cp1c.csyms[symname] = csi
 }
 func (cp1c *cparser1cache) add_field(stname string, fldname string, fldty string) *csymdata {
+	stname = strings.Replace(stname, " ", "_", -1)
 	csi := cp1c.csyms[stname]
-	csi.struc[fldname] = stfield{fldname, fldty}
+	csi.struc[fldname] = &stfield{fldname, fldty, nil, len(csi.struc)}
 	return csi
+}
+func (cp1c *cparser1cache) getsym(symname string) (*csymdata, bool) {
+	symname = strings.Replace(symname, " ", "_", -1)
+	csi, ok := cp1c.csyms[symname]
+	return csi, ok
 }
 
 var cp1cache = newcparser1cache()
@@ -331,14 +340,23 @@ func (cp *cparser1) walk(n *sitter.Node, lvl int) {
 		stbody := cp.exprtxt(ppn)
 		stname := strings.Split(stbody, "{")[0]
 		stname = strings.TrimSpace(stname)
-		_, instruct := cp1cache.csyms[stname]
+		_, instruct := cp1cache.getsym(stname)
 		gopp.Assert(instruct, "wtfff", stname)
 
 		fldname, tystr := getvarname(txt)
+		if strings.Contains(txt, "[") {
+			// char foo[bar] format
+			str1 := strings.Split(txt, "[")[0]
+			arr1 := strings.Split(str1, " ")
+			fldname = arr1[len(arr1)-1]
+			tystr = strings.Join(arr1[:len(arr1)-1], " ")
+			tystr += strings.Repeat("*", strings.Count(txt, "["))
+		}
 		csi := cp1cache.add_field(stname, fldname, tystr)
 		fldcnt := len(csi.struc)
 		if false {
-			log.Println(n.Type(), len(txt), txt, ppn.Type(), instruct, stname, fldcnt, "//")
+			log.Println(n.Type(), len(txt), txt, ppn.Type(),
+				instruct, stname, fldcnt, "//", tystr, "//", fldname)
 		}
 	case "type_definition": // typedef xxx yyy;
 		gopp.Assert(len(txt) > 0, "wtfff", txt)
@@ -467,9 +485,7 @@ func (cp *cparser1) cltdefines() {
 				// bool
 				ve, err := parser.ParseExpr("true")
 				gopp.Assert(err == nil, "wtfff", line)
-				csi := newcsymdata(fields[1], csym_define)
-				csi.define = ve
-				cp1cache.csyms[fields[1]] = csi
+				cp1cache.add(csym_define, fields[1], ve)
 				continue
 			}
 
@@ -483,13 +499,11 @@ func (cp *cparser1) cltdefines() {
 			}
 			if err == nil {
 				// log.Println(ve, reftyof(ve), codeline)
-				csi := newcsymdata(defname, csym_define)
-				csi.define = ve
-				cp1cache.csyms[defname] = csi
+				cp1cache.add(csym_define, defname, ve)
 			} else {
 				// log.Println(ve, reftyof(ve), defname, codeline, line)
 				if !strings.Contains(defval, " ") {
-					pardef, ok := cp1cache.csyms[defname]
+					pardef, ok := cp1cache.getsym(defname)
 					log.Println(defname, pardef, ok)
 					// cp.defines[defname] = defval
 				}
@@ -598,7 +612,7 @@ func getvarname(s string) (string, string) {
 }
 
 func (cp *cparser1) symtype(sym string) (tystr string, tyobj types.Type) {
-	csi, incache := cp1cache.csyms[sym]
+	csi, incache := cp1cache.getsym(sym)
 	log.Println(cp.name, sym, "incache", incache)
 	if incache {
 		switch csi.kind {
@@ -655,6 +669,8 @@ func (cp *cparser1) ctype2go(sym, tystr string) (tystr2 string, tyobj types.Type
 	switch tystr {
 	case "char*":
 		tyobj = types.Typ[types.Byteptr]
+	case "unsigned char*":
+		tyobj = types.Typ[types.Byteptr]
 	case "char**":
 		tyobj = types.NewPointer(types.Typ[types.Byteptr])
 	case "void *", "void*", "void":
@@ -667,15 +683,15 @@ func (cp *cparser1) ctype2go(sym, tystr string) (tystr2 string, tyobj types.Type
 		tyobj = types.Typ[types.Int64]
 	case "unsigned long":
 		tyobj = types.Typ[types.Uint64]
-	case "unsigned", "unsigned int":
+	case "unsigned", "unsigned int", "uint":
 		tyobj = types.Typ[types.Uint]
 	case "int":
 		tyobj = types.Typ[types.Int]
 	case "char":
 		tyobj = types.Typ[types.Byte]
-	case "uint16_t", "unsigned short":
+	case "uint16_t", "unsigned short", "unsigned short int":
 		tyobj = types.Typ[types.Uint16]
-	case "int16_t", "short":
+	case "int16_t", "short", "short int":
 		tyobj = types.Typ[types.Int16]
 	case "size_t", "time_t", "uintptr_t":
 		tyobj = types.Typ[types.Usize]
@@ -708,6 +724,33 @@ func (cp *cparser1) ctype2go(sym, tystr string) (tystr2 string, tyobj types.Type
 			return cp.ctype2go(sym, csi.tyval)
 		}
 		log.Println(cp.name, tystr, cp1cache.csyms[tystr])
+	}
+	return
+}
+
+func (cp *cparser1) getstruct(sym string) *csymdata {
+	csi, incache := cp1cache.getsym(sym)
+	log.Println(cp.name, sym, incache, csi != nil)
+	cp.fillstructy(sym, csi)
+	return csi
+}
+func (cp *cparser1) fillstructy(sym string, csi *csymdata) {
+	if csi == nil {
+		return
+	}
+	for fldname, fldo := range csi.struc {
+		fldty, tyobj := cp.ctype2go(fldname, fldo.tystr)
+		log.Println(cp.name, sym, fldname, fldo.tystr, "//", fldty, "//", tyobj)
+		if tyobj != nil {
+			fldo.tyobj = tyobj
+		} else {
+			if strings.HasPrefix(fldo.tystr, "struct ") {
+				csi2, ok := cp1cache.getsym(fldo.tystr)
+				if ok {
+					cp.fillstructy(fldname, csi2)
+				}
+			}
+		}
 	}
 	return
 }

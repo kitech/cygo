@@ -2610,7 +2610,7 @@ func (this *g2nc) exprTypeNameImpl(scope *ast.Scope, e ast.Expr) string {
 	{
 		// return "unknownty"
 	}
-	{ // C.xxx or C.xxx()
+	{ // C.xxx or C.xxx() // TODO depcreate
 		if iscsel(e) {
 			name := exprstr(e)[2:]
 			if false {
@@ -2627,7 +2627,9 @@ func (this *g2nc) exprTypeNameImpl(scope *ast.Scope, e ast.Expr) string {
 			log.Println(ce.Fun, reftyof(ce.Fun), len(this.info.Types))
 			if idt, ok := ce.Fun.(*ast.Ident); ok {
 				if funk.Contains([]string{"int"}, idt.Name) {
-					return idt.Name
+					if false {
+						return idt.Name + "/*a111*/"
+					}
 				}
 			}
 		}
@@ -2653,7 +2655,9 @@ func (this *g2nc) exprTypeNameImpl(scope *ast.Scope, e ast.Expr) string {
 			if ce, ok := se.X.(*ast.CompositeLit); ok {
 				if iscsel(ce.Type) {
 					name := exprstr(ce.Type)[2:]
-					return fmt.Sprintf("%s__ctype*/*555*/", name)
+					if false {
+						return fmt.Sprintf("%s__ctype*/*555*/", name)
+					}
 				}
 			}
 		}
@@ -2670,7 +2674,7 @@ func (this *g2nc) exprTypeNameImpl(scope *ast.Scope, e ast.Expr) string {
 					ie2 := ie.X.(*ast.IndexExpr)
 					tope = ie2.X
 				}
-				return fmt.Sprintf("__typeof__(%s%s)", tope, dimstr)
+				return fmt.Sprintf("__typeof__(%s%s)/*a222*/", tope, dimstr)
 			} else if xty != nil && xty.String() == "byte" {
 				// multiple dimision index of c type???
 				dimn := strings.Count(exprstr(ie), "[")
@@ -2680,7 +2684,7 @@ func (this *g2nc) exprTypeNameImpl(scope *ast.Scope, e ast.Expr) string {
 					ie2 := ie.X.(*ast.IndexExpr)
 					tope = ie2.X
 				}
-				return fmt.Sprintf("__typeof__(%s%s)", tope, dimstr)
+				return fmt.Sprintf("__typeof__(%s%s)/*a333*/", tope, dimstr)
 			}
 		}
 	}

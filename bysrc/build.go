@@ -9,6 +9,7 @@ package main
 // 4 生成最终代码
 
 // 第2步能够节省很多时间
+// 还可以考虑处理编译flags的问题
 
 type builder struct {
 	// pkgs/funcs/types depgraph

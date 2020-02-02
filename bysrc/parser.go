@@ -769,11 +769,52 @@ func (pc *ParserContext) walkpass_fill_fakecpkg() {
 				fvar := types.NewVar(token.NoPos, tpkg, fldname, fldtyp)
 				fldvars = append(fldvars, fvar)
 			}
-			st1 := types.NewStruct(fldvars, nil)
+			sty1 := types.NewStruct(fldvars, nil)
+			// keep NewTypeName's type arg nil, so next step get a valid struct type
+			stobj := types.NewTypeName(token.NoPos, fcpkg, stname+"_ofdep", nil)
+			stobj2 := types.NewNamed(stobj, sty1, nil)
+			scope.Insert(stobj2.Obj())
+		}
+
+		var genfakecstruct2 func(csi *csymdata) *types.Named // 为了递归
+		genfakecstruct2 = func(csi *csymdata) *types.Named {
+			if csi == nil {
+				return nil
+			}
+			stname := csi.name
+			gopp.Assert(csi.kind == csym_struct, "wtfff", stname)
+
+			fldvars := []*types.Var{}
+			for fldname, fldo := range csi.struc {
+				fldtyp := fldo.tyobj
+				if fldtyp == nil && strings.HasPrefix(fldo.tystr, "struct ") {
+					csi2 := pc.cpr.getstruct(fldo.tystr)
+					fldtyp = genfakecstruct2(csi2)
+				}
+				// fvar := types.NewField(token.NoPos, fcpkg, fldname, fldtyp, false)
+				tpkg := fcpkg
+				for name, _ := range pkgs {
+					tpkg = types.NewPackage(pc.path, name)
+					break
+				}
+				// var 在建在当前包中!!!??? make go/types.LookupFieldOrMethod happy
+				tmpfldname := fmt.Sprintf("%s_%d", fldname, fldo.idx)
+				tmpfldname = fldname
+				fvar := types.NewVar(token.NoPos, tpkg, tmpfldname, fldtyp)
+				fldvars = append(fldvars, fvar)
+			}
+
+			sty1 := types.NewStruct(fldvars, nil)
 			// keep NewTypeName's type arg nil, so next step get a valid struct type
 			stobj := types.NewTypeName(token.NoPos, fcpkg, stname, nil)
-			stobj2 := types.NewNamed(stobj, st1, nil)
+			stobj2 := types.NewNamed(stobj, sty1, nil)
 			scope.Insert(stobj2.Obj())
+			return stobj2
+		}
+		for stname, fldnames := range cstructs {
+			csi := pc.cpr.getstruct(stname)
+			log.Println(pc.bdpkgs.Name, stname, csi == nil, fldnames)
+			genfakecstruct2(csi)
 		}
 	}
 	buf := bytes.NewBuffer(nil)
