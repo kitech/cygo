@@ -9,6 +9,7 @@ go get -v github.com/thoas/go-funk
 go get -v github.com/twmb/algoimpl/go/graph
 go get -v golang.org/x/tools/go/ast/astutil
 go get -v golang.org/x/tools/go/packages
+go get -v github.com/smacker/go-tree-sitter
 go get -v github.com/kitech/goplusplus
 cp -a $GOPATH/src/github.com/kitech/goplusplus $GOPATH/src/gopp
 ln -sv $PWD $GOPATH/src/

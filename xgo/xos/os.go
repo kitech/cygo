@@ -53,6 +53,8 @@ func Environ() []string {
 	envp00 := envp[0][0]
 	b := C.O_RDWR
 	c := C.int(1)
+	d := C.double(1)
+	ch1 := C.char(1)
 	println(envp0)
 	println(envp00)
 	return arr

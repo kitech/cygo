@@ -92,6 +92,7 @@ type csymdata struct {
 	kind   int
 	name   string
 	tyval  string
+	tyobj  types.Type
 	define ast.Expr
 	struc  stfieldlist
 }
@@ -120,6 +121,9 @@ func newcparser1cache() *cparser1cache {
 }
 
 func (cp1c *cparser1cache) add(kind int, symname string, tyvalx interface{}) {
+	if _, ok := cp1c.csyms[symname]; ok {
+		return
+	}
 	csi := newcsymdata(symname, kind)
 	switch kind {
 	case csym_define:
@@ -234,6 +238,8 @@ func (cp *cparser1) walk(n *sitter.Node, lvl int) {
 	case "field_declaration":
 		fallthrough
 	case "type_definition": // typedef xxx yyy;
+		fallthrough
+	case "primitive_type":
 		fallthrough
 	case "assignment_expression":
 		txt = cp.exprtxt(n)
@@ -371,6 +377,8 @@ func (cp *cparser1) walk(n *sitter.Node, lvl int) {
 		if false {
 			log.Println(n.Type(), pn.Type(), ppn.Type(), pppn.Type(), len(txt), txt)
 		}
+	case "primitive_type":
+		cp1cache.add(csym_type, txt, txt)
 	case "translation_unit": // full text
 	default:
 		if false {
@@ -663,6 +671,8 @@ func (cp *cparser1) ctype2go(sym, tystr string) (tystr2 string, tyobj types.Type
 		tyobj = types.Typ[types.Uint]
 	case "int":
 		tyobj = types.Typ[types.Int]
+	case "char":
+		tyobj = types.Typ[types.Byte]
 	case "uint16_t", "unsigned short":
 		tyobj = types.Typ[types.Uint16]
 	case "int16_t", "short":
@@ -694,7 +704,7 @@ func (cp *cparser1) ctype2go(sym, tystr string) (tystr2 string, tyobj types.Type
 		if ok && strings.HasPrefix(csi.tyval, "enum {") {
 			tyobj = types.Typ[types.Int]
 			return
-		} else if ok {
+		} else if ok && csi.tyval != tystr {
 			return cp.ctype2go(sym, csi.tyval)
 		}
 		log.Println(cp.name, tystr, cp1cache.csyms[tystr])

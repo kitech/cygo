@@ -3,7 +3,7 @@ package xnet
 /*
 // #include "url_parser.h"
 
-extern void* xnet_parse_url();
+extern struct xnet_parsed_url* xnet_parse_url(const char *);
 extern void xnet_parsed_url_free();
 */
 import "C"

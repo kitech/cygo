@@ -2178,7 +2178,7 @@ func (this *g2nc) genExpr2(scope *ast.Scope, e ast.Expr) {
 			var vo = scope.Lookup("varname")
 			this.outf("%v_new_zero()", this.exprTypeName(scope, be)).outfh().outnl()
 			for _, ex := range te.Elts {
-				this.outf("%v->%v = %v", vo, "aaa", ex)
+				this.outf("%v->%v = %v", vo, "todoaaa", ex)
 				this.outfh().outnl()
 			}
 		default:
@@ -2300,6 +2300,17 @@ func (this *g2nc) genExpr2(scope *ast.Scope, e ast.Expr) {
 			this.genExpr(scope, te.Index)
 			this.out("]")
 		} else if varty.String() == "byte" { // multiple dimission index of c type???
+			this.genExpr(scope, te.X)
+			this.out("[")
+			this.genExpr(scope, te.Index)
+			this.out("]")
+		} else if varty.String() == "*byteptr" { // multiple dimission index of c type???
+			this.genExpr(scope, te.X)
+			this.out("[")
+			this.genExpr(scope, te.Index)
+			this.out("]")
+		} else if realty, ok := varty.(*types.Basic); ok &&
+			realty.Kind() == types.Byteptr { // multiple dimission index of c type???
 			this.genExpr(scope, te.X)
 			this.out("[")
 			this.genExpr(scope, te.Index)
@@ -2602,12 +2613,16 @@ func (this *g2nc) exprTypeNameImpl(scope *ast.Scope, e ast.Expr) string {
 	{ // C.xxx or C.xxx()
 		if iscsel(e) {
 			name := exprstr(e)[2:]
-			return fmt.Sprintf("%s__ctype", name)
+			if false {
+				return fmt.Sprintf("%s__ctype/*000*/", name)
+			}
 		}
 		if ce, ok := e.(*ast.CallExpr); ok {
 			if iscsel(ce.Fun) {
 				name := exprstr(ce.Fun)[2:]
-				return fmt.Sprintf("%s__ctype", name)
+				if false {
+					return fmt.Sprintf("%s__ctype/*111*/", name)
+				}
 			}
 			log.Println(ce.Fun, reftyof(ce.Fun), len(this.info.Types))
 			if idt, ok := ce.Fun.(*ast.Ident); ok {
@@ -2620,12 +2635,12 @@ func (this *g2nc) exprTypeNameImpl(scope *ast.Scope, e ast.Expr) string {
 			log.Println(se, reftyof(se), se.X, reftyof(se.X))
 			if iscsel(se.X) {
 				name := exprstr(se.X)[2:]
-				return fmt.Sprintf("%s__ctype", name)
+				return fmt.Sprintf("%s__ctype/*222*/", name)
 			}
 			if ce, ok := se.X.(*ast.CallExpr); ok {
 				if iscsel(ce.Fun) {
 					name := exprstr(ce.Fun)[2:]
-					return fmt.Sprintf("%s__ctype", name)
+					return fmt.Sprintf("%s__ctype/*333*/", name)
 				}
 			}
 		}
@@ -2633,12 +2648,12 @@ func (this *g2nc) exprTypeNameImpl(scope *ast.Scope, e ast.Expr) string {
 			log.Println(se, reftyof(se), se.X, reftyof(se.X))
 			if iscsel(se.X) {
 				name := exprstr(se.X)[2:]
-				return fmt.Sprintf("%s__ctype", name)
+				return fmt.Sprintf("%s__ctype/*444*/", name)
 			}
 			if ce, ok := se.X.(*ast.CompositeLit); ok {
 				if iscsel(ce.Type) {
 					name := exprstr(ce.Type)[2:]
-					return fmt.Sprintf("%s__ctype*", name)
+					return fmt.Sprintf("%s__ctype*/*555*/", name)
 				}
 			}
 		}
@@ -2727,14 +2742,14 @@ func (this *g2nc) exprTypeNameImpl2(scope *ast.Scope, ety types.Type, e ast.Expr
 			if strings.HasPrefix(tystr, "untyped ") {
 				tystr = tystr[8:]
 			}
-			return tystr
+			return tystr // + "/*jjj*/"
 			// return te.Name()
 		}
 	case *types.Named:
 		teobj := te.Obj()
 		pkgo := teobj.Pkg()
 		undty := te.Underlying()
-		log.Println(teobj, pkgo, undty)
+		log.Println(teobj, pkgo, undty, reftyof(undty))
 		switch ne := undty.(type) {
 		case *types.Interface:
 			if pkgo == nil { // builtin???
@@ -2754,6 +2769,9 @@ func (this *g2nc) exprTypeNameImpl2(scope *ast.Scope, ety types.Type, e ast.Expr
 			tyname := teobj.Name()
 			if strings.HasPrefix(tyname, "_Ctype_") {
 				return tyname[7:]
+			}
+			if pkgo.Name() == "C" {
+				return undty.String()
 			}
 			return fmt.Sprintf("%s%s%s", pkgo.Name(), pkgsep, teobj.Name())
 		case *types.Array:
@@ -2821,7 +2839,7 @@ func (this *g2nc) exprTypeNameImpl2(scope *ast.Scope, ety types.Type, e ast.Expr
 		case *ast.CallExpr:
 			return fmt.Sprintf("%v_multiret_arg*", ce.Fun)
 		case *ast.TypeAssertExpr:
-			return fmt.Sprintf("%v_multiret_arg*", "aaa")
+			return fmt.Sprintf("%v_multiret_arg*", "todoaaa")
 		default:
 			log.Println("todo", goty, reflect.TypeOf(goty), isudty, tyval, te, this.exprpos(e))
 		}

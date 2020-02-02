@@ -1301,6 +1301,11 @@ func (check *Checker) exprInternal(x *operand, e ast.Expr, hint Type) exprKind {
 				x.mode = value
 				x.typ = universeByte // use 'byte' name
 			}
+			if isByteptr(typ) {
+				valid = true
+				x.mode = variable
+				x.typ = universeByte
+			}
 
 		case *Array:
 			valid = true
@@ -1316,6 +1321,13 @@ func (check *Checker) exprInternal(x *operand, e ast.Expr, hint Type) exprKind {
 				length = typ.len
 				x.mode = variable
 				x.typ = typ.elem
+			}
+			// for Byteptr*
+			if typ, _ := typ.base.Underlying().(*Basic); typ != nil {
+				valid = true
+				// length = typ.len
+				x.mode = variable
+				x.typ = typ
 			}
 
 		case *Slice:

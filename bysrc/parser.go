@@ -617,19 +617,22 @@ func (pc *ParserContext) walkpass_fill_fakecpkg() {
 				if fe, ok := fo.(*ast.SelectorExpr); ok {
 					if iscident(fe.X) {
 						// log.Println("got222", exprstr(fe.X), fe.X, fe.Sel)
-						f1 := fakecfunc(fe.Sel, fcpkg)
-						scope.Insert(f1)
+						var cfnobj *types.Func
 						tystr, tyobj := pc.cpr.symtype(fe.Sel.Name)
 						if tyobj == nil {
-							log.Println(pkg.Name, "not found ctype", fe.Sel, tystr)
+							log.Println(pkg.Name, "todo not found ctype", fe.Sel, tystr)
+							f1 := fakecfunc(fe.Sel, fcpkg)
+							scope.Insert(f1)
+							cfnobj = f1
 						} else {
-							selidt := ast.NewIdent(fe.Sel.Name + "_ofcp")
+							selidt := ast.NewIdent(fe.Sel.Name)
 							f2 := fakecfunc2(selidt, fcpkg, tyobj)
 							scope.Insert(f2)
+							cfnobj = f2
 						}
 						csi := newcsyminfo(fe.Sel, nil)
 						csi.isfunc = true
-						csi.funo = f1
+						csi.funo = cfnobj
 						tmpidts2[fe.Sel] = csi
 					}
 				}
@@ -672,25 +675,39 @@ func (pc *ParserContext) walkpass_fill_fakecpkg() {
 		if strings.HasPrefix(idtname, "struct_") {
 		} else if csi != nil && csi.istype {
 			// log.Println("gen fakectype", csi.idt)
-			st1 := types.Typ[types.Voidptr]
-			// st1 := types.Typ[types.UnsafePointer]
-			// st1 := types.NewCtype(idtname + "__ctype")
-			stobj := types.NewTypeName(token.NoPos, fcpkg, idtname, nil)
-			stobj2 := types.NewNamed(stobj, st1, nil)
-			_ = stobj
-			scope.Insert(stobj2.Obj())
+			ctystr, ctyobj := pc.cpr.symtype(idtname)
+			if false {
+				log.Println(pc.bdpkgs.Name, idtname, ctystr, ctyobj)
+			}
+			if ctyobj != nil {
+				stobj := types.NewTypeName(token.NoPos, fcpkg, idtname, nil)
+				stobj2 := types.NewNamed(stobj, ctyobj, nil)
+				scope.Insert(stobj2.Obj())
+			} else {
+				sty1 := types.Typ[types.Voidptr]
+				// st1 := types.Typ[types.UnsafePointer]
+				// st1 := types.NewCtype(idtname + "__ctype")
+				stobj := types.NewTypeName(token.NoPos, fcpkg, idtname, nil)
+				stobj2 := types.NewNamed(stobj, sty1, nil)
+				_ = stobj
+				scope.Insert(stobj2.Obj())
+			}
 		} else {
-			scope.Insert(varx)
-			idtobj := ast.NewIdent(varx.Name() + "_asconst")
-			cst1 := fakecconst(idtobj, fcpkg)
-			scope.Insert(cst1)
 			ctystr, ctyobj := pc.cpr.symtype(idtname)
 			if ctyobj == nil {
 				log.Println(pc.bdpkgs.Name, idtname, ctystr, ctyobj)
-			} else {
-				idtobj := ast.NewIdent(varx.Name() + "_ofcp")
-				cst1 := types.NewConst(token.NoPos, fcpkg, idtobj.Name, ctyobj, nil)
+				scope.Insert(varx)
+				idtobj := ast.NewIdent(varx.Name() + "_asconst")
+				cst1 := fakecconst(idtobj, fcpkg)
 				scope.Insert(cst1)
+			} else {
+				// idtobj := ast.NewIdent(varx.Name())
+				cst1 := types.NewVar(token.NoPos, fcpkg, varx.Name(), ctyobj)
+				// cst1 := types.NewConst(token.NoPos, fcpkg, idtobj.Name, ctyobj, csval)
+				scope.Insert(cst1)
+				idtobj := ast.NewIdent(varx.Name() + "_asconst")
+				cst2 := fakecconst2(idtobj, fcpkg, ctyobj)
+				scope.Insert(cst2)
 			}
 		}
 	}
