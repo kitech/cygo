@@ -22,6 +22,8 @@ int xos_gettid3() {
 #endif
 }
 
+   extern int cxrt_get_argc();
+   extern char** cxrt_get_argv();
 */
 import "C"
 
@@ -58,6 +60,23 @@ func Environ() []string {
 	println(envp0)
 	println(envp00)
 	return arr
+}
+
+func Exit(code int) {
+	C.exit(code)
+}
+
+func Args() []string {
+	var args []string
+	argc := C.cxrt_get_argc()
+	argvpp := C.cxrt_get_argv()
+	println(argc)
+	for i := 0; i < argc; i++ {
+		argp := argvpp[i]
+		arg := gostring(argp)
+		args = append(args, arg)
+	}
+	return args
 }
 
 func Keep() {}

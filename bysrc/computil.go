@@ -487,8 +487,10 @@ func newAnnotation(cmts *ast.CommentGroup) *Annotation {
 	}
 
 	for _, cmt := range cmts.List {
-		cmtpfx := gopp.IfElseStr(strings.HasPrefix(cmt.Text, "//"), "", "// ")
-		ant.original += cmtpfx + cmt.Text + "\n"
+		cmtpfx := gopp.IfElseStr(strings.HasPrefix(cmt.Text, "//") ||
+			strings.HasPrefix(cmt.Text, "/*"), "", "// ")
+		cmtxt := strings.ReplaceAll(cmt.Text, "\n", "\n// ")
+		ant.original += cmtpfx + cmtxt + "\n"
 		lines := strings.Split(cmt.Text, "\n")
 		for _, line := range lines {
 			if strings.HasPrefix(line, "//go:nosplit") {

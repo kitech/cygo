@@ -2841,7 +2841,11 @@ func (this *g2nc) exprTypeNameImpl2(scope *ast.Scope, ety types.Type, e ast.Expr
 		log.Println(e, reflect.TypeOf(e))
 		switch ce := e.(type) {
 		case *ast.CallExpr:
-			return fmt.Sprintf("%v_multiret_arg*", ce.Fun)
+			exstr := exprstr(ce.Fun)
+			if ipos := strings.Index(exstr, "."); ipos > 0 {
+				exstr = exstr[ipos+1:]
+			}
+			return fmt.Sprintf("%v_multiret_arg*", exstr)
 		case *ast.TypeAssertExpr:
 			return fmt.Sprintf("%v_multiret_arg*", "todoaaa")
 		default:
@@ -2919,6 +2923,12 @@ func (c *g2nc) genPredefTypeDecl(scope *ast.Scope, d *ast.GenDecl) {
 				specname := tspec.Name.Name
 				c.outf("typedef struct %s%s %s%s",
 					c.pkgpfx(), specname, c.pkgpfx(), specname).outfh().outnl()
+			case *ast.Ident:
+				log.Println(tspec.Type, reflect.TypeOf(tspec.Type))
+				tystr := c.exprTypeName(scope, tspec.Type)
+				specname := trimCtype(tspec.Name.Name)
+				c.outf("typedef %v %s%v/*eee*/", tystr, c.pkgpfx(), specname).outfh().outnl()
+				// this.outf("typedef %v %s%v", spec.Type, this.pkgpfx(), spec.Name.Name).outfh().outnl()
 			}
 		}
 	}
@@ -3024,7 +3034,7 @@ func (this *g2nc) genTypeSpec(scope *ast.Scope, spec *ast.TypeSpec) {
 		log.Println(spec.Type, reflect.TypeOf(spec.Type), te)
 		tystr := this.exprTypeName(scope, spec.Type)
 		specname := trimCtype(spec.Name.Name)
-		this.outf("typedef %v %s%v", tystr, this.pkgpfx(), specname).outfh().outnl()
+		this.outf("typedef %v %s%v/*111*/", tystr, this.pkgpfx(), specname).outfh().outnl()
 		// this.outf("typedef %v %s%v", spec.Type, this.pkgpfx(), spec.Name.Name).outfh().outnl()
 	case *ast.StarExpr:
 		log.Println(spec.Type, reflect.TypeOf(spec.Type), te.X, reflect.TypeOf(te.X), spec.Name)
