@@ -225,6 +225,8 @@ func (cp *cparser1) walk(n *sitter.Node, lvl int) {
 	switch n.Type() {
 	case "declaration":
 		fallthrough
+	case "function_definition":
+		fallthrough
 	case "enumerator":
 		fallthrough
 	case "struct_specifier":
@@ -276,7 +278,11 @@ func (cp *cparser1) walk(n *sitter.Node, lvl int) {
 		if false {
 			log.Println(n.Type(), n.ChildCount(), declkind, len(txt), txt)
 		}
-
+	case "function_definition":
+		ipos := strings.Index(txt, "{")
+		declstr := strings.TrimSpace(txt[:ipos])
+		funcname, functype := getfuncname(declstr + ";")
+		cp1cache.add(csym_func, funcname, functype)
 	case "enumerator":
 		if false {
 			log.Println(n.Type(), len(txt), txt)
