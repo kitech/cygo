@@ -20,6 +20,7 @@ import (
 	"math/rand"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"time"
 
@@ -39,13 +40,7 @@ type cparser1 struct {
 	prsit *sitter.Parser
 	trn   *sitter.Tree
 
-	files   map[string]int         // filepath => lineno, reorder
-	defines map[string]ast.Expr    // name => value
-	enums   map[string]string      // name => value
-	vars    map[string]string      // name => type
-	funcs   map[string]string      // name => return type
-	structs map[string]stfieldlist // name => fields
-	types   map[string]string      // name => primitive type
+	hdrfiles map[string]int // filepath => lineno, reorder
 }
 type stfieldlist map[string]stfield
 type stfield struct {
@@ -59,13 +54,7 @@ func newcparser1(name string) *cparser1 {
 	cp.prsit = sitter.NewParser()
 	cp.prsit.SetLanguage(trspc.GetLanguage())
 
-	cp.files = map[string]int{}
-	cp.defines = map[string]ast.Expr{}
-	cp.enums = map[string]string{}
-	cp.vars = map[string]string{}
-	cp.funcs = map[string]string{}
-	cp.structs = map[string]stfieldlist{}
-	cp.types = map[string]string{}
+	cp.hdrfiles = map[string]int{}
 	return cp
 }
 
@@ -77,6 +66,7 @@ const (
 	csym_var
 	csym_func
 	csym_struct
+	csym_field
 	csym_type
 )
 
@@ -89,6 +79,7 @@ func csym_kind2str(kind int) string {
 		csym_var:    "var",
 		csym_func:   "func",
 		csym_struct: "struct",
+		csym_field:  "field",
 		csym_type:   "type",
 	}
 	if str, ok := kinds[kind]; ok {
@@ -114,27 +105,45 @@ func newcsymdata(name string, kind int) *csymdata {
 
 // 当前进程有效
 type cparser1cache struct {
-	ppfiles map[string]int // filepath => 1
-	csyms   map[string]*csymdata
+	// 当前进程生成的preprocessor文件表
+	ppfiles  map[string]int // filepath => 1
+	hdrfiles map[string]int // filepath => lineno
+	csyms    map[string]*csymdata
 }
 
 func newcparser1cache() *cparser1cache {
 	cpc := &cparser1cache{}
 	cpc.ppfiles = map[string]int{}
+	cpc.hdrfiles = map[string]int{}
 	cpc.csyms = map[string]*csymdata{}
 	return cpc
 }
 
-var cp1cache = newcparser1cache()
+func (cp1c *cparser1cache) add(kind int, symname string, tyvalx interface{}) {
+	csi := newcsymdata(symname, kind)
+	switch kind {
+	case csym_define:
+		csi.define = tyvalx.(ast.Expr)
+	case csym_struct:
+		csi.struc = stfieldlist{}
+	default:
+		csi.tyval = tyvalx.(string)
+	}
+	cp1c.csyms[symname] = csi
+}
+func (cp1c *cparser1cache) add_field(stname string, fldname string, fldty string) *csymdata {
+	csi := cp1c.csyms[stname]
+	csi.struc[fldname] = stfield{fldname, fldty}
+	return csi
+}
 
-// 当前进程生成的preprocessor文件表
-var curprocppfiles = map[string]int{}
+var cp1cache = newcparser1cache()
 
 func rmoldtccppfiles() {
 	files, err := filepath.Glob("/tmp/tcctrspp*.c")
 	gopp.ErrPrint(err)
 	for _, filename := range files {
-		if _, ok := curprocppfiles[filename]; ok {
+		if _, ok := cp1cache.ppfiles[filename]; ok {
 			continue
 		}
 		err := os.Remove(filename)
@@ -144,7 +153,7 @@ func rmoldtccppfiles() {
 func (cp *cparser1) parsestr(code string) bool {
 	rmoldtccppfiles()
 	filename := fmt.Sprintf("/tmp/tcctrspp.%s.%d.c", cp.name, rand.Intn(10000000)+50000)
-	curprocppfiles[filename] = 1
+	cp1cache.ppfiles[filename] = 1
 
 	incdirs := []string{"/home/me/oss/src/cxrt/src",
 		"/home/me/oss/src/cxrt/3rdparty/cltc/src",
@@ -189,18 +198,12 @@ func (cp *cparser1) parsefile(filename string) bool {
 }
 
 func (cp *cparser1) fill_hotfixs() {
-	cp.enums["__LINE__"] = "int"
-	cp.vars["__FILE__"] = "char*"
-	cp.vars["errno"] = "int"
-	cp.funcs["close"] = "int"
-	csi := newcsymdata("__LINE__", csym_enum)
-	cp1cache.csyms[csi.name] = csi
-	csi = newcsymdata("__FILE__", csym_var)
-	cp1cache.csyms[csi.name] = csi
-	csi = newcsymdata("errno", csym_var)
-	cp1cache.csyms[csi.name] = csi
-	csi = newcsymdata("close", csym_func)
-	cp1cache.csyms[csi.name] = csi
+	cp1cache.add(csym_enum, "__LINE__", "int")
+	cp1cache.add(csym_var, "__FILE__", "char*")
+	cp1cache.add(csym_var, "__FUNCTION__", "char*")
+	cp1cache.add(csym_var, "__func__", "char*")
+	cp1cache.add(csym_var, "errno", "int")
+	cp1cache.add(csym_var, "NULL", "void*")
 }
 func (cp *cparser1) collect() {
 	// cp.pplines = strings.Split(string(cp.ppsrc), "\n")
@@ -210,15 +213,10 @@ func (cp *cparser1) collect() {
 	btime := time.Now()
 	cp.walk(cp.trn.RootNode(), 0) // TODO slow
 	results := map[string]interface{}{
-		"files":   len(cp.files),
-		"defines": len(cp.defines),
-		"enums":   len(cp.enums),
-		"vars":    len(cp.vars),
-		"funcs":   len(cp.funcs),
-		"structs": len(cp.structs),
-		"types":   len(cp.types),
+		"hdrfiles": len(cp.hdrfiles),
+		"csyms":    len(cp1cache.csyms),
 	}
-	log.Println(cp.name, results, time.Since(btime))
+	log.Println(cp.name, results, len(cp1cache.csyms), time.Since(btime))
 }
 
 func (cp *cparser1) walk(n *sitter.Node, lvl int) {
@@ -267,18 +265,12 @@ func (cp *cparser1) walk(n *sitter.Node, lvl int) {
 		if isfunc {
 			funcname, functype := getfuncname(txt)
 			// log.Println(n.Type(), declkind, functype, "//", funcname, txt+"//")
-			cp.funcs[funcname] = functype
-			csi := newcsymdata(funcname, csym_func)
-			csi.tyval = functype
-			cp1cache.csyms[funcname] = csi
+			cp1cache.add(csym_func, funcname, functype)
 		} else {
 			// var
 			funcname, functype := getvarname(txt)
 			// log.Println(n.Type(), declkind, functype, "//", funcname, txt+"//", )
-			cp.vars[funcname] = functype
-			csi := newcsymdata(funcname, csym_var)
-			csi.tyval = functype
-			cp1cache.csyms[funcname] = csi
+			cp1cache.add(csym_var, funcname, functype)
 		}
 
 		if false {
@@ -297,22 +289,19 @@ func (cp *cparser1) walk(n *sitter.Node, lvl int) {
 			fld0 = txt[0:ipos]
 			fld1 = txt[ipos+1:]
 		}
-		cp.enums[fld0] = fld1
-		csi := newcsymdata(fld0, csym_enum)
-		csi.tyval = fld1
-		cp1cache.csyms[fld0] = csi
+		cp1cache.add(csym_enum, fld0, fld1)
 	case "struct_specifier":
 		gopp.Assert(len(txt) > 0, "wtfff", txt)
-		if _, ok := cp.structs[txt]; ok {
+		// if _, ok := cp.structs[txt]; ok {
+		// 	break
+		// }
+		if _, ok := cp1cache.csyms[txt]; ok {
 			break
 		}
 
 		stname := strings.Split(txt, "{")[0]
 		stname = strings.TrimSpace(stname)
-		cp.structs[stname] = stfieldlist{}
-		csi := newcsymdata(stname, csym_struct)
-		csi.struc = stfieldlist{}
-		cp1cache.csyms[stname] = csi
+		cp1cache.add(csym_struct, stname, stfieldlist{})
 		if false {
 			log.Println(n.Type(), len(txt), txt)
 		}
@@ -330,14 +319,12 @@ func (cp *cparser1) walk(n *sitter.Node, lvl int) {
 		stbody := cp.exprtxt(ppn)
 		stname := strings.Split(stbody, "{")[0]
 		stname = strings.TrimSpace(stname)
-		_, instruct := cp.structs[stname]
+		_, instruct := cp1cache.csyms[stname]
 		gopp.Assert(instruct, "wtfff", stname)
 
 		fldname, tystr := getvarname(txt)
-		cp.structs[stname][fldname] = stfield{fldname, tystr}
-		fldcnt := len(cp.structs[stname])
-		csi := cp1cache.csyms[stname]
-		csi.struc[fldname] = stfield{fldname, tystr}
+		csi := cp1cache.add_field(stname, fldname, tystr)
+		fldcnt := len(csi.struc)
 		if false {
 			log.Println(n.Type(), len(txt), txt, ppn.Type(), instruct, stname, fldcnt, "//")
 		}
@@ -347,18 +334,19 @@ func (cp *cparser1) walk(n *sitter.Node, lvl int) {
 		txt = strings.TrimRight(txt, ";")
 		txt = strings.TrimSpace(txt)
 		// func type
-		isfuncty := strings.Contains(txt, " (*")
+		isfuncty := strings.Contains(txt, " (*") &&
+			!strings.Contains(txt, "{")
 		if isfuncty {
-			// TODO
+			reg := regexp.MustCompile(`.* \(\*(.+)\).*`)
+			mats := reg.FindAllStringSubmatch(txt, -1)
+			tyname := mats[0][1]
+			cp1cache.add(csym_type, tyname, "void*")
 		} else {
 			fields := strings.Split(txt, " ")
 			tyname := fields[len(fields)-1]
 			realty := strings.Join(fields[1:len(fields)-1], " ")
 			// log.Println(n.Type(), len(fields), fields, tyname, realty)
-			cp.types[tyname] = realty
-			csi := newcsymdata(tyname, csym_type)
-			csi.tyval = realty
-			cp1cache.csyms[tyname] = csi
+			cp1cache.add(csym_type, tyname, realty)
 		}
 		if false {
 			log.Println(n.Type(), len(txt), txt)
@@ -372,10 +360,7 @@ func (cp *cparser1) walk(n *sitter.Node, lvl int) {
 		gopp.ErrPrint(err, txt)
 		if err == nil {
 			idtname := strings.TrimSpace(fields[0])
-			cp.defines[idtname] = ve
-			csi := newcsymdata(idtname, csym_define)
-			csi.define = ve
-			cp1cache.csyms[idtname] = csi
+			cp1cache.add(csym_define, idtname, ve)
 		}
 		if false {
 			log.Println(n.Type(), pn.Type(), ppn.Type(), pppn.Type(), len(txt), txt)
@@ -433,22 +418,22 @@ func (cp *cparser1) cltfiles() {
 			// log.Println("header file?", idx, line)
 			fields := strings.Split(line, " ")
 			hdrfile := strings.Trim(fields[2], "\"<>")
-			if _, ok := cp.files[hdrfile]; !ok {
-				cp.files[hdrfile] = idx
+			if _, ok := cp.hdrfiles[hdrfile]; !ok {
+				cp.hdrfiles[hdrfile] = idx
 			}
 		} else {
 			clrlines = append(clrlines, line)
 		}
 	}
 	cp.clrlines = clrlines
-	log.Println("files", len(cp.files), "left", len(clrlines), time.Since(btime))
+	log.Println("files", len(cp.hdrfiles), "left", len(clrlines), time.Since(btime))
 }
 
 func (cp *cparser1) cltdefines() {
 	btime := time.Now()
-	for hdrfile, _ := range cp.files {
+	for hdrfile, _ := range cp.hdrfiles {
 		if _, ok := cp1cache.ppfiles[hdrfile]; ok {
-			// continue
+			continue
 		}
 		cp1cache.ppfiles[hdrfile] = 1
 
@@ -468,7 +453,9 @@ func (cp *cparser1) cltdefines() {
 				// bool
 				ve, err := parser.ParseExpr("true")
 				gopp.Assert(err == nil, "wtfff", line)
-				cp.defines[fields[1]] = ve
+				csi := newcsymdata(fields[1], csym_define)
+				csi.define = ve
+				cp1cache.csyms[fields[1]] = csi
 				continue
 			}
 
@@ -482,21 +469,20 @@ func (cp *cparser1) cltdefines() {
 			}
 			if err == nil {
 				// log.Println(ve, reftyof(ve), codeline)
-				cp.defines[defname] = ve
 				csi := newcsymdata(defname, csym_define)
 				csi.define = ve
 				cp1cache.csyms[defname] = csi
 			} else {
 				// log.Println(ve, reftyof(ve), defname, codeline, line)
 				if !strings.Contains(defval, " ") {
-					pardef, ok := cp.defines[defval]
+					pardef, ok := cp1cache.csyms[defname]
 					log.Println(defname, pardef, ok)
 					// cp.defines[defname] = defval
 				}
 			}
 		}
 	}
-	log.Println("defines", len(cp.defines), time.Since(btime))
+	log.Println("defines", time.Since(btime))
 }
 
 func trimcomment1(line string) string {
@@ -598,68 +584,50 @@ func getvarname(s string) (string, string) {
 }
 
 func (cp *cparser1) symtype(sym string) (tystr string, tyobj types.Type) {
-	defexpr, indefine := cp.defines[sym]
-	_, inenum := cp.enums[sym]
-	tystr1, infunc := cp.funcs[sym]
-	tystr2, intype := cp.types[sym]
-	tystr3, invar := cp.vars[sym]
 	csi, incache := cp1cache.csyms[sym]
-	_ = csi
-	log.Println(cp.name, sym, "indefine", indefine, "inenums", inenum,
-		"infuncs", infunc, "intypes", intype, "invars", invar,
-		"incache", incache)
-
-	if indefine {
-		switch ety := defexpr.(type) {
-		case *ast.BasicLit:
-			switch ety.Kind {
-			case token.INT:
-				tyobj = types.Typ[types.UntypedInt]
-			default:
-				log.Println("todo", cp.name, sym, defexpr, reftyof(ety), ety.Kind)
-			}
-		case *ast.BinaryExpr:
-			switch xe := ety.X.(type) {
+	log.Println(cp.name, sym, "incache", incache)
+	if incache {
+		switch csi.kind {
+		case csym_define:
+			defexpr := csi.define
+			switch ety := defexpr.(type) {
 			case *ast.BasicLit:
-				switch xe.Kind {
+				switch ety.Kind {
 				case token.INT:
 					tyobj = types.Typ[types.UntypedInt]
 				default:
-					log.Println("todo", cp.name, sym, defexpr, reftyof(ety), xe.Kind)
+					log.Println("todo", cp.name, sym, defexpr, reftyof(ety), ety.Kind)
 				}
+			case *ast.BinaryExpr:
+				switch xe := ety.X.(type) {
+				case *ast.BasicLit:
+					switch xe.Kind {
+					case token.INT:
+						tyobj = types.Typ[types.UntypedInt]
+					default:
+						log.Println("todo", cp.name, sym, defexpr, reftyof(ety), xe.Kind)
+					}
+				default:
+					log.Println("todo", cp.name, sym, defexpr, reftyof(ety), reftyof(xe))
+				}
+			case *ast.Ident:
+				if sym == ety.Name {
+					break
+				}
+				log.Println("redir", sym, "=>", ety.Name)
+				return cp.symtype(ety.Name)
 			default:
-				log.Println("todo", cp.name, sym, defexpr, reftyof(ety), reftyof(xe))
+				vev := types.ExprString(defexpr)
+				log.Println("todo", cp.name, sym, defexpr, reftyof(ety), vev)
 			}
-		case *ast.Ident:
-			if sym == ety.Name {
-				break
-			}
-			log.Println("redir", sym, "=>", ety.Name)
-			return cp.symtype(ety.Name)
-		default:
-			vev := types.ExprString(defexpr)
-			log.Println("todo", cp.name, sym, defexpr, reftyof(ety), vev)
+		case csym_enum:
+			tyobj = types.Typ[types.UntypedInt]
+			return
+		case csym_var, csym_func, csym_type:
+			tystr, tyobj = cp.ctype2go(sym, csi.tyval)
+			return
 		}
-	}
 
-	if inenum {
-		tyobj = types.Typ[types.UntypedInt]
-		return
-	}
-
-	if infunc {
-		tystr, tyobj = cp.ctype2go(sym, tystr1)
-		return
-	}
-
-	if intype {
-		tystr, tyobj = cp.ctype2go(sym, tystr2)
-		return
-	}
-
-	if invar {
-		tystr, tyobj = cp.ctype2go(sym, tystr3)
-		return
 	}
 
 	return
@@ -689,11 +657,11 @@ func (cp *cparser1) ctype2go(sym, tystr string) (tystr2 string, tyobj types.Type
 		tyobj = types.Typ[types.Uint]
 	case "int":
 		tyobj = types.Typ[types.Int]
-	case "uint16_t":
+	case "uint16_t", "unsigned short":
 		tyobj = types.Typ[types.Uint16]
-	case "size_t":
-		tyobj = types.Typ[types.Usize]
-	case "time_t":
+	case "int16_t", "short":
+		tyobj = types.Typ[types.Int16]
+	case "size_t", "time_t", "uintptr_t":
 		tyobj = types.Typ[types.Usize]
 	case "double":
 		tyobj = types.Typ[types.Float64]
@@ -708,21 +676,22 @@ func (cp *cparser1) ctype2go(sym, tystr string) (tystr2 string, tyobj types.Type
 		if strings.HasSuffix(tystr, "*") {
 			starcnt := strings.Count(tystr, "*")
 			canty := strings.TrimRight(tystr, "*")
-			undty := cp.types[canty]
-			if undty != "" {
+			csi, ok := cp1cache.csyms[canty]
+			if ok {
+				undty := csi.tyval
 				newty := undty + strings.Repeat("*", starcnt)
 				log.Println(sym, tystr, "=>", newty)
 				return cp.ctype2go(sym, newty)
 			}
 		}
-		undty := cp.types[tystr]
-		if strings.HasPrefix(undty, "enum {") {
+		csi, ok := cp1cache.csyms[tystr]
+		if ok && strings.HasPrefix(csi.tyval, "enum {") {
 			tyobj = types.Typ[types.Int]
 			return
-		} else if undty != "" {
-			return cp.ctype2go(sym, undty)
+		} else if ok {
+			return cp.ctype2go(sym, csi.tyval)
 		}
-		log.Println(cp.name, tystr, cp.types[tystr])
+		log.Println(cp.name, tystr, cp1cache.csyms[tystr])
 	}
 	return
 }

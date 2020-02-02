@@ -2,7 +2,7 @@ package xgc
 
 /*
 #cgo LDFLAGS: -lgc
-#cgo CFLAGS: -DGC_MALLOC
+#cgo CFLAGS: -DGC_MALLOC -DGC_THREADS
 
 #include <gc/gc.h>
 */

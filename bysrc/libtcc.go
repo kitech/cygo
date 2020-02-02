@@ -184,6 +184,7 @@ func tccppfly(codebuf string, filename string, incdirs []string) error {
 	// tcc.SetOutputType(TCC_OUTPUT_MEMORY)
 	tcc.SetOptions("-o " + filename)
 	tcc.SetOptions("-v -E")
+	tcc.SetOptions("-DGC_THREADS")
 
 	cfp := redirstdout2file(filename)
 	rv = tcc.CompileStr(codebuf)
