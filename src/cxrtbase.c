@@ -85,7 +85,7 @@ void* cxrt_chan_new(int sz) {
     // return nilptr;
     void* ch = hchan_new(sz);
     assert(ch != nilptr);
-    printf("cxrt_chan_new, %p\n", ch);
+    printf("%s:%d cxrt_chan_new, %p %d\n", __FILE__, __LINE__, ch, sz);
     return ch;
 }
 void cxrt_chan_send(void*ch, void*arg) {

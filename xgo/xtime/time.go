@@ -114,7 +114,9 @@ func newtimeritem(timeout Duration, f voidptr) *timeritem {
 
 var tmrman *timerman
 
-func init() { init_timerman_proc() }
+func init() {
+	// init_timerman_proc()
+}
 func init_timerman_proc() {
 	tmrman = &timerman{}
 	// tmrman.itemmu = &xsync.Mutex{}

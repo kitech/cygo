@@ -671,6 +671,8 @@ func (cp *cparser1) ctype2go(sym, tystr string) (tystr2 string, tyobj types.Type
 		tyobj = types.Typ[types.Byteptr]
 	case "unsigned char*":
 		tyobj = types.Typ[types.Byteptr]
+	case "cxstring*":
+		tyobj = types.Typ[types.String]
 	case "char**":
 		tyobj = types.NewPointer(types.Typ[types.Byteptr])
 	case "void *", "void*", "void":

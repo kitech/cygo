@@ -1,4 +1,4 @@
-package xlog
+package dwarf
 
 /*
 #cgo LDFLAGS: -ldwarf
@@ -11,24 +11,24 @@ package xlog
 */
 import "C"
 
-type DwarfUnsigned uint64
-type DwarfSigned int64
-type DwarfOff uint64
-type DwarfAddr uint64
-type DwarfBool int
-type DwarfHalf uint16
-type DwarfSmall uint8
-type DwarfPtr voidptr
+type Unsigned uint64
+type Signed int64
+type Off uint64
+type Addr uint64
+type Bool int
+type Half uint16
+type Small uint8
+type Ptr voidptr
 
-type DwarfFormData16 struct {
+type FormData16 struct {
 	fd_data [16]byte
 }
 
-type DwarfSig8 struct {
+type Sig8 struct {
 	signature [8]byte
 }
 
-type DwarfBlock struct {
+type Block struct {
 	bl_len  uint64
 	bl_data voidptr
 
@@ -36,28 +36,28 @@ type DwarfBlock struct {
 	bl_section_offset uint64
 }
 
-type DwarfLoc struct {
+type Loc struct {
 	lr_atom    byte
 	lr_number  uint64
 	lr_number2 uint64
 	lr_offset  uint64
 }
 
-type DwarfLocdesc struct {
+type Locdesc struct {
 	ld_lopc           uint64
 	ld_hipc           uint64
 	ld_cents          uint16
-	ld_s              *DwarfLoc
+	ld_s              *Loc
 	ld_from_loclist   byte
 	ld_section_offset uint64
 }
 
 func init() {
-	// assert(sizeof(DwarfFormData16) == sizeof(C.Dwarf_Form_Data16))
-	assert(sizeof(DwarfSig8) == sizeof(C.Dwarf_Sig8))
-	assert(sizeof(DwarfBlock) == sizeof(C.Dwarf_Block))
-	assert(sizeof(DwarfLoc) == sizeof(C.Dwarf_Loc))
-	assert(sizeof(DwarfLocdesc) == sizeof(C.Dwarf_Locdesc))
+	// assert(sizeof(FormData16) == sizeof(C.Dwarf_Form_Data16))
+	assert(sizeof(Sig8) == sizeof(C.Dwarf_Sig8))
+	assert(sizeof(Block) == sizeof(C.Dwarf_Block))
+	assert(sizeof(Loc) == sizeof(C.Dwarf_Loc))
+	assert(sizeof(Locdesc) == sizeof(C.Dwarf_Locdesc))
 }
 
 const (
@@ -66,108 +66,108 @@ const (
 	DW_RANGES_END
 )
 
-type DwarfRanges struct {
-	dwr_addr1 DwarfAddr
-	dwr_addr2 DwarfAddr
+type Ranges struct {
+	dwr_addr1 Addr
+	dwr_addr2 Addr
 	dwr_type  int
 }
 
-type DwarfFrameOp struct {
-	fp_base_op     DwarfSmall
-	fp_extended_op DwarfSmall
-	fp_register    DwarfHalf
+type FrameOp struct {
+	fp_base_op     Small
+	fp_extended_op Small
+	fp_register    Half
 
 	/*  Value may be signed, depends on op.
 	    Any applicable data_alignment_factor has
 	    not been applied, this is the  raw offset. */
-	fp_offset       DwarfUnsigned
-	fp_instr_offset DwarfOff
+	fp_offset       Unsigned
+	fp_instr_offset Off
 }
 
 const DW_REG_TABLE_SIZE = 66
 
 const DW_FRAME_CFA_COL3 = 1436
 
-type DwarfRegtableEntry struct {
-	dw_offset_relevant DwarfSmall
+type RegtableEntry struct {
+	dw_offset_relevant Small
 
 	/* For DWARF2, always 0 */
-	dw_value_type DwarfSmall
-	dw_regnum     DwarfHalf
+	dw_value_type Small
+	dw_regnum     Half
 
 	/*  The data type here should  the larger of Dwarf_Addr
 	    and Dwarf_Unsigned and Dwarf_Signed. */
-	dw_offset DwarfAddr
+	dw_offset Addr
 }
 
-type DwarfRegtable struct {
-	rules [DW_REG_TABLE_SIZE]DwarfRegtableEntry
+type Regtable struct {
+	rules [DW_REG_TABLE_SIZE]RegtableEntry
 }
 
-type DwarfRegtableEntry3 struct {
-	dw_offset_relevant     DwarfSmall
-	dw_value_type          DwarfSmall
-	dw_regnum              DwarfHalf
-	dw_offset_or_block_len DwarfUnsigned
-	dw_block_ptr           DwarfPtr
+type RegtableEntry3 struct {
+	dw_offset_relevant     Small
+	dw_value_type          Small
+	dw_regnum              Half
+	dw_offset_or_block_len Unsigned
+	dw_block_ptr           Ptr
 }
 
-type DwarfRegtable3 struct {
-	rt3_cfa_rule       DwarfRegtableEntry3
-	rt3_reg_table_size DwarfHalf
-	rt3_rules          *DwarfRegtableEntry3
+type Regtable3 struct {
+	rt3_cfa_rule       RegtableEntry3
+	rt3_reg_table_size Half
+	rt3_rules          *RegtableEntry3
 }
 
-type DwarfPMarker struct {
-	ma_marker DwarfUnsigned
-	ma_offset DwarfUnsigned
+type PMarker struct {
+	ma_marker Unsigned
+	ma_offset Unsigned
 }
 
-type DwarfRelocationData struct {
+type RelocationData struct {
 	drd_type byte /* Cast to/from Dwarf_Rel_Type
 	   to keep size small in struct. */
 	drd_length byte /* Length in bytes of data being
 	   relocated. 4 for 32bit data,
 	   8 for 64bit data. */
-	drd_offset       DwarfUnsigned /* Where the data to reloc is. */
-	drd_symbol_index DwarfUnsigned
+	drd_offset       Unsigned /* Where the data to reloc is. */
+	drd_symbol_index Unsigned
 }
 
-type DwarfPStringAttr struct {
-	sa_offset DwarfUnsigned /* Offset of string attribute data */
-	sa_nbytes DwarfUnsigned
+type PStringAttr struct {
+	sa_offset Unsigned /* Offset of string attribute data */
+	sa_nbytes Unsigned
 }
 
-type DwarfDebug voidptr
-type DwarfDie voidptr
-type DwarfLine voidptr
-type DwarfGlobal voidptr
-type DwarfFunc voidptr
-type DwarfType voidptr
-type DwarfVar voidptr
-type DwarfWeak voidptr
-type DwarfError voidptr
-type DwarfAttribute voidptr
-type DwarfAbbrev voidptr
-type DwarfFde voidptr
-type DwarfCie voidptr
-type DwarfArange voidptr
-type DwarfGdbindex voidptr
-type DwarfLineContext voidptr
+type Debug voidptr
+type Die voidptr
+type Line voidptr
+type Global voidptr
+type Func voidptr
+type Type voidptr
+type Var voidptr
+type Weak voidptr
+type Error voidptr
+type Attribute voidptr
+type Abbrev voidptr
+type Fde voidptr
+type Cie voidptr
+type Arange voidptr
+type Gdbindex voidptr
+type LineContext voidptr
 
-type DwarfHandler func(dwerr DwarfError, errarg DwarfPtr)
+type Handler func(dwerr Error, errarg Ptr)
 
-type DwarfObjAccessSection struct {
+type ObjAccessSection struct {
 	/*  addr is the virtual address of the first byte of
 	    the section data.  Usually zero when the address
 	    makes no sense for a given section. */
-	addr DwarfAddr
+	addr Addr
 
 	/* Section type. */
-	type_ DwarfUnsigned
+	type_ Unsigned
 
 	/* Size in bytes of the section. */
-	size DwarfUnsigned
+	size Unsigned
 
 	/*  Having an accurate section name makes debugging of libdwarf easier.
 	    and is essential to find the .debug_ sections.  */
@@ -175,30 +175,30 @@ type DwarfObjAccessSection struct {
 	/*  Set link to zero if it is meaningless.  If non-zero
 	    it should be a link to a rela section or from symtab
 	    to strtab.  In Elf it is sh_link. */
-	link DwarfUnsigned
+	link Unsigned
 
 	/*  The section header index of the section to which the
 	    relocation applies. In Elf it is sh_info. */
-	info DwarfUnsigned
+	info Unsigned
 
 	/*  Elf sections that are tables have a non-zero entrysize so
 	    the count of entries can be calculated even without
 	    the right structure definition. If your object format
 	    does not have this data leave this zero. */
-	entrysize DwarfUnsigned
+	entrysize Unsigned
 }
 
-type DwarfObjAccessMethods struct {
+type ObjAccessMethods struct {
 	// TODO compiler
-	// get_section_info func(obj voidptr, section_index DwarfHalf, return_section *DwarfObjAccessSection, dwerr *int) int
+	// get_section_info func(obj voidptr, section_index Half, return_section *DwarfObjAccessSection, dwerr *int) int
 }
 
-type DwarfObjAccessInterface struct {
+type ObjAccessInterface struct {
 	/*  object is a void* as it hides the data the object access routines
 	    need (which varies by library in use and object format).
 	*/
 	object  voidptr
-	methods *DwarfObjAccessMethods
+	methods *ObjAccessMethods
 }
 
 /*
@@ -810,10 +810,10 @@ const DW_FRAME_SAME_VAL = 1035
 
 /* error return values
  */
-const DW_DLV_BADADDR = 0 // (~(DwarfAddr)0)
+const DW_DLV_BADADDR = 0 // (~(Addr)0)
 /* for functions returning target address */
 
-const DW_DLV_NOCOUNT = -1 // ((DwarfSigned)(0)-1)
+const DW_DLV_NOCOUNT = -1 // ((Signed)(0)-1)
 /* for functions returning count */
 
 const DW_DLV_BADOFFSET = 0 // (~(Dwarf_Off)0)
@@ -871,10 +871,11 @@ const DW_GROUPNUMBER_DWO = 2
     So consider the value put in true_path_out the
     actual file name. reserved1,2,3 should all be passed
     as zero. */
-func dwarf_init_path(path string) (
-	true_path string, dbg DwarfDebug, dwerr DwarfError, ret int) {
+func init_path(path string) (
+	true_path string, dbg Debug, dwerr Error, ret int) {
 	println(path)
-	ret = C.dwarf_init_path(C.CString(path), nil, 0, 0, 0, 0, 0,
+	ret = C.dwarf_init_path(C.CString(path), nil, 0,
+		DW_DLC_READ, 0, 0, 0,
 		&dbg, nil, 0, 0, &dwerr)
 	println(path, ret, ret == DW_DLV_OK)
 	println(path, dwerr)
@@ -884,18 +885,18 @@ func dwarf_init_path(path string) (
 
 /*  Initialization based on Unix(etc) open fd */
 /*  New March 2017 */
-func dwarf_init_b(fd int) (dbg DwarfDebug, dwerr DwarfError, ret int) {
-	ret = C.dwarf_init_b(fd, 0, 0, 0, 0, &dbg, &dwerr)
+func init_b(fd int) (dbg Debug, dwerr Error, ret int) {
+	ret = C.dwarf_init_b(fd, DW_DLC_READ, 0, 0, 0, &dbg, &dwerr)
 	return
 }
 
-func dwarf_init(fd int) (dbg DwarfDebug, dwerr DwarfError, ret int) {
-	ret = C.dwarf_init(fd, 0, 0, 0, &dbg, &dwerr)
+func inita(fd int) (dbg Debug, dwerr Error, ret int) {
+	ret = C.dwarf_init(fd, DW_DLC_READ, 0, 0, &dbg, &dwerr)
 	return
 }
 
-func dwarf_add_file_path(dbg DwarfDebug, filename string) (dwerr DwarfError, ret int) {
-	var dwerr DwarfError
+func add_file_path(dbg Debug, filename string) (dwerr Error, ret int) {
+	var dwerr Error
 	rv := C.dwarf_add_file_path(dbg, C.CString(filename), &dwerr)
 	ret = rv
 	return
@@ -903,54 +904,86 @@ func dwarf_add_file_path(dbg DwarfDebug, filename string) (dwerr DwarfError, ret
 
 /* Undocumented function for memory allocator. */
 
-func dwarf_print_memory_stats(dbg DwarfDebug) {
+func print_memory_stats(dbg Debug) {
 	C.dwarf_print_memory_stats(dbg)
 }
 
-func dwarf_get_elf(dbg DwarfDebug) (
-	return_elfptr voidptr, dwerr DwarfError, ret int) {
+func get_elf(dbg Debug) (
+	return_elfptr voidptr, dwerr Error, ret int) {
 	rv := C.dwarf_get_elf(dbg, &return_elfptr, &dwerr)
 	ret = rv
 	return
 }
-func dwarf_finish(dbg DwarfDebug) (dwerr DwarfError, ret int) {
+func finish(dbg Debug) (dwerr Error, ret int) {
 	rv := C.dwarf_finish(dbg, &dwerr)
 	ret = rv
 	return
 }
 
-func dwarf_object_finish(dbg DwarfDebug) (dwerr DwarfError, ret int) {
+func object_finish(dbg Debug) (dwerr Error, ret int) {
 	rv := C.dwarf_object_finish(dbg, &dwerr)
 	ret = rv
 	return
 }
 
-func dwarf_package_version() string {
+func package_version() string {
 	rv := C.dwarf_package_version()
 	return gostring(rv)
 }
 
+type CUHeader struct {
+	Length    Unsigned
+	Verstamp  Half
+	Abbrevoff Off
+	Addrsize  Half
+	NextOff   Unsigned
+	Dwerr     Error
+	Ret       int
+}
+
+func next_cu_header(dbg Debug) *CUHeader {
+	cuhdr := &CUHeader{}
+	cuhdr.Ret = C.dwarf_next_cu_header(dbg, &cuhdr.Length, &cuhdr.Verstamp,
+		&cuhdr.Abbrevoff, &cuhdr.Addrsize, &cuhdr.NextOff, &cuhdr.Dwerr)
+	return cuhdr
+}
+
+func siblingof(dbg Debug, die Die) (
+	return_siblingdie Die, dwerr Error, ret int) {
+	ret = C.dwarf_siblingof(dbg, die, &return_siblingdie, &dwerr)
+	return
+}
+
+func dealloc(dbg Debug, space voidptr, type_ int) {
+	C.dwarf_dealloc(dbg, space, type_) // DW_DLA_DIE)
+}
+
 /* New 27 April 2015. */
-func dwarf_die_from_hash_signature(dbg DwarfDebug, hash_sig *DwarfSig8, sig_type string) (
-	returned_CU_die DwarfDie, dwerr DwarfError, ret int) {
+func die_from_hash_signature(dbg Debug, hash_sig *Sig8, sig_type string) (
+	returned_CU_die Die, dwerr Error, ret int) {
 	ret = C.dwarf_die_from_hash_signature(dbg, hash_sig, C.CString(sig_type),
 		&returned_CU_die, &dwerr)
+	return
+}
+
+func child(die Die) (return_childdie Die, dwerr Error, ret int) {
+	ret = C.dwarf_child(die, &return_childdie, &dwerr)
 	return
 }
 
 /*  Section name access.  Because sections might
     now end with .dwo or be .zdebug  or might not.
 */
-func dwarf_get_die_section_name(dbg DwarfDebug, isinfo bool) (
-	sec_name string, dwerr DwarfError, ret int) {
+func get_die_section_name(dbg Debug, isinfo bool) (
+	sec_name string, dwerr Error, ret int) {
 	var sec_namep byteptr
 	rv := C.dwarf_get_die_section_name(dbg, isinfo, &sec_namep, &dwerr)
 	ret = rv
 	sec_name = gostring(sec_namep)
 	return
 }
-func dwarf_get_die_section_name_b(die DwarfDie) (
-	sec_name string, dwerr DwarfError, ret int) {
+func get_die_section_name_b(die Die) (
+	sec_name string, dwerr Error, ret int) {
 	var sec_namep byteptr
 	rv := C.dwarf_get_die_section_name_b(die, &sec_namep, &dwerr)
 	ret = rv
@@ -958,35 +991,62 @@ func dwarf_get_die_section_name_b(die DwarfDie) (
 	return
 }
 
-func dwarf_attr(die DwarfDie, attr DwarfHalf) (
-	returned_attr DwarfAttribute, dwerr DwarfError, ret int) {
+func attr(die Die, attr Half) (
+	returned_attr Attribute, dwerr Error, ret int) {
 	ret = C.dwarf_attr(die, attr, &returned_attr, &dwerr)
 	return
 }
-func dwarf_die_text(die DwarfDie, attr DwarfHalf) (
-	ret_name string, dwerr DwarfError, ret int) {
-	var ret_namep byteptr
-	ret = C.dwarf_die_text(die, attr, &ret_namep, &dwerr)
-	ret_name = gostring(ret_namep)
+func die_text(die Die, attr Half) (
+	retname string, dwerr Error, ret int) {
+	var retnamep byteptr
+	ret = C.dwarf_die_text(die, attr, &retnamep, &dwerr)
+	retname = gostring(retnamep)
 	return
 }
 
-func dwarf_diename(die DwarfDie) (
-	diename string, dwerr DwarfError, ret int) {
+func diename(die Die) (
+	diename string, dwerr Error, ret int) {
 	var dienamep byteptr
 	ret = C.dwarf_diename(die, &dienamep, &dwerr)
-	diename = gostring(diename)
+	diename = gostring(dienamep)
+	// dwarf_dealloc(dbg Debug, dienamep, DW_DLA_STRING)
 	return
 }
 
 /* convenience functions, alternative to using dwarf_attrlist */
-func dwarf_hasattr(die DwarfDie, attr DwarfHalf) (
-	returned_bool DwarfBool, dwerr DwarfError, ret int) {
+func hasattr(die Die, attr Half) (
+	returned_bool Bool, dwerr Error, ret int) {
 	ret = C.dwarf_hasattr(die, attr, &returned_bool, &dwerr)
 	return
 }
 
-func dwarf_lowpc(die DwarfDie) (returned_addr DwarfAddr, dwerr DwarfError, ret int) {
+type DwarfRes struct {
+	Dwerr Error
+	Ret   int
+}
+type AttrList struct {
+	Atbuf *Attribute
+	Atcnt Signed
+
+	Res DwarfRes
+}
+
+func (die Die) GetAttrs() {
+
+}
+
+func attrlist(die Die) (
+	attrbuf *Attribute, attrcnt Signed, dwerr Error, ret int) {
+	ret = C.dwarf_attrlist(die, &attrbuf, &attrcnt, &dwerr)
+	return
+}
+
+// func tag(die Die) (tag dwarf)
+
+func (die Die) Lowpc() {
+
+}
+func lowpc(die Die) (returned_addr Addr, dwerr Error, ret int) {
 	ret = C.dwarf_lowpc(die, &returned_addr, &dwerr)
 	return
 }
@@ -994,32 +1054,42 @@ func dwarf_lowpc(die DwarfDie) (returned_addr DwarfAddr, dwerr DwarfError, ret i
 /*  This works for DWARF2 and DWARF3 styles of DW_AT_highpc,
     but not for the DWARF4 class constant forms.
     If the FORM is of class constant this returns an error */
-func dwarf_highpc(die DwarfDie) (returned_addr DwarfAddr, dwerr DwarfError, ret int) {
+func (die Die) Highpc() {
+
+}
+func highpc(die Die) (returned_addr Addr, dwerr Error, ret int) {
 	ret = C.dwarf_highpc(die, &returned_addr, &dwerr)
 	return
 }
 
-func dwarf_whatattr(attr DwarfAttribute) (
-	returned_attr_num DwarfHalf, dwerr DwarfError, ret int) {
+func (attr Attribute) Whatattr() {
+}
+func whatattr(attr Attribute) (
+	returned_attr_num Half, dwerr Error, ret int) {
 	ret = C.dwarf_whatattr(attr, &returned_attr_num, &dwerr)
 	return
 }
 
+func (attr Attribute) Hasform() {
+}
+func (attr Attribute) Whatform() {
+}
+
 /* Start line number operations */
 /* dwarf_srclines  is the original interface from 1993. */
-func dwarf_srclines(die DwarfDie) (
-	linebuf *DwarfLine, linecount DwarfSigned, dwerr DwarfError, ret int) {
+func srclines(die Die) (
+	linebuf *Line, linecount Signed, dwerr Error, ret int) {
 	ret = C.dwarf_srclines(die, &linebuf, &linecount, &dwerr)
 	return
 }
 
-func dwarf_srclines_dealloc(dbg DwarfDebug, linebuf *DwarfLine, count DwarfSigned) {
+func srclines_dealloc(dbg Debug, linebuf *Line, count Signed) {
 	C.dwarf_srclines_dealloc(dbg, linebuf, count)
 }
 
-func dwarf_srclines_b(die DwarfDie) (
-	version_out DwarfUnsigned, table_cout DwarfSmall,
-	linecontext DwarfLineContext, dwerr DwarfError, ret int) {
+func srclines_b(die Die) (
+	version_out Unsigned, table_cout Small,
+	linecontext LineContext, dwerr Error, ret int) {
 	ret = C.dwarf_srclines_b(die, &version_out, &table_cout, &linecontext, &dwerr)
 	return
 }
@@ -1029,6 +1099,6 @@ func dwarf_srclines_b(die DwarfDie) (
    and dwarf_srclines_from_linecontext(),
    dwarf_srclines_twolevel_from_linecontext(),
    and dwarf_srclines_b()  allocate.  */
-func dwarf_srclines_dealloc_b(line_context DwarfLineContext) {
+func srclines_dealloc_b(line_context LineContext) {
 	C.dwarf_srclines_dealloc_b(line_context)
 }
