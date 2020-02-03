@@ -975,15 +975,19 @@ func (c *g2nc) genSwitchStmt(scope *ast.Scope, s *ast.SwitchStmt) {
 	} else {
 		log.Println(tagty, reflect.TypeOf(tagty), reflect.TypeOf(tagty.Underlying()))
 	}
+	// resolve real type
+	switch tty := tagty.(type) {
+	case *types.Named: // like type foo int
+		tagty = tty.Underlying()
+	}
 	switch tty := tagty.(type) {
 	case *types.Basic:
-		switch tty.Kind() {
-		case types.Int:
+		if tty.Kind() == types.String {
+			c.genSwitchStmtStr(scope, s)
+		} else if tty.Info()&types.IsOrdered > 0 {
 			// c.genSwitchStmtNum(scope, s)
 			c.genSwitchStmtAsIf(scope, s)
-		case types.String:
-			c.genSwitchStmtStr(scope, s)
-		default:
+		} else {
 			log.Println("unknown", tagty, reflect.TypeOf(tagty))
 		}
 	default:
@@ -2318,9 +2322,18 @@ func (this *g2nc) genExpr2(scope *ast.Scope, e ast.Expr) {
 			this.out("[")
 			this.genExpr(scope, te.Index)
 			this.out("]")
+		} else if _, ok := varty.(*types.Pointer); ok {
+			this.genExpr(scope, te.X)
+			this.out("[")
+			this.genExpr(scope, te.Index)
+			this.out("]")
 		} else {
+			this.genExpr(scope, te.X)
+			this.out("[")
+			this.genExpr(scope, te.Index)
+			this.out("] /*warn?*/")
 			log.Println("todo", te.X, te.Index, exprstr(te))
-			log.Println("todo", reftyof(te.X), varty.String(), this.exprpos(te.X))
+			log.Println("todo", reftyof(te.X), varty, reftyof(varty), this.exprpos(te.X))
 		}
 	case *ast.SliceExpr:
 		varty := this.info.TypeOf(te.X)
@@ -2437,12 +2450,16 @@ func (c *g2nc) genCxmapAddkv(scope *ast.Scope, vnamex interface{}, ke ast.Expr, 
 			keystr = fmt.Sprintf("%v", be.Value)
 		}
 	case *ast.Ident:
+		isglob := isglobalid(c.psctx, be)
+		pkgpfx := pkgpfxof(c.psctx, ke)
+		pkgpfx = gopp.IfElseStr(isglob, pkgpfx, "")
 		varty := c.info.TypeOf(ke)
 		switch varty.String() {
 		case "string":
-			keystr = be.Name
+			keystr = pkgpfx + be.Name
 		default:
-			log.Println("unknown", varty, ke)
+			keystr = pkgpfx + be.Name
+			// log.Println("unknown", varty, ke)
 		}
 	case *ast.SelectorExpr:
 		varty := c.info.TypeOf(ke)
@@ -2467,16 +2484,9 @@ func (c *g2nc) genCxmapAddkv(scope *ast.Scope, vnamex interface{}, ke ast.Expr, 
 		log.Println("unknown", vei, reflect.TypeOf(ke), reflect.TypeOf(vei))
 	}
 
-	varstr := fmt.Sprintf("%v", vnamex)
-	switch be := vnamex.(type) {
-	case *ast.Ident:
-	case *ast.SelectorExpr:
-		varstr = fmt.Sprintf("%v->%v", be.X, be.Sel)
-	default:
-		log.Println(vnamex, reflect.TypeOf(vnamex))
-	}
-
-	c.outf("hashtable_add(%v, (voidptr)(uintptr)%v,", varstr, keystr)
+	c.outf("hashtable_add(")
+	c.genExpr(scope, vnamex.(ast.Expr))
+	c.outf(", (voidptr)(uintptr)%v,", keystr)
 	c.out("(voidptr)(uintptr)(")
 	switch ve := vei.(type) {
 	case ast.Expr:
@@ -2525,15 +2535,6 @@ func (c *g2nc) genCxmapGetkv(scope *ast.Scope, vnamex interface{}, ke ast.Expr, 
 		log.Println("unknown index key", ke, reflect.TypeOf(ke))
 	}
 
-	varstr := fmt.Sprintf("%v", vnamex)
-	switch be := vnamex.(type) {
-	case *ast.Ident:
-	case *ast.SelectorExpr:
-		varstr = fmt.Sprintf("%v->%v", be.X, be.Sel)
-	default:
-		log.Println(vnamex, reflect.TypeOf(vnamex))
-	}
-
 	varobj := scope.Lookup("varname")
 	tmpname := tmpvarname()
 	if varobj == nil {
@@ -2542,8 +2543,14 @@ func (c *g2nc) genCxmapGetkv(scope *ast.Scope, vnamex interface{}, ke ast.Expr, 
 	c.out(cuzero).outfh().outnl()
 
 	c.outf("int %v =", tmpvarname()).outsp()
-	c.outf("hashtable_get(%v, (voidptr)(uintptr)%v,", varstr, keystr)
-	c.out("(voidptr*)(&(")
+	c.outf("hashtable_get(")
+	c.genExpr(scope, vnamex.(ast.Expr))
+	if false { // waitdep
+		c.outf(", (voidptr)(uintptr)%v,", keystr)
+	}
+	c.out(",")
+	c.genExpr(scope, ke)
+	c.out(", (voidptr*)(&(")
 	if varobj == nil {
 		c.outf("%v", tmpname)
 	} else {
@@ -3120,6 +3127,7 @@ func (c *g2nc) genValueSpec(scope *ast.Scope, spec *ast.ValueSpec, validx int) {
 	}
 	isglobvar := c.psctx.isglobal(spec)
 
+	varcnt := len(spec.Names)
 	for idx, varname := range spec.Names {
 		varty := c.info.TypeOf(spec.Type)
 		if varty == nil && idx < len(spec.Values) {
@@ -3233,7 +3241,8 @@ func (c *g2nc) genValueSpec(scope *ast.Scope, spec *ast.ValueSpec, validx int) {
 			}
 		}
 
-		if isglobvar || strings.HasPrefix(varname.Name, "gxtv") {
+		if isglobvar || strings.HasPrefix(varname.Name, "gxtv") ||
+			(varcnt > 1 && idx < (varcnt-1)) {
 			c.outfh().outnl()
 		}
 		// c.out("/*333*/").outnl()

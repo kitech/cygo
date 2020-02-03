@@ -874,9 +874,8 @@ const DW_GROUPNUMBER_DWO = 2
 func init_path(path string) (
 	true_path string, dbg Debug, dwerr Error, ret int) {
 	println(path)
-	ret = C.dwarf_init_path(C.CString(path), nil, 0,
-		DW_DLC_READ, 0, 0, 0,
-		&dbg, nil, 0, 0, &dwerr)
+	ret = C.dwarf_init_path(path.cstr(), nil, 0,
+		DW_DLC_READ, 0, 0, 0, &dbg, nil, 0, 0, &dwerr)
 	println(path, ret, ret == DW_DLV_OK)
 	println(path, dwerr)
 	println(path, dbg)
@@ -890,14 +889,14 @@ func init_b(fd int) (dbg Debug, dwerr Error, ret int) {
 	return
 }
 
-func inita(fd int) (dbg Debug, dwerr Error, ret int) {
+func init_a(fd int) (dbg Debug, dwerr Error, ret int) {
 	ret = C.dwarf_init(fd, DW_DLC_READ, 0, 0, &dbg, &dwerr)
 	return
 }
 
 func add_file_path(dbg Debug, filename string) (dwerr Error, ret int) {
 	var dwerr Error
-	rv := C.dwarf_add_file_path(dbg, C.CString(filename), &dwerr)
+	rv := C.dwarf_add_file_path(dbg, filename.cstr(), &dwerr)
 	ret = rv
 	return
 }
@@ -931,6 +930,32 @@ func package_version() string {
 	return gostring(rv)
 }
 
+type CUHeader4 struct {
+	Length    Unsigned
+	Verstamp  Half
+	Abbrevoff Off
+	Addrsize  Half
+	Lensize   Half
+	Extsize   Half
+	Tysig     Sig8
+	Tyoffset  Unsigned
+	NextOff   Unsigned
+	Type      Half
+
+	Dwerr Error
+	Ret   int
+}
+
+func next_cu_header4(dbg Debug) *CUHeader4 {
+	cuhdr := &CUHeader4{}
+	cuhdr.Ret = C.dwarf_next_cu_header_d(dbg, true,
+		&cuhdr.Length, &cuhdr.Verstamp, &cuhdr.Abbrevoff,
+		&cuhdr.Addrsize, &cuhdr.Lensize, &cuhdr.Extsize,
+		&cuhdr.Tysig, &cuhdr.Tyoffset,
+		&cuhdr.NextOff, &cuhdr.Type, &cuhdr.Dwerr)
+	return cuhdr
+}
+
 type CUHeader struct {
 	Length    Unsigned
 	Verstamp  Half
@@ -961,7 +986,7 @@ func dealloc(dbg Debug, space voidptr, type_ int) {
 /* New 27 April 2015. */
 func die_from_hash_signature(dbg Debug, hash_sig *Sig8, sig_type string) (
 	returned_CU_die Die, dwerr Error, ret int) {
-	ret = C.dwarf_die_from_hash_signature(dbg, hash_sig, C.CString(sig_type),
+	ret = C.dwarf_die_from_hash_signature(dbg, hash_sig, sig_type.cstr(),
 		&returned_CU_die, &dwerr)
 	return
 }
@@ -1073,6 +1098,18 @@ func whatattr(attr Attribute) (
 func (attr Attribute) Hasform() {
 }
 func (attr Attribute) Whatform() {
+}
+func whatform(attr Attribute) (
+	returned_form_num Half, dwerr Error, ret int) {
+	ret = C.dwarf_whatform(attr, &returned_form_num, &dwerr)
+	return
+}
+
+func formstring(attr Attribute) (str string, dwerr Error, ret int) {
+	var strp byteptr
+	ret = C.dwarf_formstring(attr, &strp, &dwerr)
+	str = gostring(strp)
+	return
 }
 
 /* Start line number operations */

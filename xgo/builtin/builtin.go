@@ -174,7 +174,7 @@ func (s string) trimsp() string {
 		}
 	}
 
-	ns := s[lspos:rspos]
+	ns := s[lspos : rspos+1]
 	return ns
 }
 func (s string) ltrimsp() string {
@@ -210,7 +210,7 @@ func (s string) rtrimsp() string {
 		}
 	}
 
-	ns := s[lspos:rspos]
+	ns := s[lspos : rspos+1]
 	return ns
 }
 

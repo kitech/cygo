@@ -19,7 +19,7 @@ void cxstring_free(cxstring* sobj) {
     cxfree(sobj);
 }
 
-int cxstring_len(cxstring* sobj) { return sobj->len; }
+int cxstring_len(cxstring* sobj) { return sobj == nilptr ? 0 : sobj->len; }
 int cxstring_at(cxstring* sobj, int idx) { return sobj->ptr[idx]; }
 
 // for null terminated string
@@ -260,6 +260,13 @@ int cxstring_cmp(cxstring* s0, cxstring* s1) {
 }
 
 bool cxstring_eq(cxstring* s0, cxstring* s1) {
+    if (s0 == nilptr && s1 == nilptr) return true;
+    if (s0 == nilptr) {
+        if (s1 != nilptr && s1->len == 0) return true;
+    }
+    if (s1 == nilptr) {
+        if (s0 != nilptr && s0->len == 0) return true;
+    }
     if (s0->len != s1->len) return false;
     return memcmp(s0->ptr, s1->ptr, s0->len) == 0;
 }
