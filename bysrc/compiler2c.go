@@ -232,8 +232,9 @@ func (c *g2nc) genMultiretTypes(scope *ast.Scope, pkg *ast.Package) {
 	defer c.outnl()
 	for idx, fd := range c.psctx.multirets {
 		c.outf("// %d %v %v", idx, fd.Name, fd.Type.Results.NumFields()).outnl()
-		c.outf("typedef struct %s_multiret_arg %s_multiret_arg", fd.Name.Name, fd.Name.Name).outfh().outnl()
-		c.outf("struct %s_multiret_arg {", fd.Name.Name)
+		c.outf("typedef struct %s%s_multiret_arg %s%s_multiret_arg",
+			c.pkgpfx(), fd.Name.Name, c.pkgpfx(), fd.Name.Name).outfh().outnl()
+		c.outf("struct %s%s_multiret_arg {", c.pkgpfx(), fd.Name.Name)
 
 		cnter := 0
 		for _, fld := range fd.Type.Results.List {
@@ -397,7 +398,7 @@ func (this *g2nc) genFuncDecl(scope *ast.Scope, fd *ast.FuncDecl) {
 	fdname := fd.Name.Name
 	pkgpfx := this.pkgpfx()
 	if ismret {
-		this.outf("%s_multiret_arg*", fd.Name.Name)
+		this.outf("%s%s_multiret_arg*", this.pkgpfx(), fd.Name.Name)
 	} else {
 		this.genFieldList(scope, fd.Type.Results, true, false, "", false)
 	}
@@ -465,9 +466,9 @@ func (this *g2nc) genFuncDecl(scope *ast.Scope, fd *ast.FuncDecl) {
 			this.out("{").outnl()
 			gennamedrets()
 
-			this.outf("%s_multiret_arg*", fd.Name.Name).outsp().out(tvname)
+			this.outf("%s%s_multiret_arg*", this.pkgpfx(), fd.Name.Name).outsp().out(tvname)
 			this.outeq().outsp()
-			this.outf("cxmalloc(sizeof(%s_multiret_arg))", fd.Name.Name).outfh().outnl()
+			this.outf("cxmalloc(sizeof(%s%s_multiret_arg))", this.pkgpfx(), fd.Name.Name).outfh().outnl()
 			gendeferprep()
 			this.genBlockStmt(scope, fd.Body)
 			this.out("labmret:").outnl()
@@ -665,7 +666,7 @@ func (c *g2nc) genAssignStmt(scope *ast.Scope, s *ast.AssignStmt) {
 		_, isidxas := s.Lhs[i].(*ast.IndexExpr)
 
 		if ischrv {
-			if s.Tok.String() == ":=" {
+			if s.Tok == token.DEFINE {
 				c.out(c.chanElemTypeName(chexpr, false)).outsp()
 				c.genExpr(scope, s.Lhs[i])
 				// c.outfh().outnl()
@@ -674,7 +675,7 @@ func (c *g2nc) genAssignStmt(scope *ast.Scope, s *ast.AssignStmt) {
 			var ns = putscope(scope, ast.Var, "varname", s.Lhs[i])
 			c.genExpr(ns, s.Rhs[i])
 		} else if isidxas {
-			if s.Tok.String() == ":=" {
+			if s.Tok == token.DEFINE {
 				c.out(c.exprTypeName(scope, s.Rhs[i])).outsp()
 			}
 			var ns = putscope(scope, ast.Var, "varval", s.Rhs[i])
@@ -687,7 +688,9 @@ func (c *g2nc) genAssignStmt(scope *ast.Scope, s *ast.AssignStmt) {
 			c.genExpr(ns, s.Rhs[i])
 			c.outfh().outnl()
 			for idx, te := range s.Lhs {
-				c.out(c.exprTypeName(scope, te)).outsp()
+				if s.Tok == token.DEFINE {
+					c.out(c.exprTypeName(scope, te)).outsp()
+				}
 				switch xe := te.(type) {
 				case *ast.Ident:
 					c.out(xe.Name).outeq()
@@ -2838,14 +2841,15 @@ func (this *g2nc) exprTypeNameImpl2(scope *ast.Scope, ety types.Type, e ast.Expr
 	case *types.Interface:
 		return "cxeface*"
 	case *types.Tuple:
-		log.Println(e, reflect.TypeOf(e))
+		// log.Println(e, reflect.TypeOf(e), te.String(), pkgpfxof(this.psctx, e))
 		switch ce := e.(type) {
 		case *ast.CallExpr:
 			exstr := exprstr(ce.Fun)
 			if ipos := strings.Index(exstr, "."); ipos > 0 {
 				exstr = exstr[ipos+1:]
 			}
-			return fmt.Sprintf("%v_multiret_arg*", exstr)
+			pkgpfx := pkgpfxof(this.psctx, e)
+			return fmt.Sprintf("%s%v_multiret_arg*", pkgpfx, exstr)
 		case *ast.TypeAssertExpr:
 			return fmt.Sprintf("%v_multiret_arg*", "todoaaa")
 		default:

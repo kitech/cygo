@@ -431,6 +431,27 @@ func ispackage(pc *ParserContext, e ast.Expr) bool {
 	return false
 }
 
+// 如果是同一个包，则返回空
+func pkgpfxof(pc *ParserContext, e ast.Expr) string {
+	switch te := e.(type) {
+	case *ast.CallExpr:
+		switch fe := te.Fun.(type) {
+		case *ast.SelectorExpr:
+			return pkgpfxof(pc, fe.Sel)
+		case *ast.Ident:
+			return pkgpfxof(pc, fe)
+		}
+		log.Println("noimpl", e, reftyof(e))
+	case *ast.Ident:
+		obj := pc.info.ObjectOf(te)
+		// log.Println(e, obj.Pkg().Name(), obj.Pkg())
+		return obj.Pkg().Name() + pkgsep
+	default:
+		log.Println("noimpl", e, reftyof(e))
+	}
+	return pc.bdpkgs.Name + pkgsep
+}
+
 func reftyof(x interface{}) reflect.Type { return reflect.TypeOf(x) }
 
 type FuncCallAttr struct {
