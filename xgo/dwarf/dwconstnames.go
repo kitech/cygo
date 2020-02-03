@@ -31,6 +31,16 @@ func FormKindName(kind int) string {
 	return name
 }
 
+func ErrorKindName(kind int) string {
+	name := ErrorNames[kind]
+	if name == "" {
+		name = "errunk-" + kind.repr()
+	} else {
+		name = name.trimsp()
+	}
+	return name
+}
+
 var (
 	TagNames  = map[int]string{}
 	AttrNames = map[int]string{
@@ -212,4 +222,5 @@ var (
 		DW_FORM_GNU_ref_alt:    "DW_FORM_GNU_ref_alt   ",
 		DW_FORM_GNU_strp_alt:   "DW_FORM_GNU_strp_alt  ",
 	}
+	ErrorNames = map[int]string{}
 )

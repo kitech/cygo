@@ -155,6 +155,8 @@ type Arange voidptr
 type Gdbindex voidptr
 type LineContext voidptr
 
+type Tag uint64
+
 type Handler func(dwerr Error, errarg Ptr)
 
 type ObjAccessSection struct {
@@ -864,6 +866,7 @@ const DW_GROUPNUMBER_DWO = 2
 
 /*===========================================================================*/
 /*  Dwarf consumer interface initialization and termination operations */
+var dbgobj Debug
 
 /*  Initialization based on path. This is new October 2018.
     The path actually used is copied to true_path_out
@@ -873,12 +876,9 @@ const DW_GROUPNUMBER_DWO = 2
     as zero. */
 func init_path(path string) (
 	true_path string, dbg Debug, dwerr Error, ret int) {
-	println(path)
 	ret = C.dwarf_init_path(path.cstr(), nil, 0,
 		DW_DLC_READ, 0, 0, 0, &dbg, nil, 0, 0, &dwerr)
-	println(path, ret, ret == DW_DLV_OK)
-	println(path, dwerr)
-	println(path, dbg)
+	dbgobj = dbg
 	return
 }
 
@@ -886,11 +886,13 @@ func init_path(path string) (
 /*  New March 2017 */
 func init_b(fd int) (dbg Debug, dwerr Error, ret int) {
 	ret = C.dwarf_init_b(fd, DW_DLC_READ, 0, 0, 0, &dbg, &dwerr)
+	dbgobj = dbg
 	return
 }
 
 func init_a(fd int) (dbg Debug, dwerr Error, ret int) {
 	ret = C.dwarf_init(fd, DW_DLC_READ, 0, 0, &dbg, &dwerr)
+	dbgobj = dbg
 	return
 }
 
@@ -980,7 +982,7 @@ func siblingof(dbg Debug, die Die) (
 }
 
 func dealloc(dbg Debug, space voidptr, type_ int) {
-	C.dwarf_dealloc(dbg, space, type_) // DW_DLA_DIE)
+	C.dwarf_dealloc(dbg, space, type_) // DW_DLA_DIE ..
 }
 
 /* New 27 April 2015. */
@@ -1105,10 +1107,37 @@ func whatform(attr Attribute) (
 	return
 }
 
+func formudata(attr Attribute) (val Unsigned, dwerr Error, ret int) {
+	ret = C.dwarf_formudata(attr, &val, &dwerr)
+	return
+}
+
 func formstring(attr Attribute) (str string, dwerr Error, ret int) {
 	var strp byteptr
 	ret = C.dwarf_formstring(attr, &strp, &dwerr)
 	str = gostring(strp)
+	return
+}
+
+func srcfiles(die Die) (files []string, dwerr Error, ret int) {
+	var srcfilesp *byteptr
+	var filecount Signed
+	ret = C.dwarf_srcfiles(die, &srcfilesp, &filecount, &dwerr)
+	files2 := []string{}
+	for i := 0; i < filecount; i++ {
+		// files = append(files, "file"+i.repr()) // TODO compiler
+		filename := "file" + i.repr()
+		filename = gostring_clone(srcfilesp[i])
+		files2 = append(files2, filename)
+	}
+	files = files2
+
+	// clean
+	dbg := dbgobj
+	for i := 0; i < filecount; i++ {
+		dealloc(dbg, srcfilesp[i], DW_DLA_STRING)
+	}
+	dealloc(dbg, srcfilesp, DW_DLA_LIST)
 	return
 }
 

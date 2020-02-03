@@ -2,11 +2,23 @@ package dwarf
 
 // TODO compiler type/symbol order
 
+type dwerror struct {
+	dwerr Error
+	ret   int
+}
+
+func (err *dwerror) Error() string {
+	return ""
+}
+
 type Dwarf struct {
 	filename string
 	dbg      Debug
 	err      Error
 	ret      int
+
+	sfilesv []string
+	sfilesm map[Die][]int // => index list in sfilesv
 }
 
 func NewDwarf() *Dwarf {
@@ -89,22 +101,33 @@ func (dwr *Dwarf) PrintCUList() {
 			break
 		}
 
-		dwr.get_die_and_siblings(cudie, 0)
+		var cusfiles []string
+		{
+			// 只有 cu 能够 srcfiles()
+			sfiles, dwerr, ret := srcfiles(cudie)
+			println("sfiles", sfiles.len(), ret)
+			for idx, sfile := range sfiles {
+				println("sfiles", idx, sfile)
+			}
+			cusfiles = sfiles
+		}
+
+		dwr.get_die_and_siblings(cudie, 0, cusfiles)
 		dealloc(dwr.dbg, cudie, DW_DLA_DIE)
 	}
 }
 
-func (dwr *Dwarf) get_die_and_siblings(indie Die, inlvl int) {
+func (dwr *Dwarf) get_die_and_siblings(indie Die, inlvl int, cusfiles []string) {
 	var subdie, curdie, sibdie Die // TODO compiler
 	var dwerr Error
 	var ret int
 
-	dwr.print_die_data(indie, inlvl)
-
-	subdie, dwerr, ret = child(indie)
-	if ret != DW_DLV_OK {
+	curdie = indie
+	dwr.print_die_data(indie, inlvl, cusfiles)
+	subdie, dwerr, ret = child(curdie)
+	if ret == DW_DLV_OK {
 		println(111, ret, child, inlvl)
-		dwr.get_die_and_siblings(subdie, inlvl+1)
+		dwr.get_die_and_siblings(subdie, inlvl+1, cusfiles)
 		sibdie = subdie
 		for cnter := 0; ret == DW_DLV_OK; cnter++ {
 			curdie = sibdie
@@ -114,7 +137,7 @@ func (dwr *Dwarf) get_die_and_siblings(indie Die, inlvl int) {
 			// dwerr = dwerr2
 			// ret = ret2
 			println(222, ret, curdie, sibdie, dwerr, cnter)
-			dwr.get_die_and_siblings(sibdie, inlvl+1)
+			dwr.get_die_and_siblings(sibdie, inlvl+1, cusfiles)
 		}
 	}
 }
@@ -122,7 +145,8 @@ func (dwr *Dwarf) get_die_and_siblings(indie Die, inlvl int) {
 const ctrue = 1 // TODO move to builtin
 const cfalse = 0
 
-func (dwr *Dwarf) print_die_data(printme Die, lvl int) {
+func (dwr *Dwarf) print_die_data(printme Die, lvl int, cusfiles []string) {
+	sfiles := cusfiles
 	var has_line_data bool
 	{
 		battr, dwerr, ret := hasattr(printme, DW_AT_decl_line)
@@ -132,7 +156,14 @@ func (dwr *Dwarf) print_die_data(printme Die, lvl int) {
 	{
 		battr, dwerr, ret := hasattr(printme, DW_AT_decl_file)
 		// has_line_data = ret == DW_DLV_OK && battr == ctrue
-		println("file", has_line_data, lvl, ret, battr, dwerr, DW_AT_decl_file)
+		var filename string
+		if has_line_data {
+			attr1, dwerr, ret := attr(printme, DW_AT_decl_file)
+			val, dwerr2, ret2 := formudata(attr1)
+			println(val, sfiles.len())
+			filename = sfiles[val-1]
+		}
+		println("file", has_line_data, lvl, ret, battr, dwerr, DW_AT_decl_file, filename)
 	}
 	{
 		battr, dwerr, ret := hasattr(printme, DW_AT_location)
@@ -150,9 +181,10 @@ func (dwr *Dwarf) print_die_data(printme Die, lvl int) {
 		println("attrs", attrcnt, ret)
 		for i := 0; i < attrcnt; i++ {
 			attr1 := attrs[i]
+			var attrname string
 			{
 				attrno, dwerr, ret := whatattr(attr1)
-				attrname := AttrKindName(attrno)
+				attrname = AttrKindName(attrno)
 				println("attr", i, attrno, ret, attrname)
 				switch attrno {
 				}
@@ -160,8 +192,10 @@ func (dwr *Dwarf) print_die_data(printme Die, lvl int) {
 			{
 				formno, dwerr, ret := whatform(attr1)
 				println("form", i, formno, ret)
-				// var formno2 int = formno
 				switch formno {
+				case DW_FORM_data2, DW_FORM_data1, DW_FORM_udata:
+					val, dwerr, ret := formudata(attr1)
+					println("attr udata", i, formno, ret, val, attrname)
 				case DW_FORM_strp:
 					str, dwerr, ret := formstring(attr1)
 					println("attr strp", i, formno, ret, str)
@@ -172,7 +206,7 @@ func (dwr *Dwarf) print_die_data(printme Die, lvl int) {
 			}
 		}
 	}
-	println(has_line_data, lvl)
+	println("haslineno", has_line_data, lvl)
 	if has_line_data {
 
 	}

@@ -46,6 +46,11 @@ const (
 	falsestr = "false"
 )
 
+const (
+	ctrue  = 1
+	cfalse = 0
+)
+
 type Metatype struct {
 	Size       uintptr // type size
 	Ptrdata    uintptr // size of memory prefix holding all pointers
