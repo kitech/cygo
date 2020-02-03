@@ -463,6 +463,16 @@ func fillBasicMethods() {
 		m1 := NewFunc(token.NoPos, nil, "cap", sig)
 		mapmths = append(mapmths, m1)
 	}
+	{ // map.haskey() bool
+		var sig *Signature
+		recv := NewVar(token.NoPos, nil, "this", NewMap(nil, nil))
+		var params *Tuple
+		r0 := NewVar(token.NoPos, nil, "", Typ[Bool])
+		results := NewTuple(r0)
+		sig = NewSignature(recv, params, results, false)
+		m1 := NewFunc(token.NoPos, nil, "haskey", sig)
+		mapmths = append(mapmths, m1)
+	}
 
 	{ // byte.isspace() bool
 		var sig *Signature

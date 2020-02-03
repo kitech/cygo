@@ -29,27 +29,27 @@ type Sig8 struct {
 }
 
 type Block struct {
-	bl_len  uint64
-	bl_data voidptr
+	bl_len  Unsigned
+	bl_data Ptr
 
-	bl_from_loclist   byte
-	bl_section_offset uint64
+	bl_from_loclist   Small
+	bl_section_offset Unsigned
 }
 
 type Loc struct {
-	lr_atom    byte
-	lr_number  uint64
-	lr_number2 uint64
-	lr_offset  uint64
+	lr_atom    Small
+	lr_number  Unsigned
+	lr_number2 Unsigned
+	lr_offset  Unsigned
 }
 
 type Locdesc struct {
-	ld_lopc           uint64
-	ld_hipc           uint64
-	ld_cents          uint16
+	ld_lopc           Addr
+	ld_hipc           Addr
+	ld_cents          Half
 	ld_s              *Loc
-	ld_from_loclist   byte
-	ld_section_offset uint64
+	ld_from_loclist   Small
+	ld_section_offset Unsigned
 }
 
 func init() {

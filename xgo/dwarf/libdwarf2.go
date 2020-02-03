@@ -1,8 +1,27 @@
 package dwarf
 
 /*
- */
+void dwarf2_get_elf_start_addr(void** exeadr, void** etxtadr, void**mainadr)  {
+    * exeadr = &__executable_start;
+    * etxtadr = &__etext;
+    // printf("0x%lx\n", (unsigned long)&__executable_start);
+    // printf("0x%lx\n", (unsigned long)&__etext);
+    extern int main(int argc, char**argv);
+    * mainadr = (void*)main;
+printf("%p %p\n", main, (void*)main-*exeadr);
+}
+
+*/
 import "C"
+
+var exeadr voidptr
+var etxtadr voidptr
+var mainadr voidptr
+
+func init() {
+	C.dwarf2_get_elf_start_addr(&exeadr, &etxtadr, &mainadr)
+	// println("elf start addr", exeadr, etxtadr)
+}
 
 type Dwarf struct {
 	filename string
@@ -114,6 +133,7 @@ func (cuit *CUIter) Next() (*CUHeader4, Error) {
 	cuit.idx++
 	return cuhdr, nil
 }
+func (cuit *CUIter) Index() int { return cuit.idx - 1 }
 
 // sometimes need break iterate
 func (cuit *CUIter) SkipTail() {
@@ -259,7 +279,7 @@ type Addr2Line struct {
 	ctxts   []LineContext
 
 	cufilesv []string      // global uniq filenames
-	cufilesm map[Die][]int // cudie => index list of cufilesv
+	cufilesm map[int][]int // cuidx => file index list of cufilesv
 }
 
 func newAddr2Line() *Addr2Line {
@@ -289,17 +309,45 @@ func (dw *Dwarf) inita2l() {
 	a2l.ctxts = make([]LineContext, a2l.cucnt)
 	dw.calc_lookup_table()
 	dw.check_lookup_table()
+	dw.calc_cufiles()
+	dw.check_cufiles()
 }
 
-func (dw *Dwarf) Lookup(addr voidptr) {
+func (dw *Dwarf) Addr2Line(addrx voidptr) (
+	filename string, fileline int, found bool) {
+	addr := dw.addr2virt(addrx)
+	filename, fileline, found = dw.getfileline(addr)
+	if filename.len() == 0 {
+		filename = "???"
+	}
+	return
 }
 
-func (dw *Dwarf) getfileline(addrx voidptr) {
+func (dw *Dwarf) addr2virt(addrx voidptr) Addr {
+	// TODO
+	a2l := dw.a2l
+
+	var magic Addr = a2l.minpc - 40 // a2l.minpc // readelf -e ./exename
+	var addr Addr = 0x5eeee
+	addr = addrx - exeadr
+	//	addr = addr + magic - 0x8
+	// println("adr2v", addrx, "=>", addr, exeadr, mainadr)
+	// println("minpc", a2l.minpc, "maxpc", a2l.maxpc)
+	if false {
+		addr = addrx - etxtadr
+		addr = addr + magic - 0x8
+		println("adr2v", addrx, "=>", addr, etxtadr)
+	}
+	return addr
+}
+
+// only receive short/virt addr
+func (dw *Dwarf) getfileline(addrx voidptr) (
+	filename string, fileline int, found bool) {
 	a2l := dw.a2l
 	var addr Addr = addrx
-	addr = 0x5eeee
 	cuit := dw.NewCUIterm()
-	for {
+	for stop := false; !stop; {
 		cuhdr, err1 := cuit.Next()
 		if err1.Fail() {
 			break
@@ -310,18 +358,22 @@ func (dw *Dwarf) getfileline(addrx voidptr) {
 		indie := dw.pc_in_die(cudie, addr)
 		// println(cuidx, indie, cudie, addr)
 		if indie {
-			retline, lookres := dw.lookup_pc_cu(cudie, addr)
-			dw.dealloc(cudie, DW_DLA_DIE)
+			rfileno, rlineno, lookres := dw.lookup_pc_cu(cudie, addr)
 			cuit.SkipTail()
 			if lookres {
-				println("found", cuidx, retline)
-				// dw.print_pcline(retline, addr) // call too late, retline is freed
+				// filename, fileline = dw.print_pcline2(retline, addr, cuidx)
+				filename = dw.fileno2file(cuidx, rfileno)
+				fileline = rlineno
 			}
-			break
-		} else {
-			dw.dealloc(cudie, DW_DLA_DIE)
+			found = lookres
+			stop = true
 		}
+		dw.dealloc(cudie, DW_DLA_DIE)
 	}
+	if !found {
+		println("not found", cuit.idx, addr)
+	}
+	return
 }
 func (dw *Dwarf) pc_in_die(die Die, pc Addr) (found bool) {
 	culowpc, err1 := lowpc(die)
@@ -368,12 +420,13 @@ func (dw *Dwarf) pc_in_die(die Die, pc Addr) (found bool) {
 
 	return
 }
-func (dw *Dwarf) lookup_pc_cu(die Die, pc Addr) (retline Line, found bool) {
+func (dw *Dwarf) lookup_pc_cu(die Die, pc Addr) (
+	retfileno int, retlineno int, found bool) {
 	verout, tabcnt, linectx, err1 := srclines2(die)
 	if err1 == ErrNoEntry {
 		return
 	}
-	defer srclines_dealloc2(linectx)
+	// defer srclines_dealloc2(linectx) // TODO compiler
 
 	for tabcnt == 1 {
 		linebuf, linecnt, err1 := srclines_from_linecontext(linectx)
@@ -395,13 +448,15 @@ func (dw *Dwarf) lookup_pc_cu(die Die, pc Addr) (retline Line, found bool) {
 					}
 				}
 				found = true
-				retline = last_pc_line
-				dw.print_pcline(retline, pc)
+				// retline = last_pc_line
+				// dw.print_pcline(retline, pc)
+				retfileno, retlineno = dw.pcfilelineno(line)
 				break
 			} else if prev_line != nil && pc > prev_lineaddr && pc < lnaddr {
 				found = true
-				retline = prev_line
-				dw.print_pcline(retline, pc)
+				// retline = prev_line
+				// dw.print_pcline(retline, pc)
+				retfileno, retlineno = dw.pcfilelineno(line)
 				break
 			}
 			islne, err2 := lineendsequence(line)
@@ -414,7 +469,7 @@ func (dw *Dwarf) lookup_pc_cu(die Die, pc Addr) (retline Line, found bool) {
 		}
 		break
 	}
-	// srclines_dealloc2(linectx)
+	srclines_dealloc2(linectx)
 
 	return
 }
@@ -430,16 +485,57 @@ func (dw *Dwarf) print_pcline(line Line, pc Addr) {
 		}
 		retlineno, err2 := lineno(line)
 		fileline = retlineno
-		fileno, err3 := line_srcfileno(line)
-		if err3.Fail() {
-			println(err3.Error())
-		} else {
-			println("fileno", fileno)
-		}
 	}
 	println(pc, filename, fileline, line)
 }
 
+// from cached srcfiles, if line object gone
+func (dw *Dwarf) print_pcline2(line Line, pc Addr, cuidx int) (string, int) {
+	var filename = "???"
+	var fileline int
+	if line != nil {
+		retlineno, err2 := lineno(line)
+		fileline = retlineno
+
+		retname, err1 := linesrc(line)
+		if err1.Fail() {
+			println(err1.Error())
+		} else {
+			filename = retname
+		}
+
+		// try by fileno
+		fileno, err3 := line_srcfileno(line)
+		if err3.Fail() {
+			println(err3.Error())
+		} else {
+			fidxs := dw.a2l.cufilesm[cuidx]
+			vidx := fidxs[fileno-1]
+			retname := dw.a2l.cufilesv[vidx]
+			filename = retname
+		}
+	}
+	println(cuidx, pc, filename, fileline, line)
+	return filename, fileline
+}
+func (dw *Dwarf) pcfilelineno(line Line) (fileno int, lineno1 int) {
+	retlineno, err2 := lineno(line)
+	lineno1 = retlineno
+	retfileno, err3 := line_srcfileno(line)
+	if err3.Fail() {
+		println(err3.Error())
+	} else {
+		fileno = retfileno
+	}
+	return
+}
+func (dw *Dwarf) fileno2file(cuidx int, fileno int) string {
+	a2l := dw.a2l
+	fidxs := a2l.cufilesm[cuidx]
+	vidx := fidxs[fileno-1]
+	retname := a2l.cufilesv[vidx]
+	return retname
+}
 func (dw *Dwarf) check_lookup_table() {
 	a2l := dw.a2l
 	tabsz := usize(a2l.maxpc - a2l.minpc)
@@ -571,6 +667,51 @@ func (dw *Dwarf) calc_minmax_pc() {
 	println("minpc", a2l.minpc, "maxpc", a2l.maxpc, DW_DLV_BADADDR, cucnt) // why output 27-nilty???
 }
 
+func (dw *Dwarf) calc_cufiles() {
+	a2l := dw.a2l
+
+	// TODO compiler not support string key
+	fileidxs := map[string]int{} // name => index
+	cuit := dw.NewCUIterm()
+	for {
+		cuhdr, err1 := cuit.Next()
+		if err1.Fail() {
+			break
+		}
+		cudie := cuhdr.CUdie
+		cuidx := cuhdr.Index
+
+		files, err2 := srcfiles(cudie)
+		fidxs := []int{}
+		for idx, filename := range files {
+			ok := fileidxs.haskey(filename)
+			fidx := fileidxs[filename]
+			if !ok {
+				a2l.cufilesv = append(a2l.cufilesv, filename)
+				fidx = a2l.cufilesv.len() - 1
+				fileidxs[filename] = fidx
+			}
+			// a2l.cufilesm[cuidx] = append(a2l.cufilesm[cuidx], fidx)// TODO compiler
+			fidxs = append(fidxs, fidx)
+		}
+		a2l.cufilesm[cuidx] = fidxs
+		dw.dealloc(cudie, DW_DLA_DIE)
+	}
+	var cucnt int = cuit.idx
+	a2l.cucnt = cucnt
+	println("cufiles", cucnt, fileidxs.len()) // why output 27-nilty???
+}
+func (dw *Dwarf) check_cufiles() {
+	a2l := dw.a2l
+	filesvlen := a2l.cufilesv.len()
+	filesmlen := a2l.cufilesm.len()
+	for i := 0; i < filesvlen; i++ {
+		file1 := a2l.cufilesv[i]
+		// println(i, file1)
+	}
+	println("cufiles", "vcnt", filesvlen, "mcnt", filesmlen)
+}
+
 ///
 var ErrNoEntry Error = -1
 
@@ -593,15 +734,11 @@ func (dwerr *Error) with(ret int) {
 	}
 }
 
-func (dwerr Error) Okay() bool {
-	return dwerr == nil
-}
-func (dwerr Error) Fail() bool {
-	return dwerr != nil
-}
+func (dwerr Error) Okay() bool { return dwerr == nil }
+func (dwerr Error) Fail() bool { return dwerr != nil }
 func (dwerr Error) Errno() int {
 	if dwerr == ErrNoEntry {
-		return -1
+		return DW_DLV_NO_ENTRY
 	}
 	rv := C.dwarf_errno(dwerr)
 	return rv

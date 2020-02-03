@@ -98,3 +98,7 @@ int HashTable_len(HashTable* ht) {
 int HashTable_cap(HashTable* ht) {
     return hashtable_capacity(ht);
 }
+
+int HashTable_haskey(HashTable* ht, void* key) {
+    return hashtable_contains_key(ht, key);
+}
