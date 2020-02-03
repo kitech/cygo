@@ -28,24 +28,3 @@ func (die Die) Dbg() Debug {
 	var undie *_Die = die
 	return undie.die_dbg
 }
-
-func (dwerr Error) Errno() int {
-	rv := C.dwarf_errno(dwerr)
-	return rv
-}
-
-func (dwerr Error) Errmsg() string {
-	rv := C.dwarf_errmsg(dwerr)
-	emsg := gostring(rv)
-	return emsg
-}
-
-func (dwerr Error) Error() string {
-	if dwerr != nil {
-		eno := dwerr.Errno()
-		emsg := dwerr.Errmsg()
-		emsg2 := "DWE " + eno.repr() + " " + emsg
-		return emsg2
-	}
-	return ""
-}

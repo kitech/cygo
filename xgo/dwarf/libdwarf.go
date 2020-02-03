@@ -875,31 +875,34 @@ var dbgobj Debug
     actual file name. reserved1,2,3 should all be passed
     as zero. */
 func init_path(path string) (
-	true_path string, dbg Debug, dwerr Error, ret int) {
-	ret = C.dwarf_init_path(path.cstr(), nil, 0,
+	true_path string, dbg Debug, dwerr Error) {
+	ret := C.dwarf_init_path(path.cstr(), nil, 0,
 		DW_DLC_READ, 0, 0, 0, &dbg, nil, 0, 0, &dwerr)
+	dwerr = packerror(ret, dwerr)
 	dbgobj = dbg
 	return
 }
 
 /*  Initialization based on Unix(etc) open fd */
 /*  New March 2017 */
-func init_b(fd int) (dbg Debug, dwerr Error, ret int) {
-	ret = C.dwarf_init_b(fd, DW_DLC_READ, 0, 0, 0, &dbg, &dwerr)
+func init_b(fd int) (dbg Debug, dwerr Error) {
+	ret := C.dwarf_init_b(fd, DW_DLC_READ, 0, 0, 0, &dbg, &dwerr)
+	dwerr = packerror(ret, dwerr)
 	dbgobj = dbg
 	return
 }
 
-func init_a(fd int) (dbg Debug, dwerr Error, ret int) {
-	ret = C.dwarf_init(fd, DW_DLC_READ, 0, 0, &dbg, &dwerr)
+func init_a(fd int) (dbg Debug, dwerr Error) {
+	ret := C.dwarf_init(fd, DW_DLC_READ, 0, 0, &dbg, &dwerr)
+	dwerr = packerror(ret, dwerr)
 	dbgobj = dbg
 	return
 }
 
-func add_file_path(dbg Debug, filename string) (dwerr Error, ret int) {
+func add_file_path(dbg Debug, filename string) (dwerr Error) {
 	var dwerr Error
 	rv := C.dwarf_add_file_path(dbg, filename.cstr(), &dwerr)
-	ret = rv
+	dwerr = packerror(rv, dwerr)
 	return
 }
 
@@ -910,20 +913,20 @@ func print_memory_stats(dbg Debug) {
 }
 
 func get_elf(dbg Debug) (
-	return_elfptr voidptr, dwerr Error, ret int) {
+	return_elfptr voidptr, dwerr Error) {
 	rv := C.dwarf_get_elf(dbg, &return_elfptr, &dwerr)
-	ret = rv
+	dwerr = packerror(rv, dwerr)
 	return
 }
-func finish(dbg Debug) (dwerr Error, ret int) {
+func finish(dbg Debug) (dwerr Error) {
 	rv := C.dwarf_finish(dbg, &dwerr)
-	ret = rv
+	dwerr = packerror(rv, dwerr)
 	return
 }
 
-func object_finish(dbg Debug) (dwerr Error, ret int) {
+func object_finish(dbg Debug) (dwerr Error) {
 	rv := C.dwarf_object_finish(dbg, &dwerr)
-	ret = rv
+	dwerr = packerror(rv, dwerr)
 	return
 }
 
@@ -943,19 +946,17 @@ type CUHeader4 struct {
 	Tyoffset  Unsigned
 	NextOff   Unsigned
 	Type      Half
-
-	Dwerr Error
-	Ret   int
 }
 
-func next_cu_header4(dbg Debug) *CUHeader4 {
-	cuhdr := &CUHeader4{}
-	cuhdr.Ret = C.dwarf_next_cu_header_d(dbg, true,
+func next_cu_header4(dbg Debug) (cuhdr *CUHeader4, dwerr Error) {
+	cuhdr = &CUHeader4{}
+	ret := C.dwarf_next_cu_header_d(dbg, true,
 		&cuhdr.Length, &cuhdr.Verstamp, &cuhdr.Abbrevoff,
 		&cuhdr.Addrsize, &cuhdr.Lensize, &cuhdr.Extsize,
 		&cuhdr.Tysig, &cuhdr.Tyoffset,
-		&cuhdr.NextOff, &cuhdr.Type, &cuhdr.Dwerr)
-	return cuhdr
+		&cuhdr.NextOff, &cuhdr.Type, &dwerr)
+	dwerr = packerror(ret, dwerr)
+	return
 }
 
 type CUHeader struct {
@@ -964,20 +965,19 @@ type CUHeader struct {
 	Abbrevoff Off
 	Addrsize  Half
 	NextOff   Unsigned
-	Dwerr     Error
-	Ret       int
 }
 
-func next_cu_header(dbg Debug) *CUHeader {
-	cuhdr := &CUHeader{}
-	cuhdr.Ret = C.dwarf_next_cu_header(dbg, &cuhdr.Length, &cuhdr.Verstamp,
-		&cuhdr.Abbrevoff, &cuhdr.Addrsize, &cuhdr.NextOff, &cuhdr.Dwerr)
+func next_cu_header(dbg Debug) (cuhdr *CUHeader, dwerr Error) {
+	cuhdr = &CUHeader{}
+	ret := C.dwarf_next_cu_header(dbg, &cuhdr.Length, &cuhdr.Verstamp,
+		&cuhdr.Abbrevoff, &cuhdr.Addrsize, &cuhdr.NextOff, &dwerr)
+	dwerr = packerror(ret, dwerr)
 	return cuhdr
 }
 
-func siblingof(dbg Debug, die Die) (
-	return_siblingdie Die, dwerr Error, ret int) {
-	ret = C.dwarf_siblingof(dbg, die, &return_siblingdie, &dwerr)
+func siblingof(dbg Debug, die Die) (siblingdie Die, dwerr Error) {
+	ret := C.dwarf_siblingof(dbg, die, &siblingdie, &dwerr)
+	dwerr = packerror(ret, dwerr)
 	return
 }
 
@@ -987,84 +987,81 @@ func dealloc(dbg Debug, space voidptr, type_ int) {
 
 /* New 27 April 2015. */
 func die_from_hash_signature(dbg Debug, hash_sig *Sig8, sig_type string) (
-	returned_CU_die Die, dwerr Error, ret int) {
-	ret = C.dwarf_die_from_hash_signature(dbg, hash_sig, sig_type.cstr(),
-		&returned_CU_die, &dwerr)
+	ret_CU_die Die, dwerr Error) {
+	ret := C.dwarf_die_from_hash_signature(dbg, hash_sig, sig_type.cstr(),
+		&ret_CU_die, &dwerr)
+	dwerr = packerror(ret, dwerr)
 	return
 }
 
-func child(die Die) (return_childdie Die, dwerr Error, ret int) {
-	ret = C.dwarf_child(die, &return_childdie, &dwerr)
+func child(die Die) (childdie Die, dwerr Error) {
+	ret := C.dwarf_child(die, &childdie, &dwerr)
+	dwerr = packerror(ret, dwerr)
+	if false {
+		(&dwerr).with(ret) // ok but syntax not good
+	}
 	return
 }
 
 /*  Section name access.  Because sections might
     now end with .dwo or be .zdebug  or might not.
 */
-func get_die_section_name(dbg Debug, isinfo bool) (
-	sec_name string, dwerr Error, ret int) {
+func get_die_section_name(dbg Debug, isinfo bool) (sec_name string, dwerr Error) {
 	var sec_namep byteptr
 	rv := C.dwarf_get_die_section_name(dbg, isinfo, &sec_namep, &dwerr)
-	ret = rv
+	dwerr = packerror(rv, dwerr)
 	sec_name = gostring(sec_namep)
 	return
 }
-func get_die_section_name_b(die Die) (
-	sec_name string, dwerr Error, ret int) {
+func get_die_section_name_b(die Die) (sec_name string, dwerr Error) {
 	var sec_namep byteptr
 	rv := C.dwarf_get_die_section_name_b(die, &sec_namep, &dwerr)
-	ret = rv
+	dwerr = packerror(rv, dwerr)
 	sec_name = gostring(sec_namep)
 	return
 }
 
-func attr(die Die, attr Half) (
-	returned_attr Attribute, dwerr Error, ret int) {
-	ret = C.dwarf_attr(die, attr, &returned_attr, &dwerr)
+func attr(die Die, attr Half) (ret_attr Attribute, dwerr Error) {
+	ret := C.dwarf_attr(die, attr, &ret_attr, &dwerr)
+	dwerr = packerror(ret, dwerr)
 	return
 }
-func die_text(die Die, attr Half) (
-	retname string, dwerr Error, ret int) {
+func die_text(die Die, attr Half) (retname string, dwerr Error) {
 	var retnamep byteptr
-	ret = C.dwarf_die_text(die, attr, &retnamep, &dwerr)
+	ret := C.dwarf_die_text(die, attr, &retnamep, &dwerr)
+	dwerr = packerror(ret, dwerr)
 	retname = gostring(retnamep)
 	return
 }
 
-func diename(die Die) (
-	diename string, dwerr Error, ret int) {
+func diename(die Die) (diename string, dwerr Error) {
 	var dienamep byteptr
-	ret = C.dwarf_diename(die, &dienamep, &dwerr)
+	ret := C.dwarf_diename(die, &dienamep, &dwerr)
+	dwerr = packerror(ret, dwerr)
 	diename = gostring(dienamep)
 	// dwarf_dealloc(dbg Debug, dienamep, DW_DLA_STRING)
 	return
 }
 
 /* convenience functions, alternative to using dwarf_attrlist */
-func hasattr(die Die, attr Half) (
-	returned_bool Bool, dwerr Error, ret int) {
-	ret = C.dwarf_hasattr(die, attr, &returned_bool, &dwerr)
+func hasattr(die Die, attr Half) (ret_bool Bool, dwerr Error) {
+	ret := C.dwarf_hasattr(die, attr, &ret_bool, &dwerr)
+	dwerr = packerror(ret, dwerr)
 	return
 }
 
-type DwarfRes struct {
-	Dwerr Error
-	Ret   int
-}
 type AttrList struct {
 	Atbuf *Attribute
 	Atcnt Signed
-
-	Res DwarfRes
 }
 
 func (die Die) GetAttrs() {
 
 }
 
-func attrlist(die Die) (
-	attrbuf *Attribute, attrcnt Signed, dwerr Error, ret int) {
-	ret = C.dwarf_attrlist(die, &attrbuf, &attrcnt, &dwerr)
+func attrlist(die Die) (attrbuf *Attribute, attrcnt Signed, dwerr Error) {
+	ret := C.dwarf_attrlist(die, &attrbuf, &attrcnt, &dwerr)
+	dwerr = packerror(ret, dwerr)
 	return
 }
 
@@ -1073,8 +1070,9 @@ func attrlist(die Die) (
 func (die Die) Lowpc() {
 
 }
-func lowpc(die Die) (returned_addr Addr, dwerr Error, ret int) {
-	ret = C.dwarf_lowpc(die, &returned_addr, &dwerr)
+func lowpc(die Die) (retaddr Addr, dwerr Error) {
+	ret := C.dwarf_lowpc(die, &retaddr, &dwerr)
+	dwerr = packerror(ret, dwerr)
 	return
 }
 
@@ -1084,16 +1082,17 @@ func lowpc(die Die) (returned_addr Addr, dwerr Error, ret int) {
 func (die Die) Highpc() {
 
 }
-func highpc(die Die) (returned_addr Addr, dwerr Error, ret int) {
-	ret = C.dwarf_highpc(die, &returned_addr, &dwerr)
+func highpc(die Die) (retaddr Addr, dwerr Error) {
+	ret := C.dwarf_highpc(die, &retaddr, &dwerr)
+	dwerr = packerror(ret, dwerr)
 	return
 }
 
 func (attr Attribute) Whatattr() {
 }
-func whatattr(attr Attribute) (
-	returned_attr_num Half, dwerr Error, ret int) {
-	ret = C.dwarf_whatattr(attr, &returned_attr_num, &dwerr)
+func whatattr(attr Attribute) (ret_attr_num Half, dwerr Error) {
+	ret := C.dwarf_whatattr(attr, &ret_attr_num, &dwerr)
+	dwerr = packerror(ret, dwerr)
 	return
 }
 
@@ -1101,28 +1100,36 @@ func (attr Attribute) Hasform() {
 }
 func (attr Attribute) Whatform() {
 }
-func whatform(attr Attribute) (
-	returned_form_num Half, dwerr Error, ret int) {
-	ret = C.dwarf_whatform(attr, &returned_form_num, &dwerr)
+func whatform(attr Attribute) (ret_form_num Half, dwerr Error) {
+	ret := C.dwarf_whatform(attr, &ret_form_num, &dwerr)
+	dwerr = packerror(ret, dwerr)
 	return
 }
 
-func formudata(attr Attribute) (val Unsigned, dwerr Error, ret int) {
-	ret = C.dwarf_formudata(attr, &val, &dwerr)
+func formaddr(attr Attribute) (addr Addr, dwerr Error) {
+	C.dwarf_formaddr(attr, &addr, &dwerr)
 	return
 }
 
-func formstring(attr Attribute) (str string, dwerr Error, ret int) {
+func formudata(attr Attribute) (val Unsigned, dwerr Error) {
+	ret := C.dwarf_formudata(attr, &val, &dwerr)
+	dwerr = packerror(ret, dwerr)
+	return
+}
+
+func formstring(attr Attribute) (str string, dwerr Error) {
 	var strp byteptr
-	ret = C.dwarf_formstring(attr, &strp, &dwerr)
+	ret := C.dwarf_formstring(attr, &strp, &dwerr)
+	dwerr = packerror(ret, dwerr)
 	str = gostring(strp)
 	return
 }
 
-func srcfiles(die Die) (files []string, dwerr Error, ret int) {
+func srcfiles(die Die) (files []string, dwerr Error) {
 	var srcfilesp *byteptr
 	var filecount Signed
-	ret = C.dwarf_srcfiles(die, &srcfilesp, &filecount, &dwerr)
+	ret := C.dwarf_srcfiles(die, &srcfilesp, &filecount, &dwerr)
+	dwerr = packerror(ret, dwerr)
 	files2 := []string{}
 	for i := 0; i < filecount; i++ {
 		// files = append(files, "file"+i.repr()) // TODO compiler
@@ -1143,9 +1150,9 @@ func srcfiles(die Die) (files []string, dwerr Error, ret int) {
 
 /* Start line number operations */
 /* dwarf_srclines  is the original interface from 1993. */
-func srclines(die Die) (
-	linebuf *Line, linecount Signed, dwerr Error, ret int) {
-	ret = C.dwarf_srclines(die, &linebuf, &linecount, &dwerr)
+func srclines(die Die) (linebuf *Line, linecount Signed, dwerr Error) {
+	ret := C.dwarf_srclines(die, &linebuf, &linecount, &dwerr)
+	dwerr = packerror(ret, dwerr)
 	return
 }
 
@@ -1155,8 +1162,9 @@ func srclines_dealloc(dbg Debug, linebuf *Line, count Signed) {
 
 func srclines_b(die Die) (
 	version_out Unsigned, table_cout Small,
-	linecontext LineContext, dwerr Error, ret int) {
-	ret = C.dwarf_srclines_b(die, &version_out, &table_cout, &linecontext, &dwerr)
+	linecontext LineContext, dwerr Error) {
+	ret := C.dwarf_srclines_b(die, &version_out, &table_cout, &linecontext, &dwerr)
+	dwerr = packerror(ret, dwerr)
 	return
 }
 
