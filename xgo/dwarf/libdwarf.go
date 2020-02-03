@@ -812,13 +812,17 @@ const DW_FRAME_SAME_VAL = 1035
 
 /* error return values
  */
-const DW_DLV_BADADDR = 0 // (~(Addr)0)
+// const DW_DLV_BADADDR = 0 // (~(Addr)0) // TODO compiler
+const DW_DLV_BADADDR = C.DW_DLV_BADADDR
+
 /* for functions returning target address */
 
 const DW_DLV_NOCOUNT = -1 // ((Signed)(0)-1)
 /* for functions returning count */
 
-const DW_DLV_BADOFFSET = 0 // (~(Dwarf_Off)0)
+// const DW_DLV_BADOFFSET = 0 // (~(Dwarf_Off)0)
+const DW_DLV_BADOFFSET = C.DW_DLV_BADOFFSET
+
 /* for functions returning offset */
 
 /* standard return values for functions */
@@ -946,6 +950,9 @@ type CUHeader4 struct {
 	Tyoffset  Unsigned
 	NextOff   Unsigned
 	Type      Half
+
+	CUdie Die
+	Index int
 }
 
 func next_cu_header4(dbg Debug) (cuhdr *CUHeader4, dwerr Error) {
@@ -975,6 +982,12 @@ func next_cu_header(dbg Debug) (cuhdr *CUHeader, dwerr Error) {
 	return cuhdr
 }
 
+func siblingof2(dbg Debug, die Die) (siblingdie Die, dwerr Error) {
+	isinfo := 1
+	ret := C.dwarf_siblingof_b(dbg, die, isinfo, &siblingdie, &dwerr)
+	dwerr = packerror(ret, dwerr)
+	return
+}
 func siblingof(dbg Debug, die Die) (siblingdie Die, dwerr Error) {
 	ret := C.dwarf_siblingof(dbg, die, &siblingdie, &dwerr)
 	dwerr = packerror(ret, dwerr)
@@ -1082,6 +1095,28 @@ func lowpc(die Die) (retaddr Addr, dwerr Error) {
 func (die Die) Highpc() {
 
 }
+func highpcx(die Die) (retaddr Addr, dwerr Error) {
+	hival, form, class, dwerr2 := highpc2(die)
+	dwerr = dwerr2
+	if dwerr.Okay() {
+		if class == DW_FORM_CLASS_CONSTANT {
+			lowaddr, dwerr3 := lowpc(die)
+			dwerr = dwerr3
+			if dwerr3.Okay() {
+				retaddr = lowaddr + hival
+			}
+		} else {
+			retaddr = hival
+		}
+	}
+	return
+}
+
+func highpc2(die Die) (value Addr, form Half, class int, dwerr Error) {
+	ret := C.dwarf_highpc_b(die, &value, &form, &class, &dwerr)
+	dwerr = packerror(ret, dwerr)
+	return
+}
 func highpc(die Die) (retaddr Addr, dwerr Error) {
 	ret := C.dwarf_highpc(die, &retaddr, &dwerr)
 	dwerr = packerror(ret, dwerr)
@@ -1102,6 +1137,12 @@ func (attr Attribute) Whatform() {
 }
 func whatform(attr Attribute) (ret_form_num Half, dwerr Error) {
 	ret := C.dwarf_whatform(attr, &ret_form_num, &dwerr)
+	dwerr = packerror(ret, dwerr)
+	return
+}
+
+func global_formref(attr Attribute) (offset Off, dwerr Error) {
+	ret := C.dwarf_global_formref(attr, &offset, &dwerr)
 	dwerr = packerror(ret, dwerr)
 	return
 }
@@ -1160,11 +1201,50 @@ func srclines_dealloc(dbg Debug, linebuf *Line, count Signed) {
 	C.dwarf_srclines_dealloc(dbg, linebuf, count)
 }
 
-func srclines_b(die Die) (
-	version_out Unsigned, table_cout Small,
-	linecontext LineContext, dwerr Error) {
+func srclines2(die Die) (version_out Unsigned,
+	table_cout Small, linecontext LineContext, dwerr Error) {
 	ret := C.dwarf_srclines_b(die, &version_out, &table_cout, &linecontext, &dwerr)
 	dwerr = packerror(ret, dwerr)
+	return
+}
+
+func srclines_from_linecontext(lctx LineContext) (
+	linebuf *Line, linecount Signed, dwerr Error) {
+	rv := C.dwarf_srclines_from_linecontext(lctx, &linebuf, &linecount, &dwerr)
+	dwerr = packerror(rv, dwerr)
+	return
+}
+
+func lineaddr(line Line) (retaddr Addr, dwerr Error) {
+	rv := C.dwarf_lineaddr(line, &retaddr, &dwerr)
+	dwerr = packerror(rv, dwerr)
+	return
+}
+
+func lineendsequence(line Line) (retbool Bool, dwerr Error) {
+	rv := C.dwarf_lineendsequence(line, &retbool, &dwerr)
+	dwerr = packerror(rv, dwerr)
+	return
+}
+
+func lineno(line Line) (ret_lineno Unsigned, dwerr Error) {
+	rv := C.dwarf_lineno(line, &ret_lineno, &dwerr)
+	dwerr = packerror(rv, dwerr)
+	return
+}
+func linesrc(line Line) (retname string, dwerr Error) {
+	var namep byteptr
+	rv := C.dwarf_linesrc(line, &namep, &dwerr)
+	dwerr = packerror(rv, dwerr)
+	if dwerr.Okay() {
+		retname = gostring_clone(namep)
+		dealloc(dbgobj, namep, DW_DLA_STRING)
+	}
+	return
+}
+func line_srcfileno(line Line) (ret_fileno Unsigned, dwerr Error) {
+	rv := C.dwarf_line_srcfileno(line, &ret_fileno, &dwerr)
+	dwerr = packerror(rv, dwerr)
 	return
 }
 
@@ -1173,6 +1253,18 @@ func srclines_b(die Die) (
    and dwarf_srclines_from_linecontext(),
    dwarf_srclines_twolevel_from_linecontext(),
    and dwarf_srclines_b()  allocate.  */
-func srclines_dealloc_b(line_context LineContext) {
+func srclines_dealloc2(line_context LineContext) {
 	C.dwarf_srclines_dealloc_b(line_context)
+}
+
+func get_ranges1(dbg Debug, offset Off, die Die) (
+	rangesbuf *Ranges, listlen Signed, bytecount Unsigned, dwerr Error) {
+	rv := C.dwarf_get_ranges_a(dbg, offset, die,
+		&rangesbuf, &listlen, &bytecount, &dwerr)
+	dwerr = packerror(rv, dwerr)
+	return
+}
+
+func ranges_dealloc(dbg Debug, rangesbuf *Ranges, rangecount Signed) {
+	C.dwarf_ranges_dealloc(dbg, rangesbuf, rangecount)
 }

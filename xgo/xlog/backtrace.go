@@ -46,6 +46,7 @@ func BacktraceLines() []string {
 		frames = append(frames, symstr)
 	}
 
+	// C.free(symarr)
 	return frames
 }
 func line2frame(line string) *Frame {

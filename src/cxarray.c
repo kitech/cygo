@@ -69,11 +69,14 @@ Array* cxarray_append(Array* a0, void* v) {
 }
 
 // with element size
-cxarray2* cxarray2_new(int cap, int elemsz) {
+cxarray2* cxarray2_new(int len, int elemsz) {
+    assert(len >= 0);
     assert(elemsz > 0);
-    cap = cap <= 0 ? 1 : cap;
     cxarray2* arr = (cxarray2*)cxmalloc(sizeof(cxarray2));
-    arr->len = 0;
+
+    int cap = len;
+    cap = cap < 8 ? 8 : cap;
+    arr->len = len;
     arr->cap = cap;
     arr->elemsz = elemsz;
     arr->ptr = (uint8*)cxmalloc(cap*elemsz);

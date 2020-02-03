@@ -11,10 +11,12 @@ type Dwarf struct {
 
 	sfilesv []string
 	sfilesm map[Die][]int // => index list in sfilesv
+	a2l     *Addr2Line
 }
 
 func NewDwarf() *Dwarf {
 	dwr := &Dwarf{}
+	// dwr.inita2l()
 	return dwr
 }
 
@@ -65,21 +67,74 @@ type CUHeaderb struct {
 // CU = compileunit
 // Die = dwarf info entry?
 
+func (dwr *Dwarf) RangeCU(itfn func(idx int, cudie Die) bool) {
+
+}
+func (dwr *Dwarf) nopcu(idx int, cudie Die) bool {
+	return true
+}
+func (dwr *Dwarf) testrcu1() {
+	// dwr.RangeCU(dwr.nopcu) // TODO compiler
+}
+func (dwr *Dwarf) testrcu2() {
+	// TODO compiler
+	/*
+		dwr.RangeCU(func(idx int, die Die) bool {
+			return true
+		})
+	*/
+}
+
+type CUIter struct {
+	dbg Debug
+	idx int
+	eof bool
+	err Error
+}
+
+func (dw *Dwarf) NewCUIterm() *CUIter {
+	cuit := &CUIter{}
+	cuit.dbg = dw.dbg
+	return cuit
+}
+
+func (cuit *CUIter) Next() (*CUHeader4, Error) {
+	dbg := cuit.dbg
+	cuhdr, err1 := next_cu_header4(dbg)
+	if err1.Fail() {
+		cuit.eof = true
+		return nil, err1
+	}
+	cudie, dwerr := siblingof2(dbg, 0)
+	if dwerr.Fail() {
+		return nil, dwerr
+	}
+	cuhdr.CUdie = cudie
+	cuhdr.Index = cuit.idx
+	cuit.idx++
+	return cuhdr, nil
+}
+
+// sometimes need break iterate
+func (cuit *CUIter) SkipTail() {
+	for cuit.eof == false {
+		cuit.Next()
+	}
+}
+
 func (dwr *Dwarf) PrintCUList() {
-	cucnt := 0
-	for idx := 0; ; idx++ {
+	cuidx := 0
+	for ; ; cuidx++ {
 		cuhdr, err1 := next_cu_header4(dwr.dbg)
 		if err1.Fail() {
 			println("heheh", err1.Error())
 			break
 		}
-		cucnt++
-
-		var nodie Die
-		cudie, dwerr := siblingof(dwr.dbg, nodie)
+		cudie, dwerr := siblingof2(dwr.dbg, 0)
 		println(dwerr, cudie)
 		if dwerr.Fail() {
 			println("hehe", dwerr.Error())
+			break
 		}
 
 		var cusfiles []string
@@ -88,7 +143,7 @@ func (dwr *Dwarf) PrintCUList() {
 			sfiles, dwerr := srcfiles(cudie)
 			println("sfiles", sfiles.len(), dwerr)
 			for idx, sfile := range sfiles {
-				println("sfiles", idx, sfile)
+				println("sfiles", cuidx, sfile)
 			}
 			cusfiles = sfiles
 		}
@@ -104,6 +159,7 @@ func (dwr *Dwarf) get_die_and_siblings(indie Die, inlvl int, cusfiles []string) 
 
 	curdie = indie
 	dwr.print_die_data(indie, inlvl, cusfiles)
+
 	subdie, dwerr = child(curdie)
 	if dwerr.Okay() {
 		println(111, child, inlvl)
@@ -138,6 +194,7 @@ func (dwr *Dwarf) print_die_data(printme Die, lvl int, cusfiles []string) {
 			val, dwerr2 := formudata(attr1)
 			println(val, sfiles.len())
 			filename = sfiles[val-1]
+			dwr.dealloc(attr1, DW_DLA_ATTR)
 		}
 		println("file", has_line_data, lvl, battr, dwerr, DW_AT_decl_file, filename)
 	}
@@ -149,8 +206,6 @@ func (dwr *Dwarf) print_die_data(printme Die, lvl int, cusfiles []string) {
 	{
 		diename, dwerr := diename(printme)
 		println("name", diename, dwerr, dwerr, lvl)
-		dealloc(dwr.dbg, diename, DW_DLA_STRING)
-		dealloc(dwr.dbg, diename, DW_DLA_STRING)
 	}
 	{
 		attrs, attrcnt, dwerr := attrlist(printme)
@@ -190,7 +245,333 @@ func (dwr *Dwarf) print_die_data(printme Die, lvl int, cusfiles []string) {
 
 	}
 }
+func (dw *Dwarf) dealloc(space voidptr, type_ int) {
+	dealloc(dw.dbg, space, type_)
+}
 
+///
+type Addr2Line struct {
+	cucnt int
+	minpc Addr
+	maxpc Addr
+
+	pclntab []Line
+	ctxts   []LineContext
+
+	cufilesv []string      // global uniq filenames
+	cufilesm map[Die][]int // cudie => index list of cufilesv
+}
+
+func newAddr2Line() *Addr2Line {
+	a2l := &Addr2Line{}
+	a2l.minpc = DW_DLV_BADADDR
+	return a2l
+}
+
+func (a2l *Addr2Line) setminpc(pc Addr) {
+	if pc < a2l.minpc {
+		a2l.minpc = pc
+	}
+}
+func (a2l *Addr2Line) setmaxpc(pc Addr) {
+	if pc > a2l.maxpc {
+		a2l.maxpc = pc
+	}
+}
+
+func (dw *Dwarf) inita2l() {
+	a2l := newAddr2Line()
+	dw.a2l = a2l
+	dw.calc_minmax_pc()
+	tabsz := usize(a2l.maxpc - a2l.minpc)
+	println("tabsz", tabsz, a2l.cucnt)
+	a2l.pclntab = make([]Line, tabsz)
+	a2l.ctxts = make([]LineContext, a2l.cucnt)
+	dw.calc_lookup_table()
+	dw.check_lookup_table()
+}
+
+func (dw *Dwarf) Lookup(addr voidptr) {
+}
+
+func (dw *Dwarf) getfileline(addrx voidptr) {
+	a2l := dw.a2l
+	var addr Addr = addrx
+	addr = 0x5eeee
+	cuit := dw.NewCUIterm()
+	for {
+		cuhdr, err1 := cuit.Next()
+		if err1.Fail() {
+			break
+		}
+		cudie := cuhdr.CUdie
+		cuidx := cuhdr.Index
+
+		indie := dw.pc_in_die(cudie, addr)
+		// println(cuidx, indie, cudie, addr)
+		if indie {
+			retline, lookres := dw.lookup_pc_cu(cudie, addr)
+			dw.dealloc(cudie, DW_DLA_DIE)
+			cuit.SkipTail()
+			if lookres {
+				println("found", cuidx, retline)
+				// dw.print_pcline(retline, addr) // call too late, retline is freed
+			}
+			break
+		} else {
+			dw.dealloc(cudie, DW_DLA_DIE)
+		}
+	}
+}
+func (dw *Dwarf) pc_in_die(die Die, pc Addr) (found bool) {
+	culowpc, err1 := lowpc(die)
+	if err1.Okay() {
+		if pc == culowpc {
+			return true
+		}
+		cuhighpc, err2 := highpcx(die)
+		if err2.Okay() {
+			if pc >= culowpc && pc < cuhighpc {
+				return true
+			}
+		}
+		// println("111", culowpc, cuhighpc, pc)
+	}
+
+	attr1, err2 := attr(die, DW_AT_ranges)
+	if err2.Okay() {
+		offset, err := global_formref(attr1)
+		if err.Okay() {
+			var baseaddr Addr
+			ranges, listlen, bytecnt, err := get_ranges1(dw.dbg, offset, die)
+			for i := 0; i < listlen; i++ {
+				// cur := ranges + i // TODO compiler
+				var cur *Ranges
+				cur = usize(ranges) + usize(i*sizeof(Ranges))
+				if cur.dwr_type == DW_RANGES_ENTRY {
+					rglowpc := baseaddr + cur.dwr_addr1
+					rghighpc := baseaddr + cur.dwr_addr2
+					if pc >= rglowpc && pc < rghighpc {
+						found = true
+						break
+					}
+				} else if cur.dwr_type == DW_RANGES_ADDRESS_SELECTION {
+					baseaddr = cur.dwr_addr2
+				} else {
+					baseaddr = culowpc
+				}
+			}
+			ranges_dealloc(dw.dbg, ranges, listlen)
+		}
+		dw.dealloc(attr1, DW_DLA_ATTR)
+	}
+
+	return
+}
+func (dw *Dwarf) lookup_pc_cu(die Die, pc Addr) (retline Line, found bool) {
+	verout, tabcnt, linectx, err1 := srclines2(die)
+	if err1 == ErrNoEntry {
+		return
+	}
+	defer srclines_dealloc2(linectx)
+
+	for tabcnt == 1 {
+		linebuf, linecnt, err1 := srclines_from_linecontext(linectx)
+		if err1.Fail() {
+			break
+		}
+		var prev_lineaddr Addr
+		var prev_line Line
+		for i := 0; i < linecnt; i++ {
+			line := linebuf[i]
+			lnaddr, err1 := lineaddr(line)
+			if pc == lnaddr {
+				last_pc_line := line
+				for j := i + 1; j < linecnt; j++ {
+					jline := linebuf[j]
+					lnaddr, err := lineaddr(jline)
+					if pc == lnaddr {
+						last_pc_line = jline
+					}
+				}
+				found = true
+				retline = last_pc_line
+				dw.print_pcline(retline, pc)
+				break
+			} else if prev_line != nil && pc > prev_lineaddr && pc < lnaddr {
+				found = true
+				retline = prev_line
+				dw.print_pcline(retline, pc)
+				break
+			}
+			islne, err2 := lineendsequence(line)
+			if islne == ctrue {
+				prev_line = 0
+			} else {
+				prev_lineaddr = lnaddr
+				prev_line = line
+			}
+		}
+		break
+	}
+	// srclines_dealloc2(linectx)
+
+	return
+}
+func (dw *Dwarf) print_pcline(line Line, pc Addr) {
+	var filename = "???"
+	var fileline int
+	if line != nil {
+		retname, err1 := linesrc(line)
+		if err1.Fail() {
+			println(err1.Error())
+		} else {
+			filename = retname
+		}
+		retlineno, err2 := lineno(line)
+		fileline = retlineno
+		fileno, err3 := line_srcfileno(line)
+		if err3.Fail() {
+			println(err3.Error())
+		} else {
+			println("fileno", fileno)
+		}
+	}
+	println(pc, filename, fileline, line)
+}
+
+func (dw *Dwarf) check_lookup_table() {
+	a2l := dw.a2l
+	tabsz := usize(a2l.maxpc - a2l.minpc)
+	nilpcln := 0
+	for i := 0; i < tabsz; i++ {
+		line := a2l.pclntab[i]
+		if line == nil {
+			// println(tabsz, i, line)
+			nilpcln++
+		}
+	}
+	nilctx := 0
+	for i := 0; i < a2l.ctxts.len(); i++ {
+		ctx := a2l.ctxts[i]
+		if ctx == nil {
+			// println(a2l.cucnt, i, ctx)
+			nilctx++
+		}
+	}
+	println(a2l.cucnt, nilctx, tabsz, nilpcln)
+}
+
+func (dw *Dwarf) calc_lookup_table() {
+	a2l := dw.a2l
+
+	cuit := dw.NewCUIterm()
+	for {
+		cuhdr, err1 := cuit.Next()
+		if err1.Fail() {
+			break
+		}
+		cudie := cuhdr.CUdie
+		cuidx := cuhdr.Index
+
+		verout, tabcnt, linectx, err2 := srclines2(cudie)
+		if err2.Okay() {
+			a2l.ctxts[cuidx] = linectx
+			if tabcnt == 1 { // what the 1?
+				linebuf, linecnt, err := srclines_from_linecontext(linectx)
+				if err.Fail() {
+					println(err.Error())
+					srclines_dealloc2(linectx)
+				}
+
+				var prev_lineaddr Addr
+				var prev_line Line
+				for i := 0; i < linecnt; i++ {
+					line := linebuf[i]
+					lineaddr, err := lineaddr(line)
+					// println(cuit.idx, i, lineaddr)
+					if prev_line != nil {
+						for addr := prev_lineaddr; addr < lineaddr; addr++ {
+							tabidx := addr - a2l.minpc
+							a2l.pclntab[tabidx] = linebuf[i-1]
+						}
+						fillcnt := int(lineaddr - prev_lineaddr)
+						// println(cuit.idx, i, fillcnt)
+					}
+
+					islnend, err2 := lineendsequence(line)
+					if islnend == ctrue {
+						prev_line = 0
+					} else {
+						prev_lineaddr = lineaddr
+						prev_line = line
+					}
+				}
+			}
+		}
+
+		dw.dealloc(cudie, DW_DLA_DIE)
+	}
+}
+
+func (dw *Dwarf) calc_minmax_pc() {
+	a2l := dw.a2l
+
+	cuit := dw.NewCUIterm()
+	for {
+		cuhdr, err1 := cuit.Next()
+		if err1.Fail() {
+			break
+		}
+		cudie := cuhdr.CUdie
+
+		minpc, err2 := lowpc(cudie)
+		if err2.Okay() {
+			a2l.setminpc(minpc)
+		}
+		maxpc, err3 := highpcx(cudie)
+		if err3.Okay() {
+			a2l.setmaxpc(maxpc)
+		}
+
+		//
+		rgattr, err4 := attr(cudie, DW_AT_ranges)
+		if err4.Okay() {
+			offset, err5 := global_formref(rgattr)
+			if err5.Okay() {
+				var baseaddr Addr
+				if a2l.minpc != DW_DLV_BADADDR {
+					baseaddr = a2l.minpc
+				}
+
+				ranges, rgcnt, bytecnt, err := get_ranges1(dw.dbg, offset, cudie)
+				for i := 0; i < rgcnt; i++ {
+					// cur := ranges + i // TODO compiler
+					var cur *Ranges
+					cur = usize(ranges) + usize(i*sizeof(Ranges))
+					if cur.dwr_type == DW_RANGES_ENTRY {
+						rglowpc := baseaddr + cur.dwr_addr1
+						rghighpc := baseaddr + cur.dwr_addr2
+						a2l.setminpc(rglowpc)
+						a2l.setmaxpc(rghighpc)
+					} else if cur.dwr_type == DW_RANGES_ADDRESS_SELECTION {
+						baseaddr = cur.dwr_addr2
+					} else {
+						baseaddr = a2l.minpc
+					}
+				}
+				ranges_dealloc(dw.dbg, ranges, rgcnt)
+			}
+			dw.dealloc(rgattr, DW_DLA_ATTR)
+		}
+		dw.dealloc(cudie, DW_DLA_DIE)
+	}
+	var cucnt int = cuit.idx
+	a2l.cucnt = cucnt
+	println("minpc", a2l.minpc, "maxpc", a2l.maxpc, DW_DLV_BADADDR, cucnt) // why output 27-nilty???
+}
+
+///
 var ErrNoEntry Error = -1
 
 func packerror(ret int, dwerr Error) Error {

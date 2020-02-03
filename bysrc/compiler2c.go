@@ -443,7 +443,7 @@ func (this *g2nc) genFuncDecl(scope *ast.Scope, fd *ast.FuncDecl) {
 		gendeferprep := func() {
 			this.out("// int array").outnl()
 			elemsz := "sizeof(int)"
-			this.outf("cxarray2* deferarr = cxarray2_new(1, %v)", elemsz).outfh().outnl()
+			this.outf("cxarray2* deferarr = cxarray2_new(0, %v)", elemsz).outfh().outnl()
 		}
 		gennamedrets := func() {
 			this.out("//named returns").outnl()
@@ -1308,7 +1308,7 @@ func (c *g2nc) genCallExprMake(scope *ast.Scope, te *ast.CallExpr) {
 		if len(te.Args) > 1 {
 			c.genExpr(scope, te.Args[1])
 		} else {
-			c.out("1")
+			c.out("0")
 		}
 		c.outf(", %v)", elemsz)
 	default:
@@ -1541,7 +1541,7 @@ func (c *g2nc) genCallExprNorm(scope *ast.Scope, te *ast.CallExpr) {
 	}
 	if fca.isvardic {
 		var elemsz interface{} = "sizeof(voidptr)"
-		c.outf("cxarray2* %s = cxarray2_new(1, %v)", idt.Name, elemsz).outfh().outnl()
+		c.outf("cxarray2* %s = cxarray2_new(0, %v)", idt.Name, elemsz).outfh().outnl()
 		prmty := fca.fnty.Params()
 		elemty := prmty.At(prmty.Len() - 1).Type().(*types.Slice).Elem()
 		// log.Println(te.Fun, prmty, reftyof(prmty), prmty.Len(), elemty, reftyof(elemty))
@@ -2173,7 +2173,7 @@ func (this *g2nc) genExpr2(scope *ast.Scope, e ast.Expr) {
 			var elemsz interface{} = uintptr((&types.StdSizes{}).Sizeof(bety))
 			elemsz = gopp.IfElse(elemsz == uintptr(0), "sizeof(voidptr)", elemsz)
 			gopp.Assert(elemsz != 0, "wtfff", elemsz, bety)
-			this.outf("cxarray2_new(1, %v)", elemsz).outfh().outnl()
+			this.outf("cxarray2_new(0, %v)", elemsz).outfh().outnl()
 			for idx, ex := range te.Elts {
 				log.Println(vo == nil, ex, idx, this.exprpos(ex))
 				this.genCxarrAdd(scope, vo.Data, ex, idx)
@@ -2574,20 +2574,13 @@ func (c *g2nc) genCxarrAdd(scope *ast.Scope, vnamex interface{}, ve ast.Expr, id
 	c.outf("(voidptr)&%v)", tmpname) // .outfh().outnl()
 }
 func (c *g2nc) genCxarrSet(scope *ast.Scope, vname ast.Expr, vidx ast.Expr, elem interface{}) {
-	idxstr := ""
-
-	switch te := vidx.(type) {
-	case *ast.BasicLit:
-		idxstr = te.Value
-	default:
-		log.Println("todo", vidx, reflect.TypeOf(vidx))
-	}
-
 	c.outf("cxarray2_replace_at(")
 	c.genExpr(scope, vname)
 	c.outf(", (voidptr)(uintptr)")
 	c.genExpr(scope, elem.(ast.Expr))
-	c.outf(", %v, nilptr)", idxstr).outfh().outnl()
+	c.out(",")
+	c.genExpr(scope, vidx)
+	c.outf(", nilptr)").outfh().outnl()
 }
 func (c *g2nc) genCxarrGet(scope *ast.Scope, vname ast.Expr, vidx ast.Expr, varty types.Type) {
 	var elemty types.Type
@@ -3029,7 +3022,7 @@ func (this *g2nc) genTypeSpec(scope *ast.Scope, spec *ast.TypeSpec) {
 				} else if isslicety2(fldty) {
 					var elemsz interface{} = unsafe.Sizeof(uintptr(0))
 					elemsz = gopp.IfElse(elemsz == uintptr(0), "sizeof(voidptr)", elemsz)
-					this.outf("obj->%s = cxarray2_new(1, %v)", fldname.Name, elemsz).outfh().outnl()
+					this.outf("obj->%s = cxarray2_new(0, %v)", fldname.Name, elemsz).outfh().outnl()
 				} else if ismapty2(fldty) {
 					this.outf("obj->%s = cxhashtable_new()", fldname.Name).outfh().outnl()
 				} else if ischanty2(fldty) {
@@ -3229,7 +3222,7 @@ func (c *g2nc) genValueSpec(scope *ast.Scope, spec *ast.ValueSpec, validx int) {
 			} else if isslicety2(varty) {
 				var elemsz interface{} = unsafe.Sizeof(uintptr(0))
 				elemsz = gopp.IfElse(elemsz == uintptr(0), "sizeof(voidptr)", elemsz)
-				c.outf("cxarray2_new(1, %v)", elemsz)
+				c.outf("cxarray2_new(0, %v)", elemsz)
 			} else if ismapty2(varty) {
 				c.out("cxhashtable_new()")
 			} else if isstructty2(varty) {

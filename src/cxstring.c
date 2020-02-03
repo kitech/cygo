@@ -38,14 +38,14 @@ cxstring* cxstring_new_cstr2(char* s, int len) {
 }
 cxstring* cxstring_new_char(char ch) {
     cxstring* t = cxstring_new();
-    t->ptr = cxmalloc(2);
+    t->ptr = cxmalloc(8);
     t->len = 1;
     t->ptr[0] = ch;
     return t;
 }
 cxstring* cxstring_new_rune(rune ch) {
     cxstring* t = cxstring_new();
-    t->ptr = cxmalloc(4);
+    t->ptr = cxmalloc(8);
     t->len = 3;
     char* p = (char*)&ch;
     t->ptr[0] = p[0];
