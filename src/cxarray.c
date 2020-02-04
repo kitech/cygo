@@ -103,7 +103,7 @@ void cxarray2_expend(cxarray2* a0, int n) {
         cap = cap <= 0 ? n : cap;
         cap = cap > sz ? cap : cap*2;
         uint8* ptr = cxmalloc(cap*a0->elemsz);
-        memcpy(ptr, a0->ptr, cap*a0->elemsz);
+        memcpy(ptr, a0->ptr, a0->len*a0->elemsz);
         a0->ptr = ptr;
         a0->cap = cap;
     }

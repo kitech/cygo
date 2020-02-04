@@ -20,7 +20,9 @@ pthread_create_t pthread_create_f;
 int pthread_create_wip(pthread_t *thread, const pthread_attr_t *attr,
                    void *(*start_routine) (void *), void *arg) {
     if (!pthread_create_f) initHook2();
-    int rv = pthread_create_f(thread, attr, start_routine, arg);
+    linfo("%d %p\n", thread, pthread_create_f);
+    int rv = 0;
+    rv = pthread_create_f(thread, attr, start_routine, arg);
     return rv;
 }
 
@@ -131,6 +133,7 @@ char* crn_getaddrinfo(const char* hostname) {
 static int doInitHook2() {
     if (getaddrinfo_f) return 0;
     getaddrinfo_f = (getaddrinfo_t)dlsym(RTLD_NEXT, "getaddrinfo");
+    pthread_create_f = (pthread_create_t)dlsym(RTLD_NEXT, "pthread_create");
 
     return 1;
 }

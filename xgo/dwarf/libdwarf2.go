@@ -163,7 +163,10 @@ func (cuit *CUIter) Index() int { return cuit.idx - 1 }
 // sometimes need break iterate
 func (cuit *CUIter) SkipTail() {
 	for cuit.eof == false {
-		cuit.Next()
+		cuhdr, err := cuit.Next()
+		if err.Okay() {
+			dealloc(cuit.dbg, cuhdr.CUdie, DW_DLA_DIE)
+		}
 	}
 }
 

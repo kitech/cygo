@@ -1113,7 +1113,7 @@ int eventfd(unsigned int initval, int flags) {
     // if (!crn_in_procer()) return open_f(fds, nfds, timeout);
     // linfo("%d %d\n", initval, flags);
     if (GC_thread_is_registered() == 0) { // hotfix qt event dispatch thread
-        linfo("%d %d not gcreg thread\n", initval, flags);
+        linfo("%d %d not gcreg thread %p\n", initval, flags, pthread_self());
         struct GC_stack_base stkbase;
         GC_get_stack_base(&stkbase);
         GC_register_my_thread(&stkbase);

@@ -1,4 +1,4 @@
-package xlog
+package dwarf
 
 /*
 #cgo LDFLAGS: -ldwarf
@@ -12,7 +12,9 @@ package xlog
 import "C"
 
 func init() {
-	C.init_elf_dwarf2()
+	if false {
+		C.init_elf_dwarf2()
+	}
 }
 
 func addr2line1(addr voidptr) (string, int) {

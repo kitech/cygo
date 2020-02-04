@@ -8,7 +8,7 @@
 #include <poll.h>
 
 #define LIBGO_SYS_Linux
-
+#include <pthread.h>
 #if defined(LIBGO_SYS_Linux)
 #include <sys/epoll.h>
 #include <sys/inotify.h>
@@ -18,6 +18,7 @@ typedef int (*pipe_t)(int pipefd[2]);
 extern pipe_t pipe_f;
 
 #if defined(LIBGO_SYS_Linux)
+
 typedef int (*pipe2_t)(int pipefd[2], int flags);
 extern pipe2_t pipe2_f;
 typedef int(*inotify_init_t)();

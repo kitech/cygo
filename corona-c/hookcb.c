@@ -154,6 +154,13 @@ hookcb* hookcb_get() {
 void hookcb_oncreate(int fd, int fdty, bool isNonBlocking, int domain, int sockty, int protocol) {
     // if (!crn_in_procer()) return; // create 只记录，所以不需要检测是否在fiber内
     if (!gcinited) return;
+    if (GC_thread_is_registered() == 0) {
+        linfo("%d %d not gcreg thread %p\n", fd, fdty, pthread_self());
+        struct GC_stack_base stkbase;
+        GC_get_stack_base(&stkbase);
+        GC_register_my_thread(&stkbase);
+    }
+
     hookcb* hkcb = hookcb_get();
     if (hkcb == 0) {
         linfo("why nil %d\n", fd);

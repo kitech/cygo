@@ -13,6 +13,7 @@ import "C"
 import (
 	"xgo/dwarf"
 	"xgo/xstrings"
+	"xgo/xsync"
 )
 
 type Frame struct {
@@ -95,16 +96,23 @@ func Backtrace() []*Frame {
 }
 
 var dwdbg *dwarf.Dwarf
-
-// var globmu xsync.Mutex // TODO compiler not support plain object
-
+var globmu *xsync.Mutex // TODO compiler not support plain object
+func init() {
+	globmu = &xsync.Mutex{}
+}
 func lazyinit_dwarf() {
 	if dwdbg == nil {
-		// globmu.Lock()
-		// globmu.Unlock()
-		dwdbg = dwarf.NewDwarf()
-		// dwdbg.Open("./ocgui")
-		dwdbg.OpenSelf()
+		newed := false
+		globmu.Lock()
+		if dwdbg == nil {
+			newed = true
+			dwdbg = dwarf.NewDwarf()
+		}
+		globmu.Unlock()
+		if newed {
+			// dwdbg.Open("./ocgui")
+			dwdbg.OpenSelf()
+		}
 	}
 }
 
