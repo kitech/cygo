@@ -9,6 +9,7 @@ import (
 	"log"
 	"path/filepath"
 	"reflect"
+	"runtime"
 	"runtime/debug"
 	"strings"
 	"unsafe"
@@ -248,6 +249,44 @@ func (c *g2nc) genMultiretTypes(scope *ast.Scope, pkg *ast.Package) {
 		c.out("}").outfh().outnl()
 		c.outnl()
 	}
+	for idx, fd := range c.psctx.multirets {
+		c.outf("// %d %v %v", idx, fd.Name, fd.Type.Results.NumFields()).outnl()
+		c.outf("%s%s_multiret_arg* %s%s_multiret_arg_new_zero() {",
+			c.pkgpfx(), fd.Name.Name, c.pkgpfx(), fd.Name.Name).outnl()
+		c.outf("%s%s_multiret_arg* obj = (%s%s_multiret_arg*)cxmalloc(sizeof(%s%s_multiret_arg))",
+			c.pkgpfx(), fd.Name.Name, c.pkgpfx(), fd.Name.Name, c.pkgpfx(), fd.Name.Name).outfh().outnl()
+		cnter := 0
+		for _, fld := range fd.Type.Results.List {
+			fldtyx := c.info.TypeOf(fld.Type)
+			for _, _ = range fld.Names {
+				recurzero := false
+				switch fldty := fldtyx.(type) {
+				case *types.Basic:
+					if fldty.Kind() == types.String {
+						recurzero = true
+						c.outf("obj->%s=cxstring_new()", tmpvarname2(cnter)).outfh().outnl()
+					}
+				case *types.Slice:
+					recurzero = true
+					elemtyt := fldty.Elem()
+					tyszer := types.SizesFor(runtime.Compiler, runtime.GOARCH)
+					var elemsz interface{} = tyszer.Sizeof(elemtyt)
+					elemsz = gopp.IfElse(elemsz == uintptr(0), "sizeof(voidptr)", elemsz)
+					elemsz = gopp.IfElse(elemsz == int64(0), "sizeof(voidptr)", elemsz)
+					c.outf("obj->%s=cxarray2_new(0,%v)",
+						tmpvarname2(cnter), elemsz).outfh().outnl()
+				}
+				if !recurzero {
+					c.out("//")
+					c.out(c.exprTypeName(scope, fld.Type)).outsp()
+					c.out(tmpvarname2(cnter)).outfh().outnl()
+				}
+				cnter++
+			}
+		}
+		c.out("return obj").outfh().outnl()
+		c.out("}").outnl()
+	}
 }
 
 func (this *g2nc) genFuncs(pkg *ast.Package) {
@@ -450,13 +489,31 @@ func (this *g2nc) genFuncDecl(scope *ast.Scope, fd *ast.FuncDecl) {
 			if fd.Type.Results == nil {
 				return
 			}
+
 			for _, fld := range fd.Type.Results.List {
+				fldtyx := this.info.TypeOf(fld.Type)
 				for _, name := range fld.Names {
 					this.out(this.exprTypeName(scope, fld.Type)).outsp()
 					this.out(name.Name).outeq().out(cuzero).outfh().outnl()
+
+					switch fldty := fldtyx.(type) {
+					case *types.Basic:
+						if fldty.Kind() == types.String {
+							this.outf("%v=cxstring_new()", name).outfh().outnl()
+						}
+					case *types.Slice:
+						elemtyt := fldty.Elem()
+						tyszer := types.SizesFor(runtime.Compiler, runtime.GOARCH)
+						var elemsz interface{} = tyszer.Sizeof(elemtyt)
+						elemsz = gopp.IfElse(elemsz == uintptr(0), "sizeof(voidptr)", elemsz)
+						elemsz = gopp.IfElse(elemsz == int64(0), "sizeof(voidptr)", elemsz)
+						this.outf("%v=cxarray2_new(0,%v)",
+							name, elemsz).outfh().outnl()
+					}
 				}
 			}
 		}
+
 		scope = ast.NewScope(scope)
 		scope.Insert(ast.NewObj(ast.Fun, fd.Name.Name))
 		if ismret {
@@ -468,7 +525,15 @@ func (this *g2nc) genFuncDecl(scope *ast.Scope, fd *ast.FuncDecl) {
 
 			this.outf("%s%s_multiret_arg*", this.pkgpfx(), fd.Name.Name).outsp().out(tvname)
 			this.outeq().outsp()
-			this.outf("cxmalloc(sizeof(%s%s_multiret_arg))", this.pkgpfx(), fd.Name.Name).outfh().outnl()
+			this.outf("%s%s_multiret_arg_new_zero()", this.pkgpfx(), fd.Name.Name).outfh().outnl()
+			cnter := 0
+			for _, fld := range fd.Type.Results.List {
+				for _, name := range fld.Names {
+					this.out(name.Name).outeq()
+					this.outf("%s->%s", tvname, tmpvarname2(cnter)).outfh().outnl()
+					cnter++
+				}
+			}
 			gendeferprep()
 			this.genBlockStmt(scope, fd.Body)
 			this.out("labmret:").outnl()
@@ -1301,7 +1366,8 @@ func (c *g2nc) genCallExprMake(scope *ast.Scope, te *ast.CallExpr) {
 		elemtya := te.Args[0].(*ast.ArrayType).Elt
 		// log.Println(te.Args[0], reftyof(te.Args[0]), elemtya, reftyof(elemtya))
 		elemtyt := c.info.TypeOf(elemtya)
-		var elemsz interface{} = (&types.StdSizes{}).Sizeof(elemtyt)
+		tyszer := types.SizesFor(runtime.Compiler, runtime.GOARCH)
+		var elemsz interface{} = tyszer.Sizeof(elemtyt)
 		elemsz = gopp.IfElse(elemsz == uintptr(0), "sizeof(voidptr)", elemsz)
 		elemsz = gopp.IfElse(elemsz == int64(0), "sizeof(voidptr)", elemsz)
 		c.outf("cxarray2_new(")
@@ -2170,7 +2236,8 @@ func (this *g2nc) genExpr2(scope *ast.Scope, e ast.Expr) {
 				log.Println("temp var?", vo, this.exprpos(te), gotyval)
 			}
 			bety := this.info.TypeOf(be.Elt)
-			var elemsz interface{} = uintptr((&types.StdSizes{}).Sizeof(bety))
+			tyszer := types.SizesFor(runtime.Compiler, runtime.GOARCH)
+			var elemsz interface{} = tyszer.Sizeof(bety)
 			elemsz = gopp.IfElse(elemsz == uintptr(0), "sizeof(voidptr)", elemsz)
 			gopp.Assert(elemsz != 0, "wtfff", elemsz, bety)
 			this.outf("cxarray2_new(0, %v)", elemsz).outfh().outnl()
@@ -2574,10 +2641,15 @@ func (c *g2nc) genCxarrAdd(scope *ast.Scope, vnamex interface{}, ve ast.Expr, id
 	c.outf("(voidptr)&%v)", tmpname) // .outfh().outnl()
 }
 func (c *g2nc) genCxarrSet(scope *ast.Scope, vname ast.Expr, vidx ast.Expr, elem interface{}) {
+	tname := tmpvarname()
+	c.out(c.exprTypeName(scope, elem.(ast.Expr))).outsp()
+	c.out(tname).outeq()
+	c.genExpr(scope, elem.(ast.Expr))
+	c.outfh().outnl()
 	c.outf("cxarray2_replace_at(")
 	c.genExpr(scope, vname)
-	c.outf(", (voidptr)(uintptr)")
-	c.genExpr(scope, elem.(ast.Expr))
+	c.outf(", (voidptr)(uintptr)&")
+	c.out(tname)
 	c.out(",")
 	c.genExpr(scope, vidx)
 	c.outf(", nilptr)").outfh().outnl()
@@ -2589,6 +2661,26 @@ func (c *g2nc) genCxarrGet(scope *ast.Scope, vname ast.Expr, vidx ast.Expr, vart
 		elemty = arrty.Elem()
 	case *types.Array:
 		elemty = arrty.Elem()
+	}
+
+	if false { //TODO
+		asobj := scope.Lookup("varname")
+		if asobj != nil {
+			c.out(cuzero).outfh().outnl()
+		}
+		// insert bound check code
+		c.out("if ((")
+		c.genExpr(scope, vidx)
+		c.out(")>")
+		c.out("cxarray2_size(")
+		c.genExpr(scope, vname)
+		c.out(")) {").outnl()
+		c.out(" // out of array bound").outnl()
+		c.out("}").outnl()
+
+		if asobj != nil {
+			c.outf("%v", asobj.Data).outeq()
+		}
 	}
 	tystr := c.exprTypeName(scope, vname)
 	tystr = c.exprTypeNameImpl2(scope, elemty, nil)

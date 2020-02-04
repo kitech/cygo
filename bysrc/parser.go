@@ -1445,12 +1445,40 @@ func (pc *ParserContext) walkpass_tmpvars() {
 						pc.cursors[valsp] = c
 					}
 				}
+			case *ast.IndexExpr:
+				stmt := upfindstmt(pc, c, 0)
+				// dont left value
+				if ae, ok := stmt.(*ast.AssignStmt); ok {
+					leftval := false
+					for _, be := range ae.Lhs {
+						if be == te {
+							leftval = true
+							break
+						}
+					}
+					if leftval {
+						break
+					}
+				}
+
+				vsp2 := &ast.AssignStmt{}
+				vsp2.Lhs = []ast.Expr{newIdent(tmpvarname())}
+				vsp2.Rhs = []ast.Expr{te}
+				vsp2.Tok = token.DEFINE
+				vsp2.TokPos = c.Node().Pos()
+				// te.Args[idx] = vsp2.Lhs[0]
+				c.Replace(vsp2.Lhs[0])
+				tmpvars[stmt] = append(tmpvars[stmt], vsp2)
+				tyval := types.TypeAndValue{}
+				tyval.Type = pc.info.TypeOf(te)
+				pc.info.Types[vsp2.Lhs[0]] = tyval
 			default:
 				gopp.G_USED(te)
 			}
 			return true
 		})
 	}
+
 	log.Println("tmpvars", len(tmpvars))
 	pc.tmpvars = tmpvars
 }

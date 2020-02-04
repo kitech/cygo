@@ -96,15 +96,18 @@ cxarray2* cxarray2_slice(cxarray2* a0, int start, int end) {
 }
 
 void cxarray2_expend(cxarray2* a0, int n) {
-    int sz = a0->len + n * a0->elemsz;
+    assert(n > 0);
+    int sz = a0->len + n;
     if (sz >= a0->cap) {
         int cap = a0->cap*2;
+        cap = cap <= 0 ? n : cap;
         cap = cap > sz ? cap : cap*2;
         uint8* ptr = cxmalloc(cap*a0->elemsz);
         memcpy(ptr, a0->ptr, cap*a0->elemsz);
         a0->ptr = ptr;
         a0->cap = cap;
     }
+    assert(a0->cap >= a0->len+n);
 }
 cxarray2* cxarray2_append(cxarray2* a0, void* v) {
     assert(a0 != nilptr);

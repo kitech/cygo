@@ -6,7 +6,7 @@ package xsync
 import "C"
 
 func init() {
-	if false {
+	if true {
 		assert(sizeof(Mutex) == sizeof(C.pthread_mutex_t))
 	}
 }

@@ -14,6 +14,7 @@
 #include <errno.h>
 #include <sys/socket.h>
 
+#include <pthread.h>
 #include <gc.h> // must put after <pthread.h>
 
 // golang type map

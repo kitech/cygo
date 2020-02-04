@@ -304,8 +304,24 @@ type Addr2Line struct {
 	pclntab []Line
 	ctxts   []LineContext
 
+	cuaddrs []*minCUItem       // len == cucnt
+	culines map[int][]*minLine // cuidx =>
+
 	cufilesv []string      // global uniq filenames
 	cufilesm map[int][]int // cuidx => file index list of cufilesv
+}
+
+type minCUItem struct {
+	low  Addr
+	high Addr
+}
+type minLine struct {
+	fileno int
+	lineno int
+
+	prev_line   bool
+	prev_lnaddr Addr
+	lnaddr      Addr
 }
 
 func newAddr2Line() *Addr2Line {
@@ -333,8 +349,11 @@ func (dw *Dwarf) inita2l() {
 	println("tabsz", tabsz, a2l.cucnt)
 	a2l.pclntab = make([]Line, tabsz)
 	a2l.ctxts = make([]LineContext, a2l.cucnt)
+	// a2l.cuaddrs = make([]*minCUItem, a2l.cucnt)
 	dw.calc_lookup_table()
 	dw.check_lookup_table()
+	dw.calc_lookup_table2()
+	dw.check_lookup_table2()
 	dw.calc_cufiles()
 	dw.check_cufiles()
 }
@@ -384,7 +403,10 @@ func (dw *Dwarf) getfileline(addrx voidptr) (
 		indie := dw.pc_in_die(cudie, addr)
 		// println(cuidx, indie, cudie, addr)
 		if indie {
-			rfileno, rlineno, lookres := dw.lookup_pc_cu(cudie, addr)
+			if false {
+				rfileno, rlineno, lookres := dw.lookup_pc_cu(cudie, addr)
+			}
+			rfileno, rlineno, lookres := dw.lookup_pc_cu2(cudie, addr, cuidx)
 			cuit.SkipTail()
 			if lookres {
 				// filename, fileline = dw.print_pcline2(retline, addr, cuidx)
@@ -448,8 +470,8 @@ func (dw *Dwarf) pc_in_die(die Die, pc Addr) (found bool) {
 }
 func (dw *Dwarf) lookup_pc_cu(die Die, pc Addr) (
 	retfileno int, retlineno int, found bool) {
-	verout, tabcnt, linectx, err1 := srclines2(die)
-	if err1 == ErrNoEntry {
+	verout, tabcnt, linectx, err0 := srclines2(die)
+	if err0 == ErrNoEntry {
 		return
 	}
 	// defer srclines_dealloc2(linectx) // TODO compiler
@@ -495,8 +517,46 @@ func (dw *Dwarf) lookup_pc_cu(die Die, pc Addr) (
 		}
 		break
 	}
-	srclines_dealloc2(linectx)
+	if err0.Okay() {
+		srclines_dealloc2(linectx)
+	}
 
+	return
+}
+func (dw *Dwarf) lookup_pc_cu2(die Die, pc Addr, cuidx int) (
+	retfileno int, retlineno int, found bool) {
+	a2l := dw.a2l
+	if pc >= a2l.minpc && pc < a2l.maxpc {
+		// println("infile", a2l.minpc, pc, a2l.maxpc)
+	}
+	if cuidx >= a2l.cuaddrs.len() {
+		return
+	}
+	cuitem := a2l.cuaddrs[cuidx]
+	// println(cuitem != nil, cuitem)
+	if pc >= cuitem.low && pc < cuitem.high {
+		// println("incu", cuidx, cuitem.low, pc, cuitem.high)
+		lnvec := a2l.culines[cuidx]
+		for i := 0; i < lnvec.len(); i++ {
+			minln := lnvec[i]
+			if pc == minln.lnaddr {
+				filename := dw.fileno2file(cuidx, minln.fileno)
+				// println("inln111", cuidx, i, minln.lineno, minln.fileno, filename)
+				retfileno = minln.fileno
+				retlineno = minln.lineno
+				found = true
+				break
+			} else if minln.prev_line &&
+				pc > minln.prev_lnaddr && pc < minln.lnaddr {
+				filename := dw.fileno2file(cuidx, minln.fileno)
+				// println("inln222", cuidx, i, minln.lineno, minln.fileno, filename)
+				retfileno = minln.fileno
+				retlineno = minln.lineno
+				found = true
+				break
+			}
+		}
+	}
 	return
 }
 func (dw *Dwarf) print_pcline(line Line, pc Addr) {
@@ -562,6 +622,7 @@ func (dw *Dwarf) fileno2file(cuidx int, fileno int) string {
 	retname := a2l.cufilesv[vidx]
 	return retname
 }
+
 func (dw *Dwarf) check_lookup_table() {
 	a2l := dw.a2l
 	tabsz := usize(a2l.maxpc - a2l.minpc)
@@ -603,7 +664,7 @@ func (dw *Dwarf) calc_lookup_table() {
 				linebuf, linecnt, err := srclines_from_linecontext(linectx)
 				if err.Fail() {
 					println(err.Error())
-					srclines_dealloc2(linectx)
+					// srclines_dealloc2(linectx)
 				}
 
 				var prev_lineaddr Addr
@@ -630,8 +691,93 @@ func (dw *Dwarf) calc_lookup_table() {
 					}
 				}
 			}
+			srclines_dealloc2(linectx)
 		}
+		dw.dealloc(cudie, DW_DLA_DIE)
+	}
+}
 
+func (dw *Dwarf) check_lookup_table2() {
+	a2l := dw.a2l
+	lncnt := 0
+	for _, lnvec := range a2l.culines {
+		lncnt += lnvec.len()
+	}
+	println(a2l.cucnt, lncnt)
+}
+func (dw *Dwarf) calc_lookup_table2() {
+	a2l := dw.a2l
+
+	cuit := dw.NewCUIterm()
+	for {
+		cuhdr, err1 := cuit.Next()
+		if err1.Fail() {
+			break
+		}
+		cudie := cuhdr.CUdie
+		cuidx := cuhdr.Index
+
+		cuitem := &minCUItem{}
+		{
+			addr1, err1 := lowpc(cudie)
+			addr2, err2 := highpcx(cudie)
+			cuitem.low = addr1
+			cuitem.high = addr2
+			// a2l.cuaddrs[cuidx] = cuitem // TODO compiler?
+			a2l.cuaddrs = append(a2l.cuaddrs, cuitem)
+		}
+		culnvec := []*minLine{}
+
+		verout, tabcnt, linectx, err2 := srclines2(cudie)
+		if err2.Okay() {
+			a2l.ctxts[cuidx] = linectx
+			if tabcnt == 1 { // what the 1?
+				linebuf, linecnt, err := srclines_from_linecontext(linectx)
+				if err.Fail() {
+					println(err.Error())
+					// srclines_dealloc2(linectx)
+				}
+
+				var prev_lnaddr Addr
+				var prev_line Line
+				for i := 0; i < linecnt; i++ {
+					line := linebuf[i]
+					lnaddr, err := lineaddr(line)
+					// println(cuit.idx, i, lineaddr)
+					if prev_line != nil {
+						for addr := prev_lnaddr; addr < lnaddr; addr++ {
+							tabidx := addr - a2l.minpc
+							if false {
+								a2l.pclntab[tabidx] = linebuf[i-1]
+							}
+						}
+						fillcnt := int(lnaddr - prev_lnaddr)
+						// println(cuit.idx, i, fillcnt)
+						minln := &minLine{}
+						minln.prev_line = true
+						minln.prev_lnaddr = prev_lnaddr
+						minln.lnaddr = lnaddr
+						lineno1, err1 := lineno(line)
+						fileno1, err2 := line_srcfileno(line)
+						minln.lineno = lineno1
+						minln.fileno = fileno1
+						culnvec = append(culnvec, minln)
+					}
+
+					islne, err2 := lineendsequence(line)
+					if islne == ctrue {
+						prev_line = 0
+					} else {
+						prev_lnaddr = lnaddr
+						prev_line = line
+					}
+				}
+			}
+			if err2.Okay() {
+				srclines_dealloc2(linectx)
+			}
+		}
+		a2l.culines[cuidx] = culnvec
 		dw.dealloc(cudie, DW_DLA_DIE)
 	}
 }

@@ -198,7 +198,7 @@ func clangfmt(fname string) {
 	if err != nil {
 		return
 	}
-	cmdo := exec.Command(exepath, "-i", fname, "--style", "WebKit")
+	cmdo := exec.Command(exepath, "--sort-includes=0", "-i", fname, "--style", "WebKit")
 	err = cmdo.Run()
 	gopp.ErrPrint(err, fname)
 }

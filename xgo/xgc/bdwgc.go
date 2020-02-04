@@ -4,6 +4,7 @@ package xgc
 #cgo LDFLAGS: -lgc
 #cgo CFLAGS: -DGC_MALLOC -DGC_THREADS
 
+#include <pthread.h>
 #include <gc/gc.h>
 */
 import "C"
@@ -22,6 +23,7 @@ const (
 func Keep() {}
 
 func Init() {
+	C.GC_allow_register_threads()
 	C.GC_init()
 }
 func Inited() bool {

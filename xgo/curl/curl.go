@@ -18,6 +18,7 @@ type Curl struct {
 	url_        string
 	connonly_   bool
 	uapolicy_   int
+	resolves_   map[string]string // domain => ip
 
 	// result
 	rcvlen usize

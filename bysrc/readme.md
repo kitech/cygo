@@ -41,3 +41,7 @@
 ### 类似项目
 * https://github.com/DQNEO/minigo
 
+### BUGS
+* crash: Collecting from unknown thread
+  curl thread based DNS resolve
+
