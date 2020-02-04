@@ -5,7 +5,15 @@ package xsync
 */
 import "C"
 
+func init() {
+	if false {
+		assert(sizeof(Mutex) == sizeof(C.pthread_mutex_t))
+	}
+}
+
 type Mutex struct {
+	// TODO compilerd to voidptr lock, and failed then
+	// if in somewhere have use of C.pthread_mutex_t, then it's works again
 	lock C.pthread_mutex_t
 }
 

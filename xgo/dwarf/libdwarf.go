@@ -870,7 +870,6 @@ const DW_GROUPNUMBER_DWO = 2
 
 /*===========================================================================*/
 /*  Dwarf consumer interface initialization and termination operations */
-var dbgobj Debug
 
 /*  Initialization based on path. This is new October 2018.
     The path actually used is copied to true_path_out

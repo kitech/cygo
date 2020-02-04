@@ -1,6 +1,10 @@
 package dwarf
 
 /*
+#include <unistd.h>
+extern char __executable_start;
+extern char __etext;
+
 void dwarf2_get_elf_start_addr(void** exeadr, void** etxtadr, void**mainadr)  {
     * exeadr = &__executable_start;
     * etxtadr = &__etext;
@@ -8,15 +12,18 @@ void dwarf2_get_elf_start_addr(void** exeadr, void** etxtadr, void**mainadr)  {
     // printf("0x%lx\n", (unsigned long)&__etext);
     extern int main(int argc, char**argv);
     * mainadr = (void*)main;
-printf("%p %p\n", main, (void*)main-*exeadr);
+    // printf("%p %p\n", main, (void*)main-*exeadr);
 }
 
+extern char** cxrt_get_argv();
+extern int cxrt_get_argc();
 */
 import "C"
 
 var exeadr voidptr
 var etxtadr voidptr
 var mainadr voidptr
+var dbgobj Debug
 
 func init() {
 	C.dwarf2_get_elf_start_addr(&exeadr, &etxtadr, &mainadr)
@@ -35,15 +42,33 @@ type Dwarf struct {
 
 func NewDwarf() *Dwarf {
 	dwr := &Dwarf{}
-	// dwr.inita2l()
 	return dwr
 }
 
+func (dwr *Dwarf) OpenSelf() bool {
+	argv := C.cxrt_get_argv()
+	argc := C.cxrt_get_argc()
+	if argc <= 0 {
+		// panicln("cannot found self executable", argc)// TODO compiler
+		println("cannot found self executable", argc)
+		return false
+	}
+
+	filename := gostring(argv[0])
+	return dwr.Open(filename)
+}
 func (dwr *Dwarf) Open(filename string) bool {
+	if dbgobj != nil {
+		println("warning, reinit dwarf debug object", filename)
+		return true
+	}
 	dwr.filename = filename
 	truepath, dbg, dwerr := init_path(filename)
 	dwr.dbg = dbg
 	dwr.err = dwerr
+	if dwerr.Okay() {
+		dwr.inita2l()
+	}
 	return dwerr.Okay()
 }
 
@@ -270,6 +295,7 @@ func (dw *Dwarf) dealloc(space voidptr, type_ int) {
 }
 
 ///
+// https://github.com/Crablicious/libdwarf-addr2line/blob/master/addr2line.c
 type Addr2Line struct {
 	cucnt int
 	minpc Addr
@@ -371,7 +397,7 @@ func (dw *Dwarf) getfileline(addrx voidptr) (
 		dw.dealloc(cudie, DW_DLA_DIE)
 	}
 	if !found {
-		println("not found", cuit.idx, addr)
+		// println("not found", cuit.idx, addr)
 	}
 	return
 }

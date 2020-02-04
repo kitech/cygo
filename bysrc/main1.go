@@ -9,6 +9,8 @@ import (
 	"runtime"
 	"strings"
 	"time"
+
+	"github.com/twmb/algoimpl/go/graph"
 )
 
 var fname string
@@ -28,7 +30,7 @@ func main() {
 	}
 
 	gopaths := gopp.Gopaths()
-	builtin_imppath := "cxrt/xgo/builtin"
+	builtin_imppath := "xgo/builtin"
 	builtin_pkgpath := ""
 	for _, gopath := range gopaths {
 		pkgpath := gopath + "/src/" + builtin_imppath
@@ -100,30 +102,76 @@ func main() {
 		}
 	}
 
+	// packages  depgraph order
+	pkgdepg := graph.New(graph.Directed)
+	pkgnodeg := map[string]graph.Node{}
+	for i := len(comps) - 1; i >= 0; i-- {
+		psctx := comps[i].psctx
+		curpkg := psctx.path
+		curpkg = trimgopath(curpkg)
+		curpkg = gopp.IfElseStr(curpkg == ".", "main", curpkg)
+		na, ok := pkgnodeg[curpkg]
+		if !ok {
+			na = pkgdepg.MakeNode()
+			*na.Value = curpkg
+			pkgnodeg[curpkg] = na
+		}
+		for _, imppkg := range psctx.bdpkgs.Imports {
+			if imppkg == "C" {
+				continue
+			}
+			if false {
+				log.Println("dep", curpkg, "<-", imppkg)
+			}
+			nb, ok := pkgnodeg[imppkg]
+			if !ok {
+				nb = pkgdepg.MakeNode()
+				*nb.Value = imppkg
+				pkgnodeg[imppkg] = nb
+			}
+			err := pkgdepg.MakeEdge(nb, na)
+			gopp.ErrPrint(err)
+		}
+	}
+	nodes := pkgdepg.TopologicalSort()
+	// log.Println(nodes)
+	for idx, nodeg := range nodes {
+		valx := nodeg.Value
+		if false {
+			log.Println(idx, *valx)
+		}
+	}
+	comps2 := []*g2nc{} // order by depgraph
+	for _, nodeg := range nodes {
+		valx := *nodeg.Value
+		val := valx.(string)
+
+		for i := len(comps) - 1; i >= 0; i-- {
+			psctx := comps[i].psctx
+			curpkg := psctx.path
+			curpkg = trimgopath(curpkg)
+			curpkg = gopp.IfElseStr(curpkg == ".", "main", curpkg)
+			if curpkg == val {
+				comps2 = append(comps2, comps[i])
+				break
+			}
+		}
+	}
+	gopp.Assert(len(comps2) == len(comps), "wtfff", len(comps2), len(comps))
+	comps = comps2
+
 	code := ""
 	extname := ""
 	pkgclts := []string{}
-	for i := len(comps) - 1; i >= 0; i-- {
+	for i := 0; i < len(comps); i++ {
 		psctx := comps[i].psctx
 		if psctx.bdpkgs.Name != "main" {
 			pkgclts = append(pkgclts, psctx.bdpkgs.Name)
 		}
 	}
-	// TODO packages depgraph
-	unsafepkg_code := ""
-	builtinpkg_code := ""
-	for i := len(comps) - 1; i >= 0; i-- {
-		psctx := comps[i].psctx
+	log.Println("pkg order", pkgclts, "main")
 
-		str, _ := comps[i].code()
-		if psctx.path == builtin_pkgpath {
-			builtinpkg_code = str
-		}
-		if strings.HasSuffix(psctx.path, "/unsafe") {
-			unsafepkg_code = str
-		}
-	}
-	for i := len(comps) - 1; i >= 0; i-- {
+	for i := 0; i < len(comps); i++ {
 		psctx := comps[i].psctx
 		if psctx.bdpkgs.Name == "main" {
 			comps[i].genCallPkgGlobvarsInits(pkgclts)
@@ -131,24 +179,27 @@ func main() {
 		}
 
 		str, ext := comps[i].code()
-		if strings.HasSuffix(psctx.path, "/unsafe") {
-		} else if psctx.path == builtin_pkgpath {
-			// code = str + code // 最前置
-		} else {
-			code += str
-		}
+		code += str
 		extname = ext
 	}
-	code = comps[0].genBuiltinTypesMetatype() +
-		unsafepkg_code + "\n" + builtinpkg_code + "\n" + code
+
+	code = comps[0].genBuiltinTypesMetatype() + code
 	fname := "opkgs/foo." + extname
 	ioutil.WriteFile(fname, []byte(code), 0644)
+	log.Println("clangfmt ...", fname, len(code))
+	btime := time.Now()
 	clangfmt(fname)
-	log.Println("gencode lines", strings.Count(code, "\n"))
+	linecnt := strings.Count(code, "\n")
+	log.Println("gencode lines", linecnt, len(code), time.Since(btime))
 }
 func clangfmt(fname string) {
-	cmdo := exec.Command("clang-format", "-i", fname, "--style", "WebKit")
-	err := cmdo.Run()
+	exepath, err := exec.LookPath("clang-format")
+	gopp.ErrPrint(err)
+	if err != nil {
+		return
+	}
+	cmdo := exec.Command(exepath, "-i", fname, "--style", "WebKit")
+	err = cmdo.Run()
 	gopp.ErrPrint(err, fname)
 }
 func dogen(fname string, pkgrename string, builtin_psctx *ParserContext) (*ParserContext, *g2nc) {

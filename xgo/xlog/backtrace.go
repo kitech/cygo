@@ -11,6 +11,7 @@ package xlog
 */
 import "C"
 import (
+	"xgo/dwarf"
 	"xgo/xstrings"
 )
 
@@ -93,17 +94,39 @@ func Backtrace() []*Frame {
 	return frms
 }
 
+var dwdbg *dwarf.Dwarf
+
+// var globmu xsync.Mutex // TODO compiler not support plain object
+
+func lazyinit_dwarf() {
+	if dwdbg == nil {
+		// globmu.Lock()
+		// globmu.Unlock()
+		dwdbg = dwarf.NewDwarf()
+		// dwdbg.Open("./ocgui")
+		dwdbg.OpenSelf()
+	}
+}
+
 // backtrace with file/line
 func Callers() []*Frame {
+	lazyinit_dwarf()
+
 	frms := Backtrace()
 	for idx := 0; idx < frms.len(); idx++ {
 		frm := frms[idx]
 		// file, lineno := addr2line1(frm.Funcaddr) // TODO crash
 		// file, lineno := "unimpl", 0 // TODO compiler
+		filename, fileline, found := dwdbg.Addr2Line(frm.Funcaddr)
+		// println(idx, frm.Mglname, filename, fileline, found)
 		file := "unimpl"
 		lineno := 0
 		frm.File = file
 		frm.Lineno = lineno
+		if found {
+			frm.File = filename
+			frm.Lineno = fileline
+		}
 		frm.Line = lineno.repr()
 	}
 	return frms

@@ -522,8 +522,8 @@ func (c *g2nc) genInitFuncs(scope *ast.Scope, pkg *ast.Package) {
 func (c *g2nc) genCallPkgGlobvarsInits(pkgs []string) {
 	gopp.Assert(len(pkgs) > 0, "wtfff", len(pkgs)) // builtin
 	c.out("void cxall_globvars_init() {").outnl()
-	last := pkgs[len(pkgs)-1] // builtin
-	pkgs = append([]string{last}, pkgs[:len(pkgs)-1]...)
+	// last := pkgs[len(pkgs)-1] // builtin
+	// pkgs = append([]string{last}, pkgs[:len(pkgs)-1]...)
 	for _, pkg := range pkgs {
 		c.outf("  %s%sglobvars_init()", pkg, pkgsep).outfh().outnl()
 	}
@@ -531,8 +531,8 @@ func (c *g2nc) genCallPkgGlobvarsInits(pkgs []string) {
 }
 func (c *g2nc) genCallPkgInits(pkgs []string) {
 	c.out("void cxall_pkginit() {").outnl()
-	last := pkgs[len(pkgs)-1] // builtin
-	pkgs = append([]string{last}, pkgs[:len(pkgs)-1]...)
+	// last := pkgs[len(pkgs)-1] // builtin
+	// pkgs = append([]string{last}, pkgs[:len(pkgs)-1]...)
 	for _, pkg := range pkgs {
 		c.outf("  %s%spkginit()", pkg, pkgsep).outfh().outnl()
 	}

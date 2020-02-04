@@ -391,7 +391,8 @@ func (this *ParserContext) pickCCode3(fo *ast.File) string {
 			gopp.G_USED(idx, idx2)
 			if impo.Pos()-token.Pos(len("\nimport ")) == cmto.End() {
 				// log.Println("got c code", cmto.Text())
-				return cmto.Text()
+				cmtpfx := "// embed C code from " + exprpos(this, impo).String() + "\n"
+				return cmtpfx + cmto.Text()
 			}
 		}
 	}
@@ -852,7 +853,7 @@ func (pc *ParserContext) walkpass_fill_builtinpkg() {
 				fio.Decls = append(fio.Decls, gendecl)
 			}
 
-			iSpec := newimpspec("cxrt/xgo/builtin", "")
+			iSpec := newimpspec("xgo/builtin", "")
 			gendecl.Specs = append(gendecl.Specs, iSpec)
 			ast.SortImports(pc.fset, fio)
 		}
