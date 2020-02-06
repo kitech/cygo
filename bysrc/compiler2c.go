@@ -513,6 +513,11 @@ func (this *g2nc) genFuncDecl(scope *ast.Scope, fd *ast.FuncDecl) {
 				}
 			}
 		}
+		gentoperr := func() {
+			this.out("// uniform error like exception").outnl()
+			this.out("error* gxtvtoperr").outeq().out(cuzero).outfh().outnl()
+			this.out("int gxtvtoperr_lineno").outeq().out(cuzero).outfh().outnl()
+		}
 
 		scope = ast.NewScope(scope)
 		scope.Insert(ast.NewObj(ast.Fun, fd.Name.Name))
@@ -522,6 +527,7 @@ func (this *g2nc) genFuncDecl(scope *ast.Scope, fd *ast.FuncDecl) {
 			this.multirets[fd] = tvidt
 			this.out("{").outnl()
 			gennamedrets()
+			gentoperr()
 
 			this.outf("%s%s_multiret_arg*", this.pkgpfx(), fd.Name.Name).outsp().out(tvname)
 			this.outeq().outsp()
@@ -543,6 +549,7 @@ func (this *g2nc) genFuncDecl(scope *ast.Scope, fd *ast.FuncDecl) {
 			this.out("{").outnl()
 			gendeferprep()
 			gennamedrets()
+			gentoperr()
 			this.genBlockStmt(scope, fd.Body)
 			this.out("}").outnl()
 		}
@@ -626,6 +633,7 @@ func (this *g2nc) genBlockStmt(scope *ast.Scope, stmt *ast.BlockStmt) {
 		if !tailreturn {
 			this.genDeferStmt(scope, tailstmt)
 		}
+		this.genExceptionStmt(scope, tailstmt)
 	}
 	this.out("}").outnl()
 }
@@ -654,8 +662,19 @@ func (this *g2nc) genStmt(scope *ast.Scope, stmt ast.Stmt, idx int) {
 	switch t := stmt.(type) {
 	case *ast.AssignStmt:
 		this.genAssignStmt(scope, t)
+		if len(t.Rhs) == 1 {
+			if ce, ok := t.Rhs[0].(*ast.CallExpr); ok {
+				lastvar := t.Lhs[len(t.Lhs)-1]
+				log.Println(lastvar, reftyof(lastvar), len(t.Lhs))
+				var ns = putscope(scope, ast.Var, "varname", lastvar)
+				this.genCallExprExceptionJump(ns, ce)
+			}
+		}
 	case *ast.ExprStmt:
 		this.genExpr(scope, t.X)
+		if ce, ok := t.X.(*ast.CallExpr); ok {
+			this.genCallExprExceptionJump(scope, ce)
+		}
 	case *ast.GoStmt:
 		this.genGoStmt(scope, t)
 	case *ast.ForStmt:
@@ -1569,6 +1588,15 @@ func (c *g2nc) getCallExprAttr(scope *ast.Scope, te *ast.CallExpr) *FuncCallAttr
 			fca.fnty = goty1
 			fca.isvardic = goty1.Variadic()
 			fca.prmty = goty1.Params()
+			retlst := goty1.Results()
+			for i := 0; retlst != nil && i < retlst.Len(); i++ {
+				fldvar := retlst.At(i)
+				log.Println(i, fldvar, reftyof(fldvar.Type()))
+				if iserrorty2(fldvar.Type()) {
+					// log.Println("seems haserrret", te.Fun)
+					fca.haserrret = true
+				}
+			}
 		} else {
 			log.Println(gotyx, reflect.TypeOf(gotyx), te.Fun)
 		}
@@ -1579,6 +1607,13 @@ func (c *g2nc) getCallExprAttr(scope *ast.Scope, te *ast.CallExpr) *FuncCallAttr
 	fca.haslval = lexpr != nil
 	if lexpr != nil {
 		fca.lexpr = lexpr.(ast.Expr)
+	}
+	if !fca.haslval {
+		lobj := scope.Lookup("varname")
+		fca.haslval = lobj != nil
+		if fca.haslval {
+			fca.lexpr = lobj.Data.(ast.Expr)
+		}
 	}
 
 	_, fca.isclos = te.Fun.(*ast.FuncLit)
@@ -1714,7 +1749,31 @@ func (c *g2nc) genCallExprNorm(scope *ast.Scope, te *ast.CallExpr) {
 		c.out(gopp.IfElseStr(idx == len(te.Args)-1, "", ", "))
 	}
 	c.out(")")
+
 }
+func (c *g2nc) genCallExprExceptionJump(scope *ast.Scope, te *ast.CallExpr) {
+	// funame := te.Fun.(*ast.Ident).Name
+	fca := c.getCallExprAttr(scope, te)
+	// gopp.Assert(!fca.isvardic, "moved", te.Fun)
+
+	if fca.haserrret {
+		c.outfh().outnl()
+		tmphaslval := tmptyname() + "lval"
+		c.outf("bool %v = %v", tmphaslval, fca.haslval).outfh().outnl()
+		c.out(gopp.IfElseStr(fca.haslval, "", "//"))
+		c.outf("gxtvtoperr =")
+		if fca.haslval {
+			c.genExpr(scope, fca.lexpr)
+		}
+		c.outfh().outnl()
+		c.outf("if (%v && gxtvtoperr != nilptr) {", tmphaslval).outnl()
+		c.outf("     gxtvtoperr_lineno = __LINE__").outfh().outnl()
+		c.outf("//   goto ???").outfh().outnl()
+		c.outf("}").outnl()
+		c.outf("// gotobacklab1: ").outfh().outnl()
+	}
+}
+
 func (c *g2nc) genCallExprVaridic(scope *ast.Scope, te *ast.CallExpr) {
 	// funame := te.Fun.(*ast.Ident).Name
 	fca := c.getCallExprAttr(scope, te)
@@ -2053,6 +2112,23 @@ func (c *g2nc) genDeferStmt(scope *ast.Scope, e ast.Stmt) {
 	}
 	c.out("}").outnl()
 	c.out("}").outnl()
+}
+
+func (c *g2nc) genExceptionStmt(scope *ast.Scope, e ast.Stmt) {
+	dstfd := upfindFuncDeclNode(c.psctx, e, 0)
+	defers := []*ast.DeferStmt{}
+	for _, defero := range c.psctx.defers {
+		tmpfd := upfindFuncDeclNode(c.psctx, defero, 0)
+		if tmpfd != dstfd {
+			continue
+		}
+		defers = append(defers, defero)
+	}
+	// log.Println("got defered return", len(defers))
+	c.outf("// exception section %v", len(defers)).outnl()
+	if len(defers) == 0 {
+		return
+	}
 }
 
 // keepvoid
