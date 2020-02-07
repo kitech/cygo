@@ -74,6 +74,12 @@ func isuntypedty(tystr string) bool    { return strings.HasPrefix(tystr, "untype
 func isuntypedty2(typ types.Type) bool { return isuntypedty(typ.String()) }
 func iswrapcfunc(name string) bool     { return strings.HasPrefix(name, "_Cfunc") }
 func istuple(tystr string) bool        { return strings.Contains(tystr, "_multiret_") }
+func istuple2(typ types.Type) bool {
+	if _, ok := typ.(*types.Tuple); ok {
+		return true
+	}
+	return false
+}
 func iscident(e ast.Expr) bool {
 	if idt, ok := e.(*ast.Ident); ok {
 		return idt.Name == "C"

@@ -8,6 +8,9 @@ package dwarf
 #include <libdwarf/libdwarf.h>
 #include <libelf.h>
 
+// for type resolve
+extern int init_elf_dwarf2();
+extern void rtdebug2_addr2line(void*, char*, int*);
 */
 import "C"
 

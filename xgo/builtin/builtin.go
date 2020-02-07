@@ -36,8 +36,9 @@ func strndup3(ptr voidptr, n int) voidptr {
 	}
 	return C.cxstrndup(ptr, n)
 }
-func memcpy3(dst voidptr, src voidptr, n int) {
-	C.memcpy(dst, src, n)
+func memcpy3(dst voidptr, src voidptr, n int) voidptr {
+	rv := C.memcpy(dst, src, n)
+	return rv
 }
 func memdup3(src voidptr, n int) voidptr {
 	if src == nil {

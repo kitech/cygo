@@ -749,6 +749,7 @@ func (c *g2nc) genAssignStmt(scope *ast.Scope, s *ast.AssignStmt) {
 		}
 		_, isidxas := s.Lhs[i].(*ast.IndexExpr)
 
+		rety := c.info.TypeOf(s.Rhs[i])
 		if ischrv {
 			if s.Tok == token.DEFINE {
 				c.out(c.chanElemTypeName(chexpr, false)).outsp()
@@ -764,7 +765,8 @@ func (c *g2nc) genAssignStmt(scope *ast.Scope, s *ast.AssignStmt) {
 			}
 			var ns = putscope(scope, ast.Var, "varval", s.Rhs[i])
 			c.genExpr(ns, s.Lhs[i])
-		} else if istuple(c.exprTypeName(scope, s.Rhs[i])) {
+			// } else if istuple(c.exprTypeName(scope, s.Rhs[i])) {
+		} else if istuple2(rety) {
 			tvname := tmpvarname()
 			var ns = putscope(scope, ast.Var, "varname", newIdent(tvname))
 			c.out(c.exprTypeName(scope, s.Rhs[i]))
@@ -786,7 +788,7 @@ func (c *g2nc) genAssignStmt(scope *ast.Scope, s *ast.AssignStmt) {
 				c.out(tvname).out("->").out(tmpvarname2(idx)).outfh().outnl()
 			}
 			c.outf("cxfree(%s)", tvname).outfh().outnl()
-		} else if iserrorty2(c.info.TypeOf(s.Lhs[i])) {
+		} else if iserrorty2(rety) {
 			c.out("error*").outsp()
 			c.genExpr(scope, s.Lhs[i])
 			c.outeq()
@@ -804,6 +806,7 @@ func (c *g2nc) genAssignStmt(scope *ast.Scope, s *ast.AssignStmt) {
 			}
 		} else {
 			if s.Tok == token.DEFINE {
+				log.Println(s.Rhs[i], rety, s.Lhs)
 				c.out(c.exprTypeName(scope, s.Rhs[i])).outsp()
 			}
 			c.genExpr(scope, s.Lhs[i])
@@ -2881,7 +2884,7 @@ func (this *g2nc) exprTypeNameImpl(scope *ast.Scope, e ast.Expr) string {
 		if exprstr(e) == mthsep {
 			return "int"
 		}
-		log.Panicln(e, exprstr(e), reftyof(e), this.exprpos(e))
+		log.Panicln(e, exprstr(e), reftyof(e), this.exprpos(e), goty)
 	}
 	val := this.exprTypeNameImpl2(scope, goty, e)
 	if isinvalidty(val) {

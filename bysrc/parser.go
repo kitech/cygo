@@ -1418,6 +1418,60 @@ func (pc *ParserContext) walkpass_tmpvars() {
 						// log.Println(ae, reftyof(ae))
 					}
 				}
+				// 检查函数调用返回值是否需要补齐
+				stmt := upfindstmt(pc, c, 0)
+				switch upstmt := stmt.(type) {
+				case *ast.ExprStmt: // 无赋值
+					retyx := pc.info.TypeOf(te)
+					if retyx == nil {
+						log.Println("todo notype", te.Fun)
+						break
+					}
+					if isctydeftype2(retyx) {
+						log.Println("todo incomplete ctype", retyx, te.Fun)
+						break
+					}
+					vsp2 := &ast.AssignStmt{}
+					vsp2.Rhs = []ast.Expr{te}
+					vsp2.Tok = token.DEFINE
+					vsp2.TokPos = c.Node().Pos()
+					if rety, ok := retyx.(*types.Tuple); ok {
+						if rety.Len() == 0 {
+							// 空返回值被识别为types.Tuple?
+							break
+						}
+						for i := 0; i < rety.Len(); i++ {
+							vsp2.Lhs = append(vsp2.Lhs, newIdent(tmpvarname()))
+							pc.info.Types[vsp2.Lhs[i]] = newtyandval(rety.At(i).Type())
+						}
+					} else {
+						fntyx := pc.info.TypeOf(te.Fun)
+						if fnty, ok := fntyx.(*types.Signature); ok {
+							if fnty.Results() == nil || fnty.Results().Len() == 0 {
+								break
+							}
+						}
+						lexpr := newIdent(tmpvarname())
+						vsp2.Lhs = []ast.Expr{lexpr}
+						pc.info.Types[lexpr] = newtyandval(fntyx)
+					}
+					stmtc := pc.cursors[stmt]
+					stmtp := stmtc.Parent()
+					if blkstmt, ok := stmtp.(*ast.BlockStmt); ok {
+						for idx, be := range blkstmt.List {
+							if be == stmt {
+								// str := fmt.Sprintf("%v", te.Fun)
+								// log.Println("stmtp", reftyof(stmtp), te.Fun, str, idx)
+								tmpvars[vsp2] = tmpvars[stmt]
+								delete(tmpvars, stmt)
+								blkstmt.List[idx] = vsp2
+								break
+							}
+						}
+					}
+				default:
+					_ = upstmt
+				}
 			case *ast.AssignStmt: // processing _ name
 				for idx, ae := range te.Lhs {
 					aidt, ok := ae.(*ast.Ident)
