@@ -155,27 +155,52 @@ func errcontinue()
 func errreturn(err error, args ...interface{})
 
 func errpanic(err error, args ...interface{}) {
-	if err != nil {
-		memcpy3(0x1, 0x1, 0x1)
+	if err == nil {
+		return
 	}
+	var errmsg string = err.Error()
+	println("err", errmsg)
+	memcpy3(0x1, 0x1, 0x1)
 }
 func errfatal(err error, args ...interface{}) {
-	if err != nil {
-		C.exit(-1)
+	if err == nil {
+		return
 	}
+	var errmsg string = err.Error()
+	println("err", errmsg)
+	C.exit(-1)
 }
 func errprint(err error, args ...interface{}) {
 	if err != nil {
-		println("err", err.Error())
+		var errmsg string = err.Error()
+		argc := args.len()
+		switch argc {
+		case 0:
+			println("err", errmsg, args...)
+		case 1:
+			println("err", errmsg, args...)
+		case 2:
+			println("err", errmsg, args...)
+		case 3:
+			println("err", errmsg, args...)
+		case 4:
+			println("err", errmsg, args...)
+		case 5:
+			println("err", errmsg, args...)
+		default:
+			println("err", errmsg, args...) // TODO compiler
+		}
 	}
 }
 
 func errdo(err error, errfn func(e error)) {
-	if err != nil {
-		if errfn != nil {
-			errfn(err)
-		}
+	if err == nil {
+		return
 	}
+	if errfn == nil {
+		return
+	}
+	errfn(err)
 }
 
 // TODO need compiler
@@ -185,27 +210,34 @@ func nilcontinue(obj voidptr)
 func nilreturn(obj voidptr, args ...interface{})
 
 func nilpanic(obj voidptr, args ...interface{}) {
-	if obj == nil {
-		memcpy3(0x1, 0x1, 0x1)
+	if obj != nil {
+		return
 	}
+	println("nil", obj, args...)
+	memcpy3(0x1, 0x1, 0x1)
 }
 func nilfatal(obj voidptr, args ...interface{}) {
-	if obj == nil {
-		println("nil")
-		C.exit(-1)
+	if obj != nil {
+		return
 	}
+	println("nil", obj, args...)
+	C.exit(-1)
 }
 func nilprint(obj voidptr, args ...interface{}) {
-	if obj == nil {
-		println("nil")
+	if obj != nil {
+		return
 	}
+	println("nil", obj, args...)
+
 }
 func nildo(obj voidptr, nilfn func()) {
-	if obj == nil {
-		if nilfn != nil {
-			nilfn()
-		}
+	if obj != nil {
+		return
 	}
+	if nilfn == nil {
+		return
+	}
+	nilfn()
 }
 
 ///

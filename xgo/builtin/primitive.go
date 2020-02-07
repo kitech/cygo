@@ -130,3 +130,9 @@ func (i charptr) repr() string {
 	C.sprintf(mem, "%p".ptr, i)
 	return gostring(mem)
 }
+
+func (v int) times(itfn func(it int)) {
+	for i := 0; i < v; i++ {
+		itfn(i)
+	}
+}

@@ -894,7 +894,8 @@ func (pc *ParserContext) walkpass_fill_builtinpkg() {
 				// 把builtin的包ident添加上包前缀
 			case *ast.CallExpr:
 				if fnidt, ok := te.Fun.(*ast.Ident); ok {
-					if fnidt.Name == "errreturn" {
+					if fnidt.Name == "errreturn" ||
+						fnidt.Name == "nilreturn" {
 						// replace to if (err != nil) { return }
 						retstmt := &ast.ReturnStmt{}
 						retstmt.Return = te.Pos()
@@ -907,6 +908,9 @@ func (pc *ParserContext) walkpass_fill_builtinpkg() {
 						binexpr := &ast.BinaryExpr{}
 						binexpr.OpPos = te.Pos()
 						binexpr.Op = token.NEQ
+						if fnidt.Name == "nilreturn" {
+							binexpr.Op = token.EQL
+						}
 						binexpr.X = te.Args[0]
 						binexpr.Y = newIdent("nil")
 						ifstmt := &ast.IfStmt{}
