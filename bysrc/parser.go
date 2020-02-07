@@ -892,6 +892,39 @@ func (pc *ParserContext) walkpass_fill_builtinpkg() {
 				c.Replace(sele)
 
 				// 把builtin的包ident添加上包前缀
+			case *ast.CallExpr:
+				if fnidt, ok := te.Fun.(*ast.Ident); ok {
+					if fnidt.Name == "errreturn" {
+						// replace to if (err != nil) { return }
+						retstmt := &ast.ReturnStmt{}
+						retstmt.Return = te.Pos()
+						for i := 1; i < len(te.Args); i++ {
+							retstmt.Results = append(retstmt.Results, te.Args[i])
+						}
+						blkstmt := &ast.BlockStmt{}
+						blkstmt.Lbrace = te.Pos()
+						blkstmt.List = append(blkstmt.List, retstmt)
+						binexpr := &ast.BinaryExpr{}
+						binexpr.OpPos = te.Pos()
+						binexpr.Op = token.NEQ
+						binexpr.X = te.Args[0]
+						binexpr.Y = newIdent("nil")
+						ifstmt := &ast.IfStmt{}
+						ifstmt.If = te.Pos()
+						ifstmt.Cond = binexpr
+						ifstmt.Body = blkstmt
+						// c.Replace(ifstmt)
+						stmt1 := pc.cursors[c.Parent()]
+						stmt2 := pc.cursors[stmt1.Parent()]
+						if blkstmt2, ok := stmt2.Node().(*ast.BlockStmt); ok {
+							for idx, be := range blkstmt2.List {
+								if be == stmt1.Node() {
+									blkstmt2.List[idx] = ifstmt
+								}
+							}
+						}
+					}
+				}
 			default:
 				gopp.G_USED(te)
 			}
