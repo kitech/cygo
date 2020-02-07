@@ -130,6 +130,7 @@ func (this *ParserContext) Init_no_cgocmd() error {
 	this.cpr = cp1
 
 	this.walkpass_valid_files()
+	this.walkpass_fill_funcvars()
 	this.walkpass_flat_cursors()
 	this.walkpass_csymbols()
 	// this.walkpass_prefill_ctypes() // before types.Config.Check
@@ -1296,6 +1297,75 @@ func (pc *ParserContext) walkpass_func_deps2() {
 	}
 }
 
+func (pc *ParserContext) walkpass_fill_funcvars() {
+	pkgs := pc.pkgs
+	var toperrvarobj *ast.Ident
+	_ = toperrvarobj
+	for _, pkg := range pkgs {
+		astutil.Apply(pkg, func(c *astutil.Cursor) bool {
+			switch te := c.Node().(type) {
+			case *ast.FuncDecl:
+				if te.Body == nil {
+					break
+				}
+				if te.Body == nil || te.Body.List == nil {
+					break
+				}
+				toperrvar, declvar := newVardecl("gxtvtoperr", newIdent("error"), te.Body.Pos())
+				te.Body.List = append([]ast.Stmt{declvar}, te.Body.List...)
+				toperrvarobj = toperrvar
+
+				// add return if not have
+				lastmt := te.Body.List[len(te.Body.List)-1]
+				if _, ok := lastmt.(*ast.ReturnStmt); !ok {
+					res := te.Type.Results
+					needretarg := res != nil
+					if res != nil && res.NumFields() > 0 {
+						needretarg = len(res.List[0].Names) == 0
+					}
+					// log.Println(te.Name, needretarg, res)
+					if needretarg {
+						var rargs []ast.Expr
+						for _, fld := range res.List {
+							idt, declvar := newVardecl(tmpvarname(), fld.Type, lastmt.Pos())
+							rargs = append(rargs, idt)
+							te.Body.List = append(te.Body.List, declvar)
+						}
+						retst := &ast.ReturnStmt{}
+						retst.Results = rargs
+						te.Body.List = append(te.Body.List, retst)
+					} else {
+						retst := &ast.ReturnStmt{}
+						te.Body.List = append(te.Body.List, retst)
+					}
+				}
+			default:
+				gopp.G_USED(te)
+			}
+			return true
+		}, func(c *astutil.Cursor) bool {
+			switch te := c.Node().(type) {
+			case *ast.CatchStmt:
+				assign := &ast.AssignStmt{}
+				assign.TokPos = te.Pos()
+				assign.Tok = token.DEFINE
+				err2idt := newIdent("err")
+				err2idt.Obj = ast.NewObj(ast.Var, err2idt.Name)
+				err2idt.NamePos = te.Pos()
+				assign.Lhs = append(assign.Lhs, err2idt)
+				assign.Rhs = append(assign.Rhs, toperrvarobj)
+				gopp.Assert(toperrvarobj != nil, "wtfff")
+				te.Init = assign
+				te.Tag = assign.Lhs[0]
+				log.Println(te, toperrvarobj == nil)
+			case *ast.SwitchStmt:
+			default:
+				gopp.G_USED(te)
+			}
+			return true
+		})
+	}
+}
 func (pc *ParserContext) walkpass_flat_cursors() {
 	pkgs := pc.pkgs
 	for _, pkg := range pkgs {

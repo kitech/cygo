@@ -124,12 +124,6 @@ func newLitStr(v string) *ast.BasicLit {
 func newLitFloat(v float32) *ast.BasicLit {
 	return &ast.BasicLit{Kind: token.FLOAT, Value: fmt.Sprintf("%f", v)}
 }
-func newIdent(v string) *ast.Ident {
-	idt := &ast.Ident{}
-	idt.Name = v
-	idt.NamePos = token.NoPos
-	return idt
-}
 
 func typesty2str(typ types.Type) string {
 	ret := ""
@@ -275,6 +269,12 @@ func (c *basecomp) exprpos(e ast.Node) token.Position {
 	return exprpos(c.psctx, e)
 }
 func (c *basecomp) prtnode(n ast.Node) string {
+	defer func() {
+		if p := recover(); p != nil {
+			return
+		}
+	}()
+	log.Println(n, reftyof(n))
 	buf := bytes.NewBuffer(nil)
 	printer.Fprint(buf, c.psctx.fset, n)
 	return string(buf.Bytes())

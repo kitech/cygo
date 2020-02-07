@@ -126,3 +126,28 @@ func newimpspec(path string, name string) *ast.ImportSpec {
 	impspec.Path.ValuePos = token.NoPos
 	return impspec
 }
+
+func newIdent(v string) *ast.Ident {
+	idt := &ast.Ident{}
+	idt.Name = v
+	idt.NamePos = token.NoPos
+	return idt
+}
+
+func newVardecl(name string, typ ast.Expr, pos token.Pos) (*ast.Ident, *ast.DeclStmt) {
+	idt := newIdent(name)
+	idt.NamePos = pos
+	idt.Obj = ast.NewObj(ast.Var, idt.Name)
+
+	valspec := &ast.ValueSpec{}
+	valspec.Type = typ
+	valspec.Names = append(valspec.Names, idt)
+	gendecl := &ast.GenDecl{}
+	gendecl.Tok = token.VAR
+	gendecl.TokPos = pos
+	gendecl.Specs = append(gendecl.Specs, valspec)
+	declvar := &ast.DeclStmt{}
+	declvar.Decl = gendecl
+
+	return idt, declvar
+}

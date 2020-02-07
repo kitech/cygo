@@ -1288,6 +1288,11 @@ func (p *printer) stmt(stmt ast.Stmt, nextIsRBrace bool) {
 		p.controlClause(false, s.Init, s.Tag, nil)
 		p.block(s.Body, 0)
 
+	case *ast.CatchStmt:
+		p.print(token.CATCH)
+		p.controlClause(false, s.Init, s.Tag, nil)
+		p.block(s.Body, 0)
+
 	case *ast.TypeSwitchStmt:
 		p.print(token.SWITCH)
 		if s.Init != nil {

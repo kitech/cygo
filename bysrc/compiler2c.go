@@ -693,6 +693,8 @@ func (this *g2nc) genStmt(scope *ast.Scope, stmt ast.Stmt, idx int) {
 		this.genBlockStmt(scope, t)
 	case *ast.SwitchStmt:
 		this.genSwitchStmt(scope, t)
+	case *ast.CatchStmt:
+		this.genCatchStmt(scope, t)
 	case *ast.CaseClause:
 		// addfh = false
 		this.genCaseClause(scope, t, idx)
@@ -1086,6 +1088,7 @@ func (c *g2nc) genSwitchStmt(scope *ast.Scope, s *ast.SwitchStmt) {
 	}
 
 }
+
 func (c *g2nc) genSwitchStmtNum(scope *ast.Scope, s *ast.SwitchStmt) {
 	c.out("switch (")
 	c.genExpr(scope, s.Tag)
@@ -1248,6 +1251,86 @@ func (c *g2nc) genSwitchStmtAsIf(scope *ast.Scope, s *ast.SwitchStmt) {
 		c.outf("}").outnl()
 	}
 	c.out("}").outnl()
+}
+
+// TODO c switch too weak, use c if stmt
+func (c *g2nc) genCatchStmtAsIf(scope *ast.Scope, s *ast.CatchStmt) {
+	c.out("{ // catch asif").outnl()
+	if s.Init != nil {
+		c.genStmt(scope, s.Init, 0)
+	}
+	lst := s.Body.List
+	tmplabs := []string{}
+	for range lst {
+		tmplabs = append(tmplabs, tmpvarname())
+	}
+	for idx, stmtx := range lst {
+		stmt := stmtx.(*ast.CaseClause)
+		log.Println(stmt, reftyof(stmt))
+		c.outf(gopp.IfElseStr(idx > 0, "else", "")).outsp()
+		c.outf("// %v", exprpos(c.psctx, stmt)).outnl()
+		c.outf("if (")
+		for idx2, exprx := range stmt.List {
+			c.genExpr(scope, s.Tag)
+			c.out(token.EQL.String())
+			c.genExpr(scope, exprx)
+			c.out(gopp.IfElseStr(idx2 < len(stmt.List)-1, "||", ""))
+		}
+		if len(stmt.List) == 0 { //default
+			c.out("1")
+		}
+		c.outf(") {").outnl()
+		c.outf("%s:", tmplabs[idx]).outfh().outnl()
+		c.outf("int gxtvnextcase = 0").outfh().outnl()
+		c.outf("do {").outnl()
+		for idx2, s2 := range stmt.Body {
+			c.genStmt(scope, s2, idx2)
+		}
+		c.outf("} while(0)").outfh().outnl()
+		c.outf("if (gxtvnextcase==1) {").outnl()
+		if idx >= len(lst)-1 {
+			c.outf("// goto %s+1", tmplabs[idx]).outnl()
+		} else {
+			c.outf("goto %s", tmplabs[idx+1]).outfh().outnl()
+		}
+		c.outf("}").outnl()
+		c.outf("}").outnl()
+	}
+	c.out("}").outnl()
+}
+
+func (c *g2nc) genCatchStmt(scope *ast.Scope, s *ast.CatchStmt) {
+	tagty := c.info.TypeOf(s.Tag)
+	if tagty == nil {
+		log.Println(tagty, c.exprpos(s))
+	} else {
+		log.Println(tagty, reflect.TypeOf(tagty), reflect.TypeOf(tagty.Underlying()))
+	}
+	// resolve real type
+	c.genCatchStmtAsIf(scope, s)
+	/*
+		switch tty := tagty.(type) {
+		case *types.Named: // like type foo int
+			tagty = tty.Underlying()
+		}
+		switch tty := tagty.(type) {
+		case *types.Basic:
+			if tty.Kind() == types.String {
+				c.genSwitchStmtStr(scope, s)
+			} else if tty.Info()&types.IsOrdered > 0 {
+				// c.genSwitchStmtNum(scope, s)
+				c.genSwitchStmtAsIf(scope, s)
+			} else {
+				log.Println("unknown", tagty, reflect.TypeOf(tagty))
+			}
+		default:
+			if tagty == nil {
+				c.genSwitchStmtIf(scope, s)
+			} else {
+				log.Println("unknown", tagty, reflect.TypeOf(tagty))
+			}
+		}
+	*/
 }
 
 func (c *g2nc) genCallExpr(scope *ast.Scope, te *ast.CallExpr) {

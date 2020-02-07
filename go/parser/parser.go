@@ -2052,6 +2052,64 @@ func (p *parser) parseSwitchStmt() ast.Stmt {
 	return &ast.SwitchStmt{Switch: pos, Init: s1, Tag: p.makeExpr(s2, "switch expression"), Body: body}
 }
 
+func (p *parser) parseCatchStmt() ast.Stmt {
+	if p.trace {
+		defer un(trace(p, "CatchStmt"))
+	}
+
+	pos := p.expect(token.CATCH)
+	p.openScope()
+	defer p.closeScope()
+
+	var s1, s2 ast.Stmt
+	if p.tok != token.LBRACE {
+		prevLev := p.exprLev
+		p.exprLev = -1
+		if p.tok != token.SEMICOLON {
+			s2, _ = p.parseSimpleStmt(basic)
+		}
+		if p.tok == token.SEMICOLON {
+			p.next()
+			s1 = s2
+			s2 = nil
+			if p.tok != token.LBRACE {
+				// A TypeSwitchGuard may declare a variable in addition
+				// to the variable declared in the initial SimpleStmt.
+				// Introduce extra scope to avoid redeclaration errors:
+				//
+				//	switch t := 0; t := x.(T) { ... }
+				//
+				// (this code is not valid Go because the first t
+				// cannot be accessed and thus is never used, the extra
+				// scope is needed for the correct error message).
+				//
+				// If we don't have a type switch, s2 must be an expression.
+				// Having the extra nested but empty scope won't affect it.
+				p.openScope()
+				defer p.closeScope()
+				s2, _ = p.parseSimpleStmt(basic)
+			}
+		}
+		p.exprLev = prevLev
+	}
+
+	typeSwitch := p.isTypeSwitchGuard(s2)
+	lbrace := p.expect(token.LBRACE)
+	var list []ast.Stmt
+	for p.tok == token.CASE || p.tok == token.DEFAULT {
+		list = append(list, p.parseCaseClause(typeSwitch))
+	}
+	rbrace := p.expect(token.RBRACE)
+	p.expectSemi()
+	body := &ast.BlockStmt{Lbrace: lbrace, List: list, Rbrace: rbrace}
+
+	if typeSwitch {
+		return &ast.TypeSwitchStmt{Switch: pos, Init: s1, Assign: s2, Body: body}
+	}
+
+	return &ast.CatchStmt{Catch: pos, Init: s1, Tag: p.makeExpr(s2, "catch expression"), Body: body}
+}
+
 func (p *parser) parseCommClause() *ast.CommClause {
 	if p.trace {
 		defer un(trace(p, "CommClause"))
@@ -2246,6 +2304,8 @@ func (p *parser) parseStmt() (s ast.Stmt) {
 		s = p.parseIfStmt()
 	case token.SWITCH:
 		s = p.parseSwitchStmt()
+	case token.CATCH:
+		s = p.parseCatchStmt()
 	case token.SELECT:
 		s = p.parseSelectStmt()
 	case token.FOR:

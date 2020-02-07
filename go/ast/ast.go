@@ -662,6 +662,13 @@ type (
 		Body   *BlockStmt // CaseClauses only
 	}
 
+	CatchStmt struct {
+		Catch token.Pos
+		Init  Stmt
+		Tag   Expr
+		Body  *BlockStmt
+	}
+
 	// An TypeSwitchStmt node represents a type switch statement.
 	TypeSwitchStmt struct {
 		Switch token.Pos  // position of "switch" keyword
@@ -723,6 +730,7 @@ func (s *IfStmt) Pos() token.Pos         { return s.If }
 func (s *CaseClause) Pos() token.Pos     { return s.Case }
 func (s *SwitchStmt) Pos() token.Pos     { return s.Switch }
 func (s *TypeSwitchStmt) Pos() token.Pos { return s.Switch }
+func (s *CatchStmt) Pos() token.Pos      { return s.Catch }
 func (s *CommClause) Pos() token.Pos     { return s.Case }
 func (s *SelectStmt) Pos() token.Pos     { return s.Select }
 func (s *ForStmt) Pos() token.Pos        { return s.For }
@@ -772,6 +780,7 @@ func (s *CaseClause) End() token.Pos {
 }
 func (s *SwitchStmt) End() token.Pos     { return s.Body.End() }
 func (s *TypeSwitchStmt) End() token.Pos { return s.Body.End() }
+func (s *CatchStmt) End() token.Pos      { return s.Body.End() }
 func (s *CommClause) End() token.Pos {
 	if n := len(s.Body); n > 0 {
 		return s.Body[n-1].End()
@@ -802,6 +811,7 @@ func (*IfStmt) stmtNode()         {}
 func (*CaseClause) stmtNode()     {}
 func (*SwitchStmt) stmtNode()     {}
 func (*TypeSwitchStmt) stmtNode() {}
+func (*CatchStmt) stmtNode()      {}
 func (*CommClause) stmtNode()     {}
 func (*SelectStmt) stmtNode()     {}
 func (*ForStmt) stmtNode()        {}
