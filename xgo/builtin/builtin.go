@@ -36,6 +36,10 @@ func strndup3(ptr voidptr, n int) voidptr {
 	}
 	return C.cxstrndup(ptr, n)
 }
+func strlen3(ptr voidptr) int {
+	rv := C.strlen(ptr)
+	return rv
+}
 func memcpy3(dst voidptr, src voidptr, n int) voidptr {
 	rv := C.memcpy(dst, src, n)
 	return rv
@@ -173,8 +177,9 @@ func errpanic(err error, args ...interface{}) {
 	var errmsg string = err.Error()
 	println("err", errmsg)
 	var int0x1 = 0x1
-	var addr0x1 = (voidptr)(int0x1)
-	memcpy3(addr0x1, addr0x1, addr0x1)
+	// var addr0x1 = (voidptr)(uintptr)(int0x1) // TODO compiler
+	var addr0x1 = (voidptr)(uintptr(int0x1))
+	memcpy3(addr0x1, addr0x1, int0x1)
 }
 func errfatal(err error, args ...interface{}) {
 	if err == nil {
@@ -229,8 +234,9 @@ func nilpanic(obj voidptr, args ...interface{}) {
 	}
 	println("nil", obj, args...)
 	var int0x1 = 0x1
-	var addr0x1 = (voidptr)(int0x1)
-	memcpy3(addr0x1, addr0x1, addr0x1)
+	// var addr0x1 = (voidptr)(uintptr)(int0x1) // TODO compiler
+	var addr0x1 = (voidptr)(uintptr(int0x1))
+	memcpy3(addr0x1, addr0x1, int0x1)
 }
 func nilfatal(obj voidptr, args ...interface{}) {
 	if obj != nil {

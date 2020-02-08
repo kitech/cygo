@@ -10,6 +10,7 @@ func init() {
 		assert(sizeof(Mutex) == sizeof(C.pthread_mutex_t))
 	}
 }
+func Keep() {}
 
 type Mutex struct {
 	// TODO compilerd to voidptr lock, and failed then

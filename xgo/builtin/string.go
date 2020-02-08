@@ -10,7 +10,7 @@ import "C"
 
 ///
 type mirstring struct {
-	ptr voidptr
+	ptr byteptr
 	len int
 }
 
@@ -34,6 +34,76 @@ func gostringn(ptr byteptr, n int) string {
 	s := string(ptr)
 	s.len = n
 	return s
+}
+
+func mirstring_new() string {
+	s := &mirstring{}
+	var s2 string
+	s2 = (string)(s)
+	return s2
+}
+
+func mirstring_new_cstr_ref(sptr byteptr) string {
+	s := &mirstring{}
+	s.ptr = sptr
+	s.len = strlen3(sptr)
+
+	var s2 string
+	s2 = (string)(s)
+
+	return s2
+}
+
+func mirstring_new_cstr(sptr byteptr) string {
+	s := &mirstring{}
+	s.ptr = strdup3(sptr)
+	s.len = strlen3(sptr)
+
+	var s2 string
+	s2 = (string)(s)
+
+	return s2
+}
+
+func mirstring_new_cstr2(sptr byteptr, len int) string {
+	s := &mirstring{}
+	s.ptr = strndup3(sptr, len)
+	s.len = len
+
+	var s2 string
+	s2 = (string)(s)
+
+	return s2
+}
+func mirstring_new_char(ch byte) string {
+	s := &mirstring{}
+	s.ptr = malloc3(8)
+	s.ptr[0] = ch
+	s.len = 1
+
+	var s2 string
+	s2 = (string)(s)
+
+	return s2
+}
+
+// TODO
+func mirstring_new_rune(ch rune) string {
+	s := &mirstring{}
+	s.ptr = malloc3(8)
+	s.len = 3
+
+	var p byteptr
+	p = (byteptr)(&ch)
+	s.ptr[0] = p[0]
+	s.ptr[1] = p[1]
+	s.ptr[2] = p[2]
+	s.ptr[3] = p[3]
+
+	var s2 string
+	s2 = (string)(s)
+
+	return s2
 }
 
 /*
