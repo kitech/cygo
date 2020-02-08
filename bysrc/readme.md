@@ -25,7 +25,7 @@
 * [ ] union 支持
 * [x] := range => in
 * [x] for 循环中占位符号省略，对slice和map都可以省略两个占位符
-* [ ] for in a..b
+* [x] for x in low..high
 * [ ] 给 for 添加 Index项，即 slice, 则使用 Index, Value, 是map, 则，Index, Key, Value 
 * [ ] for 中 index 的位置想放在后面了，但是多数语言放前面
 * [x] 内置的string要有更多的方法，用单独的strings包有点麻烦

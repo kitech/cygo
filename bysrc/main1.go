@@ -171,6 +171,7 @@ func main() {
 	}
 	log.Println("pkg order", pkgclts, "main")
 
+	mainpkgcode := ""
 	for i := 0; i < len(comps); i++ {
 		psctx := comps[i].psctx
 		if psctx.bdpkgs.Name == "main" {
@@ -179,11 +180,15 @@ func main() {
 		}
 
 		str, ext := comps[i].code()
-		code += str
-		extname = ext
+		if psctx.bdpkgs.Name == "main" {
+			mainpkgcode = str
+		} else {
+			code += str
+			extname = ext
+		}
 	}
 
-	code = comps[0].genBuiltinTypesMetatype() + code
+	code = comps[0].genBuiltinTypesMetatype() + code + mainpkgcode
 	fname := "opkgs/foo." + extname
 	ioutil.WriteFile(fname, []byte(code), 0644)
 	log.Println("clangfmt ...", fname, len(code))

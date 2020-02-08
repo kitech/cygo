@@ -48,6 +48,18 @@ func memdup3(src voidptr, n int) voidptr {
 	C.memcpy(dst, src, n)
 	return dst
 }
+func memmove3(dst voidptr, src voidptr, n int) voidptr {
+	rv := C.memmove(dst, src, n)
+	return rv
+}
+func memset3(ptr voidptr, c int, n int) voidptr {
+	rv := C.memset(ptr, c, n)
+	return rv
+}
+func memcmp3(p1 voidptr, p2 voidptr, n int) int {
+	rv := C.memcmp(p1, p2, n)
+	return rv
+}
 
 //export hehe_exped
 func hehe_exped(a int, b string) int {

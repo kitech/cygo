@@ -403,13 +403,48 @@ func fillBasicMethods() {
 	}
 	{ // array.append()
 		var sig *Signature
-		recv := NewVar(token.NoPos, nil, "this", NewSlice(Typ[Voidptr]))
+		recv := NewVar(token.NoPos, nil, "this", NewSlice(nil))
 		arg0 := NewVar(token.NoPos, nil, "elem", Typ[Voidptr])
 		params := NewTuple(arg0)
-		r0 := NewVar(token.NoPos, nil, "", NewSlice(Typ[Voidptr]))
+		r0 := NewVar(token.NoPos, nil, "", NewSlice(nil))
 		results := NewTuple(r0)
 		sig = NewSignature(recv, params, results, false)
 		m1 := NewFunc(token.NoPos, nil, "append", sig)
+		arrmths = append(arrmths, m1)
+	}
+	{ // array.reverse()
+		var sig *Signature
+		recv := NewVar(token.NoPos, nil, "this", NewSlice(nil))
+		// arg0 := NewVar(token.NoPos, nil, "elem", Typ[Voidptr])
+		// params := NewTuple(arg0)
+		var params *Tuple
+		r0 := NewVar(token.NoPos, nil, "", NewSlice(nil))
+		results := NewTuple(r0)
+		sig = NewSignature(recv, params, results, false)
+		m1 := NewFunc(token.NoPos, nil, "reverse", sig)
+		arrmths = append(arrmths, m1)
+	}
+	{ // array.delete()
+		var sig *Signature
+		recv := NewVar(token.NoPos, nil, "this", NewSlice(nil))
+		arg0 := NewVar(token.NoPos, nil, "index", Typ[Int])
+		params := NewTuple(arg0)
+		r0 := NewVar(token.NoPos, nil, "", NewSlice(nil))
+		results := NewTuple(r0)
+		sig = NewSignature(recv, params, results, false)
+		m1 := NewFunc(token.NoPos, nil, "delete", sig)
+		arrmths = append(arrmths, m1)
+	}
+	{ // array.clear()
+		var sig *Signature
+		recv := NewVar(token.NoPos, nil, "this", NewSlice(nil))
+		// arg0 := NewVar(token.NoPos, nil, "elem", Typ[Voidptr])
+		// params := NewTuple(arg0)
+		var params *Tuple
+		r0 := NewVar(token.NoPos, nil, "", NewSlice(nil))
+		results := NewTuple(r0)
+		sig = NewSignature(recv, params, results, false)
+		m1 := NewFunc(token.NoPos, nil, "clear", sig)
 		arrmths = append(arrmths, m1)
 	}
 	{ // array.join() string

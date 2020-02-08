@@ -2228,7 +2228,11 @@ func (c *g2nc) genExceptionStmt(scope *ast.Scope, e ast.Stmt) {
 	// log.Println("got defered return", len(defers))
 	c.outf("// exception section %v", len(defers)).outnl()
 	if len(defers) == 0 {
-		return
+		// return
+	}
+	for i := 0; i < 3; i++ {
+		tmplab := tmpvarname()
+		c.outf("%s:;", tmplab).outnl()
 	}
 }
 
