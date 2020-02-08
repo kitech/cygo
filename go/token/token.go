@@ -124,7 +124,10 @@ const (
 	SWITCH
 	TYPE
 	VAR
+
 	CATCH
+	IN
+	LET
 	keyword_end
 )
 
@@ -226,7 +229,10 @@ var tokens = [...]string{
 	SWITCH: "switch",
 	TYPE:   "type",
 	VAR:    "var",
-	CATCH:  "catch",
+
+	CATCH: "catch",
+	IN:    "in",
+	LET:   "let",
 }
 
 // String returns the string corresponding to the token tok.

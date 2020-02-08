@@ -597,6 +597,7 @@ func (c *g2nc) genCallPkgGlobvarsInits(pkgs []string) {
 	// last := pkgs[len(pkgs)-1] // builtin
 	// pkgs = append([]string{last}, pkgs[:len(pkgs)-1]...)
 	for _, pkg := range pkgs {
+		c.outf("extern void %s%sglobvars_init()", pkg, pkgsep).outfh().outnl()
 		c.outf("  %s%sglobvars_init()", pkg, pkgsep).outfh().outnl()
 	}
 	c.out("}").outnl()
@@ -606,6 +607,7 @@ func (c *g2nc) genCallPkgInits(pkgs []string) {
 	// last := pkgs[len(pkgs)-1] // builtin
 	// pkgs = append([]string{last}, pkgs[:len(pkgs)-1]...)
 	for _, pkg := range pkgs {
+		c.outf("extern void %s%spkginit()", pkg, pkgsep).outfh().outnl()
 		c.outf("  %s%spkginit()", pkg, pkgsep).outfh().outnl()
 	}
 	c.out("}").outnl()
@@ -767,7 +769,6 @@ func (c *g2nc) genAssignStmt(scope *ast.Scope, s *ast.AssignStmt) {
 			}
 			var ns = putscope(scope, ast.Var, "varval", s.Rhs[i])
 			c.genExpr(ns, s.Lhs[i])
-			// } else if istuple(c.exprTypeName(scope, s.Rhs[i])) {
 		} else if istuple2(rety) {
 			tvname := tmpvarname()
 			var ns = putscope(scope, ast.Var, "varname", newIdent(tvname))
@@ -954,6 +955,11 @@ func (c *g2nc) genForStmt(scope *ast.Scope, s *ast.ForStmt) {
 func (c *g2nc) genRangeStmt(scope *ast.Scope, s *ast.RangeStmt) {
 	varty := c.info.TypeOf(s.X)
 	// log.Println(varty, reflect.TypeOf(varty))
+	if s.Key != nil && s.Value == nil {
+		// fix form like: for x in arr
+		s.Value = s.Key
+		s.Key = nil
+	}
 	switch be := varty.(type) {
 	case *types.Map:
 		keytystr := c.exprTypeName(scope, s.Key)
@@ -967,9 +973,11 @@ func (c *g2nc) genRangeStmt(scope *ast.Scope, s *ast.RangeStmt) {
 		c.out("  TableEntry *entry").outfh().outnl()
 		c.out("  while (hashtable_iter_next(&htiter, &entry) != CC_ITER_END) {").outnl()
 		keyvname := fmt.Sprintf("%v", s.Key)
+		keyvname = gopp.IfElseStr(s.Key == nil, tmpvarname(), keyvname)
 		keyvname = gopp.IfElseStr(keyvname == "_", tmpvarname(), keyvname)
 		c.outf("    %s %v = entry->key", keytystr, keyvname).outfh().outnl()
 		valvname := fmt.Sprintf("%v", s.Value)
+		valvname = gopp.IfElseStr(s.Value == nil, tmpvarname(), valvname)
 		valvname = gopp.IfElseStr(valvname == "_", tmpvarname(), valvname)
 		c.outf("    %s %v = entry->value", valtystr, valvname).outfh().outnl()
 		c.genBlockStmt(scope, s.Body)
@@ -978,6 +986,7 @@ func (c *g2nc) genRangeStmt(scope *ast.Scope, s *ast.RangeStmt) {
 		c.out("}").outnl()
 	case *types.Slice:
 		keyidstr := fmt.Sprintf("%v", s.Key)
+		keyidstr = gopp.IfElseStr(s.Key == nil, tmpvarname(), keyidstr)
 		keyidstr = gopp.IfElseStr(keyidstr == "_", tmpvarname(), keyidstr)
 
 		c.out("{").outnl()

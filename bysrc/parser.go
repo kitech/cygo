@@ -837,6 +837,10 @@ func (pc *ParserContext) walkpass_fill_builtinpkg() {
 		if obj == nil {
 			continue // package ident
 		}
+		isglob := isglobalid(bipc, idt)
+		if !isglob {
+			continue
+		}
 		bidefs[idt.Name] = true
 	}
 

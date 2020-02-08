@@ -23,18 +23,22 @@
 * [x] len(), cap()的写法使用方法方式
 * [x] assert, sizeof, alignof, offsetof 内置
 * [ ] union 支持
-* [ ] := range => in
+* [x] := range => in
+* [x] for 循环中占位符号省略，对slice和map都可以省略两个占位符
+* [ ] for in a..b
+* [ ] 给 for 添加 Index项，即 slice, 则使用 Index, Value, 是map, 则，Index, Key, Value 
 * [x] 内置的string要有更多的方法，用单独的strings包有点麻烦
 * [x] 内置的int/float要有更多的转换方法
 * [ ] 结构体的通用 repr 函数
 * [ ] string和array似乎可以全在builtin中用go语法实现了。
 * [ ] func type parameters
 * [ ] type order graph
-* [ ] for 循环中占位符号省略
+* [ ] catch 语法错误/异常处理
+* [ ] let 替换const
 
 ### 语法树重写
 * [ ] 变量声明解构为每条语句一个变量，如果有多个的话
-* [ ] 末尾没有return的要补上
+* [x] 末尾没有return的要补上
 * [ ] 现在的ast在插入删除语句上有点弱 
 
 

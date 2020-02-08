@@ -81,7 +81,7 @@ func (p *parser) init(fset *token.FileSet, filename string, src []byte, mode Mod
 
 	p.mode = mode
 	p.trace = mode&Trace != 0 // for convenience (p.trace is used frequently)
-	// p.trace = true
+	p.trace = true
 
 	p.next()
 }
@@ -1676,13 +1676,17 @@ func (p *parser) parseSimpleStmt(mode int) (ast.Stmt, bool) {
 		token.DEFINE, token.ASSIGN, token.ADD_ASSIGN,
 		token.SUB_ASSIGN, token.MUL_ASSIGN, token.QUO_ASSIGN,
 		token.REM_ASSIGN, token.AND_ASSIGN, token.OR_ASSIGN,
-		token.XOR_ASSIGN, token.SHL_ASSIGN, token.SHR_ASSIGN, token.AND_NOT_ASSIGN:
+		token.XOR_ASSIGN, token.SHL_ASSIGN, token.SHR_ASSIGN, token.AND_NOT_ASSIGN,
+		token.IN:
 		// assignment statement, possibly part of a range clause
 		pos, tok := p.pos, p.tok
-		p.next()
+		if p.tok != token.IN {
+			p.next()
+		}
 		var y []ast.Expr
 		isRange := false
-		if mode == rangeOk && p.tok == token.RANGE && (tok == token.DEFINE || tok == token.ASSIGN) {
+		if mode == rangeOk && (p.tok == token.RANGE || p.tok == token.IN) &&
+			(tok == token.DEFINE || tok == token.ASSIGN || tok == token.IN) {
 			pos := p.pos
 			p.next()
 			y = []ast.Expr{&ast.UnaryExpr{OpPos: pos, Op: token.RANGE, X: p.parseRhs()}}
@@ -1690,7 +1694,11 @@ func (p *parser) parseSimpleStmt(mode int) (ast.Stmt, bool) {
 		} else {
 			y = p.parseRhsList()
 		}
-		as := &ast.AssignStmt{Lhs: x, TokPos: pos, Tok: tok, Rhs: y}
+		tok2 := tok
+		if tok == token.IN {
+			tok2 = token.DEFINE
+		}
+		as := &ast.AssignStmt{Lhs: x, TokPos: pos, Tok: tok2, Rhs: y}
 		if tok == token.DEFINE {
 			p.shortVarDecl(as, x)
 		}
@@ -2201,7 +2209,7 @@ func (p *parser) parseForStmt() ast.Stmt {
 		prevLev := p.exprLev
 		p.exprLev = -1
 		if p.tok != token.SEMICOLON {
-			if p.tok == token.RANGE {
+			if p.tok == token.RANGE || p.tok == token.IN {
 				// "for range x" (nil lhs in assignment)
 				pos := p.pos
 				p.next()

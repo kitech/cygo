@@ -397,7 +397,7 @@ func (psctx *ParserContext) isglobal(e ast.Node) bool {
 	case *ast.File:
 		return true
 	case *ast.FuncDecl:
-		return false
+		return false // wt???
 	default:
 		gopp.G_USED(te)
 		return psctx.isglobal(psctx.cursors[e].Parent())
