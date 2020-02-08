@@ -81,7 +81,7 @@ func (p *parser) init(fset *token.FileSet, filename string, src []byte, mode Mod
 
 	p.mode = mode
 	p.trace = mode&Trace != 0 // for convenience (p.trace is used frequently)
-	p.trace = true
+	// p.trace = true
 
 	p.next()
 }
@@ -2220,6 +2220,41 @@ func (p *parser) parseForStmt() ast.Stmt {
 				s2, isRange = p.parseSimpleStmt(rangeOk)
 			}
 		}
+
+		if isRange && p.tok == token.TWODOT {
+			// for x in low..high
+			isRange = false
+			p.next()
+			highe := p.parseRhs()
+
+			as := s2.(*ast.AssignStmt)
+			s1 = nil
+			s2 = nil
+
+			// assert(len(as.Lhs)==1)
+			var aslastvar ast.Expr
+			if len(as.Lhs) == 1 {
+				aslastvar = as.Lhs[len(as.Lhs)-1]
+			} else { // == 0
+				panic(len(as.Lhs))
+			}
+			as2 := &ast.AssignStmt{}
+			as2.Tok = token.DEFINE
+			as2.Lhs = as.Lhs
+			as2.Rhs = append(as2.Rhs, as.Rhs[0].(*ast.UnaryExpr).X)
+			s1 = as2
+
+			s2x := &ast.BinaryExpr{}
+			s2x.Op = token.LSS
+			s2x.X = aslastvar
+			s2x.Y = highe
+			s2 = &ast.ExprStmt{X: s2x}
+
+			s3x := &ast.IncDecStmt{}
+			s3x.Tok = token.INC
+			s3x.X = aslastvar
+			s3 = s3x
+		}
 		if !isRange && p.tok == token.SEMICOLON {
 			p.next()
 			s1 = s2
@@ -2241,7 +2276,7 @@ func (p *parser) parseForStmt() ast.Stmt {
 	if isRange {
 		as := s2.(*ast.AssignStmt)
 		// check lhs
-		var key, value ast.Expr
+		var idx, key, value ast.Expr
 		switch len(as.Lhs) {
 		case 0:
 			// nothing to do
@@ -2249,8 +2284,10 @@ func (p *parser) parseForStmt() ast.Stmt {
 			key = as.Lhs[0]
 		case 2:
 			key, value = as.Lhs[0], as.Lhs[1]
+		case 3:
+			idx, key, value = as.Lhs[0], as.Lhs[1], as.Lhs[2]
 		default:
-			p.errorExpected(as.Lhs[len(as.Lhs)-1].Pos(), "at most 2 expressions")
+			p.errorExpected(as.Lhs[len(as.Lhs)-1].Pos(), "at most 3 expressions")
 			return &ast.BadStmt{From: pos, To: p.safePos(body.End())}
 		}
 		// parseSimpleStmt returned a right-hand side that
@@ -2258,6 +2295,7 @@ func (p *parser) parseForStmt() ast.Stmt {
 		x := as.Rhs[0].(*ast.UnaryExpr).X
 		return &ast.RangeStmt{
 			For:    pos,
+			Index:  idx,
 			Key:    key,
 			Value:  value,
 			TokPos: as.TokPos,

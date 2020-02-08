@@ -128,6 +128,8 @@ const (
 	CATCH
 	IN
 	LET
+	TWODOT
+	INCLUDE
 	keyword_end
 )
 
@@ -230,9 +232,11 @@ var tokens = [...]string{
 	TYPE:   "type",
 	VAR:    "var",
 
-	CATCH: "catch",
-	IN:    "in",
-	LET:   "let",
+	CATCH:   "catch",
+	IN:      "in",
+	LET:     "let",
+	TWODOT:  "..",
+	INCLUDE: "#include",
 }
 
 // String returns the string corresponding to the token tok.

@@ -434,7 +434,7 @@ func (s *Scanner) scanNumber() (token.Token, string) {
 	}
 
 	// fractional part
-	if s.ch == '.' {
+	if s.ch == '.' && s.peek() != '.' {
 		tok = token.FLOAT
 		if prefix == 'o' || prefix == 'b' {
 			s.error(s.offset, "invalid radix point in "+litname(prefix))
@@ -802,6 +802,14 @@ scanAgain:
 			insertSemi = true
 			tok = token.IDENT
 		}
+	case ch == '.' && s.peek() == '.':
+		s.next()
+		s.next()
+		tok = token.TWODOT
+		if s.ch == '.' {
+			s.next()
+			tok = token.ELLIPSIS
+		}
 	case isDecimal(ch) || ch == '.' && isDecimal(rune(s.peek())):
 		insertSemi = true
 		tok, lit = s.scanNumber()
@@ -839,8 +847,11 @@ scanAgain:
 			tok = token.PERIOD
 			if s.ch == '.' && s.peek() == '.' {
 				s.next()
-				s.next() // consume last '.'
-				tok = token.ELLIPSIS
+				tok = token.TWODOT
+				if s.ch == '.' {
+					s.next() // consume last '.'
+					tok = token.ELLIPSIS
+				}
 			}
 		case ',':
 			tok = token.COMMA

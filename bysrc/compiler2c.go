@@ -955,23 +955,24 @@ func (c *g2nc) genForStmt(scope *ast.Scope, s *ast.ForStmt) {
 func (c *g2nc) genRangeStmt(scope *ast.Scope, s *ast.RangeStmt) {
 	varty := c.info.TypeOf(s.X)
 	// log.Println(varty, reflect.TypeOf(varty))
-	if s.Key != nil && s.Value == nil {
-		// fix form like: for x in arr
-		s.Value = s.Key
-		s.Key = nil
-	}
 	switch be := varty.(type) {
 	case *types.Map:
+		idxidstr := fmt.Sprintf("%v", s.Key)
+		idxidstr = gopp.IfElseStr(s.Index == nil, tmpvarname(), idxidstr)
+		idxidstr = gopp.IfElseStr(idxidstr == "_", tmpvarname(), idxidstr)
+
 		keytystr := c.exprTypeName(scope, s.Key)
 		valtystr := c.exprTypeName(scope, s.Value)
 
 		c.out("{").outnl()
+		c.outf("  int %s = -1", idxidstr).outfh().outnl()
 		c.out("  HashTableIter htiter").outfh().outnl()
 		c.out("  hashtable_iter_init(&htiter, ")
 		c.genExpr(scope, s.X)
 		c.out(")").outfh().outnl()
 		c.out("  TableEntry *entry").outfh().outnl()
 		c.out("  while (hashtable_iter_next(&htiter, &entry) != CC_ITER_END) {").outnl()
+		c.outf("  %s++", idxidstr).outfh().outnl()
 		keyvname := fmt.Sprintf("%v", s.Key)
 		keyvname = gopp.IfElseStr(s.Key == nil, tmpvarname(), keyvname)
 		keyvname = gopp.IfElseStr(keyvname == "_", tmpvarname(), keyvname)
@@ -985,6 +986,11 @@ func (c *g2nc) genRangeStmt(scope *ast.Scope, s *ast.RangeStmt) {
 		c.out("// TODO gc safepoint code").outnl()
 		c.out("}").outnl()
 	case *types.Slice:
+		if s.Key != nil && s.Value == nil {
+			// fix form like: for x in arr
+			s.Value = s.Key
+			s.Key = nil
+		}
 		keyidstr := fmt.Sprintf("%v", s.Key)
 		keyidstr = gopp.IfElseStr(s.Key == nil, tmpvarname(), keyidstr)
 		keyidstr = gopp.IfElseStr(keyidstr == "_", tmpvarname(), keyidstr)
