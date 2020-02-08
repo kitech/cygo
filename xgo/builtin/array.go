@@ -7,6 +7,37 @@ type mirarray struct {
 	elemsz int
 }
 
+func mirarray_new() *mirarray {
+	arr := &mirarray{}
+	return arr
+}
+
+func (arr *mirarray) dummy() {
+
+}
+
+func (arr *mirarray) each(fn func(idx int, elem voidptr)) {
+
+}
+
+func (arr *mirarray) mapfn(fn func(idx int, elem voidptr) *mirarray) {
+
+}
+
+func (arr *mirarray) reduce(fn func(idx int, elem voidptr) bool) {
+
+}
+
+/*
+func (arr *mirarray) ptr() *mirarray {
+	return arr.ptr_
+}
+*/
+
+func (arr *mirarray) delete(idx int) *mirarray {
+	return arr
+}
+
 // array.ptr()
 
 //export cxarray2_ptr
@@ -23,7 +54,6 @@ func cxarray2_delete(arrx voidptr, idx int) voidptr {
 	var arr *mirarray
 	arr = (*mirarray)(arrx)
 	if idx > arr.len-1 {
-		return
 	} else if idx == arr.len-1 {
 		arr.len -= 1
 	} else {

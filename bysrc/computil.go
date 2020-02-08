@@ -523,16 +523,21 @@ func newAnnotation(cmts *ast.CommentGroup) *Annotation {
 		for _, line := range lines {
 			if strings.HasPrefix(line, "//go:nosplit") {
 				ant.nosplit = true
-			} else if strings.HasPrefix(line, "//go:nowritebarrier") {
+			}
+			if strings.HasPrefix(line, "//go:nowritebarrier") {
 				ant.nowritebarrier = true
-			} else if strings.HasPrefix(line, "//go:systemstack") {
+			}
+			if strings.HasPrefix(line, "//go:systemstack") {
 				ant.systemstack = true
-			} else if strings.HasPrefix(line, "//go:noinline") {
+			}
+			if strings.HasPrefix(line, "//go:noinline") {
 				ant.noinline = true
-			} else if strings.HasPrefix(line, "//go:linkname") {
+			}
+			if strings.HasPrefix(line, "//go:linkname ") {
 				fields := strings.Split(line, " ")
 				ant.linkname = fields[1]
-			} else if strings.HasPrefix(line, "//export") {
+			}
+			if strings.HasPrefix(line, "//export ") {
 				fields := strings.Split(line, " ")
 				ant.exported = true
 				ant.exportname = fields[1]

@@ -397,12 +397,32 @@ func (c *g2nc) genPostFuncDecl(scope *ast.Scope, fd *ast.FuncDecl) {
 	if ant.exported {
 		c.genFieldList(scope, fd.Type.Results, true, false, "", false)
 		c.outsp().out(ant.exportname).out("(")
+		if fd.Recv != nil {
+			c.genExpr(scope, fd.Recv.List[0].Type)
+			c.outsp().out("this")
+			if len(fd.Type.Params.List) > 0 {
+				c.out(",")
+			}
+		}
 		c.genFieldList(scope, fd.Type.Params, false, true, ",", true)
 		c.out(") {").outnl()
 		if fd.Type.Results != nil {
 			c.out("return").outsp()
 		}
-		c.out(c.pkgpfx(), fd.Name.Name).out("(")
+		// c.out(c.pkgpfx())
+		if fd.Recv != nil {
+			tystr := c.exprTypeName(scope, fd.Recv.List[0].Type)
+			tystr = strings.Trim(tystr, "*")
+			c.out(tystr)
+			c.out(mthsep)
+		}
+		c.out(fd.Name.Name).out("(")
+		if fd.Recv != nil {
+			c.out("this")
+			if len(fd.Type.Params.List) > 0 {
+				c.out(",")
+			}
+		}
 		for idx1, prm := range fd.Type.Params.List {
 			for idx2, name := range prm.Names {
 				c.out(name.Name)
