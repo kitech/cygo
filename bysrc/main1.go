@@ -31,14 +31,7 @@ func main() {
 
 	gopaths := gopp.Gopaths()
 	builtin_imppath := "xgo/builtin"
-	builtin_pkgpath := ""
-	for _, gopath := range gopaths {
-		pkgpath := gopath + "/src/" + builtin_imppath
-		if gopp.FileExist(pkgpath) {
-			builtin_pkgpath = pkgpath
-			break
-		}
-	}
+	builtin_pkgpath := find_builtin_path(builtin_imppath)
 	gopp.Assert(builtin_pkgpath != "", "not found", builtin_imppath)
 
 	pkgpaths := []string{builtin_pkgpath, fname}
@@ -46,6 +39,10 @@ func main() {
 	comps := []*g2nc{}
 	pkgrenames := map[string]string{} // path => rename
 	dedups := map[string]bool{}       // pkgpath =>
+
+	// prefill builtin methods
+	bimths := cltbuiltin_methods(builtin_pkgpath)
+	fill_builtin_methods(bimths)
 
 	var builtin_psctx *ParserContext
 	gopaths = append(gopaths, runtime.GOROOT())
@@ -207,6 +204,20 @@ func clangfmt(fname string) {
 	err = cmdo.Run()
 	gopp.ErrPrint(err, fname)
 }
+
+func doparse(fname string, pkgrename string) *ParserContext {
+	psctx := NewParserContext(fname, pkgrename, nil)
+	err := psctx.Init()
+	if err != nil && !strings.Contains(err.Error(), "declared but not used") {
+		gopp.ErrPrint(err)
+		println()
+		println()
+		time.Sleep(1 * time.Second)
+	}
+
+	return psctx
+}
+
 func dogen(fname string, pkgrename string, builtin_psctx *ParserContext) (*ParserContext, *g2nc) {
 	psctx := NewParserContext(fname, pkgrename, builtin_psctx)
 	err := psctx.Init()

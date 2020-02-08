@@ -32,6 +32,19 @@ func (arr *mirarray) reduce(fn func(idx int, elem voidptr) bool) {
 func (arr *mirarray) ptr() *mirarray {
 	return arr.ptr_
 }
+
+
+func (arr *mirarray) len() *mirarray {
+	return arr.len
+}
+
+func (arr *mirarray) cap() *mirarray {
+	return arr.cap
+}
+
+func (arr *mirarray) elemsz() *mirarray {
+	return arr.elemsz
+}
 */
 
 func (arr *mirarray) delete(idx int) *mirarray {

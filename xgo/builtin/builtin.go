@@ -172,7 +172,9 @@ func errpanic(err error, args ...interface{}) {
 	}
 	var errmsg string = err.Error()
 	println("err", errmsg)
-	memcpy3(0x1, 0x1, 0x1)
+	var int0x1 = 0x1
+	var addr0x1 = (voidptr)(int0x1)
+	memcpy3(addr0x1, addr0x1, addr0x1)
 }
 func errfatal(err error, args ...interface{}) {
 	if err == nil {
@@ -226,7 +228,9 @@ func nilpanic(obj voidptr, args ...interface{}) {
 		return
 	}
 	println("nil", obj, args...)
-	memcpy3(0x1, 0x1, 0x1)
+	var int0x1 = 0x1
+	var addr0x1 = (voidptr)(int0x1)
+	memcpy3(addr0x1, addr0x1, addr0x1)
 }
 func nilfatal(obj voidptr, args ...interface{}) {
 	if obj != nil {

@@ -1,6 +1,8 @@
 package types
 
-import "go/token"
+import (
+	"go/token"
+)
 
 const (
 	Voidptr = UntypedNil + 1
@@ -564,6 +566,32 @@ var strmths = []*Func{}
 var arrmths = []*Func{}
 var mapmths = []*Func{}
 var intmths = []*Func{}
+var builtin_type_methods = map[Type][]*Func{}
+
+func DumpBuiltinMethods() map[string]int {
+	res := map[string]int{
+		"strmths": len(strmths), "arrmths": len(arrmths),
+		"mapmths": len(mapmths), "intmths": len(intmths),
+		"sums": len(builtin_type_methods)}
+	return res
+}
+func AddBuiltinMethod(typ Type, fnty *Func) {
+	switch typ2 := typ.(type) {
+	case *Basic:
+		switch typ2.kind {
+		case String:
+			strmths = append(strmths, fnty)
+		}
+		builtin_type_methods[typ] = append(builtin_type_methods[typ], fnty)
+	case *Map:
+		mapmths = append(mapmths, fnty)
+		builtin_type_methods[typ] = append(builtin_type_methods[typ], fnty)
+	case *Slice:
+		arrmths = append(arrmths, fnty)
+		builtin_type_methods[typ] = append(builtin_type_methods[typ], fnty)
+	default:
+	}
+}
 
 // Nil represents the predeclared value nil.
 type Nilofc struct {

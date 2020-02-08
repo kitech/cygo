@@ -36,6 +36,12 @@ func gostringn(ptr byteptr, n int) string {
 	return s
 }
 
+/*
+func (s string) len() int {
+	return s.len
+}
+*/
+
 func (s string) cstr() byteptr {
 	return s.ptr
 }
@@ -182,6 +188,13 @@ func (s string) right(sep string) string {
 	seplen := len(sep)
 	return s[pos+seplen:]
 }
+func (s string) leftn(n int) string {
+	return s
+}
+func (s string) rightn(n int) string {
+	return s
+}
+
 func (s string) prefixed(sub string) bool {
 	pos := s.index(sub)
 	return pos == 0
