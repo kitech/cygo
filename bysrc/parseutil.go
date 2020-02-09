@@ -26,7 +26,7 @@ func find_builtin_path(builtin_imppath string) string {
 
 func cltbuiltin_methods(builtin_pkgpath string) map[string][]*ast.FuncDecl {
 	mths := map[string][]*ast.FuncDecl{}
-	bipc, _ := dogen(builtin_pkgpath, "", nil)
+	bipc := doparse(builtin_pkgpath, "")
 	for name, pkgo := range bipc.pkgs {
 		if false {
 			log.Println(name, pkgo.Name)
@@ -72,7 +72,7 @@ func fill_builtin_methods(bimths map[string][]*ast.FuncDecl) {
 	defer log.Println(types.DumpBuiltinMethods())
 
 	for tyname, fndecls := range bimths {
-		var typobj = tyname2typobj(tyname)
+		var typobj = tyname2typobj(tyname, nil)
 		if typobj == nil {
 			log.Println("unkty", tyname)
 			continue
@@ -87,7 +87,7 @@ func fill_builtin_methods(bimths map[string][]*ast.FuncDecl) {
 			} else {
 				for _, fldo := range fndecl.Type.Results.List {
 					tyname := typexpr2tyname(fldo.Type)
-					typobj := tyname2typobj(tyname)
+					typobj := tyname2typobj(tyname, fldo.Type)
 					if typobj == nil {
 						log.Println(tyname, reftyof(fldo.Type))
 					}
@@ -140,7 +140,7 @@ func typexpr2tyname(tyexpr ast.Expr) string {
 	return tystr
 }
 
-func tyname2typobj(tyname string) types.Type {
+func tyname2typobj(tyname string, tyexpr ast.Expr) types.Type {
 	var typobj types.Type
 
 	for _, tyo := range types.Typ {
@@ -158,7 +158,19 @@ func tyname2typobj(tyname string) types.Type {
 	case "map":
 		typobj = types.NewMap(voidptrty, voidptrty)
 		// typobj = types.NewPointer(typobj)
-	case "array", "mirarray":
+	case "array":
+		var elty types.Type
+		if tyexpr != nil {
+			ty := tyexpr.(*ast.ArrayType)
+			name := typexpr2tyname(ty.Elt)
+			elty = tyname2typobj(name, ty.Elt)
+		}
+		if elty != nil {
+			typobj = types.NewSlice(elty)
+		} else {
+			typobj = types.NewSlice(voidptrty)
+		}
+	case "mirarray":
 		typobj = types.NewSlice(voidptrty)
 	case "f64":
 		typobj = types.Typ[types.Float64]

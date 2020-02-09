@@ -195,20 +195,21 @@ func errprint(err error, args ...interface{}) {
 		argc := args.len()
 		switch argc {
 		case 0:
-			println("err", errmsg, args...)
+			// println("err", errmsg, args...)
 		case 1:
-			println("err", errmsg, args...)
+			// println("err", errmsg, args...)
 		case 2:
-			println("err", errmsg, args...)
+			// println("err", errmsg, args...)
 		case 3:
-			println("err", errmsg, args...)
+			// println("err", errmsg, args...)
 		case 4:
-			println("err", errmsg, args...)
+			// println("err", errmsg, args...)
 		case 5:
-			println("err", errmsg, args...)
+			// println("err", errmsg, args...)
 		default:
-			println("err", errmsg, args...) // TODO compiler
+			// println("err", errmsg, args...) // TODO compiler
 		}
+		println("err", errmsg)
 	}
 }
 
@@ -232,7 +233,8 @@ func nilpanic(obj voidptr, args ...interface{}) {
 	if obj != nil {
 		return
 	}
-	println("nil", obj, args...)
+	// println("nil", obj, args...)
+	println("nil", obj)
 	var int0x1 = 0x1
 	// var addr0x1 = (voidptr)(uintptr)(int0x1) // TODO compiler
 	var addr0x1 = (voidptr)(uintptr(int0x1))
@@ -242,14 +244,16 @@ func nilfatal(obj voidptr, args ...interface{}) {
 	if obj != nil {
 		return
 	}
-	println("nil", obj, args...)
+	// println("nil", obj, args...)
+	println("nil", obj)
 	C.exit(-1)
 }
 func nilprint(obj voidptr, args ...interface{}) {
 	if obj != nil {
 		return
 	}
-	println("nil", obj, args...)
+	// println("nil", obj, args...)
+	println("nil", obj)
 
 }
 func nildo(obj voidptr, nilfn func()) {

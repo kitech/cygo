@@ -207,7 +207,7 @@ func clangfmt(fname string) {
 
 func doparse(fname string, pkgrename string) *ParserContext {
 	psctx := NewParserContext(fname, pkgrename, nil)
-	err := psctx.Init()
+	err := psctx.Init(false)
 	if err != nil && !strings.Contains(err.Error(), "declared but not used") {
 		gopp.ErrPrint(err)
 		println()
@@ -220,7 +220,7 @@ func doparse(fname string, pkgrename string) *ParserContext {
 
 func dogen(fname string, pkgrename string, builtin_psctx *ParserContext) (*ParserContext, *g2nc) {
 	psctx := NewParserContext(fname, pkgrename, builtin_psctx)
-	err := psctx.Init()
+	err := psctx.Init(true)
 	if err != nil && !strings.Contains(err.Error(), "declared but not used") {
 		gopp.ErrPrint(err)
 		println()

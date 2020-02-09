@@ -6,11 +6,6 @@
 
 package types
 
-import (
-	"log"
-	"reflect"
-)
-
 // Internal use of LookupFieldOrMethod: If the obj result is a method
 // associated with a concrete (non-interface) type, the method's signature
 // may not be fully set up. Call Checker.objDecl(obj, nil) before accessing
@@ -99,11 +94,6 @@ func lookupFieldOrMethod(T Type, addressable bool, pkg *Package, name string) (o
 	for len(current) > 0 {
 		var next []embeddedType // embedded types found at current depth
 
-		log.Println(name, typ, reflect.TypeOf(typ), isPtr, pkg.Name())
-		if name == "split" && typ.String() == "string" {
-			// log.Panicln("ok")
-		}
-
 		// look for (pkg, name) in all types at current depth
 		for _, e := range current {
 			typ := e.typ
@@ -190,6 +180,14 @@ func lookupFieldOrMethod(T Type, addressable bool, pkg *Package, name string) (o
 					if i, m := lookupMethod(strmths, nil, name); m != nil {
 						obj = m
 						index = concat(e.index, i)
+					} else {
+						for idx, varo := range strflds {
+							if varo.name == name {
+								obj = varo
+								index = concat(e.index, idx)
+								break
+							}
+						}
 					}
 				} else if t.kind == Int || t.kind == Rune ||
 					t.kind == Bool || t.kind == Byte ||

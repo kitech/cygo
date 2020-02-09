@@ -92,21 +92,14 @@ func NewParserContext(path string, pkgrename string, builtin_psctx *ParserContex
 
 	return this
 }
-func (this *ParserContext) Init() error {
-	this.init_extra_builtin_types()
-	return this.Init_no_cgocmd()
+
+// semachk parse but no semantics check: types.Check
+func (this *ParserContext) Init(semachk bool) error {
+	return this.Init_no_cgocmd(semachk)
 	// return this.Init_explict_cgo()
 }
-func (this *ParserContext) init_extra_builtin_types() {
-	// too late call here, so need modify go/types/ files directly
-	// types.HackExtraBuiltin() // file: go/types/myhack.go
-	// tybno := types.UntypedNil
-	// tybinfo := types.IsUntyped
-	// vptrty := types.Basic{tybno << 1, tybinfo << 1, "voidptr"}
-	// types.Typ = append(types.Typ, vptrty)
-}
 
-func (this *ParserContext) Init_no_cgocmd() error {
+func (this *ParserContext) Init_no_cgocmd(semachk bool) error {
 
 	bdpkgs, err := build.ImportDir(this.path, build.ImportComment)
 	gopp.ErrPrint(err)
@@ -117,7 +110,7 @@ func (this *ParserContext) Init_no_cgocmd() error {
 	log.Println(this.path, bdpkgs.Name, bdpkgs.GoFiles, bdpkgs.TestGoFiles,
 		bdpkgs.CgoFiles, bdpkgs.CFiles, bdpkgs.CXXFiles)
 
-	// parser step 2, got ast/types
+	// parser step 2, got ast
 	this.fset = token.NewFileSet()
 	pkgs, err := parser.ParseDir(this.fset, this.path, this.dirFilter, 0|parser.AllErrors|parser.ParseComments)
 	gopp.ErrPrint(err)
@@ -137,6 +130,10 @@ func (this *ParserContext) Init_no_cgocmd() error {
 	this.walkpass_fill_fakecpkg()   // before types.Config.Check
 	this.walkpass_fill_builtinpkg() // before types.Config.Check
 
+	// parser step 3, got types, semantics check
+	if !semachk {
+		return nil
+	}
 	this.walkpass_check() // semantics check
 	if this.chkerrs != nil {
 		os.Exit(-1)
@@ -178,7 +175,13 @@ func (pc *ParserContext) pkgimperror(err error) {
 		// must stop error
 		if strings.Contains(err.Error(), "could not import") ||
 			strings.Contains(err.Error(), "no result values expected") ||
-			strings.Contains(err.Error(), "missing return") {
+			strings.Contains(err.Error(), "missing return") ||
+			// TODO
+			// strings.Contains(err.Error(), "is not an expression") ||
+			strings.Contains(err.Error(), "has no field or method") ||
+			// TODO
+			// strings.Contains(err.Error(), "variable) is not a type") ||
+			false {
 			pc.chkerrs = append(pc.chkerrs, err)
 		}
 	}

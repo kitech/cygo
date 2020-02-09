@@ -1,5 +1,9 @@
 package builtin
 
+/*
+ */
+import "C"
+
 type mirarray struct {
 	ptr    voidptr
 	len    int

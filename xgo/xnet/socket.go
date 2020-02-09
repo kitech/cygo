@@ -121,7 +121,7 @@ func (ai *AddrInfo) clone() *AddrInfo {
 	newai.ai_next = nil
 	if ai.ai_canonname != nil {
 		s := gostring(ai.ai_canonname)
-		newai.ai_canonname = memdup3(ai.ai_canonname, s.len())
+		newai.ai_canonname = memdup3(ai.ai_canonname, s.len)
 	}
 	if ai.ai_addr != nil {
 		v := &SockAddr{}

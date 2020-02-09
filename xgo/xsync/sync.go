@@ -5,16 +5,25 @@ package xsync
 */
 import "C"
 
+func Keep() {}
+
 func init() {
 	if true {
-		assert(sizeof(Mutex) == sizeof(C.pthread_mutex_t))
+		// impl1 // TODO
+		// sz1 := sizeof(Mutex{}) // TODO compiler
+		sz1 := sizeof(Mutex) // TODO compiler
+		assert(sz1 == sizeof(C.pthread_mutex_t))
+
+		// impl2
+		// sz2 := unsafe.Sizeof(Mutex{}) // TODO compiler
+		// assert(sz2 == sizeof(C.pthread_mutex_t))
 	}
 }
-func Keep() {}
 
 type Mutex struct {
 	// TODO compilerd to voidptr lock, and failed then
 	// if in somewhere have use of C.pthread_mutex_t, then it's works again
+	// oh, it is a union
 	lock C.pthread_mutex_t
 }
 

@@ -37,59 +37,42 @@ func gostringn(ptr byteptr, n int) string {
 }
 
 func mirstring_new() string {
-	s := &mirstring{}
-	var s2 string
-	s2 = (string)(s)
-	return s2
+	var s string
+	return s
 }
 
 func mirstring_new_cstr_ref(sptr byteptr) string {
-	s := &mirstring{}
+	var s string
 	s.ptr = sptr
 	s.len = strlen3(sptr)
 
-	var s2 string
-	s2 = (string)(s)
-
-	return s2
+	return s
 }
 
 func mirstring_new_cstr(sptr byteptr) string {
-	s := &mirstring{}
+	var s string
 	s.ptr = strdup3(sptr)
 	s.len = strlen3(sptr)
-
-	var s2 string
-	s2 = (string)(s)
-
-	return s2
+	return s
 }
 
 func mirstring_new_cstr2(sptr byteptr, len int) string {
-	s := &mirstring{}
+	var s string
 	s.ptr = strndup3(sptr, len)
 	s.len = len
-
-	var s2 string
-	s2 = (string)(s)
-
-	return s2
+	return s
 }
 func mirstring_new_char(ch byte) string {
-	s := &mirstring{}
+	var s string
 	s.ptr = malloc3(8)
 	s.ptr[0] = ch
 	s.len = 1
-
-	var s2 string
-	s2 = (string)(s)
-
-	return s2
+	return s
 }
 
 // TODO
 func mirstring_new_rune(ch rune) string {
-	s := &mirstring{}
+	var s string
 	s.ptr = malloc3(8)
 	s.len = 3
 
@@ -99,27 +82,27 @@ func mirstring_new_rune(ch rune) string {
 	s.ptr[1] = p[1]
 	s.ptr[2] = p[2]
 	s.ptr[3] = p[3]
-
-	var s2 string
-	s2 = (string)(s)
-
-	return s2
+	return s
 }
 
-/*
-func (s string) len() int {
+func (s string) Ptr() byteptr {
+	return s.ptr
+}
+func (s string) Len() int {
 	return s.len
 }
-*/
-
 func (s string) cstr() byteptr {
 	return s.ptr
 }
+func (s string) empty() bool {
+	return s.len == 0
+}
+
 func (s string) split(sep string) []string {
 	res := []string{}
 	pos := 0
-	slen := len(s)
-	seplen := len(sep)
+	slen := s.len
+	seplen := sep.len
 	for i := 0; i < slen; i++ {
 		if i+seplen > slen {
 			break
@@ -137,7 +120,7 @@ func (s string) split(sep string) []string {
 	return res
 }
 func (s string) trimsp() string {
-	slen := s.len()
+	slen := s.len
 	lspos := 0
 	rspos := slen - 1
 
@@ -164,7 +147,7 @@ func (s string) trimsp() string {
 	return ns
 }
 func (s string) ltrimsp() string {
-	slen := s.len()
+	slen := s.len
 	lspos := 0
 	rspos := slen - 1
 
@@ -182,7 +165,7 @@ func (s string) ltrimsp() string {
 	return ns
 }
 func (s string) rtrimsp() string {
-	slen := s.len()
+	slen := s.len
 	lspos := 0
 	rspos := slen - 1
 
@@ -227,8 +210,8 @@ func cxarray2_join(arr []string, sep string) string {
 
 func (s string) index(sep string) int {
 	res := -1
-	slen := len(s)
-	seplen := len(sep)
+	slen := s.len
+	seplen := sep.len
 	for i := 0; i < slen; i++ {
 		if i+seplen > slen {
 			break
@@ -255,7 +238,7 @@ func (s string) right(sep string) string {
 	if pos < 0 {
 		return ""
 	}
-	seplen := len(sep)
+	seplen := sep.len
 	return s[pos+seplen:]
 }
 func (s string) leftn(n int) string {
@@ -302,7 +285,7 @@ func (s string) replaceall(old string, new string) string {
 }
 
 func (s string) toupper() string {
-	slen := s.len()
+	slen := s.len
 	ns := ""
 	for i := 0; i < slen; i++ {
 		ch := s[i]
@@ -316,7 +299,7 @@ func (s string) toupper() string {
 	return ns
 }
 func (s string) tolower() string {
-	slen := s.len()
+	slen := s.len
 	ns := ""
 	for i := 0; i < slen; i++ {
 		ch := s[i]
@@ -330,7 +313,7 @@ func (s string) tolower() string {
 	return ns
 }
 func (s string) totitle() string {
-	slen := s.len()
+	slen := s.len
 	ns := ""
 	for i := 0; i < slen; i++ {
 		ch := s[i]
@@ -344,6 +327,7 @@ func (s string) totitle() string {
 	return ns
 }
 
+// TODO
 func (s string) tomd5() string {
 	return s
 }
@@ -363,7 +347,7 @@ func (s string) toint() int {
 }
 func (s string) tof32() f32 {
 	rv := C.atof(s.ptr)
-	return rv
+	return f32(rv)
 }
 func (s string) tof64() f64 {
 	rv := C.atof(s.ptr)
@@ -374,7 +358,7 @@ func (s string) tobool() bool {
 }
 
 func (s string) isdigit() bool {
-	slen := s.len()
+	slen := s.len
 	for i := 0; i < slen; i++ {
 		ch := s[i]
 		if ch >= '0' && ch <= '9' {
@@ -385,7 +369,7 @@ func (s string) isdigit() bool {
 	return true
 }
 func (s string) isnumber() bool {
-	slen := s.len()
+	slen := s.len
 	for i := 0; i < slen; i++ {
 		ch := s[i]
 		if (ch >= '0' && ch <= '9') || ch == '.' {
@@ -396,7 +380,7 @@ func (s string) isnumber() bool {
 	return true
 }
 func (s string) isprintable() bool {
-	slen := s.len()
+	slen := s.len
 	for i := 0; i < slen; i++ {
 		ch := s[i]
 		if ch >= '0' && ch <= '9' {
@@ -409,7 +393,7 @@ func (s string) isprintable() bool {
 	return true
 }
 func (s string) ishex() bool {
-	slen := s.len()
+	slen := s.len
 	for i := 0; i < slen; i++ {
 		ch := s[i]
 		if ch >= '0' && ch <= '9' {
@@ -422,7 +406,7 @@ func (s string) ishex() bool {
 	return true
 }
 func (s string) isascii() bool {
-	slen := s.len()
+	slen := s.len
 	for i := 0; i < slen; i++ {
 		ch := s[i]
 		if ch < 128 {
