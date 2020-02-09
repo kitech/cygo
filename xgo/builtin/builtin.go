@@ -202,7 +202,7 @@ func errfatal(err error, args ...interface{}) {
 func errprint(err error, args ...interface{}) {
 	if err != nil {
 		var errmsg string = err.Error()
-		argc := args.len()
+		argc := args.len
 		switch argc {
 		case 0:
 			// println("err", errmsg, args...)

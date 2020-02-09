@@ -1,6 +1,9 @@
 package builtin
 
 type mirmap struct {
+	len_ int
+	cap_ int
+
 	key voidptr
 	val voidptr
 
@@ -30,4 +33,16 @@ func (mp *mirmap) mapfn(fn func(key voidptr, val voidptr) *mirmap) {
 
 func (mp *mirmap) reduce(fn func(key voidptr, val voidptr) bool) {
 
+}
+
+func (mp *mirmap) haskey(k voidptr) bool {
+	return false
+}
+
+func (mp *mirmap) len() int {
+	return 0
+}
+
+func (mp *mirmap) cap() int {
+	return 0
 }

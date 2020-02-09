@@ -14,7 +14,7 @@ var (
 )
 
 func rand_humanua() string {
-	ualen := human_uas.len()
+	ualen := human_uas.len
 	return human_uas[ualen-1]
 }
 

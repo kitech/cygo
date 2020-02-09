@@ -203,16 +203,43 @@ func lookupFieldOrMethod(T Type, addressable bool, pkg *Package, name string) (o
 						obj = m
 						index = concat(e.index, i)
 					}
+					if obj == nil {
+						var t2 = t
+						if t.kind == Byte {
+							t2 = Typ[Uint8]
+						}
+						var mths = builtin_type_methods[t2]
+						if i, m := lookupMethod(mths, nil, name); m != nil {
+							obj = m
+							index = concat(e.index, i)
+						}
+					}
 				}
 			case *Slice:
 				if i, m := lookupMethod(arrmths, nil, name); m != nil {
 					obj = m
 					index = concat(e.index, i)
 				}
+				for idx, varo := range arrflds {
+					if varo.name == name {
+						obj = varo
+						index = concat(e.index, idx)
+						break
+					}
+				}
 			case *Map:
 				if i, m := lookupMethod(mapmths, nil, name); m != nil {
 					obj = m
 					index = concat(e.index, i)
+				}
+				if obj == nil {
+					for idx, varo := range mapflds {
+						if varo.name == name {
+							obj = varo
+							index = concat(e.index, idx)
+							break
+						}
+					}
 				}
 			default:
 				// log.Println(typ, reflect.TypeOf(typ))

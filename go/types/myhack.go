@@ -67,24 +67,15 @@ func HackExtraBuiltin() {
 }
 
 func fillBasicMethods() {
-	/*{ // string.join([]string, sep string) int
-		var sig *Signature
-		recv := NewVar(token.NoPos, nil, "this", Typ[String])
-		arg0 := NewVar(token.NoPos, nil, "sep", Typ[String])
-		params := NewTuple(arg0)
-		r0 := NewVar(token.NoPos, nil, "", NewSlice(Typ[Int]))
-		results := NewTuple(r0)
-		sig = NewSignature(recv, params, results, false)
-		m1 := NewFunc(token.NoPos, nil, "join", sig)
-		strmths = append(strmths, m1)
-	}*/
 	{
 		f1 := NewVar(token.NoPos, nil, "len", Typ[Int])
 		strflds = append(strflds, f1)
+		builtin_type_fields[Typ[String]] = append(builtin_type_fields[Typ[String]], f1)
 	}
 	{
 		f1 := NewVar(token.NoPos, nil, "ptr", Typ[Byteptr])
 		strflds = append(strflds, f1)
+		builtin_type_fields[Typ[String]] = append(builtin_type_fields[Typ[String]], f1)
 	}
 	{
 		f1 := NewVar(token.NoPos, nil, "len", Typ[Int])
@@ -98,190 +89,13 @@ func fillBasicMethods() {
 		f1 := NewVar(token.NoPos, nil, "ptr", Typ[Voidptr])
 		arrflds = append(arrflds, f1)
 	}
-	{ // array.len() int
-		var sig *Signature
-		recv := NewVar(token.NoPos, nil, "this", NewSlice(nil))
-		var params *Tuple
-		r0 := NewVar(token.NoPos, nil, "", Typ[Int])
-		results := NewTuple(r0)
-		sig = NewSignature(recv, params, results, false)
-		m1 := NewFunc(token.NoPos, nil, "len", sig)
-		arrmths = append(arrmths, m1)
-	}
-	{ // array.cap() int
-		var sig *Signature
-		recv := NewVar(token.NoPos, nil, "this", NewSlice(nil))
-		var params *Tuple
-		r0 := NewVar(token.NoPos, nil, "", Typ[Int])
-		results := NewTuple(r0)
-		sig = NewSignature(recv, params, results, false)
-		m1 := NewFunc(token.NoPos, nil, "cap", sig)
-		arrmths = append(arrmths, m1)
-	}
-	{ // array.ptr() voidptr
-		var sig *Signature
-		recv := NewVar(token.NoPos, nil, "this", NewSlice(nil))
-		var params *Tuple
-		r0 := NewVar(token.NoPos, nil, "", Typ[Voidptr])
-		results := NewTuple(r0)
-		sig = NewSignature(recv, params, results, false)
-		m1 := NewFunc(token.NoPos, nil, "ptr", sig)
-		arrmths = append(arrmths, m1)
-	}
-	{ // array.append()
-		var sig *Signature
-		recv := NewVar(token.NoPos, nil, "this", NewSlice(nil))
-		arg0 := NewVar(token.NoPos, nil, "elem", Typ[Voidptr])
-		params := NewTuple(arg0)
-		r0 := NewVar(token.NoPos, nil, "", NewSlice(nil))
-		results := NewTuple(r0)
-		sig = NewSignature(recv, params, results, false)
-		m1 := NewFunc(token.NoPos, nil, "append", sig)
-		arrmths = append(arrmths, m1)
-	}
-	{ // array.reverse()
-		var sig *Signature
-		recv := NewVar(token.NoPos, nil, "this", NewSlice(nil))
-		// arg0 := NewVar(token.NoPos, nil, "elem", Typ[Voidptr])
-		// params := NewTuple(arg0)
-		var params *Tuple
-		r0 := NewVar(token.NoPos, nil, "", NewSlice(nil))
-		results := NewTuple(r0)
-		sig = NewSignature(recv, params, results, false)
-		m1 := NewFunc(token.NoPos, nil, "reverse", sig)
-		arrmths = append(arrmths, m1)
-	}
-	{ // array.delete()
-		var sig *Signature
-		recv := NewVar(token.NoPos, nil, "this", NewSlice(nil))
-		arg0 := NewVar(token.NoPos, nil, "index", Typ[Int])
-		params := NewTuple(arg0)
-		r0 := NewVar(token.NoPos, nil, "", NewSlice(nil))
-		results := NewTuple(r0)
-		sig = NewSignature(recv, params, results, false)
-		m1 := NewFunc(token.NoPos, nil, "delete", sig)
-		arrmths = append(arrmths, m1)
-	}
-	{ // array.clear()
-		var sig *Signature
-		recv := NewVar(token.NoPos, nil, "this", NewSlice(nil))
-		// arg0 := NewVar(token.NoPos, nil, "elem", Typ[Voidptr])
-		// params := NewTuple(arg0)
-		var params *Tuple
-		r0 := NewVar(token.NoPos, nil, "", NewSlice(nil))
-		results := NewTuple(r0)
-		sig = NewSignature(recv, params, results, false)
-		m1 := NewFunc(token.NoPos, nil, "clear", sig)
-		arrmths = append(arrmths, m1)
-	}
-	{ // array.join() string
-		var sig *Signature
-		recv := NewVar(token.NoPos, nil, "this", NewSlice(Typ[String]))
-		var params *Tuple
-		r0 := NewVar(token.NoPos, nil, "", Typ[String])
-		results := NewTuple(r0)
-		sig = NewSignature(recv, params, results, false)
-		m1 := NewFunc(token.NoPos, nil, "join", sig)
-		arrmths = append(arrmths, m1)
-	}
-	{ // array.map() []string
-		var sig *Signature
-		recv := NewVar(token.NoPos, nil, "this", NewSlice(Typ[String]))
-		var params *Tuple
-		r0 := NewVar(token.NoPos, nil, "", Typ[String])
-		results := NewTuple(r0)
-		sig = NewSignature(recv, params, results, false)
-		m1 := NewFunc(token.NoPos, nil, "map", sig)
-		arrmths = append(arrmths, m1)
-	}
-	{ // array.filter() []string
-		var sig *Signature
-		recv := NewVar(token.NoPos, nil, "this", NewSlice(Typ[String]))
-		var params *Tuple
-		r0 := NewVar(token.NoPos, nil, "", Typ[String])
-		results := NewTuple(r0)
-		sig = NewSignature(recv, params, results, false)
-		m1 := NewFunc(token.NoPos, nil, "filter", sig)
-		arrmths = append(arrmths, m1)
-	}
-
-	{ // map.len() int
-		var sig *Signature
-		recv := NewVar(token.NoPos, nil, "this", NewMap(nil, nil))
-		var params *Tuple
-		r0 := NewVar(token.NoPos, nil, "", Typ[Int])
-		results := NewTuple(r0)
-		sig = NewSignature(recv, params, results, false)
-		m1 := NewFunc(token.NoPos, nil, "len", sig)
-		mapmths = append(mapmths, m1)
-	}
-	{ // map.cap() int
-		var sig *Signature
-		recv := NewVar(token.NoPos, nil, "this", NewMap(nil, nil))
-		var params *Tuple
-		r0 := NewVar(token.NoPos, nil, "", Typ[Int])
-		results := NewTuple(r0)
-		sig = NewSignature(recv, params, results, false)
-		m1 := NewFunc(token.NoPos, nil, "cap", sig)
-		mapmths = append(mapmths, m1)
-	}
-	{ // map.haskey() bool
-		var sig *Signature
-		recv := NewVar(token.NoPos, nil, "this", NewMap(nil, nil))
-		var params *Tuple
-		r0 := NewVar(token.NoPos, nil, "", Typ[Bool])
-		results := NewTuple(r0)
-		sig = NewSignature(recv, params, results, false)
-		m1 := NewFunc(token.NoPos, nil, "haskey", sig)
-		mapmths = append(mapmths, m1)
-	}
-
-	{ // byte.isspace() bool
-		var sig *Signature
-		recv := NewVar(token.NoPos, nil, "this", Typ[Byte])
-		var params *Tuple
-		r0 := NewVar(token.NoPos, nil, "", Typ[Bool])
-		results := NewTuple(r0)
-		sig = NewSignature(recv, params, results, false)
-		m1 := NewFunc(token.NoPos, nil, "isspace", sig)
-		intmths = append(intmths, m1)
-	}
-	{ // byte.isdigit() bool
-		var sig *Signature
-		recv := NewVar(token.NoPos, nil, "this", Typ[Byte])
-		var params *Tuple
-		r0 := NewVar(token.NoPos, nil, "", Typ[Bool])
-		results := NewTuple(r0)
-		sig = NewSignature(recv, params, results, false)
-		m1 := NewFunc(token.NoPos, nil, "isdigit", sig)
-		intmths = append(intmths, m1)
-	}
-	{ // byte.isnumber() bool
-		var sig *Signature
-		recv := NewVar(token.NoPos, nil, "this", Typ[Byte])
-		var params *Tuple
-		r0 := NewVar(token.NoPos, nil, "", Typ[Bool])
-		results := NewTuple(r0)
-		sig = NewSignature(recv, params, results, false)
-		m1 := NewFunc(token.NoPos, nil, "isnumber", sig)
-		intmths = append(intmths, m1)
-	}
-
 	{
-		for _, ty := range []BasicKind{
-			Bool, Int, Int8, Int16, Int32, Int64,
-			Uint, Uint8, Uint16, Uint32, Uint64,
-			Uintptr, Float32, Float64,
-			Byte, Rune, Usize, Voidptr, Byteptr, Charptr} {
-			var sig *Signature
-			recv := NewVar(token.NoPos, nil, "this", Typ[ty])
-			var params *Tuple
-			r0 := NewVar(token.NoPos, nil, "", Typ[String])
-			results := NewTuple(r0)
-			sig = NewSignature(recv, params, results, false)
-			m1 := NewFunc(token.NoPos, nil, "repr", sig)
-			intmths = append(intmths, m1)
-		}
+		// f1 := NewVar(token.NoPos, nil, "len", Typ[Int])
+		// mapflds = append(arrflds, f1)
+	}
+	{
+		// f1 := NewVar(token.NoPos, nil, "cap", Typ[Int])
+		// mapflds = append(arrflds, f1)
 	}
 
 	println(len(strmths), len(arrmths), len(mapmths))
@@ -292,8 +106,10 @@ var strflds = []*Var{}
 var arrmths = []*Func{}
 var arrflds = []*Var{}
 var mapmths = []*Func{}
+var mapflds = []*Var{}
 var intmths = []*Func{}
 var builtin_type_methods = map[Type][]*Func{}
+var builtin_type_fields = map[Type][]*Var{}
 
 func DumpBuiltinMethods() map[string]int {
 	res := map[string]int{

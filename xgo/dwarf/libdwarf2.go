@@ -189,7 +189,7 @@ func (dwr *Dwarf) PrintCUList() {
 		{
 			// 只有 cu 能够 srcfiles()
 			sfiles, dwerr := srcfiles(cudie)
-			println("sfiles", sfiles.len(), dwerr)
+			println("sfiles", sfiles.len, dwerr)
 			for idx, sfile := range sfiles {
 				println("sfiles", cuidx, sfile)
 			}
@@ -240,7 +240,7 @@ func (dwr *Dwarf) print_die_data(printme Die, lvl int, cusfiles []string) {
 		if has_line_data {
 			attr1, dwerr := attr(printme, DW_AT_decl_file)
 			val, dwerr2 := formudata(attr1)
-			println(val, sfiles.len())
+			println(val, sfiles.len)
 			filename = sfiles[val-1]
 			dwr.dealloc(attr1, DW_DLA_ATTR)
 		}
@@ -365,7 +365,7 @@ func (dw *Dwarf) Addr2Line(addrx voidptr) (
 	filename string, fileline int, found bool) {
 	addr := dw.addr2virt(addrx)
 	filename, fileline, found = dw.getfileline(addr)
-	if filename.len() == 0 {
+	if filename.len == 0 {
 		filename = "???"
 	}
 	return
@@ -532,7 +532,7 @@ func (dw *Dwarf) lookup_pc_cu2(die Die, pc Addr, cuidx int) (
 	if pc >= a2l.minpc && pc < a2l.maxpc {
 		// println("infile", a2l.minpc, pc, a2l.maxpc)
 	}
-	if cuidx >= a2l.cuaddrs.len() {
+	if cuidx >= a2l.cuaddrs.len {
 		return
 	}
 	cuitem := a2l.cuaddrs[cuidx]
@@ -540,7 +540,7 @@ func (dw *Dwarf) lookup_pc_cu2(die Die, pc Addr, cuidx int) (
 	if pc >= cuitem.low && pc < cuitem.high {
 		// println("incu", cuidx, cuitem.low, pc, cuitem.high)
 		lnvec := a2l.culines[cuidx]
-		for i := 0; i < lnvec.len(); i++ {
+		for i := 0; i < lnvec.len; i++ {
 			minln := lnvec[i]
 			if pc == minln.lnaddr {
 				filename := dw.fileno2file(cuidx, minln.fileno)
@@ -638,7 +638,7 @@ func (dw *Dwarf) check_lookup_table() {
 		}
 	}
 	nilctx := 0
-	for i := 0; i < a2l.ctxts.len(); i++ {
+	for i := 0; i < a2l.ctxts.len; i++ {
 		ctx := a2l.ctxts[i]
 		if ctx == nil {
 			// println(a2l.cucnt, i, ctx)
@@ -704,7 +704,7 @@ func (dw *Dwarf) check_lookup_table2() {
 	a2l := dw.a2l
 	lncnt := 0
 	for _, lnvec := range a2l.culines {
-		lncnt += lnvec.len()
+		lncnt += lnvec.len
 	}
 	println(a2l.cucnt, lncnt)
 }
@@ -863,7 +863,7 @@ func (dw *Dwarf) calc_cufiles() {
 			fidx := fileidxs[filename]
 			if !ok {
 				a2l.cufilesv = append(a2l.cufilesv, filename)
-				fidx = a2l.cufilesv.len() - 1
+				fidx = a2l.cufilesv.len - 1
 				fileidxs[filename] = fidx
 			}
 			// a2l.cufilesm[cuidx] = append(a2l.cufilesm[cuidx], fidx)// TODO compiler
@@ -878,7 +878,7 @@ func (dw *Dwarf) calc_cufiles() {
 }
 func (dw *Dwarf) check_cufiles() {
 	a2l := dw.a2l
-	filesvlen := a2l.cufilesv.len()
+	filesvlen := a2l.cufilesv.len
 	filesmlen := a2l.cufilesm.len()
 	for i := 0; i < filesvlen; i++ {
 		file1 := a2l.cufilesv[i]

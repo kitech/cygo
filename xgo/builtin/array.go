@@ -31,25 +31,41 @@ func (arr *mirarray) mapfn(fn func(idx int, elem voidptr) *mirarray) {
 func (arr *mirarray) reduce(fn func(idx int, elem voidptr) bool) {
 
 }
+func (arr *mirarray) filter(fn func(idx int, elem voidptr) bool) {
+
+}
 
 func (arr *mirarray) Ptr() voidptr {
 	return arr.ptr
 }
-
 func (arr *mirarray) Len() int {
 	return arr.len
 }
-
 func (arr *mirarray) Cap() int {
 	return arr.cap
 }
-
 func (arr *mirarray) Elemsz() int {
 	return arr.elemsz
 }
 
 func (arr *mirarray) delete(idx int) *mirarray {
 	return arr
+}
+
+func (arr *mirarray) append() *mirarray {
+	return arr
+}
+
+func (arr *mirarray) reverse() *mirarray {
+	return arr
+}
+
+func (arr *mirarray) clear() *mirarray {
+	return arr
+}
+
+func (arr *mirarray) join(sep string) string {
+	return ""
 }
 
 // array.ptr()

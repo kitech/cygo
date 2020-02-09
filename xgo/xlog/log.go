@@ -31,7 +31,7 @@ func init() {
 	var estr2 string = estr
 	gopaths = estr2.split(":")
 
-	assert(pkgsep.len() > 0)
+	assert(pkgsep.len > 0)
 }
 
 func dummy(args ...interface{}) {
@@ -66,11 +66,11 @@ func Sprintf(format string, args ...interface{}) string {
 ///
 func trim_gopath(s string) string {
 	const clen = 5 // "/src/" length
-	for i := 0; i < gopaths.len(); i++ {
+	for i := 0; i < gopaths.len; i++ {
 		sub := gopaths[i]
 		if s.prefixed(sub) {
 			// if xstrings.Prefixed(s, sub) {
-			return s[sub.len()+clen:]
+			return s[sub.len+clen:]
 		}
 	}
 	return s
@@ -146,7 +146,7 @@ func unicall1(fnptr voidptr, args []*voidptr) voidptr {
 	var tmpfn func() voidptr
 	tmpfn = fnptr
 	// argc := len(args)
-	argc := args.len()
+	argc := args.len
 
 	var ret voidptr
 	switch argc {
@@ -184,7 +184,7 @@ func unicall1(fnptr voidptr, args []*voidptr) voidptr {
 // return file:line
 func getprintcaller(depth int, trimpfx bool) string {
 	callers := Callers()
-	assert(callers.len() > skip_depth)
+	assert(callers.len > skip_depth)
 	caller := callers[depth]
 	// println(caller.File, ":", caller.Lineno, caller.Funcname, a0)
 	trfile := trim_gopath(caller.File)
@@ -196,7 +196,7 @@ func getprintcaller(depth int, trimpfx bool) string {
 // with caller
 func printx2(newline bool, args ...interface{}) int {
 	fileline := getprintcaller(skip_depth+2, true)
-	argc := args.len()
+	argc := args.len
 	if argc == 0 {
 		if newline {
 			C.printf("%.*s\n", fileline.len, fileline.ptr)
@@ -213,13 +213,13 @@ func printx2(newline bool, args ...interface{}) int {
 		var kind int = mty.kind
 		var size int = mty.size
 		varval := fmtstrbykind(kind, efc.data)
-		// println(args.len(), i, kind, size, varval.repr)
+		// println(args.len, i, kind, size, varval.repr)
 		varvals = append(varvals, varval)
 	}
-	// println(varvals.len(), 111)
+	// println(varvals.len, 111)
 
 	res := ""
-	for i := 0; i < varvals.len(); i++ {
+	for i := 0; i < varvals.len; i++ {
 		res += (varvals[i]).repr + " "
 	}
 
@@ -234,7 +234,7 @@ func printx2(newline bool, args ...interface{}) int {
 // without caller
 func printx1(newline bool, args ...interface{}) int {
 	// argc := len(args)
-	argc := args.len()
+	argc := args.len
 	if argc == 0 {
 		return 0
 	}
@@ -247,13 +247,13 @@ func printx1(newline bool, args ...interface{}) int {
 		mty := efc._type
 		var kind int = mty.kind
 		var size int = mty.size
-		println(args.len(), kind, size)
+		println(args.len, kind, size)
 		varval := fmtstrbykind(kind, efc.data)
 		varvals = append(varvals, varval)
 	}
-	println(varvals.len(), 111)
+	println(varvals.len, 111)
 	fmtstr := ""
-	for i := 0; i < varvals.len(); i++ {
+	for i := 0; i < varvals.len; i++ {
 		varval := varvals[i]
 		fmtstr += varval.fmtstr + " "
 	}
@@ -263,7 +263,7 @@ func printx1(newline bool, args ...interface{}) int {
 	argptrs := []*voidptr{}
 	addr1 := cxstring_ptraddr(fmtstr)
 	argptrs = append(argptrs, addr1)
-	for i := 0; i < varvals.len(); i++ {
+	for i := 0; i < varvals.len; i++ {
 		varval := varvals[i]
 		argptrs = append(argptrs, varval.valpp)
 	}
@@ -274,7 +274,7 @@ func printx1(newline bool, args ...interface{}) int {
 
 	// unicall1(printf_fnptr, argptrs)
 	res := ""
-	for i := 0; i < varvals.len(); i++ {
+	for i := 0; i < varvals.len; i++ {
 		res += (varvals[i]).repr + " "
 	}
 	if newline {
@@ -410,7 +410,7 @@ func printx(a0 interface{}) {
 }
 func printint(a0 int) {
 	callers := Callers()
-	assert(callers.len() > skip_depth)
+	assert(callers.len > skip_depth)
 	caller := callers[skip_depth]
 	// println(caller.File, ":", caller.Lineno, caller.Funcname, a0)
 	trfile := trim_gopath(caller.File)
@@ -419,7 +419,7 @@ func printint(a0 int) {
 }
 func printstr(a0 string) {
 	callers := Callers()
-	assert(callers.len() > skip_depth)
+	assert(callers.len > skip_depth)
 	caller := callers[skip_depth]
 	// println(caller.File, ":", caller.Lineno, caller.Funcname, a0)
 	trfile := trim_gopath(caller.File)
@@ -429,7 +429,7 @@ func printstr(a0 string) {
 }
 func printptr(a0 voidptr) {
 	callers := Callers()
-	assert(callers.len() > skip_depth)
+	assert(callers.len > skip_depth)
 	caller := callers[skip_depth]
 	// println(caller.File, ":", caller.Lineno, caller.Funcname, a0)
 	trfile := trim_gopath(caller.File)
@@ -438,7 +438,7 @@ func printptr(a0 voidptr) {
 }
 func printflt(a0 f64) {
 	callers := Callers()
-	assert(callers.len() > skip_depth)
+	assert(callers.len > skip_depth)
 	caller := callers[skip_depth]
 	// println(caller.File, ":", caller.Lineno, caller.Funcname, a0)
 	trfile := trim_gopath(caller.File)
