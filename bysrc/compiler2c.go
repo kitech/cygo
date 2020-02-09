@@ -409,12 +409,14 @@ func (c *g2nc) genPostFuncDecl(scope *ast.Scope, fd *ast.FuncDecl) {
 		if fd.Type.Results != nil {
 			c.out("return").outsp()
 		}
-		// c.out(c.pkgpfx())
+
 		if fd.Recv != nil {
 			tystr := c.exprTypeName(scope, fd.Recv.List[0].Type)
 			tystr = strings.Trim(tystr, "*")
 			c.out(tystr)
 			c.out(mthsep)
+		} else {
+			c.out(c.pkgpfx())
 		}
 		c.out(fd.Name.Name).out("(")
 		if fd.Recv != nil {
