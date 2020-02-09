@@ -187,3 +187,23 @@ func tyname2typobj(tyname string, tyexpr ast.Expr) types.Type {
 	}
 	return typobj
 }
+
+///
+// error handling
+type ExceptionInfo struct {
+	index     int
+	callexpr  *ast.CallExpr
+	gotolab   string
+	gobaklab  string
+	catchexpr *ast.CatchStmt
+}
+type FuncExceptions struct {
+	fndecl     *ast.FuncDecl
+	callexes   []*ExceptionInfo
+	gotolab    string
+	catchexprs []*ast.CatchStmt
+}
+
+func (pc *ParserContext) findexcepts(fd *ast.FuncDecl) {
+
+}

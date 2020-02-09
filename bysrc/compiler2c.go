@@ -31,10 +31,17 @@ type g2nc struct {
 	pkgo   *ast.Package
 
 	info *types.Info
+
+	fnexcepts map[*ast.FuncDecl]*FuncExceptions
 }
 
-func (this *g2nc) genpkgs() {
+func (this *g2nc) initfields() {
 	this.info = &this.psctx.info
+	this.fnexcepts = this.psctx.fnexcepts
+
+}
+func (this *g2nc) genpkgs() {
+	this.initfields()
 
 	// pkgs order?
 	for pname, pkg := range this.psctx.pkgs {
@@ -657,7 +664,7 @@ func (this *g2nc) genBlockStmt(scope *ast.Scope, stmt *ast.BlockStmt) {
 		if !tailreturn {
 			this.genDeferStmt(scope, tailstmt)
 		}
-		this.genExceptionStmt(scope, tailstmt)
+		this.genExceptionStmt(scope, stmt)
 	}
 	this.out("}").outnl()
 }
@@ -718,7 +725,7 @@ func (this *g2nc) genStmt(scope *ast.Scope, stmt ast.Stmt, idx int) {
 	case *ast.SwitchStmt:
 		this.genSwitchStmt(scope, t)
 	case *ast.CatchStmt:
-		this.genCatchStmt(scope, t)
+		// this.genCatchStmt(scope, t)
 	case *ast.CaseClause:
 		// addfh = false
 		this.genCaseClause(scope, t, idx)
@@ -1881,6 +1888,20 @@ func (c *g2nc) genCallExprExceptionJump(scope *ast.Scope, te *ast.CallExpr) {
 
 	if fca.haserrret {
 		c.outfh().outnl()
+
+		upfd := upfindFuncDeclNode(c.psctx, te, 0)
+		gopp.Assert(upfd != nil, "wtfff", te.Fun)
+		fnexc, ok := c.fnexcepts[upfd]
+		gopp.Assert(ok, "wtfff", upfd.Name, te.Fun)
+		var exi *ExceptionInfo
+		for _, ex := range fnexc.callexes {
+			if ex.callexpr == te {
+				exi = ex
+				break
+			}
+		}
+		gopp.Assert(exi != nil, "wtfff", upfd.Name, te.Fun)
+
 		tmphaslval := tmptyname() + "lval"
 		c.outf("bool %v = %v", tmphaslval, fca.haslval).outfh().outnl()
 		c.out(gopp.IfElseStr(fca.haslval, "", "//"))
@@ -1891,9 +1912,49 @@ func (c *g2nc) genCallExprExceptionJump(scope *ast.Scope, te *ast.CallExpr) {
 		c.outfh().outnl()
 		c.outf("if (%v && gxtvtoperr != nilptr) {", tmphaslval).outnl()
 		c.outf("     gxtvtoperr_lineno = __LINE__").outfh().outnl()
-		c.outf("//   goto ???").outfh().outnl()
+		c.outf("//   goto %v  %v???", fnexc.gotolab, exi.index).outfh().outnl()
+		c.outf("  gxjmpfromidx = %v", exi.index).outfh().outnl()
+		c.outf("  goto %v", fnexc.gotolab).outfh().outnl()
 		c.outf("}").outnl()
-		c.outf("// gotobacklab1: ").outfh().outnl()
+		c.outf("// gobaklab %v: ", exi.index).outfh().outnl()
+		c.outf("%v:", exi.gobaklab).outfh().outnl()
+		c.outf("if (gxtvtoperr != nilptr) {").outnl()
+		c.outf(" // return now").outfh().outnl()
+		// 当前函数无返回，或者无error返回值，则panic
+		// 当前函数单返回值，直接返回err
+		// 当前函数多返回值，则给其中的err字段赋值，并返回
+		fnrety := upfd.Type
+		if fnrety.Results == nil || len(fnrety.Results.List) == 0 {
+			c.outf(" // panic").outfh().outnl()
+			c.outf("panic(nilptr)").outfh().outnl()
+		} else if len(fnrety.Results.List) == 1 {
+			retfld := fnrety.Results.List[0]
+			if fmt.Sprintf("%v", retfld.Type) == "error" {
+				c.outf("return").outsp()
+				c.genExpr(scope, fca.lexpr)
+				c.outfh().outnl()
+			} else {
+				c.outf(" // panic").outfh().outnl()
+			}
+		} else {
+			reterridx := -1
+			for i := len(fnrety.Results.List) - 1; i >= 0; i++ {
+				retfld := fnrety.Results.List[i]
+				if fmt.Sprintf("%v", retfld.Type) == "error" {
+					reterridx = i
+					break
+				}
+			}
+			if reterridx < 0 {
+				c.outf(" // panic").outfh().outnl()
+			} else {
+				rtvname := c.multirets[upfd]
+				c.outf("%v->%v = gxtvtoperr", rtvname, tmpvarname2(reterridx))
+				c.outfh().outnl()
+				c.outf("return %v", rtvname).outfh().outnl()
+			}
+		}
+		c.outf("}").outnl()
 	}
 }
 
@@ -2239,23 +2300,29 @@ func (c *g2nc) genDeferStmt(scope *ast.Scope, e ast.Stmt) {
 
 func (c *g2nc) genExceptionStmt(scope *ast.Scope, e ast.Stmt) {
 	dstfd := upfindFuncDeclNode(c.psctx, e, 0)
-	defers := []*ast.DeferStmt{}
-	for _, defero := range c.psctx.defers {
-		tmpfd := upfindFuncDeclNode(c.psctx, defero, 0)
-		if tmpfd != dstfd {
-			continue
-		}
-		defers = append(defers, defero)
+	// log.Println("got excepts return", len(defers))
+	fnexc, ok := c.fnexcepts[dstfd]
+	excposcnt := 0
+	if ok {
+		excposcnt = len(fnexc.callexes)
 	}
-	// log.Println("got defered return", len(defers))
-	c.outf("// exception section %v", len(defers)).outnl()
-	if len(defers) == 0 {
-		// return
+	c.outf("// exception section %v", excposcnt).outnl()
+	if !ok {
+		log.Println(dstfd.Name, ok, reftyof(e))
+		return
 	}
-	for i := 0; i < 3; i++ {
-		tmplab := tmpvarname()
-		c.outf("%s:;", tmplab).outnl()
+
+	c.outf("%s:;", fnexc.gotolab).outnl()
+	if len(fnexc.catchexprs) > 0 {
+		c.genCatchStmt(scope, fnexc.catchexprs[0])
 	}
+	c.out("switch (gxjmpfromidx) {")
+	for idx, exi := range fnexc.callexes {
+		tmplab := exi.gobaklab
+		c.outf("case %d: ", idx).outnl()
+		c.outf("goto %s; break;", tmplab).outnl()
+	}
+	c.out("}")
 }
 
 // keepvoid

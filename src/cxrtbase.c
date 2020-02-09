@@ -104,6 +104,10 @@ void* cxrt_chan_recv(void*ch) {
 error* error_new_zero() {
     return (error*)cxmalloc(sizeof(error));
 }
+cxstring* error_Error(error* err) {
+    return cxstring_new_cstr(err->data);
+}
+
 void printlndep(const char* fmt, ...) {
     va_list arg;
     int done;
@@ -136,7 +140,7 @@ void println3(const char* origfilename, int origlineno, const char* filename, in
 }
 
 #define MAX_STACK_LEVELS  50
-void panic(cxstring*s) {
+void panic_cimpl(cxstring*s) {
     if (s != nilptr) {
         printf("%.*s", s->len, s->ptr);
     }else{
@@ -148,18 +152,18 @@ void panic(cxstring*s) {
     // print to stderr (fd = 2), and remove this function from the trace
     backtrace_symbols_fd(buffer + 1, levels - 1, 2);
 
-    memcpy((void*)0x1, "abc", 3);
+    memcpy((void*)0xfffffffff, (void*)0xffffffff, 0x1);
     // abort();
     // raise(SIGABRT);
 }
-void panicln(cxstring*s) {
+void panicln_cimpl(cxstring*s) {
     cxstring* lr = cxstring_new_cstr("\n");
     if (s != nilptr) {
         s = cxstring_add(s, lr);
     } else{
         s = lr;
     }
-    panic(s);
+    panic_cimpl(s);
 }
 
 #include <unistd.h>

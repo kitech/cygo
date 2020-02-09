@@ -144,7 +144,7 @@ cxstring* GoString(char* s);
 cxstring* GoStringN(char* s, int n);
 cxstring* cxstring_dup(cxstring* s);
 int cxstring_cmp(cxstring* s0, cxstring* s1);
-void panic(cxstring* s);
+void panic(cxeface* v);
 void panicln(cxstring*s);
 extern cxstring* cxstring_replace(cxstring* s0, cxstring* old, cxstring* new, int count);
 
@@ -152,11 +152,13 @@ extern cxarray2* cxstring_split(cxstring* s0, cxstring* s1);
 extern cxarray2* cxstring_splitch(cxstring* s0, int s1);
 // cxstring end
 
-typedef struct error {
-    void* data;
-    cxstring*(*Error)();
-} error;
+typedef struct error error;
+struct error {
+    void* data; // error's this object
+    cxstring*(*Error)(error*);
+};
 error* error_new_zero();
+cxstring* error_Error(error* err);
 
 // cxhashtable begin
 HashTable* cxhashtable_new();

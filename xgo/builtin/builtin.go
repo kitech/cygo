@@ -91,12 +91,44 @@ func unsafe__Offsetof111(a int) int {
 	return 0
 }
 
-// func panic()   {}
-func panicln()         {}
+// func panic()           {}
 func fatal()           {}
 func fatalln()         {}
 func throw(err error)  {}
 func report(err error) {}
+
+//export panic
+func panic_goimpl(v interface{}) {
+	println("panic_goimpl")
+	abort()
+}
+
+func fatal2()           {}
+func fatalln2()         {}
+func throw2(err error)  {}
+func report2(err error) {}
+
+func raise(sig int) int { return C.raise(sig) }
+func abort()            { C.abort() }
+
+func cerrclr() {
+	C.errno = 0
+}
+func cerrno() int {
+	return C.errno
+}
+func cerrmsg() string {
+	emsg := C.strerror(C.errno)
+	return gostring(emsg)
+}
+func cerrmsgof(no int) string {
+	emsg := C.strerror(no)
+	return gostring(emsg)
+}
+func prtcerr(pfx string) {
+	pfx = pfx + cerrmsg()
+	println(pfx)
+}
 
 // 非侵入式异常机制 - 即，不改变主逻辑的缩进结构
 // 一种处理 err 的写法，是否可行
@@ -145,25 +177,6 @@ func unierrchk() {
 	*/
 }
 
-func cerrclr() {
-	C.errno = 0
-}
-func cerrno() int {
-	return C.errno
-}
-func cerrmsg() string {
-	emsg := C.strerror(C.errno)
-	return gostring(emsg)
-}
-func cerrmsgof(no int) string {
-	emsg := C.strerror(no)
-	return gostring(emsg)
-}
-func prtcerr(pfx string) {
-	pfx = pfx + cerrmsg()
-	println(pfx)
-}
-
 // TODO need compiler
 func errbreak()
 func errcontinue()
@@ -176,10 +189,7 @@ func errpanic(err error, args ...interface{}) {
 	}
 	var errmsg string = err.Error()
 	println("err", errmsg)
-	var int0x1 = 0x1
-	// var addr0x1 = (voidptr)(uintptr)(int0x1) // TODO compiler
-	var addr0x1 = (voidptr)(uintptr(int0x1))
-	memcpy3(addr0x1, addr0x1, int0x1)
+	abort()
 }
 func errfatal(err error, args ...interface{}) {
 	if err == nil {
@@ -235,10 +245,7 @@ func nilpanic(obj voidptr, args ...interface{}) {
 	}
 	// println("nil", obj, args...)
 	println("nil", obj)
-	var int0x1 = 0x1
-	// var addr0x1 = (voidptr)(uintptr)(int0x1) // TODO compiler
-	var addr0x1 = (voidptr)(uintptr(int0x1))
-	memcpy3(addr0x1, addr0x1, int0x1)
+	abort()
 }
 func nilfatal(obj voidptr, args ...interface{}) {
 	if obj != nil {
@@ -264,4 +271,14 @@ func nildo(obj voidptr, nilfn func()) {
 		return
 	}
 	nilfn()
+}
+
+type mirerror struct {
+	obj   voidptr // error's this object
+	Error func(obj voidptr) string
+}
+
+//export error_Errorddd
+func error_Errorddd(err error) string {
+	return ""
 }
