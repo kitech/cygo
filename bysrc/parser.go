@@ -560,6 +560,15 @@ func (pc *ParserContext) walkpass_fill_fakecpkg() {
 	tmpidts := map[*ast.Ident]*types.Var{}
 	tmpidts2 := map[*ast.Ident]*csyminfo{}
 	inconst := false
+
+	intmpidts2 := func(idt *ast.Ident) *csyminfo {
+		for t, csi := range tmpidts2 {
+			if t.Name == idt.Name {
+				return csi
+			}
+		}
+		return nil
+	}
 	for _, pkg := range pkgs {
 		astutil.Apply(pkg, func(c *astutil.Cursor) bool {
 			switch te := c.Node().(type) {
@@ -576,15 +585,25 @@ func (pc *ParserContext) walkpass_fill_fakecpkg() {
 					if fe, ok := pn.(*ast.Field); ok {
 						atye = fe.Type
 					}
+					if fe, ok := pn.(*ast.CallExpr); ok { // sizeof(C.pthread_mutex_t)
+						if false {
+							log.Println(fe.Args[0], reftyof(fe.Args[0]))
+						}
+					}
 					istype := atye == te // 是否是在type的位置上
-					// log.Println("got111", te.X, te.Sel, c.Index(), inconst, reftyof(pn), atye, reftyof(atye), atye == te, istype)
+					// log.Println("got111", te.X, te.Sel, c.Index(), inconst, reftyof(pn), atye, reftyof(atye), atye == te, istype, exprpos(pc, te))
 					v1 := fakecvar(te.Sel, fcpkg)
 					// scope.Insert(v1)
 					tmpidts[te.Sel] = v1
 					csi := newcsyminfo(te.Sel, v1)
 					csi.istype = istype
 					csi.isconst = inconst
-					tmpidts2[te.Sel] = csi
+					if ocsi := intmpidts2(te.Sel); ocsi != nil {
+						tmpidts2[te.Sel] = ocsi
+						ocsi.istype = ocsi.istype || istype
+					} else {
+						tmpidts2[te.Sel] = csi
+					}
 
 					// 怎么获对应的变量名
 					valspx := upfind_func(pc, c, 0, func(c2 *astutil.Cursor) bool {
@@ -689,23 +708,37 @@ func (pc *ParserContext) walkpass_fill_fakecpkg() {
 		if obj := scope.Lookup(idt.Name); obj != nil {
 			continue
 		}
+
 		csi := tmpidts2[idt]
+		if false {
+			log.Println(idtname, csi != nil, csi.istype, csi.isfield)
+		}
 		if strings.HasPrefix(idtname, "struct_") {
 		} else if csi != nil && csi.istype {
 			// log.Println("gen fakectype", csi.idt)
 			ctystr, ctyobj := pc.cpr.symtype(idtname)
 			if false {
-				log.Println(pc.bdpkgs.Name, idtname, ctystr, ctyobj)
+				log.Println(pc.bdpkgs.Name, idtname, "/", ctystr, "/", ctyobj)
 			}
 			if ctyobj != nil {
-				stobj := types.NewTypeName(token.NoPos, fcpkg, idtname, nil)
+				stobj := types.NewTypeName(token.NoPos, fcpkg, idtname+"kkk", nil)
 				stobj2 := types.NewNamed(stobj, ctyobj, nil)
+				scope.Insert(stobj2.Obj())
+			} else if ctyobj == nil && strings.HasPrefix(ctystr, "union{") {
+				stname := idtname
+				var fldvars []*types.Var
+				var1 := types.NewVar(token.NoPos, fcpkg, "itunion", types.Typ[types.Bool])
+				fldvars = append(fldvars, var1)
+				sty1 := types.NewStruct(fldvars, nil)
+				// keep NewTypeName's type arg nil, so next step get a valid struct type
+				stobj := types.NewTypeName(token.NoPos, fcpkg, stname, nil)
+				stobj2 := types.NewNamed(stobj, sty1, nil)
 				scope.Insert(stobj2.Obj())
 			} else {
 				sty1 := types.Typ[types.Voidptr]
 				// st1 := types.Typ[types.UnsafePointer]
 				// st1 := types.NewCtype(idtname + "__ctype")
-				stobj := types.NewTypeName(token.NoPos, fcpkg, idtname, nil)
+				stobj := types.NewTypeName(token.NoPos, fcpkg, idtname+"iii", nil)
 				stobj2 := types.NewNamed(stobj, sty1, nil)
 				_ = stobj
 				scope.Insert(stobj2.Obj())
@@ -715,7 +748,7 @@ func (pc *ParserContext) walkpass_fill_fakecpkg() {
 			if ctyobj == nil {
 				log.Println(pc.bdpkgs.Name, idtname, ctystr, ctyobj)
 				scope.Insert(varx)
-				idtobj := ast.NewIdent(varx.Name() + "_asconst")
+				idtobj := ast.NewIdent(varx.Name() + "_asconst_nnn")
 				cst1 := fakecconst(idtobj, fcpkg)
 				scope.Insert(cst1)
 			} else {

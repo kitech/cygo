@@ -17,6 +17,10 @@ func init() {
 		// impl2
 		// sz2 := unsafe.Sizeof(Mutex{}) // TODO compiler
 		// assert(sz2 == sizeof(C.pthread_mutex_t))
+
+		// impl3
+		// sz1 := unsafe.Sizeof(Mutex{})  // TODO compiler
+		// sz2 := unsafe.Sizeof(C.pthread_mutex_t{})  // TODO compiler
 	}
 }
 
