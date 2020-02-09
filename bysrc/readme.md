@@ -22,7 +22,7 @@
 * [x] 需要定义几个常用的内置类型， unsafe.Pointer => voidptr, byteptr
 * [x] len(), cap()的写法使用方法方式
 * [x] assert, sizeof, alignof, offsetof 内置
-* [ ] union 支持
+* [ ] C union 支持。转到go要用 struct
 * [x] := range => in
 * [x] for 循环中占位符号省略，对slice和map都可以省略两个占位符
 * [x] for x in low..high
@@ -36,6 +36,7 @@
 * [ ] type order graph
 * [ ] catch 语法错误/异常处理
 * [ ] let 替换const
+* [ ] 三元运算符号，值表达式只准使用常量或者ident
 
 ### 语法树重写
 * [ ] 变量声明解构为每条语句一个变量，如果有多个的话

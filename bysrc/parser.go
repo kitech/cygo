@@ -119,8 +119,11 @@ func (this *ParserContext) Init_no_cgocmd(semachk bool) error {
 	this.ccode = this.pickCCode()
 
 	cp1 := newcparser1(bdpkgs.Name)
-	cp1.parsestr(this.ccode)
+	err = cp1.parsestr(this.ccode)
 	this.cpr = cp1
+	if err != nil {
+		log.Fatalln(bdpkgs.Name, err)
+	}
 
 	this.walkpass_valid_files()
 	this.walkpass_fill_funcvars()
@@ -163,27 +166,37 @@ func (pc *ParserContext) pkgimperror(err error) {
 	if err == nil {
 		return
 	}
-	if strings.Contains(err.Error(), "declared but not used") ||
+	chkwarns := []error{}
+	chkunks := []error{}
+	_ = chkwarns
+	_ = chkunks
+	// warnerrs := []string{}
+	// fatalerrs := []string{}
+	// must stop error
+	if strings.Contains(err.Error(), "could not import") ||
+		strings.Contains(err.Error(), "no result values expected") ||
+		strings.Contains(err.Error(), "missing return") ||
+		strings.Contains(err.Error(), "has no field or method") ||
+		strings.Contains(err.Error(), "variable) is not a type") ||
+		false {
+		log.Println("fatalerr", err)
+		pc.chkerrs = append(pc.chkerrs, err)
+	} else if strings.Contains(err.Error(), "__ctype ") ||
+		// TODO
+		strings.Contains(err.Error(), "(type) is not an expression") ||
+		false {
+		log.Println("warn5err", err)
+	} else if strings.Contains(err.Error(), "declared but not used") ||
 		strings.Contains(err.Error(), "not exported by package C") ||
 		strings.Contains(err.Error(), "too many arguments") ||
 		strings.Contains(err.Error(), "not exported by package") ||
 		(strings.Contains(err.Error(), "cannot convert") &&
 			(strings.Contains(err.Error(), "__ctype "))) {
 		// log.Println(err)
+		chkwarns = append(chkwarns, err)
 	} else {
-		log.Println(err)
-		// must stop error
-		if strings.Contains(err.Error(), "could not import") ||
-			strings.Contains(err.Error(), "no result values expected") ||
-			strings.Contains(err.Error(), "missing return") ||
-			// TODO
-			// strings.Contains(err.Error(), "is not an expression") ||
-			strings.Contains(err.Error(), "has no field or method") ||
-			// TODO
-			// strings.Contains(err.Error(), "variable) is not a type") ||
-			false {
-			pc.chkerrs = append(pc.chkerrs, err)
-		}
+		log.Println("unkerr", err)
+		chkunks = append(chkunks, err)
 	}
 }
 func (this *ParserContext) Init_explict_cgo() error {

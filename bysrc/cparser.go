@@ -163,11 +163,12 @@ func rmoldtccppfiles() {
 		gopp.ErrPrint(err, filename)
 	}
 }
-func (cp *cparser1) parsestr(code string) bool {
+func (cp *cparser1) parsestr(code string) error {
 	rmoldtccppfiles()
 	filename := fmt.Sprintf("/tmp/tcctrspp.%s.%d.c", cp.name, rand.Intn(10000000)+50000)
 	cp1cache.ppfiles[filename] = 1
 
+	// TODO hard code path
 	incdirs := []string{"/home/me/oss/src/cxrt/src",
 		"/home/me/oss/src/cxrt/3rdparty/cltc/src",
 		"/home/me/oss/src/cxrt/3rdparty/tcc"}
@@ -179,8 +180,11 @@ func (cp *cparser1) parsestr(code string) bool {
 	code = "#include <cxrtbase.h>\n" + code
 	btime := time.Now()
 	err := tccpp(code, filename, incdirs)
-	gopp.ErrPrint(err, filename)
-	log.Println("tccpp", time.Since(btime))
+	gopp.ErrPrint(err, cp.name, filename)
+	log.Println("tccpp", cp.name, err, time.Since(btime))
+	if err != nil {
+		return err
+	}
 
 	bcc, err := ioutil.ReadFile(filename)
 	gopp.ErrPrint(err, filename)
@@ -195,15 +199,15 @@ func (cp *cparser1) parsestr(code string) bool {
 	cp.ppsrc = bcc
 	cp.pplines = cp.clrlines
 	cp.clrlines = nil
-	log.Println("clrpp", time.Since(btime))
+	log.Println("clrpp", cp.name, time.Since(btime))
 
 	btime = time.Now()
 	trn := cp.prsit.Parse(bcc)
 	cp.trn = trn
-	log.Println("trsit parse", time.Since(btime))
+	log.Println("trsit parse", cp.name, time.Since(btime))
 
 	cp.collect()
-	return true
+	return err
 }
 
 func (cp *cparser1) parsefile(filename string) bool {
@@ -403,6 +407,10 @@ func (cp *cparser1) walk(n *sitter.Node, lvl int) {
 			txt := cp.exprtxt(n)
 			log.Println(n.Type(), len(txt), txt)
 		}
+	}
+	if false {
+		txt := cp.exprtxt(n)
+		log.Println(n.Type(), len(txt), txt)
 	}
 
 	brn := int(n.ChildCount())
@@ -685,7 +693,7 @@ func (cp *cparser1) ctype2go(sym, tystr string) (tystr2 string, tyobj types.Type
 		tyobj = types.Typ[types.Int64]
 	case "long long int":
 		tyobj = types.Typ[types.Int64]
-	case "unsigned long":
+	case "unsigned long", "unsigned long int":
 		tyobj = types.Typ[types.Uint64]
 	case "unsigned", "unsigned int", "uint":
 		tyobj = types.Typ[types.Uint]
@@ -703,6 +711,8 @@ func (cp *cparser1) ctype2go(sym, tystr string) (tystr2 string, tyobj types.Type
 		tyobj = types.Typ[types.Float64]
 	case "float":
 		tyobj = types.Typ[types.Float32]
+	case "_Bool":
+		tyobj = types.Typ[types.Bool]
 
 	default:
 		if strings.HasPrefix(tystr, "struct ") && strings.HasSuffix(tystr, "*") {
