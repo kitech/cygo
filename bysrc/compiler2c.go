@@ -533,8 +533,6 @@ func (this *g2nc) genFuncDecl(scope *ast.Scope, fd *ast.FuncDecl) {
 		}
 		gentoperr := func() {
 			this.out("// uniform error like exception").outnl()
-			this.out("error* gxtvtoperr").outeq().out(cuzero).outfh().outnl()
-			this.out("int gxtvtoperr_lineno").outeq().out(cuzero).outfh().outnl()
 		}
 
 		scope = ast.NewScope(scope)
@@ -813,6 +811,8 @@ func (c *g2nc) genAssignStmt(scope *ast.Scope, s *ast.AssignStmt) {
 			c.out("error*").outsp()
 			c.genExpr(scope, s.Lhs[i])
 			c.outeq()
+			lety := c.info.TypeOf(s.Lhs[i])
+			gopp.Assert(lety != nil, "wtfff", rety, s.Rhs[i], s.Lhs[i])
 			if c.info.TypeOf(s.Rhs[i]) == c.info.TypeOf(s.Lhs[i]) {
 				c.genExpr(scope, s.Rhs[i])
 			} else {
@@ -854,7 +854,12 @@ func (c *g2nc) genAssignStmt(scope *ast.Scope, s *ast.AssignStmt) {
 			if isstrty2(goty) && s.Tok == token.ADD_ASSIGN {
 				c.out(")")
 			}
+
 			// c.outfh().outnl()
+		}
+
+		if i < len(s.Lhs)-1 {
+			c.outfh().outnl()
 		}
 	}
 
@@ -1892,22 +1897,22 @@ func (c *g2nc) genCallExprExceptionJump(scope *ast.Scope, te *ast.CallExpr) {
 		}
 		gopp.Assert(exi != nil, "wtfff", upfd.Name, te.Fun)
 
-		tmphaslval := tmptyname() + "lval"
-		c.outf("bool %v = %v", tmphaslval, fca.haslval).outfh().outnl()
 		c.out(gopp.IfElseStr(fca.haslval, "", "//"))
 		c.outf("gxtvtoperr =")
 		if fca.haslval {
 			c.genExpr(scope, fca.lexpr)
 		}
 		c.outfh().outnl()
+		tmphaslval := tmptyname() + "lval"
+		c.outf("bool %v = %v", tmphaslval, fca.haslval).outfh().outnl()
 		c.outf("if (%v && gxtvtoperr != nilptr) {", tmphaslval).outnl()
 		c.outf("     gxtvtoperr_lineno = __LINE__").outfh().outnl()
 		c.outf("//   goto %v  %v???", fnexc.gotolab, exi.index).outfh().outnl()
 		c.outf("  gxjmpfromidx = %v", exi.index).outfh().outnl()
 		c.outf("  goto %v", fnexc.gotolab).outfh().outnl()
 		c.outf("}").outnl()
-		c.outf("// gobaklab %v: ", exi.index).outfh().outnl()
-		c.outf("%v:", exi.gobaklab).outfh().outnl()
+		c.outf("%v:; // %v noerr or jmpbak from %v",
+			exi.gobaklab, exi.index, fnexc.gotolab).outfh().outnl()
 		c.outf("if (gxtvtoperr != nilptr) {").outnl()
 		c.outf(" // return now").outfh().outnl()
 		// 当前函数无返回，或者无error返回值，则panic

@@ -181,6 +181,7 @@ func (pc *ParserContext) pkgimperror(err error) {
 		strings.Contains(err.Error(), "missing return") ||
 		strings.Contains(err.Error(), "has no field or method") ||
 		strings.Contains(err.Error(), "variable) is not a type") ||
+		strings.Contains(err.Error(), "invalid statement") ||
 		false {
 		log.Println("fatalerr", err)
 		pc.chkerrs = append(pc.chkerrs, err)
@@ -1356,6 +1357,8 @@ func (pc *ParserContext) walkpass_func_deps2() {
 func (pc *ParserContext) walkpass_fill_funcvars() {
 	pkgs := pc.pkgs
 	var toperrvarobj *ast.Ident
+	var jmpfidxvarobj *ast.Ident
+	var errlnovarobj *ast.Ident
 	_ = toperrvarobj
 	for _, pkg := range pkgs {
 		astutil.Apply(pkg, func(c *astutil.Cursor) bool {
@@ -1370,8 +1373,13 @@ func (pc *ParserContext) walkpass_fill_funcvars() {
 				toperrvar, declvar := newVardecl("gxtvtoperr", newIdent("error"), te.Body.Pos())
 				te.Body.List = append([]ast.Stmt{declvar}, te.Body.List...)
 				toperrvarobj = toperrvar
-				_, declvar2 := newVardecl("gxjmpfromidx", newIdent("int"), te.Body.Pos())
+				jmpfidxvar, declvar2 := newVardecl("gxjmpfromidx", newIdent("int"), te.Body.Pos())
 				te.Body.List = append([]ast.Stmt{declvar2}, te.Body.List...)
+				jmpfidxvarobj = jmpfidxvar
+
+				errlnovar, declvar3 := newVardecl("gxtvtoperr_lineno", newIdent("int"), te.Body.Pos())
+				te.Body.List = append([]ast.Stmt{declvar3}, te.Body.List...)
+				errlnovarobj = errlnovar
 
 				// add return if not have
 				lastmt := te.Body.List[len(te.Body.List)-1]
@@ -1416,6 +1424,21 @@ func (pc *ParserContext) walkpass_fill_funcvars() {
 				te.Init = assign
 				te.Tag = assign.Lhs[0]
 				log.Println(te, toperrvarobj == nil)
+
+				// erridx := gxjmpfromidx
+				erridxidt := newIdent("erridx")
+				erridxidt.Obj = ast.NewObj(ast.Var, erridxidt.Name)
+				erridxidt.NamePos = te.Pos()
+				assign.Lhs = append(assign.Lhs, erridxidt)
+				assign.Rhs = append(assign.Rhs, jmpfidxvarobj)
+
+				// errlno := gxtvtoperr_lineno
+				errlnoidt := newIdent("errlno")
+				errlnoidt.Obj = ast.NewObj(ast.Var, errlnoidt.Name)
+				errlnoidt.NamePos = te.Pos()
+				assign.Lhs = append(assign.Lhs, errlnoidt)
+				assign.Rhs = append(assign.Rhs, errlnovarobj)
+
 			case *ast.SwitchStmt:
 			default:
 				gopp.G_USED(te)
@@ -1618,7 +1641,7 @@ func (pc *ParserContext) walkpass_tmpvars() {
 						}
 						lexpr := newIdent(tmpvarname())
 						vsp2.Lhs = []ast.Expr{lexpr}
-						pc.info.Types[lexpr] = newtyandval(fntyx)
+						pc.info.Types[lexpr] = newtyandval(pc.info.TypeOf(te))
 					}
 					stmtc := pc.cursors[stmt]
 					stmtp := stmtc.Parent()

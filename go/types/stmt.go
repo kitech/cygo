@@ -547,6 +547,48 @@ func (check *Checker) stmt(ctxt stmtContext, s ast.Stmt) {
 			check.closeScope()
 		}
 
+	case *ast.CatchStmt: // === *ast.SwitchStmt
+		inner |= breakOk
+		check.openScope(s, "catch")
+		defer check.closeScope()
+
+		check.simpleStmt(s.Init)
+		var x operand
+		if s.Tag != nil {
+			check.expr(&x, s.Tag)
+			// By checking assignment of x to an invisible temporary
+			// (as a compiler would), we get all the relevant checks.
+			check.assignment(&x, nil, "switch expression")
+		} else {
+			// spec: "A missing switch expression is
+			// equivalent to the boolean value true."
+			x.mode = constant_
+			x.typ = Typ[Bool]
+			x.val = constant.MakeBool(true)
+			x.expr = &ast.Ident{NamePos: s.Body.Lbrace, Name: "true"}
+		}
+
+		check.multipleDefaults(s.Body.List)
+
+		seen := make(valueMap) // map of seen case values to positions and types
+		for i, c := range s.Body.List {
+			clause, _ := c.(*ast.CaseClause)
+			if clause == nil {
+				check.invalidAST(c.Pos(), "incorrect expression switch case")
+				continue
+			}
+			check.caseValues(&x, clause.List, seen)
+			check.openScope(clause, "case")
+			inner := inner
+			if i+1 < len(s.Body.List) {
+				inner |= fallthroughOk
+			} else {
+				inner |= finalSwitchCase
+			}
+			check.stmtList(inner, clause.Body)
+			check.closeScope()
+		}
+
 	case *ast.TypeSwitchStmt:
 		inner |= breakOk
 		check.openScope(s, "type switch")
