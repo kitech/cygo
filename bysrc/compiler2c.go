@@ -9,10 +9,8 @@ import (
 	"log"
 	"path/filepath"
 	"reflect"
-	"runtime"
 	"runtime/debug"
 	"strings"
-	"unsafe"
 
 	"github.com/thoas/go-funk"
 )
@@ -275,13 +273,9 @@ func (c *g2nc) genMultiretTypes(scope *ast.Scope, pkg *ast.Package) {
 					}
 				case *types.Slice:
 					recurzero = true
-					elemtyt := fldty.Elem()
-					tyszer := types.SizesFor(runtime.Compiler, runtime.GOARCH)
-					var elemsz interface{} = tyszer.Sizeof(elemtyt)
-					elemsz = gopp.IfElse(elemsz == uintptr(0), "sizeof(voidptr)", elemsz)
-					elemsz = gopp.IfElse(elemsz == int64(0), "sizeof(voidptr)", elemsz)
-					c.outf("obj->%s=cxarray2_new(0,%v)",
-						tmpvarname2(cnter), elemsz).outfh().outnl()
+					c.outf("obj->%s=cxarray2_new(0,", tmpvarname2(cnter))
+					etystr := c.exprTypeNameImpl2(scope, fldty.Elem(), nil)
+					c.outf("sizeof(%s))", etystr).outfh().outnl()
 				}
 				if !recurzero {
 					c.out("//")
@@ -510,8 +504,7 @@ func (this *g2nc) genFuncDecl(scope *ast.Scope, fd *ast.FuncDecl) {
 	} else if fd.Body != nil {
 		gendeferprep := func() {
 			this.out("// int array").outnl()
-			elemsz := "sizeof(int)"
-			this.outf("cxarray2* deferarr = cxarray2_new(0, %v)", elemsz).outfh().outnl()
+			this.outf("cxarray2* deferarr=cxarray2_new(0, sizeof(int))").outfh().outnl()
 		}
 		gennamedrets := func() {
 			this.out("//named returns").outnl()
@@ -531,13 +524,9 @@ func (this *g2nc) genFuncDecl(scope *ast.Scope, fd *ast.FuncDecl) {
 							this.outf("%v=cxstring_new()", name).outfh().outnl()
 						}
 					case *types.Slice:
-						elemtyt := fldty.Elem()
-						tyszer := types.SizesFor(runtime.Compiler, runtime.GOARCH)
-						var elemsz interface{} = tyszer.Sizeof(elemtyt)
-						elemsz = gopp.IfElse(elemsz == uintptr(0), "sizeof(voidptr)", elemsz)
-						elemsz = gopp.IfElse(elemsz == int64(0), "sizeof(voidptr)", elemsz)
-						this.outf("%v=cxarray2_new(0,%v)",
-							name, elemsz).outfh().outnl()
+						this.outf("%v=cxarray2_new(0,", name)
+						etystr := this.exprTypeNameImpl2(scope, fldty.Elem(), nil)
+						this.outf("sizeof(%s))", etystr).outfh().outnl()
 					}
 				}
 			}
@@ -1515,17 +1504,14 @@ func (c *g2nc) genCallExprMake(scope *ast.Scope, te *ast.CallExpr) {
 		elemtya := te.Args[0].(*ast.ArrayType).Elt
 		// log.Println(te.Args[0], reftyof(te.Args[0]), elemtya, reftyof(elemtya))
 		elemtyt := c.info.TypeOf(elemtya)
-		tyszer := types.SizesFor(runtime.Compiler, runtime.GOARCH)
-		var elemsz interface{} = tyszer.Sizeof(elemtyt)
-		elemsz = gopp.IfElse(elemsz == uintptr(0), "sizeof(voidptr)", elemsz)
-		elemsz = gopp.IfElse(elemsz == int64(0), "sizeof(voidptr)", elemsz)
 		c.outf("cxarray2_new(")
 		if len(te.Args) > 1 {
 			c.genExpr(scope, te.Args[1])
 		} else {
 			c.out("0")
 		}
-		c.outf(", %v)", elemsz)
+		etystr := c.exprTypeNameImpl2(scope, elemtyt, elemtya)
+		c.outf(", sizeof(%v))", etystr)
 	default:
 		log.Println("unknown", itep, ity, lenep)
 	}
@@ -1771,8 +1757,7 @@ func (c *g2nc) genCallExprNorm(scope *ast.Scope, te *ast.CallExpr) {
 		c.out(cuzero).outfh().outnl()
 	}
 	if fca.isvardic {
-		var elemsz interface{} = "sizeof(voidptr)"
-		c.outf("cxarray2* %s = cxarray2_new(0, %v)", idt.Name, elemsz).outfh().outnl()
+		c.outf("cxarray2* %s=cxarray2_new(0,sizeof(voidptr))", idt.Name).outfh().outnl()
 		prmty := fca.fnty.Params()
 		elemty := prmty.At(prmty.Len() - 1).Type().(*types.Slice).Elem()
 		// log.Println(te.Fun, prmty, reftyof(prmty), prmty.Len(), elemty, reftyof(elemty))
@@ -1835,12 +1820,17 @@ func (c *g2nc) genCallExprNorm(scope *ast.Scope, te *ast.CallExpr) {
 			c.out(vartystr + "_" + fca.selfn.Sel.Name)
 		}
 	} else {
-		fnobj := c.info.ObjectOf(te.Fun.(*ast.Ident))
+		fnidt := te.Fun.(*ast.Ident)
+		fnobj := c.info.ObjectOf(fnidt)
 		pkgo := fnobj.Pkg()
 		if pkgo != nil && fnobj.Pkg() != nil {
 			// c.out(fnobj.Pkg().Name(), "_")
 		}
-		c.genExpr(scope, te.Fun)
+		if funk.Contains([]string{"assert", "sizeof", "alignof"}, fnidt.Name) {
+			c.out(fnidt.Name)
+		} else {
+			c.genExpr(scope, te.Fun)
+		}
 	}
 
 	c.out("(")
@@ -2344,6 +2334,7 @@ func (this *g2nc) genFieldList(scope *ast.Scope, flds *ast.FieldList,
 		if tyname, ok := this.psctx.functypes[fld.Type]; ok {
 			this.out(tyname)
 		} else {
+			// this.outf("/* %v */", exprstr(fld.Type))
 			this.genTypeExpr(scope, fld.Type)
 		}
 		this.outsp()
@@ -2506,11 +2497,8 @@ func (this *g2nc) genExpr2(scope *ast.Scope, e ast.Expr) {
 				log.Println("temp var?", vo, this.exprpos(te), gotyval)
 			}
 			bety := this.info.TypeOf(be.Elt)
-			tyszer := types.SizesFor(runtime.Compiler, runtime.GOARCH)
-			var elemsz interface{} = tyszer.Sizeof(bety)
-			elemsz = gopp.IfElse(elemsz == uintptr(0), "sizeof(voidptr)", elemsz)
-			gopp.Assert(elemsz != 0, "wtfff", elemsz, bety)
-			this.outf("cxarray2_new(0, %v)", elemsz).outfh().outnl()
+			etystr := this.exprTypeNameImpl2(scope, bety, be.Elt)
+			this.outf("cxarray2_new(0, sizeof(%s))", etystr).outfh().outnl()
 			for idx, ex := range te.Elts {
 				log.Println(vo == nil, ex, idx, this.exprpos(ex))
 				this.genCxarrAdd(scope, vo.Data, ex, idx)
@@ -3382,9 +3370,9 @@ func (this *g2nc) genTypeSpec(scope *ast.Scope, spec *ast.TypeSpec) {
 				if isstrty2(fldty) {
 					this.outf("obj->%s = cxstring_new()", fldname.Name).outfh().outnl()
 				} else if isslicety2(fldty) {
-					var elemsz interface{} = unsafe.Sizeof(uintptr(0))
-					elemsz = gopp.IfElse(elemsz == uintptr(0), "sizeof(voidptr)", elemsz)
-					this.outf("obj->%s = cxarray2_new(0, %v)", fldname.Name, elemsz).outfh().outnl()
+					elemty := fldty.(*types.Slice).Elem()
+					tystr := this.exprTypeNameImpl2(scope, elemty, nil)
+					this.outf("obj->%s = cxarray2_new(0, sizeof(%s))", fldname.Name, tystr).outfh().outnl()
 				} else if ismapty2(fldty) {
 					this.outf("obj->%s = cxhashtable_new()", fldname.Name).outfh().outnl()
 				} else if ischanty2(fldty) {
@@ -3582,9 +3570,9 @@ func (c *g2nc) genValueSpec(scope *ast.Scope, spec *ast.ValueSpec, validx int) {
 			} else if isstrty2(varty) {
 				c.out("cxstring_new()")
 			} else if isslicety2(varty) {
-				var elemsz interface{} = unsafe.Sizeof(uintptr(0))
-				elemsz = gopp.IfElse(elemsz == uintptr(0), "sizeof(voidptr)", elemsz)
-				c.outf("cxarray2_new(0, %v)", elemsz)
+				elemty := varty.(*types.Slice).Elem()
+				tystr := c.exprTypeNameImpl2(scope, elemty, nil)
+				c.outf("cxarray2_new(0, sizeof(%s))", tystr)
 			} else if ismapty2(varty) {
 				c.out("cxhashtable_new()")
 			} else if isstructty2(varty) {
