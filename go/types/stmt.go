@@ -548,7 +548,7 @@ func (check *Checker) stmt(ctxt stmtContext, s ast.Stmt) {
 		}
 
 	case *ast.CatchStmt: // === *ast.SwitchStmt
-		inner |= breakOk
+		inner |= breakOk | continueOk
 		check.openScope(s, "catch")
 		defer check.closeScope()
 

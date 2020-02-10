@@ -2069,7 +2069,7 @@ func (pc *ParserContext) walkpass_fnexcepts() {
 		astutil.Apply(pkg, func(c *astutil.Cursor) bool {
 			switch te := c.Node().(type) {
 			case *ast.FuncDecl:
-				log.Println("enter fd", te.Name)
+				// log.Println("enter fd", te.Name)
 				if te.Body == nil || len(te.Body.List) == 0 {
 					break
 				}
@@ -2125,7 +2125,7 @@ func (pc *ParserContext) walkpass_fnexcepts() {
 		}, func(c *astutil.Cursor) bool {
 			switch te := c.Node().(type) {
 			case *ast.FuncDecl:
-				log.Println("leave fd", te.Name)
+				// log.Println("leave fd", te.Name)
 				if te.Body == nil || len(te.Body.List) == 0 {
 					break
 				}

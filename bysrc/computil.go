@@ -261,9 +261,26 @@ func (bc *basecomp) initbc() {
 // idt is ast.CallExpr.Fun
 func (bc *basecomp) funcistype(idt ast.Expr) bool {
 	tyval, ok := bc.strtypes[bc.exprstr(idt)]
+	ok = ok && tyval.IsType()
 	if ok {
+		return true
 	}
-	return ok && tyval.IsType()
+	/*
+		switch te := idt.(type) {
+		case *ast.Ident:
+			for _, typ := range types.Typ {
+				if typ.Name() == te.Name {
+					// return true
+				}
+			}
+			for _, typ := range types.AliasTyp {
+				if typ.Name() == te.Name {
+					//return true
+				}
+			}
+		}
+	*/
+	return ok
 }
 
 func (bc *basecomp) exprstr(e ast.Expr) string { return types.ExprString(e) }

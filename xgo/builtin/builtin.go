@@ -76,6 +76,13 @@ func sizeof() int
 func alignof() int
 func offsetof() int
 
+func sizeof_type(t Type) int {
+	return 0
+}
+func sizeof_var(t Type) int {
+	return 0
+}
+
 //export unsafe__Sizeof111
 func unsafe__Sizeof111(a int) int {
 	return 0

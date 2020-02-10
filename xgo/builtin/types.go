@@ -2,6 +2,8 @@ package builtin
 
 import "unsafe"
 
+type BasicKind int
+
 const (
 	Invalid = /*BasicKind*/ iota // type is invalid
 
@@ -35,10 +37,22 @@ const (
 )
 
 const (
+	// endofOrignalGoType = iota + UntypedNil // TODO compiler
 	endofOrignalGoType = iota + 25
 	Voidptr
 	Byteptr
 	Charptr
+)
+
+const (
+	Struct = 25
+	Slice
+	Array
+	Map
+	Ptr
+	Chan
+	Func
+	Interface
 )
 
 const (
@@ -52,15 +66,15 @@ const (
 )
 
 type Metatype struct {
-	Size       uintptr // type size
-	Ptrdata    uintptr // size of memory prefix holding all pointers
-	Hash       uint32  // hash of type; avoids computation in hash tables
-	Tflag      uint8   // tflag   // extra type information flags
-	Align      uint8   // alignment of variable with this type
-	Fieldalign uint8   // alignment of struct field with this type
-	Kind       uint8   // enumeration for C
-	Alg        voidptr // *typeAlg // algorithm table
-	Gcdata     *byte   // garbage collection data
+	Size       uintptr  // type size
+	Ptrdata    uintptr  // size of memory prefix holding all pointers
+	Hash       uint32   // hash of type; avoids computation in hash tables
+	Tflag      uint8    // tflag   // extra type information flags
+	Align      uint8    // alignment of variable with this type
+	Fieldalign uint8    // alignment of struct field with this type
+	Kind       uint8    // enumeration for C
+	Alg        *typealg // *typeAlg // algorithm table
+	Gcdata     byteptr  // garbage collection data
 	Str        byteptr
 	PtrToThis  voidptr
 	// int32   // nameOff // string form
@@ -105,3 +119,51 @@ type Wideptr struct {
 	Ptr voidptr
 	Obj voidptr
 }
+
+type typealg struct {
+	hash  func(voidptr, uintptr) uintptr
+	equal func(voidptr, voidptr) bool
+}
+
+// Type is here for the purposes of documentation only. It is a stand-in
+// for any Go type, but represents the same type for any given function
+// invocation.
+type Type int
+type Type1 int
+type IntegerType int
+type FloatType float32
+
+func typeof(val voidptr) *Metatype
+
+func typeof_goimpl(tyobjx voidptr) *Metatype {
+	var tyobj *Metatype
+	tyobj = (*Metatype)(tyobjx)
+	return tyobj
+}
+
+func (mty *Metatype) Name() string {
+	return gostring(mty.Str)
+}
+
+func (mty *Metatype) KindName() string {
+	kind := mty.Kind
+	if kind >= Invalid && kind <= UnsafePointer {
+		return gostring(mty.Str)
+	}
+	switch mty.Kind {
+	case Struct:
+		return "struct"
+		// case Map:
+		// return "map"
+		// case Array:
+		// return "array"
+		// case Slice:
+		// return "slice"
+		// case Chan:
+		// return "chan"
+	}
+	return "unktykind"
+}
+
+func (mty *Metatype) sizeof() int  { return mty.Size }
+func (mty *Metatype) alignof() int { return mty.Align }

@@ -35,6 +35,10 @@ const (
 	PATH_MAX = 256 // C.PATH_MAX
 )
 
+const (
+	PathSep = "/"
+)
+
 func Gettid() int {
 	return C.xos_gettid3()
 }

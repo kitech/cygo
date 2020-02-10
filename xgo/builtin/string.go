@@ -119,6 +119,9 @@ func (s string) split(sep string) []string {
 	}
 	return res
 }
+func (s string) splitline() []string { return s.split("\n") }
+func (s string) splitpath() []string { return s.split("/") }
+
 func (s string) trimsp() string {
 	slen := s.len
 	lspos := 0
@@ -181,6 +184,16 @@ func (s string) rtrimsp() string {
 
 	ns := s[lspos : rspos+1]
 	return ns
+}
+
+func (s string) trim_goimpl(cutset string) string {
+	return s
+}
+func (s string) ltrim_goimpl(cutset string) string {
+	return s
+}
+func (s string) rtrim_goimpl(cutset string) string {
+	return s
 }
 
 /*

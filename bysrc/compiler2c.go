@@ -1837,6 +1837,13 @@ func (c *g2nc) genCallExprNorm(scope *ast.Scope, te *ast.CallExpr) {
 			c.genExpr(scope, te.Fun)
 		}
 	}
+	if fca.isselfn && fca.isbuiltin && fca.selfn.Sel.Name == "typeof" {
+		a0ty := c.info.TypeOf(te.Args[0])
+		tystr := c.exprTypeNameImpl2(scope, a0ty, te.Args[0])
+		tystr = strings.Trim(tystr, "*")
+		c.outf("_goimpl((voidptr)(&%s_metatype))", tystr)
+		return
+	}
 
 	c.out("(")
 	// reciever this
@@ -3581,7 +3588,7 @@ func (c *g2nc) genValueSpec(scope *ast.Scope, spec *ast.ValueSpec, validx int) {
 			} else if ismapty2(varty) {
 				c.out("cxhashtable_new()")
 			} else if isstructty2(varty) {
-				tystr := sign2rety(varty.String())
+				tystr := c.exprTypeNameImpl2(scope, varty, varname)
 				tystr = strings.Trim(tystr, "*")
 				c.outf("%s_new_zero()", tystr)
 			} else {

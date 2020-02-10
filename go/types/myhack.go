@@ -30,6 +30,8 @@ func init() {
 	// HackExtraBuiltin()
 }
 
+var AliasTyp []*Basic = aliases
+
 // too late, call in universe.go:190 init(), before defPredxxx
 func HackExtraBuiltin() {
 	hetyp := []*Basic{
@@ -57,6 +59,7 @@ func HackExtraBuiltin() {
 	for _, typ := range healias {
 		aliases = append(aliases, typ)
 	}
+	AliasTyp = aliases
 
 	def(&Nilofc{object{name: "nilofc", typ: Typ[UntypedNil], color_: black}})
 	def(&Cnil{object{name: "cnil", typ: Typ[UntypedNil], color_: black}})

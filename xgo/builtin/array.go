@@ -79,8 +79,8 @@ func cxarray2_ptr(arrx voidptr) voidptr {
 
 //export cxarray2_delete
 func cxarray2_delete(arrx voidptr, idx int) voidptr {
-	// assert(arrx != nil)
-	// assert(idx >= 0) // TODO compiler
+	assert(arrx != nil)
+	assert(idx >= 0)
 	var arr *mirarray
 	arr = (*mirarray)(arrx)
 	if idx > arr.len-1 {

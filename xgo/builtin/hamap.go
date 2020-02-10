@@ -12,7 +12,7 @@ func htkey_cmp_int(k1 voidptr, k2 voidptr) bool {
 }
 
 func htkey_hash_int32(k1 voidptr, len int) usize {
-	var k1p *int32 = (*int32)(k1)
+	var k1p *uint32 = (*int32)(k1)
 	var x = *k1p
 
 	x = ((x >> 16) ^ x) * 0x45d9f3b
@@ -22,14 +22,14 @@ func htkey_hash_int32(k1 voidptr, len int) usize {
 	return x
 }
 func htkey_unhash_int32(hv usize) int32 {
-	var x int32 = hv
+	var x uint32 = hv
 	x = ((x >> 16) ^ x) * 0x119de1f3
 	x = ((x >> 16) ^ x) * 0x119de1f3
 	x = (x >> 16) ^ x
 	return x
 }
 func htkey_hash_int64(k1 voidptr, len int) usize {
-	var k1p *int64 = (*int64)(k1)
+	var k1p *uint64 = (*int64)(k1)
 	var x = *k1p
 
 	x = (x ^ (x >> 30)) * (0xbf58476d1ce4e5b9)
@@ -39,7 +39,7 @@ func htkey_hash_int64(k1 voidptr, len int) usize {
 	return x
 }
 func htkey_unhash_int64(hv usize) int64 {
-	var x int64 = hv
+	var x uint64 = hv
 	x = (x ^ (x >> 31) ^ (x >> 62)) * (0x319642b2d24d8ec3)
 	x = (x ^ (x >> 27) ^ (x >> 54)) * (0x96de1b173f119089)
 	x = x ^ (x >> 30) ^ (x >> 60)
@@ -51,7 +51,7 @@ func htkey_hash_int(k1 voidptr, len int) usize {
 	var k1p *int = (*int)(k1)
 	var k1v = *k1p
 
-	tysz := sizeof(int)
+	tysz := sizeof(int(0))
 	if tysz == 4 {
 		return htkey_hash_int32(k1, tysz)
 	} else {
@@ -76,7 +76,7 @@ func htkey_hash_str(k1 voidptr, len int) usize {
 	hash = 0 + 5381 + len + 1
 	for i := 0; i < len; i++ {
 		c := k1p[i]
-		hash = ((hash << 5) + hash) ^ c
+		hash = ((hash << 5) + hash) ^ usize(c)
 	}
 
 	return hash
@@ -84,7 +84,8 @@ func htkey_hash_str(k1 voidptr, len int) usize {
 
 // len = 0
 func htkey_hash_ptr(k1 voidptr, len int) usize {
-	tysz := sizeof(voidptr)
+	// tysz := sizeof(voidptr) // TODO compiler
+	tysz := sizeof(voidptr(0))
 	if tysz == 4 {
 		return htkey_hash_int32(&k1, 0)
 	} else {
@@ -112,6 +113,7 @@ func htkey_hash_getfunc(kind int) func(k1 voidptr, len int) usize {
 func typesize(kind int) int {
 	switch kind {
 	case Int:
+		// return sizeof(int) // TODO compiler
 		return sizeof(int(0))
 	case Voidptr:
 		return sizeof(voidptr(0))
@@ -146,7 +148,8 @@ func mirmap_new(keykind int) *mirmap {
 	mp.keykind = keykind
 	mp.bucketsz = 16
 	mp.cap_ = 1
-	mp.ptr = malloc3(1 * sizeof(voidptr(0)))
+	var vptrsz int = sizeof(voidptr(0))
+	mp.ptr = malloc3(1 * vptrsz)
 	return mp
 }
 

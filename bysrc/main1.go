@@ -188,10 +188,10 @@ func main() {
 	code = comps[0].genBuiltinTypesMetatype() + code + mainpkgcode
 	fname := "opkgs/foo." + extname
 	ioutil.WriteFile(fname, []byte(code), 0644)
-	log.Println("clangfmt ...", fname, len(code))
+	linecnt := strings.Count(code, "\n")
+	log.Println("clangfmt ...", fname, len(code), linecnt)
 	btime := time.Now()
 	clangfmt(fname)
-	linecnt := strings.Count(code, "\n")
 	log.Println("gencode lines", linecnt, len(code), time.Since(btime))
 }
 func clangfmt(fname string) {
