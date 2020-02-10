@@ -767,7 +767,7 @@ func (c *g2nc) genAssignStmt(scope *ast.Scope, s *ast.AssignStmt) {
 		default:
 			// log.Println("unknown", reflect.TypeOf(e))
 		}
-		_, isidxas := s.Lhs[i].(*ast.IndexExpr)
+		idxase, isidxas := s.Lhs[i].(*ast.IndexExpr) // index assign
 
 		rety := c.info.TypeOf(s.Rhs[i])
 		if ischrv {
@@ -785,6 +785,15 @@ func (c *g2nc) genAssignStmt(scope *ast.Scope, s *ast.AssignStmt) {
 			}
 			var ns = putscope(scope, ast.Var, "varval", s.Rhs[i])
 			c.genExpr(ns, s.Lhs[i])
+
+			// TODO rewrite ast of map/arr elem assign to call
+			idxerty := c.info.TypeOf(idxase.X)
+			_, ismap := idxerty.(*types.Map)
+			_, isarray := idxerty.(*types.Slice)
+			if !ismap && !isarray {
+				c.outeq()
+				c.genExpr(ns, s.Rhs[i])
+			}
 		} else if istuple2(rety) {
 			tvname := tmpvarname()
 			var ns = putscope(scope, ast.Var, "varname", newIdent(tvname))
