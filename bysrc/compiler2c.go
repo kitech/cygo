@@ -335,13 +335,14 @@ func (c *g2nc) genPreFuncDecl(scope *ast.Scope, d *ast.FuncDecl) {
 		c.closidx[fnlit] = closi
 		cnter := closi.idx
 
+		pkgpfx := c.pkgpfx()
 		c.outf("// %v", fnlit).outnl()
 		c.out("typedef").outsp()
 		c.out("struct").outsp()
-		c.outf("%s_closure_arg_%d", d.Name.Name, cnter).outsp()
-		c.outf("%s_closure_arg_%d", d.Name.Name, cnter).outfh().outnl()
+		c.outf("%s%s_closure_arg_%d", pkgpfx, d.Name.Name, cnter).outsp()
+		c.outf("%s%s_closure_arg_%d", pkgpfx, d.Name.Name, cnter).outfh().outnl()
 		c.out("struct").outsp()
-		c.outf("%s_closure_arg_%d", d.Name.Name, cnter).outsp()
+		c.outf("%s%s_closure_arg_%d", pkgpfx, d.Name.Name, cnter).outsp()
 		c.out("{").outnl()
 		for _, ido := range closi.idents {
 			c.out(c.exprTypeName(scope, ido)).outsp()
@@ -351,19 +352,19 @@ func (c *g2nc) genPreFuncDecl(scope *ast.Scope, d *ast.FuncDecl) {
 
 		c.out("typedef").outsp()
 		c.genFieldList(scope, fnlit.Type.Results, true, false, "", true)
-		c.outf("(*%s_closure_type_%d)(", d.Name.Name, cnter)
+		c.outf("(*%s%s_closure_type_%d)(", pkgpfx, d.Name.Name, cnter)
 		c.genFieldList(scope, fnlit.Type.Params, false, false, ",", false)
-		c.outf("%s_closure_arg_%d*", d.Name.Name, cnter).outsp()
+		c.outf("%s%s_closure_arg_%d*", pkgpfx, d.Name.Name, cnter).outsp()
 		c.out(")")
 		c.outfh().outnl()
 
 		c.out("static").outsp()
 		c.genFieldList(scope, fnlit.Type.Results, true, false, "", true)
 		c.outsp()
-		c.outf("%s_closure_%d(", d.Name.Name, cnter)
+		c.outf("%s%s_closure_%d(", pkgpfx, d.Name.Name, cnter)
 		c.genFieldList(scope, fnlit.Type.Params, false, true, ",", false)
 		// c.genFieldList(scope *ast.Scope, flds *ast.FieldList, keepvoid bool, withname bool, linebrk string, skiplast bool)
-		c.outf("%s_closure_arg_%d*", d.Name.Name, cnter).outsp()
+		c.outf("%s%s_closure_arg_%d*", pkgpfx, d.Name.Name, cnter).outsp()
 		c.out("clos")
 		c.out(")")
 		c.out("{").outnl()
@@ -1422,11 +1423,16 @@ func (c *g2nc) genCallExpr(scope *ast.Scope, te *ast.CallExpr) {
 			_, isfnvar := te.Fun.(*ast.Ident)
 			var fnlit *ast.FuncLit
 			gotyx := c.info.TypeOf(te.Fun)
-			// log.Println(gotyx, reftyof(gotyx), te.Fun, reftyof(te.Fun))
+			log.Println(gotyx, reftyof(gotyx), te.Fun, reftyof(te.Fun))
 			switch gotyx.(type) {
 			case *types.Signature:
 				symve := upfindsym(scope, be, 0)
 				isclos = symve != nil && !isfnvar
+				if symve != nil {
+					if _, ok := symve.(*ast.FuncLit); ok {
+						isclos = true
+					}
+				}
 				if isclos {
 					fnlit = symve.(*ast.FuncLit)
 				}
@@ -2053,8 +2059,9 @@ func (c *g2nc) genCallExprClosure(scope *ast.Scope, te *ast.CallExpr, fnlit *ast
 
 	closi := c.getclosinfo(fnlit)
 	argtv := tmpvarname()
-	c.out(closi.argtyname).outstar().outsp().out(argtv).outeq()
-	c.outf("(%s*)cxmalloc(sizeof(%s))", closi.argtyname, closi.argtyname).outfh().outnl()
+	c.outf("%s%s", c.pkgpfx(), closi.argtyname).outstar().outsp().out(argtv).outeq()
+	c.outf("(%s%s*)cxmalloc(sizeof(%s%s))",
+		c.pkgpfx(), closi.argtyname, c.pkgpfx(), closi.argtyname).outfh().outnl()
 	for _, ido := range closi.idents {
 		c.out(argtv, "->", ido.Name).outeq()
 		c.out(ido.Name).outfh().outnl()
@@ -2075,7 +2082,7 @@ func (c *g2nc) genCallExprClosure(scope *ast.Scope, te *ast.CallExpr, fnlit *ast
 		}
 	} else if isfnlit {
 		closi := c.getclosinfo(fnlit)
-		c.out(closi.fnname)
+		c.outf("%s%s", c.pkgpfx(), closi.fnname)
 	} else {
 		c.genExpr(scope, te.Fun)
 	}
@@ -2777,7 +2784,7 @@ func (this *g2nc) genExpr2(scope *ast.Scope, e ast.Expr) {
 		this.out(")")
 	case *ast.FuncLit:
 		closi := this.getclosinfo(te)
-		this.out(closi.fnname).outfh().outnl()
+		this.outf("%s%s", this.pkgpfx(), closi.fnname).outfh().outnl()
 	default:
 		this.outf("unknown %v", e)
 		log.Println("unknown", reflect.TypeOf(e), e, te)
@@ -3188,7 +3195,7 @@ func (this *g2nc) exprTypeNameImpl2(scope *ast.Scope, ety types.Type, e ast.Expr
 		switch fe := e.(type) {
 		case *ast.FuncLit:
 			if closi, ok := this.closidx[fe]; ok {
-				return closi.fntype
+				return this.pkgpfx() + closi.fntype
 			} else {
 				log.Println("todo", goty, reflect.TypeOf(goty), isudty, tyval, te)
 			}
