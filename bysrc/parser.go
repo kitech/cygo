@@ -7,9 +7,11 @@ import (
 	"go/build"
 	"go/importer"
 	"go/parser"
+	"go/printer"
 	"go/token"
 	"go/types"
 	"gopp"
+	"io/ioutil"
 	"log"
 	"os"
 	"os/exec"
@@ -136,6 +138,7 @@ func (this *ParserContext) Init_no_cgocmd(semachk bool) error {
 	this.walkpass_fill_fakecpkg()   // before types.Config.Check
 	this.walkpass_fill_builtinpkg() // before types.Config.Check
 
+	this.saveastcode()
 	// parser step 3, got types, semantics check
 	if !semachk {
 		return nil
@@ -307,6 +310,22 @@ func (pc *ParserContext) walkpass_cgo_processor() {
 		gopp.ErrPrint(err, file)
 	}
 	os.Rename(pc.wkdir+"/_cgo_gotypes.go", pc.wkdir+"/cxuse_cgo_gotypes.go")
+}
+
+func (pc *ParserContext) saveastcode() {
+	pkgs := pc.pkgs
+	codebuf := bytes.NewBuffer(nil)
+	for _, pkgo := range pkgs {
+		for _, fio := range pkgo.Files {
+			err := printer.Fprint(codebuf, pc.fset, fio)
+			// err := ast.Fprint(codebuf, pc.fset, nil, nil)
+			gopp.ErrPrint(err, pc.bdpkgs.Name)
+		}
+	}
+	log.Println(pc.bdpkgs.Name, codebuf.Len())
+	savefile := fmt.Sprintf("./opkgs/%s-ast-tfed.go", pc.bdpkgs.Name)
+	err := ioutil.WriteFile(savefile, codebuf.Bytes(), 0644)
+	gopp.ErrPrint(err, savefile, codebuf.Len())
 }
 
 func (pc *ParserContext) walkpass_check() {
@@ -1799,7 +1818,7 @@ func (pc *ParserContext) walkpass_tmpvars() {
 		})
 	}
 
-	log.Println("tmpvars", len(tmpvars))
+	log.Println("tmpvars", pc.bdpkgs.Name, len(tmpvars))
 	pc.tmpvars = tmpvars
 }
 
