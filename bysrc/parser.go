@@ -129,6 +129,7 @@ func (this *ParserContext) Init_no_cgocmd(semachk bool) error {
 
 	this.walkpass_valid_files()
 	this.walkpass_fill_funcvars()
+	this.walkpass_rewrite_ast()
 	this.walkpass_flat_cursors()
 	this.walkpass_csymbols()
 	// this.walkpass_prefill_ctypes() // before types.Config.Check
@@ -1447,6 +1448,70 @@ func (pc *ParserContext) walkpass_fill_funcvars() {
 		})
 	}
 }
+
+type astrewritecontext struct {
+	curcs  *astutil.Cursor
+	lastst *astutil.Cursor // last can InsertBefore, or InsertAfter cursor
+	ispre  bool
+}
+
+// 在 check 之前做 ast 修改，不需要涉及类型问题
+
+func (pc *ParserContext) walkpass_rewrite_ast() {
+	pkgs := pc.pkgs
+	var lastst *astutil.Cursor // last can InsertBefore, or InsertAfter cursor
+	for _, pkg := range pkgs {
+		astutil.Apply(pkg, func(c *astutil.Cursor) bool {
+			tc := *c
+			switch te := c.Node().(type) {
+			case ast.Stmt:
+				if c.Index() >= 0 {
+					lastst = &tc
+				}
+			case *ast.CallExpr:
+				for idx, aex := range te.Args {
+					switch ae := aex.(type) {
+					case *ast.BasicLit:
+						vsp2 := &ast.AssignStmt{}
+						vsp2.Lhs = []ast.Expr{newIdent(tmpvarname())}
+						vsp2.Rhs = []ast.Expr{ae}
+						vsp2.Tok = token.DEFINE
+						vsp2.TokPos = c.Node().Pos()
+						te.Args[idx] = vsp2.Lhs[0]
+						lastst.InsertBefore(vsp2)
+					case *ast.CallExpr:
+						vsp2 := &ast.AssignStmt{}
+						vsp2.Lhs = []ast.Expr{newIdent(tmpvarname())}
+						vsp2.Rhs = []ast.Expr{ae}
+						vsp2.Tok = token.DEFINE
+						vsp2.TokPos = c.Node().Pos()
+						te.Args[idx] = vsp2.Lhs[0]
+						lastst.InsertBefore(vsp2)
+
+					case *ast.FuncLit:
+						vsp2 := &ast.AssignStmt{}
+						vsp2.Lhs = []ast.Expr{newIdent(tmpvarname())}
+						vsp2.Rhs = []ast.Expr{ae}
+						vsp2.Tok = token.DEFINE
+						vsp2.TokPos = c.Node().Pos()
+						te.Args[idx] = vsp2.Lhs[0]
+						lastst.InsertBefore(vsp2)
+					}
+				}
+			default:
+				gopp.G_USED(te)
+			}
+			return true
+		}, func(c *astutil.Cursor) bool {
+			switch te := c.Node().(type) {
+			default:
+				gopp.G_USED(te)
+			}
+			return true
+		})
+	}
+}
+
 func (pc *ParserContext) walkpass_flat_cursors() {
 	pkgs := pc.pkgs
 	for _, pkg := range pkgs {
@@ -1527,9 +1592,21 @@ func (pc *ParserContext) walkpass_tmpvars() {
 	var tmpvars = map[ast.Stmt][]ast.Node{} // => tmpvarname
 	gopp.G_USED(tmpvars)
 
+	var lastblk *astutil.Cursor
+	var lastst *astutil.Cursor
 	for _, pkg := range pkgs {
 		astutil.Apply(pkg, func(c *astutil.Cursor) bool {
 			switch te := c.Node().(type) {
+			case ast.Stmt:
+				if c.Index() >= 0 {
+					c1 := *c
+					lastst = &c1 //
+				}
+			case *ast.BlockStmt:
+				c1 := *c
+				lastblk = &c1
+
+			case *ast.CallExpr:
 			default:
 				// log.Println(c.Name(), exprpos(pc, c.Node()))
 				gopp.G_USED(te)
@@ -1602,6 +1679,7 @@ func (pc *ParserContext) walkpass_tmpvars() {
 						tyval := types.TypeAndValue{}
 						tyval.Type = pc.info.TypeOf(ae)
 						pc.info.Types[vsp2.Lhs[0]] = tyval
+
 					default:
 						// log.Println(ae, reftyof(ae))
 					}

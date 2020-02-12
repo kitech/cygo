@@ -336,6 +336,7 @@ func (bc *basecomp) fillclosidents(clos *closinfo) {
 	fnlit := clos.fnlit
 	myids := map[*ast.Ident]bool{}
 	myids2 := map[string]bool{}
+	seenids := map[string]bool{}
 	_ = myids
 	_ = myids2
 
@@ -366,11 +367,17 @@ func (bc *basecomp) fillclosidents(clos *closinfo) {
 					if te.Obj == nil {
 						// maybe builtin, like false/true/...
 					} else {
-						clos.idents = append(clos.idents, te)
+						if _, ok := seenids[te.Name]; !ok {
+							clos.idents = append(clos.idents, te)
+							seenids[te.Name] = true
+						}
 					}
 				}
 			}
 		case *ast.AssignStmt:
+			if te.Tok == token.ASSIGN {
+				break
+			}
 			for _, lvex := range te.Lhs {
 				switch lve := lvex.(type) {
 				case *ast.Ident:
