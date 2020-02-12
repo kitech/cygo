@@ -137,6 +137,7 @@ func (this *ParserContext) Init_no_cgocmd(semachk bool) error {
 	// this.walkpass_prefill_ctypes() // before types.Config.Check
 	this.walkpass_fill_fakecpkg()   // before types.Config.Check
 	this.walkpass_fill_builtinpkg() // before types.Config.Check
+	this.walkpass_dotransforms(false)
 
 	this.saveastcode()
 	// parser step 3, got types, semantics check
@@ -147,6 +148,7 @@ func (this *ParserContext) Init_no_cgocmd(semachk bool) error {
 	if this.chkerrs != nil {
 		os.Exit(-1)
 	}
+	this.walkpass_dotransforms(true)
 	// this.walkpass_resolve_ctypes()
 	// this.walkpass_flat_cursors() // move move previous
 	// this.walkpass_clean_cgodecl()
@@ -476,16 +478,6 @@ func (pc *ParserContext) walkpass_resolve_ctypes_bycgo() {
 		})
 	}
 	pc.ctypes = ctypes
-}
-
-func astcs_next(c *astutil.Cursor) *astutil.Cursor {
-	return nil
-}
-func astcs_prev(c *astutil.Cursor) *astutil.Cursor {
-	return nil
-}
-func astcs_upper(c *astutil.Cursor) *astutil.Cursor {
-	return nil
 }
 
 func (pc *ParserContext) walkpass_csymbols() {
@@ -1468,13 +1460,38 @@ func (pc *ParserContext) walkpass_fill_funcvars() {
 	}
 }
 
-type astrewritecontext struct {
-	curcs  *astutil.Cursor
-	lastst *astutil.Cursor // last can InsertBefore, or InsertAfter cursor
-	ispre  bool
-}
-
 // 在 check 之前做 ast 修改，不需要涉及类型问题
+func (pc *ParserContext) walkpass_dotransforms(afterchk bool) {
+	pkgs := pc.pkgs
+	for _, tfo := range transforms {
+		if afterchk {
+			if !tfo.afterchk() {
+				continue
+			}
+		}
+		var lastst *astutil.Cursor // last can InsertBefore, or InsertAfter cursor
+		for _, pkg := range pkgs {
+			astutil.Apply(pkg, func(c *astutil.Cursor) bool {
+				tc := *c
+				switch c.Node().(type) {
+				case ast.Stmt:
+					if c.Index() >= 0 {
+						lastst = &tc
+					}
+				}
+				tfctx := &TransformContext{c: c, lastst: lastst,
+					n: c.Node(), ispre: true}
+				tfo.apply(tfctx)
+				return true
+			}, func(c *astutil.Cursor) bool {
+				tfctx := &TransformContext{c: c, lastst: lastst,
+					n: c.Node(), ispre: false}
+				tfo.apply(tfctx)
+				return true
+			})
+		}
+	}
+}
 
 func (pc *ParserContext) walkpass_rewrite_ast() {
 	pkgs := pc.pkgs
