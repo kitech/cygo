@@ -21,3 +21,16 @@ func (ufn *Unifunc) Call() {
 		fnptr(ufn.obj)
 	}
 }
+
+type gxcallable struct {
+	obj   voidptr
+	fnptr voidptr
+}
+
+//export gxcallable_new
+func gxcallable_new(fnptr voidptr, obj voidptr) voidptr {
+	var caobj *gxcallable = malloc3(sizeof(voidptr(0)) * 2)
+	caobj.obj = obj
+	caobj.fnptr = fnptr
+	return caobj
+}

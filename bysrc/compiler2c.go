@@ -358,6 +358,12 @@ func (c *g2nc) genPreFuncDecl(scope *ast.Scope, d *ast.FuncDecl) {
 		c.out(")")
 		c.outfh().outnl()
 
+		c.outf("%s%s_closure_arg_%d* %s%s_closure_arg_%d_new_zero() {",
+			pkgpfx, d.Name.Name, cnter, pkgpfx, d.Name.Name, cnter)
+		c.outf("  return (%s%s_closure_arg_%d*)cxmalloc(sizeof(%s%s_closure_arg_%d))",
+			pkgpfx, d.Name.Name, cnter, pkgpfx, d.Name.Name, cnter).outfh().outnl()
+		c.out("}").outnl()
+
 		c.out("static").outsp()
 		c.genFieldList(scope, fnlit.Type.Results, true, false, "", true)
 		c.outsp()
@@ -454,6 +460,7 @@ func (c *g2nc) genFuncDeclExported(scope *ast.Scope, fd *ast.FuncDecl, ant *Anno
 
 }
 func (c *g2nc) genFuncDeclCallable(scope *ast.Scope, fd *ast.FuncDecl, ant *Annotation) {
+	// todo multirets
 	c.genFieldList(scope, fd.Type.Results, true, false, "", false)
 	c.outsp()
 	c.outf("%s%s_gxcallable", c.pkgpfx(), fd.Name).out("(")
@@ -811,7 +818,7 @@ func (c *g2nc) genAssignStmt(scope *ast.Scope, s *ast.AssignStmt) {
 		}
 		idxase, isidxas := s.Lhs[i].(*ast.IndexExpr) // index assign
 
-		rety := c.info.TypeOf(s.Rhs[i])
+		retyx := c.info.TypeOf(s.Rhs[i])
 		if ischrv {
 			if s.Tok == token.DEFINE {
 				c.out(c.chanElemTypeName(chexpr, false)).outsp()
@@ -836,7 +843,7 @@ func (c *g2nc) genAssignStmt(scope *ast.Scope, s *ast.AssignStmt) {
 				c.outeq()
 				c.genExpr(ns, s.Rhs[i])
 			}
-		} else if istuple2(rety) {
+		} else if istuple2(retyx) {
 			tvname := tmpvarname()
 			var ns = putscope(scope, ast.Var, "varname", newIdent(tvname))
 			c.out(c.exprTypeName(scope, s.Rhs[i]))
@@ -858,12 +865,12 @@ func (c *g2nc) genAssignStmt(scope *ast.Scope, s *ast.AssignStmt) {
 				c.out(tvname).out("->").out(tmpvarname2(idx)).outfh().outnl()
 			}
 			c.outf("cxfree(%s)", tvname).outfh().outnl()
-		} else if iserrorty2(rety) {
+		} else if iserrorty2(retyx) {
 			c.out("error*").outsp()
 			c.genExpr(scope, s.Lhs[i])
 			c.outeq()
 			lety := c.info.TypeOf(s.Lhs[i])
-			gopp.Assert(lety != nil, "wtfff", rety, s.Rhs[i], s.Lhs[i])
+			gopp.Assert(lety != nil, "wtfff", retyx, s.Rhs[i], s.Lhs[i])
 			if c.info.TypeOf(s.Rhs[i]) == c.info.TypeOf(s.Lhs[i]) {
 				c.genExpr(scope, s.Rhs[i])
 			} else {
@@ -875,6 +882,42 @@ func (c *g2nc) genAssignStmt(scope *ast.Scope, s *ast.AssignStmt) {
 				c.genExpr(scope, s.Lhs[i])
 				c.outf("->Error").outeq()
 				c.outf("%s_Error", strings.Trim(c.exprTypeName(scope, s.Rhs[i]), "*"))
+			}
+		} else if rety, ok := retyx.(*types.Signature); ok {
+			log.Println(s.Lhs[i], retyx, reftyof(retyx), rety, reftyof(s.Rhs[i]))
+			switch aty := s.Rhs[i].(type) {
+			case *ast.FuncLit:
+				closi := c.getclosinfo(aty)
+				tmpvname := tmpvarname()
+				c.outf("%s%s* %s", c.pkgpfx(), closi.argtyname, tmpvname).outeq()
+				c.outf("%s%s_new_zero()", c.pkgpfx(), closi.argtyname).outfh().outnl()
+				for _, idt := range closi.idents {
+					c.outf("%s->%s=%s", tmpvname, idt.Name, idt.Name).outfh().outnl()
+				}
+				if s.Tok == token.DEFINE {
+					c.out("gxcallable*").outsp()
+				}
+				c.genExpr(scope, s.Lhs[i])
+				c.out("").outeq()
+				c.outf("gxcallable_new(%s%s, %s)", c.pkgpfx(), closi.fnname, tmpvname)
+			default:
+				if idt, ok := s.Rhs[i].(*ast.Ident); ok && idt.Obj.Kind == ast.Fun {
+					if s.Tok == token.DEFINE {
+						c.out("gxcallable*").outsp()
+					}
+					c.genExpr(scope, s.Lhs[i])
+					c.out("").outeq()
+					c.outf("gxcallable_new(%s%s_gxcallable, nilptr)", c.pkgpfx(), idt.Name)
+				} else {
+					if s.Tok == token.DEFINE {
+						c.out("__typeof__(")
+						c.genExpr(scope, aty)
+						c.out(")").outsp()
+					}
+					c.genExpr(scope, s.Lhs[i])
+					c.outeq()
+					c.genExpr(scope, s.Rhs[i])
+				}
 			}
 		} else {
 			if s.Tok == token.DEFINE {
@@ -1890,7 +1933,14 @@ func (c *g2nc) genCallExprNorm(scope *ast.Scope, te *ast.CallExpr) {
 		if funk.Contains([]string{"assert", "sizeof", "alignof"}, fnidt.Name) {
 			c.out(fnidt.Name)
 		} else {
-			c.genExpr(scope, te.Fun)
+			_, issig := fnobj.Type().(*types.Signature)
+			log.Println(fnidt.Name, fnidt.Obj, fnobj.Type(), issig)
+			if fnidt.Obj != nil && fnidt.Obj.Kind == ast.Var && issig {
+				c.genCallExprClosure2(scope, te)
+				return
+			} else {
+				c.genExpr(scope, te.Fun)
+			}
 		}
 	}
 	if fca.isselfn && fca.isbuiltin && fca.selfn.Sel.Name == "typeof" {
@@ -2100,12 +2150,14 @@ func (c *g2nc) genCallExprClosure(scope *ast.Scope, te *ast.CallExpr, fnlit *ast
 
 	closi := c.getclosinfo(fnlit)
 	argtv := tmpvarname()
-	c.outf("%s%s", c.pkgpfx(), closi.argtyname).outstar().outsp().out(argtv).outeq()
-	c.outf("(%s%s*)cxmalloc(sizeof(%s%s))",
-		c.pkgpfx(), closi.argtyname, c.pkgpfx(), closi.argtyname).outfh().outnl()
-	for _, ido := range closi.idents {
-		c.out(argtv, "->", ido.Name).outeq()
-		c.out(ido.Name).outfh().outnl()
+	if false {
+		c.outf("%s%s", c.pkgpfx(), closi.argtyname).outstar().outsp().out(argtv).outeq()
+		c.outf("(%s%s*)cxmalloc(sizeof(%s%s))",
+			c.pkgpfx(), closi.argtyname, c.pkgpfx(), closi.argtyname).outfh().outnl()
+		for _, ido := range closi.idents {
+			c.out(argtv, "->", ido.Name).outeq()
+			c.out(ido.Name).outfh().outnl()
+		}
 	}
 
 	if lefte != nil {
@@ -2113,39 +2165,56 @@ func (c *g2nc) genCallExprClosure(scope *ast.Scope, te *ast.CallExpr, fnlit *ast
 		c.outeq()
 	}
 
-	if isselfn {
-		if iscfn {
-			c.genExpr(scope, selfn.Sel)
+	_ = isselfn
+	_ = iscfn
+	_ = ispkgsel
+	_ = isfnlit
+	/*
+		if isselfn {
+			if iscfn {
+				c.genExpr(scope, selfn.Sel)
+			} else {
+				vartystr := c.exprTypeName(scope, selfn.X)
+				vartystr = strings.TrimRight(vartystr, "*")
+				c.out(vartystr + "_" + selfn.Sel.Name)
+			}
+		} else if isfnlit {
+			closi := c.getclosinfo(fnlit)
+			c.outf("%s%s", c.pkgpfx(), closi.fnname)
 		} else {
-			vartystr := c.exprTypeName(scope, selfn.X)
-			vartystr = strings.TrimRight(vartystr, "*")
-			c.out(vartystr + "_" + selfn.Sel.Name)
+			c.genExpr(scope, te.Fun)
 		}
-	} else if isfnlit {
-		closi := c.getclosinfo(fnlit)
-		c.outf("%s%s", c.pkgpfx(), closi.fnname)
-	} else {
-		c.genExpr(scope, te.Fun)
-	}
 
-	c.out("(")
-	if isselfn && !iscfn && !ispkgsel {
-		c.genExpr(scope, selfn.X)
+		c.out("(")
+		if isselfn && !iscfn && !ispkgsel {
+			c.genExpr(scope, selfn.X)
+			c.out(gopp.IfElseStr(len(te.Args) > 0, ",", ""))
+		}
+		c.out(argtv)
 		c.out(gopp.IfElseStr(len(te.Args) > 0, ",", ""))
-	}
-	c.out(argtv)
+		for idx, e1 := range te.Args {
+			c.genExpr(scope, e1)
+			c.out(gopp.IfElseStr(idx == len(te.Args)-1, "", ", "))
+		}
+		c.out(")")
+		c.outfh().outnl()
+	*/
+	fnidt := te.Fun.(*ast.Ident)
+	c.outf("((%s%s)(%s->fnptr))(%s->obj",
+		c.pkgpfx(), closi.fntype, fnidt.Name, fnidt.Name)
 	c.out(gopp.IfElseStr(len(te.Args) > 0, ",", ""))
 	for idx, e1 := range te.Args {
 		c.genExpr(scope, e1)
 		c.out(gopp.IfElseStr(idx == len(te.Args)-1, "", ", "))
 	}
-	c.out(")")
-	c.outfh().outnl()
+	c.out(")").outfh().outnl()
 	// assign back in case modified
-	for _, ido := range closi.idents {
-		c.out(ido.Name).outeq()
-		c.out(argtv, "->", ido.Name)
-		c.outfh().outnl()
+	if false {
+		for _, ido := range closi.idents {
+			c.out(ido.Name).outeq()
+			c.out(argtv, "->", ido.Name)
+			c.outfh().outnl()
+		}
 	}
 
 	// check if real need, ;\n
@@ -2153,6 +2222,51 @@ func (c *g2nc) genCallExprClosure(scope *ast.Scope, te *ast.CallExpr, fnlit *ast
 	if cs.Name() != "Args" {
 		// c.outfh().outnl()
 	}
+}
+
+// inparam
+func (c *g2nc) genCallExprClosure2(scope *ast.Scope, te *ast.CallExpr /*fnlit *ast.FuncLit*/) {
+	// funame := te.Fun.(*ast.Ident).Name
+	lefte := c.valnames[te]
+	selfn, isselfn := te.Fun.(*ast.SelectorExpr)
+	_, isfnlit := te.Fun.(*ast.FuncLit)
+	isidt := false
+	iscfn := false
+	ispkgsel := false
+	if isselfn {
+		var selidt *ast.Ident
+		selidt, isidt = selfn.X.(*ast.Ident)
+		iscfn = isidt && selidt.Name == "C"
+		selty := c.info.TypeOf(selfn.X)
+		ispkgsel = isinvalidty2(selty)
+	}
+	if !isselfn && isidt {
+	}
+
+	if lefte != nil {
+		// {0} 只能用于初始化
+		c.out("0").outfh().outnl()
+	}
+
+	_ = isselfn
+	_ = iscfn
+	_ = ispkgsel
+	_ = isfnlit
+	fnidt := te.Fun.(*ast.Ident)
+	tmpvname := tmpvarname()
+	c.outf("gxcallable* %s =(gxcallable*)%s", tmpvname, fnidt.Name).outfh().outnl()
+	if lefte != nil {
+		c.genExpr(scope, lefte)
+		c.outeq()
+	}
+	c.outf("((%s%s)(%s->fnptr))(%s->obj", "void*", "(*)()", tmpvname, tmpvname)
+	c.out(gopp.IfElseStr(len(te.Args) > 0, ",", ""))
+	for idx, e1 := range te.Args {
+		c.genExpr(scope, e1)
+		c.out(gopp.IfElseStr(idx == len(te.Args)-1, "", ", "))
+	}
+	c.out(")").outfh().outnl()
+	// assign back in case modified
 }
 
 // chan structure args

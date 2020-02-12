@@ -9,6 +9,10 @@ type bar struct {
 	b2 bool
 }
 
+func useclos(fff func()) {
+	fff()
+}
+
 func main() {
 	var v = 5
 	println(v)
@@ -25,6 +29,11 @@ func main() {
 	}
 
 	f1()
+
+	f2 := f1
+	f2()
+
+	useclos(f2)
 
 	// f2 := foo
 	// f2()
