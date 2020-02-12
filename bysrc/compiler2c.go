@@ -362,10 +362,10 @@ func (c *g2nc) genPreFuncDecl(scope *ast.Scope, d *ast.FuncDecl) {
 		c.genFieldList(scope, fnlit.Type.Results, true, false, "", true)
 		c.outsp()
 		c.outf("%s%s_closure_%d(", pkgpfx, d.Name.Name, cnter)
-		c.genFieldList(scope, fnlit.Type.Params, false, true, ",", false)
-		// c.genFieldList(scope *ast.Scope, flds *ast.FieldList, keepvoid bool, withname bool, linebrk string, skiplast bool)
 		c.outf("%s%s_closure_arg_%d*", pkgpfx, d.Name.Name, cnter).outsp()
-		c.out("clos")
+		c.out("clos", gopp.IfElseStr(fnlit.Type.Params.NumFields() > 0, ",", ""))
+		c.genFieldList(scope, fnlit.Type.Params, false, true, ",", true)
+		// c.genFieldList(scope *ast.Scope, flds *ast.FieldList, keepvoid bool, withname bool, linebrk string, skiplast bool)
 		c.out(")")
 		c.out("{").outnl()
 		for _, ido := range closi.idents {
@@ -375,6 +375,12 @@ func (c *g2nc) genPreFuncDecl(scope *ast.Scope, d *ast.FuncDecl) {
 			c.outfh().outnl()
 		}
 		c.genBlockStmt(scope, fnlit.Body)
+		// assign back in case modified
+		for _, ido := range closi.idents {
+			c.out("clos", "->", ido.Name).outeq()
+			c.out(ido.Name)
+			c.outfh().outnl()
+		}
 		c.out("}").outnl()
 		c.outnl()
 	}
@@ -397,48 +403,83 @@ func (c *g2nc) genPostFuncDecl(scope *ast.Scope, fd *ast.FuncDecl) {
 	}
 	ant := newAnnotation(fd.Doc)
 	if ant.exported {
-		c.genFieldList(scope, fd.Type.Results, true, false, "", false)
-		c.outsp().out(ant.exportname).out("(")
-		if fd.Recv != nil {
-			c.genExpr(scope, fd.Recv.List[0].Type)
-			c.outsp().out("this")
-			if len(fd.Type.Params.List) > 0 {
-				c.out(",")
-			}
-		}
-		c.genFieldList(scope, fd.Type.Params, false, true, ",", true)
-		c.out(") {").outnl()
-		if fd.Type.Results != nil {
-			c.out("return").outsp()
-		}
-
-		if fd.Recv != nil {
-			tystr := c.exprTypeName(scope, fd.Recv.List[0].Type)
-			tystr = strings.Trim(tystr, "*")
-			c.out(tystr)
-			c.out(mthsep)
-		} else {
-			c.out(c.pkgpfx())
-		}
-		c.out(fd.Name.Name).out("(")
-		if fd.Recv != nil {
-			c.out("this")
-			if len(fd.Type.Params.List) > 0 {
-				c.out(",")
-			}
-		}
-		for idx1, prm := range fd.Type.Params.List {
-			for idx2, name := range prm.Names {
-				c.out(name.Name)
-				if idx2 == len(prm.Names)-1 && idx1 == len(fd.Type.Params.List)-1 {
-				} else {
-					c.out(",")
-				}
-			}
-		}
-		c.out(")").outfh().outnl()
-		c.out("}").outnl()
+		c.genFuncDeclExported(scope, fd, ant)
 	}
+	if fd.Recv == nil && fd.Body != nil {
+		c.genFuncDeclCallable(scope, fd, ant)
+	}
+}
+func (c *g2nc) genFuncDeclExported(scope *ast.Scope, fd *ast.FuncDecl, ant *Annotation) {
+	c.genFieldList(scope, fd.Type.Results, true, false, "", false)
+	c.outsp().out(ant.exportname).out("(")
+	if fd.Recv != nil {
+		c.genExpr(scope, fd.Recv.List[0].Type)
+		c.outsp().out("this")
+		if len(fd.Type.Params.List) > 0 {
+			c.out(",")
+		}
+	}
+	c.genFieldList(scope, fd.Type.Params, false, true, ",", true)
+	c.out(") {").outnl()
+	if fd.Type.Results != nil {
+		c.out("return").outsp()
+	}
+
+	if fd.Recv != nil {
+		tystr := c.exprTypeName(scope, fd.Recv.List[0].Type)
+		tystr = strings.Trim(tystr, "*")
+		c.out(tystr)
+		c.out(mthsep)
+	} else {
+		c.out(c.pkgpfx())
+	}
+	c.out(fd.Name.Name).out("(")
+	if fd.Recv != nil {
+		c.out("this")
+		if len(fd.Type.Params.List) > 0 {
+			c.out(",")
+		}
+	}
+	for idx1, prm := range fd.Type.Params.List {
+		for idx2, name := range prm.Names {
+			c.out(name.Name)
+			if idx2 == len(prm.Names)-1 && idx1 == len(fd.Type.Params.List)-1 {
+			} else {
+				c.out(",")
+			}
+		}
+	}
+	c.out(")").outfh().outnl()
+	c.out("}").outnl().outnl()
+
+}
+func (c *g2nc) genFuncDeclCallable(scope *ast.Scope, fd *ast.FuncDecl, ant *Annotation) {
+	c.genFieldList(scope, fd.Type.Results, true, false, "", false)
+	c.outsp()
+	c.outf("%s%s_gxcallable", c.pkgpfx(), fd.Name).out("(")
+	gopp.Assert(fd.Recv == nil, "wtfff", fd.Recv)
+	c.out("voidptr nilthis", gopp.IfElseStr(len(fd.Type.Params.List) > 0, ",", ""))
+	c.genFieldList(scope, fd.Type.Params, false, true, ",", true)
+	c.out(") {").outnl()
+	if fd.Type.Results != nil {
+		c.out("return").outsp()
+	}
+	if fd.Recv != nil {
+	} else {
+		c.out(c.pkgpfx())
+	}
+	c.out(fd.Name.Name).out("(")
+	for idx1, prm := range fd.Type.Params.List {
+		for idx2, name := range prm.Names {
+			c.out(name.Name)
+			if idx2 == len(prm.Names)-1 && idx1 == len(fd.Type.Params.List)-1 {
+			} else {
+				c.out(",")
+			}
+		}
+	}
+	c.out(")").outfh().outnl()
+	c.out("}").outnl().outnl()
 }
 func (this *g2nc) genFuncDecl(scope *ast.Scope, fd *ast.FuncDecl) {
 	ant := newAnnotation(fd.Doc)
@@ -2092,13 +2133,20 @@ func (c *g2nc) genCallExprClosure(scope *ast.Scope, te *ast.CallExpr, fnlit *ast
 		c.genExpr(scope, selfn.X)
 		c.out(gopp.IfElseStr(len(te.Args) > 0, ",", ""))
 	}
+	c.out(argtv)
+	c.out(gopp.IfElseStr(len(te.Args) > 0, ",", ""))
 	for idx, e1 := range te.Args {
 		c.genExpr(scope, e1)
 		c.out(gopp.IfElseStr(idx == len(te.Args)-1, "", ", "))
 	}
-	c.out(gopp.IfElseStr(len(te.Args) > 0, ",", ""))
-	c.out(argtv)
 	c.out(")")
+	c.outfh().outnl()
+	// assign back in case modified
+	for _, ido := range closi.idents {
+		c.out(ido.Name).outeq()
+		c.out(argtv, "->", ido.Name)
+		c.outfh().outnl()
+	}
 
 	// check if real need, ;\n
 	cs := c.psctx.cursors[te]
@@ -3714,6 +3762,11 @@ typedef uintptr_t uintptr;
 typedef void* voidptr;
 typedef char* byteptr;
 typedef void voidty;
+#ifndef have_gxcallbale
+#define have_gxcallbale
+typedef struct gxcallable gxcallable;
+struct gxcallable {voidptr obj; voidptr fnptr; };
+#endif
 `
 	return precgodefs
 }
