@@ -121,7 +121,7 @@ type Wideptr struct {
 }
 
 type typealg struct {
-	hash  func(voidptr, uintptr) uintptr
+	hash  func(voidptr, int) usize
 	equal func(voidptr, voidptr) bool
 }
 

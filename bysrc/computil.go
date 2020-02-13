@@ -115,16 +115,6 @@ func iserrorty2(typ types.Type) bool {
 	return segs[len(segs)-1] == "error"
 }
 
-func newLitInt(v int) *ast.BasicLit {
-	return &ast.BasicLit{Kind: token.INT, Value: fmt.Sprintf("%d", v)}
-}
-func newLitStr(v string) *ast.BasicLit {
-	return &ast.BasicLit{Kind: token.STRING, Value: fmt.Sprintf("%s", v)}
-}
-func newLitFloat(v float32) *ast.BasicLit {
-	return &ast.BasicLit{Kind: token.FLOAT, Value: fmt.Sprintf("%f", v)}
-}
-
 func typesty2str(typ types.Type) string {
 	ret := ""
 	switch aty := typ.(type) {

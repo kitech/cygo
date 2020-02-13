@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"go/ast"
 	"go/token"
 	"log"
@@ -134,6 +135,14 @@ func newIdent(v string) *ast.Ident {
 	return idt
 }
 
+func newIdentp(v string, p token.Pos) *ast.Ident {
+	idt := &ast.Ident{}
+	idt.Name = v
+	idt.NamePos = token.NoPos
+	idt.NamePos = p
+	return idt
+}
+
 func newVardecl(name string, typ ast.Expr, pos token.Pos) (*ast.Ident, *ast.DeclStmt) {
 	idt := newIdent(name)
 	idt.NamePos = pos
@@ -150,4 +159,24 @@ func newVardecl(name string, typ ast.Expr, pos token.Pos) (*ast.Ident, *ast.Decl
 	declvar.Decl = gendecl
 
 	return idt, declvar
+}
+
+func newLitInt(v int) *ast.BasicLit {
+	return &ast.BasicLit{Kind: token.INT, Value: fmt.Sprintf("%d", v)}
+}
+func newLitStr(v string) *ast.BasicLit {
+	return &ast.BasicLit{Kind: token.STRING, Value: fmt.Sprintf("%s", v)}
+}
+func newLitFloat(v float32) *ast.BasicLit {
+	return &ast.BasicLit{Kind: token.FLOAT, Value: fmt.Sprintf("%f", v)}
+}
+
+var trueidt = newIdent("true")
+var falseidt = newIdent("false")
+
+func newLitBool(v bool) *ast.Ident {
+	if v {
+		return trueidt
+	}
+	return falseidt
 }

@@ -130,6 +130,10 @@ func (this *ParserContext) Init_no_cgocmd(semachk bool) error {
 	}
 
 	this.walkpass_valid_files()
+	this.walkpass_dotransforms(false)
+	this.saveastcode()
+	// os.Exit(-1)
+
 	this.walkpass_fill_funcvars()
 	this.walkpass_rewrite_ast()
 	this.walkpass_flat_cursors()
@@ -137,9 +141,6 @@ func (this *ParserContext) Init_no_cgocmd(semachk bool) error {
 	// this.walkpass_prefill_ctypes() // before types.Config.Check
 	this.walkpass_fill_fakecpkg()   // before types.Config.Check
 	this.walkpass_fill_builtinpkg() // before types.Config.Check
-	this.walkpass_dotransforms(false)
-
-	this.saveastcode()
 	// parser step 3, got types, semantics check
 	if !semachk {
 		return nil
@@ -148,7 +149,8 @@ func (this *ParserContext) Init_no_cgocmd(semachk bool) error {
 	if this.chkerrs != nil {
 		os.Exit(-1)
 	}
-	this.walkpass_dotransforms(true)
+
+	// this.walkpass_dotransforms(true)
 	// this.walkpass_resolve_ctypes()
 	// this.walkpass_flat_cursors() // move move previous
 	// this.walkpass_clean_cgodecl()
@@ -1375,11 +1377,20 @@ func (pc *ParserContext) walkpass_fill_funcvars() {
 	for _, pkg := range pkgs {
 		astutil.Apply(pkg, func(c *astutil.Cursor) bool {
 			switch te := c.Node().(type) {
+			default:
+				gopp.G_USED(te)
+			}
+			return true
+		}, func(c *astutil.Cursor) bool {
+			switch te := c.Node().(type) {
 			case *ast.FuncDecl:
 				if te.Body == nil {
 					break
 				}
 				if te.Body == nil || te.Body.List == nil {
+					break
+				}
+				if true {
 					break
 				}
 				toperrvar, declvar := newVardecl("gxtvtoperr", newIdent("error"), te.Body.Pos())
@@ -1417,12 +1428,7 @@ func (pc *ParserContext) walkpass_fill_funcvars() {
 						te.Body.List = append(te.Body.List, retst)
 					}
 				}
-			default:
-				gopp.G_USED(te)
-			}
-			return true
-		}, func(c *astutil.Cursor) bool {
-			switch te := c.Node().(type) {
+
 			case *ast.CatchStmt:
 				assign := &ast.AssignStmt{}
 				assign.TokPos = te.Pos()
@@ -1460,37 +1466,136 @@ func (pc *ParserContext) walkpass_fill_funcvars() {
 	}
 }
 
+/*
+遍历时即时修改问题太多
+
+第二种方法，
+* 遍历时记录当前修改的expr，及在其之前最近的可插入点要插入的exprs，这一步不做插入操作。
+* 第二遍遍历做flat cursor树快照
+* 第三遍遍历做插入操作，根据快照向上回溯找最近可插入点
+*/
+
 // 在 check 之前做 ast 修改，不需要涉及类型问题
 func (pc *ParserContext) walkpass_dotransforms(afterchk bool) {
-	pkgs := pc.pkgs
-	for _, tfo := range transforms {
-		if afterchk {
-			if !tfo.afterchk() {
-				continue
-			}
+	for i := 0; ; i++ {
+		addtot := pc.walkpass_dotransforms_impl(afterchk)
+		if addtot == 0 {
+			log.Println("total cycles", i+1)
+			break
 		}
-		var lastst *astutil.Cursor // last can InsertBefore, or InsertAfter cursor
+		// log.Println("continue", i, addtot)
+	}
+}
+func (pc *ParserContext) walkpass_dotransforms_impl(afterchk bool) int {
+	pkgs := pc.pkgs
+
+	addlines := map[ast.Node][]ast.Stmt{}
+	addtot := 0
+	mrgaddlines := func(lines map[ast.Node][]ast.Stmt) {
+		for e, stmts := range lines {
+			addlines[e] = append(addlines[e], stmts...)
+			addtot += len(stmts)
+		}
+	}
+	for _, tfo := range transforms {
 		for _, pkg := range pkgs {
 			astutil.Apply(pkg, func(c *astutil.Cursor) bool {
-				tc := *c
-				switch c.Node().(type) {
-				case ast.Stmt:
-					if c.Index() >= 0 {
-						lastst = &tc
-					}
-				}
-				tfctx := &TransformContext{c: c, lastst: lastst,
-					n: c.Node(), ispre: true}
+				tfctx := newTransformContext(pc, c, true)
 				tfo.apply(tfctx)
+				mrgaddlines(tfctx.inslines)
 				return true
 			}, func(c *astutil.Cursor) bool {
-				tfctx := &TransformContext{c: c, lastst: lastst,
-					n: c.Node(), ispre: false}
+				tfctx := newTransformContext(pc, c, false)
 				tfo.apply(tfctx)
 				return true
 			})
 		}
 	}
+	log.Println("addlines", pc.bdpkgs.Name, len(addlines), addtot)
+	pc.walkpass_flat_cursors()
+	cursors := pc.cursors
+	var findupinsable func(e ast.Node) *astutil.Cursor
+	findupinsable = func(e ast.Node) *astutil.Cursor {
+		c := cursors[e]
+		if c == nil {
+			return nil
+		}
+		pe := c.Parent()
+		if pe == nil {
+			return nil
+		}
+		if _, ok := pe.(*ast.BlockStmt); ok {
+			return c
+		}
+		if _, ok := pe.(*ast.CaseClause); ok {
+			return c
+		}
+		return findupinsable(pe)
+	}
+	for curexpr, stmts := range addlines {
+		// log.Println("addlines", len(addlines))
+		found := false
+		for _, pkg := range pkgs {
+			if found {
+				break
+			}
+			astutil.Apply(pkg, func(c *astutil.Cursor) bool {
+				if found {
+					return false
+				}
+				n := c.Node()
+				if n != curexpr {
+					return true
+				}
+
+				found = true
+				te := n
+				inscs := findupinsable(te)
+				if inscs == nil {
+					log.Println("not found", te)
+				}
+				if false {
+					log.Println(inscs != nil, inscs.Index(), reftyof(inscs.Node()))
+				}
+				curcs := inscs.Node().(ast.Stmt)
+				var oldlst []ast.Stmt
+				switch vec := inscs.Parent().(type) {
+				case *ast.BlockStmt:
+					oldlst = vec.List
+				case *ast.CaseClause:
+					oldlst = vec.Body
+				default:
+					log.Panicln(reftyof(vec))
+				}
+				oldcnt := len(oldlst)
+
+				var lst []ast.Stmt
+				for _, stmt := range oldlst {
+					if stmt == curcs {
+						lst = append(lst, stmts...)
+					}
+					lst = append(lst, stmt)
+				}
+				if len(lst) > oldcnt {
+					switch vec := inscs.Parent().(type) {
+					case *ast.BlockStmt:
+						vec.List = lst
+					case *ast.CaseClause:
+						vec.Body = lst
+					default:
+						log.Panicln(reftyof(vec))
+					}
+					// blkst.List = lst
+					// log.Println("change", len(stmts), len(lst))
+				} else {
+					log.Println("not change", len(stmts))
+				}
+
+				return true
+			}, nil)
+		}
+	}
+	return addtot
 }
 
 func (pc *ParserContext) walkpass_rewrite_ast() {
@@ -1506,32 +1611,36 @@ func (pc *ParserContext) walkpass_rewrite_ast() {
 				}
 			case *ast.CallExpr:
 				for idx, aex := range te.Args {
+					_ = idx
 					switch ae := aex.(type) {
 					case *ast.BasicLit:
-						vsp2 := &ast.AssignStmt{}
-						vsp2.Lhs = []ast.Expr{newIdent(tmpvarname())}
-						vsp2.Rhs = []ast.Expr{ae}
-						vsp2.Tok = token.DEFINE
-						vsp2.TokPos = c.Node().Pos()
-						te.Args[idx] = vsp2.Lhs[0]
-						lastst.InsertBefore(vsp2)
+						// vsp2 := &ast.AssignStmt{}
+						// vsp2.Lhs = []ast.Expr{newIdent(tmpvarname())}
+						// vsp2.Rhs = []ast.Expr{ae}
+						// vsp2.Tok = token.DEFINE
+						// vsp2.TokPos = c.Node().Pos()
+						// te.Args[idx] = vsp2.Lhs[0]
+						// lastst.InsertBefore(vsp2)
 					case *ast.CallExpr:
-						vsp2 := &ast.AssignStmt{}
-						vsp2.Lhs = []ast.Expr{newIdent(tmpvarname())}
-						vsp2.Rhs = []ast.Expr{ae}
-						vsp2.Tok = token.DEFINE
-						vsp2.TokPos = c.Node().Pos()
-						te.Args[idx] = vsp2.Lhs[0]
-						lastst.InsertBefore(vsp2)
+						// vsp2 := &ast.AssignStmt{}
+						// vsp2.Lhs = []ast.Expr{newIdent(tmpvarname())}
+						// vsp2.Rhs = []ast.Expr{ae}
+						// vsp2.Tok = token.DEFINE
+						// vsp2.TokPos = c.Node().Pos()
+						// te.Args[idx] = vsp2.Lhs[0]
+						// lastst.InsertBefore(vsp2)
 
 					case *ast.FuncLit:
-						vsp2 := &ast.AssignStmt{}
-						vsp2.Lhs = []ast.Expr{newIdent(tmpvarname())}
-						vsp2.Rhs = []ast.Expr{ae}
-						vsp2.Tok = token.DEFINE
-						vsp2.TokPos = c.Node().Pos()
-						te.Args[idx] = vsp2.Lhs[0]
-						lastst.InsertBefore(vsp2)
+					// vsp2 := &ast.AssignStmt{}
+					// vsp2.Lhs = []ast.Expr{newIdent(tmpvarname())}
+					// vsp2.Rhs = []ast.Expr{ae}
+					// vsp2.Tok = token.DEFINE
+					// vsp2.TokPos = c.Node().Pos()
+					// te.Args[idx] = vsp2.Lhs[0]
+					// lastst.InsertBefore(vsp2)
+
+					default:
+						gopp.G_USED(ae)
 					}
 				}
 			default:
@@ -1837,6 +1946,14 @@ func (pc *ParserContext) walkpass_tmpvars() {
 
 	log.Println("tmpvars", pc.bdpkgs.Name, len(tmpvars))
 	pc.tmpvars = tmpvars
+	cnter := 0
+	for stmt, _ := range tmpvars {
+		log.Println("tmpvars", cnter, exprpos(pc, stmt))
+		cnter++
+		if cnter > 2 {
+			break
+		}
+	}
 }
 
 func (pc *ParserContext) walkpass_kvpairs() {
