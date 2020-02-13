@@ -813,7 +813,8 @@ const DW_FRAME_SAME_VAL = 1035
 /* error return values
  */
 // const DW_DLV_BADADDR = 0 // (~(Addr)0) // TODO compiler
-const DW_DLV_BADADDR = C.DW_DLV_BADADDR
+// const DW_DLV_BADADDR = C.DW_DLV_BADADDR // TODO compiler
+const DW_DLV_BADADDR = -1
 
 /* for functions returning target address */
 
@@ -821,7 +822,8 @@ const DW_DLV_NOCOUNT = -1 // ((Signed)(0)-1)
 /* for functions returning count */
 
 // const DW_DLV_BADOFFSET = 0 // (~(Dwarf_Off)0)
-const DW_DLV_BADOFFSET = C.DW_DLV_BADOFFSET
+// const DW_DLV_BADOFFSET = C.DW_DLV_BADOFFSET // TODO compiler
+const DW_DLV_BADOFFSET = -1
 
 /* for functions returning offset */
 

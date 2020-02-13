@@ -211,10 +211,12 @@ func Setu64(v *u64, new u64) {
 	C.mylang_sync_atomic_setu64(v, new)
 }
 func Setusize(v *usize, new usize) usize {
-	C.mylang_sync_atomic_setusize(v, new)
+	rv := C.mylang_sync_atomic_setusize(v, new)
+	return rv
 }
 func Setvptr(v *voidptr, new voidptr) voidptr {
-	C.mylang_sync_atomic_setuptr(v, new)
+	rv := C.mylang_sync_atomic_setuptr(v, new)
+	return rv
 }
 
 func Getint(v *int) int {

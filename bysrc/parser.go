@@ -135,7 +135,6 @@ func (this *ParserContext) Init_no_cgocmd(semachk bool) error {
 	// os.Exit(-1)
 
 	this.walkpass_fill_funcvars()
-	this.walkpass_rewrite_ast()
 	this.walkpass_flat_cursors()
 	this.walkpass_csymbols()
 	// this.walkpass_prefill_ctypes() // before types.Config.Check
@@ -1390,9 +1389,7 @@ func (pc *ParserContext) walkpass_fill_funcvars() {
 				if te.Body == nil || te.Body.List == nil {
 					break
 				}
-				if true {
-					break
-				}
+
 				toperrvar, declvar := newVardecl("gxtvtoperr", newIdent("error"), te.Body.Pos())
 				te.Body.List = append([]ast.Stmt{declvar}, te.Body.List...)
 				toperrvarobj = toperrvar
@@ -1530,6 +1527,9 @@ func (pc *ParserContext) walkpass_dotransforms_impl(afterchk bool) int {
 		if _, ok := pe.(*ast.CaseClause); ok {
 			return c
 		}
+		if _, ok := pe.(*ast.File); ok {
+			return c
+		}
 		return findupinsable(pe)
 	}
 	for curexpr, stmts := range addlines {
@@ -1552,10 +1552,37 @@ func (pc *ParserContext) walkpass_dotransforms_impl(afterchk bool) int {
 				te := n
 				inscs := findupinsable(te)
 				if inscs == nil {
-					log.Println("not found", te)
+					// TODO not found, but maybe global
+					pn := c.Parent()
+					log.Println("not found", reftyof(te), reftyof(pn), te)
 				}
 				if false {
 					log.Println(inscs != nil, inscs.Index(), reftyof(inscs.Node()))
+				}
+				if gend, ok := inscs.Node().(*ast.GenDecl); ok {
+					log.Println("got some", gend.Tok, len(stmts), exprpos(pc, gend))
+					valsp := &ast.ValueSpec{}
+					_ = valsp
+					var newspecs []ast.Spec
+					oldcnt := len(gend.Specs)
+					for idx, spx := range gend.Specs {
+						log.Println(idx, reftyof(spx), reftyof(c.Parent()), reftyof(c.Node()))
+						if spx == c.Parent() {
+							log.Println("got it")
+							for _, stmt := range stmts {
+								as := stmt.(*ast.AssignStmt)
+								valsp := &ast.ValueSpec{}
+								valsp.Names = append(valsp.Names, as.Lhs[0].(*ast.Ident))
+								valsp.Values = append(valsp.Values, as.Rhs[0])
+								newspecs = append(newspecs, valsp)
+							}
+						}
+						newspecs = append(newspecs, spx)
+					}
+					if len(newspecs) > oldcnt {
+						gend.Specs = newspecs
+					}
+					return false
 				}
 				curcs := inscs.Node().(ast.Stmt)
 				var oldlst []ast.Stmt
@@ -1598,71 +1625,13 @@ func (pc *ParserContext) walkpass_dotransforms_impl(afterchk bool) int {
 	return addtot
 }
 
-func (pc *ParserContext) walkpass_rewrite_ast() {
-	pkgs := pc.pkgs
-	var lastst *astutil.Cursor // last can InsertBefore, or InsertAfter cursor
-	for _, pkg := range pkgs {
-		astutil.Apply(pkg, func(c *astutil.Cursor) bool {
-			tc := *c
-			switch te := c.Node().(type) {
-			case ast.Stmt:
-				if c.Index() >= 0 {
-					lastst = &tc
-				}
-			case *ast.CallExpr:
-				for idx, aex := range te.Args {
-					_ = idx
-					switch ae := aex.(type) {
-					case *ast.BasicLit:
-						// vsp2 := &ast.AssignStmt{}
-						// vsp2.Lhs = []ast.Expr{newIdent(tmpvarname())}
-						// vsp2.Rhs = []ast.Expr{ae}
-						// vsp2.Tok = token.DEFINE
-						// vsp2.TokPos = c.Node().Pos()
-						// te.Args[idx] = vsp2.Lhs[0]
-						// lastst.InsertBefore(vsp2)
-					case *ast.CallExpr:
-						// vsp2 := &ast.AssignStmt{}
-						// vsp2.Lhs = []ast.Expr{newIdent(tmpvarname())}
-						// vsp2.Rhs = []ast.Expr{ae}
-						// vsp2.Tok = token.DEFINE
-						// vsp2.TokPos = c.Node().Pos()
-						// te.Args[idx] = vsp2.Lhs[0]
-						// lastst.InsertBefore(vsp2)
-
-					case *ast.FuncLit:
-					// vsp2 := &ast.AssignStmt{}
-					// vsp2.Lhs = []ast.Expr{newIdent(tmpvarname())}
-					// vsp2.Rhs = []ast.Expr{ae}
-					// vsp2.Tok = token.DEFINE
-					// vsp2.TokPos = c.Node().Pos()
-					// te.Args[idx] = vsp2.Lhs[0]
-					// lastst.InsertBefore(vsp2)
-
-					default:
-						gopp.G_USED(ae)
-					}
-				}
-			default:
-				gopp.G_USED(te)
-			}
-			return true
-		}, func(c *astutil.Cursor) bool {
-			switch te := c.Node().(type) {
-			default:
-				gopp.G_USED(te)
-			}
-			return true
-		})
-	}
-}
-
 func (pc *ParserContext) walkpass_flat_cursors() {
 	pkgs := pc.pkgs
+	cursors := map[ast.Node]*astutil.Cursor{}
 	for _, pkg := range pkgs {
 		astutil.Apply(pkg, func(c *astutil.Cursor) bool {
 			tc := *c
-			pc.cursors[c.Node()] = &tc
+			cursors[c.Node()] = &tc
 			switch te := c.Node().(type) {
 			default:
 				gopp.G_USED(te)
@@ -1676,6 +1645,7 @@ func (pc *ParserContext) walkpass_flat_cursors() {
 			return true
 		})
 	}
+	pc.cursors = cursors
 }
 
 func (pc *ParserContext) walkpass_tmpl_proc() {

@@ -120,7 +120,7 @@ func init() {
 func init_timerman_proc() {
 	tmrman = &timerman{}
 	// tmrman.itemmu = &xsync.Mutex{}
-	tmrman.tmradd = make(chan *timeritem, 128)
+	// tmrman.tmradd = make(chan *timeritem, 128) // TODO compiler
 	go timerman_dotask_proc()
 	go timerman_recv_proc()
 }
@@ -143,7 +143,7 @@ func timerman_dotask_proc1() {
 			lefts = append(lefts, item)
 		}
 	}
-	if readys.len() > 0 {
+	if readys.len > 0 {
 		tmrman.items = lefts
 	}
 	tmrman.unlock()

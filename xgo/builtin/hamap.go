@@ -313,11 +313,11 @@ func (mp *mirmap) values() []voidptr {
 func (mp *mirmap) values2() []voidptr {
 	res := []voidptr{}
 	// TODO compiler
-	/*
-		mp.each(func(key voidptr, val voidptr) {
-			res = append(res, val)
-		})
-	*/
+	//*
+	mp.each(func(key voidptr, val voidptr) {
+		res = append(res, val)
+	})
+	//*/
 	return res
 }
 

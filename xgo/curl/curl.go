@@ -149,7 +149,7 @@ func header_cltcb(buf voidptr, size usize, nitem usize, cbval voidptr) usize {
 	s := gostringn(buf, nitem)
 	// xlog.Println(size, nitem, cbval, s)
 	kv := s.split(": ")
-	if kv.len() != 2 {
+	if kv.len != 2 {
 		// first line
 		rsp.Stline = s.trimsp()
 	} else {
@@ -354,7 +354,7 @@ type Response struct {
 }
 
 // network ok?
-func (rsp *Response) Ok() bool { return rsp.Ret == OK }
+func (rsp *Response) Ok() bool { return rsp.Ret == CEOK }
 
 // protocol ok?
 func (rsp *Response) Is10x() bool {
@@ -406,8 +406,9 @@ const (
 )
 
 const (
-	OK    = C.CURLE_OK
-	AGAIN = C.CURLE_AGAIN
+	// CEOK    = C.CURLE_OK // TODO compiler
+	CEOK    = 0
+	CEAGAIN = C.CURLE_AGAIN
 
 	// t1 = C.CURLOPT_HTTPPOST
 )

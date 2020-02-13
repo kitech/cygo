@@ -811,7 +811,8 @@ func (dw *Dwarf) calc_minmax_pc() {
 			offset, err5 := global_formref(rgattr)
 			if err5.Okay() {
 				var baseaddr Addr
-				if a2l.minpc != DW_DLV_BADADDR {
+				var badaddr Addr = DW_DLV_BADADDR
+				if a2l.minpc != badaddr {
 					baseaddr = a2l.minpc
 				}
 
