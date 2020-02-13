@@ -461,7 +461,12 @@ func (c *g2nc) genFuncDeclExported(scope *ast.Scope, fd *ast.FuncDecl, ant *Anno
 }
 func (c *g2nc) genFuncDeclCallable(scope *ast.Scope, fd *ast.FuncDecl, ant *Annotation) {
 	// todo multirets
-	c.genFieldList(scope, fd.Type.Results, true, false, "", false)
+	ismret := fd.Type.Results.NumFields() >= 2
+	if ismret {
+		c.outf("%s%s_multiret_arg*", c.pkgpfx(), fd.Name.Name)
+	} else {
+		c.genFieldList(scope, fd.Type.Results, true, false, "", false)
+	}
 	c.outsp()
 	c.outf("%s%s_gxcallable", c.pkgpfx(), fd.Name).out("(")
 	gopp.Assert(fd.Recv == nil, "wtfff", fd.Recv)

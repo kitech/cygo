@@ -494,6 +494,7 @@ type FuncCallAttr struct {
 	isvardic   bool
 	haslval    bool
 	haserrret  bool
+	ismret     bool
 	lexpr      ast.Expr
 }
 

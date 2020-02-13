@@ -189,6 +189,7 @@ func (pc *ParserContext) pkgimperror(err error) {
 		strings.Contains(err.Error(), "has no field or method") ||
 		strings.Contains(err.Error(), "variable) is not a type") ||
 		strings.Contains(err.Error(), "invalid statement") ||
+		strings.Contains(err.Error(), "not declared by package") ||
 		false {
 		log.Println("fatalerr", err)
 		pc.chkerrs = append(pc.chkerrs, err)
@@ -738,7 +739,7 @@ func (pc *ParserContext) walkpass_fill_fakecpkg() {
 				log.Println(pc.bdpkgs.Name, idtname, "/", ctystr, "/", ctyobj)
 			}
 			if ctyobj != nil {
-				stobj := types.NewTypeName(token.NoPos, fcpkg, idtname+"kkk", nil)
+				stobj := types.NewTypeName(token.NoPos, fcpkg, idtname, nil)
 				stobj2 := types.NewNamed(stobj, ctyobj, nil)
 				scope.Insert(stobj2.Obj())
 			} else if ctyobj == nil && strings.HasPrefix(ctystr, "union{") {
@@ -794,7 +795,7 @@ func (pc *ParserContext) walkpass_fill_fakecpkg() {
 	}
 	{
 		st1 := types.Typ[types.Voidptr]
-		stobj := types.NewTypeName(token.NoPos, fcpkg, "socklenttt", nil)
+		stobj := types.NewTypeName(token.NoPos, fcpkg, "socklen_t_ttt", nil)
 		stobj2 := types.NewNamed(stobj, st1, nil)
 		_ = stobj
 		scope.Insert(stobj2.Obj())
@@ -889,6 +890,8 @@ func (pc *ParserContext) walkpass_fill_fakecpkg() {
 	buf.WriteString(pc.path + "\n")
 	scope.WriteTo(buf, 1, true)
 	pc.fcdefscc = "// " + strings.ReplaceAll(string(buf.Bytes()), "\n", "\n// ")
+	cdefsfile := fmt.Sprintf("./opkgs/%s.cdefs", pc.bdpkgs.Name)
+	ioutil.WriteFile(cdefsfile, buf.Bytes(), 0644)
 }
 
 // before types.Config.Check

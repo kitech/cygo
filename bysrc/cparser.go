@@ -693,7 +693,7 @@ func (cp *cparser1) ctype2go(sym, tystr string) (tystr2 string, tyobj types.Type
 		tyobj = types.Typ[types.Int64]
 	case "long long int":
 		tyobj = types.Typ[types.Int64]
-	case "unsigned long", "unsigned long int":
+	case "unsigned long", "unsigned long int", "ulong":
 		tyobj = types.Typ[types.Uint64]
 	case "unsigned", "unsigned int", "uint":
 		tyobj = types.Typ[types.Uint]
@@ -701,7 +701,7 @@ func (cp *cparser1) ctype2go(sym, tystr string) (tystr2 string, tyobj types.Type
 		tyobj = types.Typ[types.Int]
 	case "char":
 		tyobj = types.Typ[types.Byte]
-	case "uint16_t", "unsigned short", "unsigned short int":
+	case "uint16_t", "unsigned short", "unsigned short int", "ushort":
 		tyobj = types.Typ[types.Uint16]
 	case "int16_t", "short", "short int":
 		tyobj = types.Typ[types.Int16]
