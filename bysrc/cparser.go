@@ -61,7 +61,7 @@ func newcparser1(name string) *cparser1 {
 }
 
 const (
-	csym_non = iota
+	csym_non = iota + 999
 	csym_file
 	csym_define
 	csym_enum

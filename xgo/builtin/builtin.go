@@ -7,6 +7,7 @@ package builtin
 #include <stdio.h>
 #include <errno.h>
 #include <string.h>
+#include <signal.h>
 #include <cxrtbase.h>
 */
 import "C"

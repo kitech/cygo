@@ -4,15 +4,18 @@ package main
 
 import (
 	"fmt"
+	"go/types"
 	"gopp"
 	"io/ioutil"
 	"log"
 	"math/rand"
 	"runtime"
+	"strings"
 
 	cc1x "github.com/xlab/c-for-go/parser"
 	cc1 "modernc.org/cc"
 	"modernc.org/cc/v3"
+	"modernc.org/xc"
 )
 
 type cparser2 struct {
@@ -20,11 +23,26 @@ type cparser2 struct {
 	ctu  *cc.AST
 	cfg  *cc.Config
 	ctu1 *cc1.TranslationUnit
+	syms map[string]*csymdata2 // identity/struct/type name =>
+}
+type csymdata2 struct {
+	name string
+	kind int
+	typ  cc1.Type
+}
+
+func newcsymdata2(name string, kind int, typ cc1.Type) *csymdata2 {
+	csi := &csymdata2{}
+	csi.name = name
+	csi.kind = kind
+	csi.typ = typ
+	return csi
 }
 
 func newcparser2(name string) *cparser2 {
 	cp := &cparser2{}
 	cp.name = name
+	cp.syms = map[string]*csymdata2{}
 	return cp
 }
 
@@ -92,12 +110,123 @@ func (cp *cparser2) parsefile(filename string) error {
 		cp.ctu1 = ctu
 	}
 	if err == nil {
-		cp.dumpdecls()
+		cp.collects1()
+		// cp.dumpdecls1()
 	}
 	return err
 }
 
-func (cp *cparser2) dumpdecls() {
+func (cp *cparser2) gotypeof(sym string) types.Type {
+	csi, found := cp.syms[sym]
+	log.Println(cp.name, sym, "insyms", found)
+	if found {
+		if csi.kind == csym_define {
+			return types.Typ[types.UntypedInt]
+		}
+		cty := csi.typ
+		log.Println(cp.name, sym, "insyms", found, cty.Kind())
+		return cp.gotypeof2(sym, cty, true)
+	} else {
+		// log.Fatalln("symbol not found", sym)
+	}
+	return nil
+}
+
+func (cp *cparser2) gotypeof2(sym string, cty cc1.Type, resty bool) types.Type {
+	switch cty.Kind() {
+	case cc1.Struct: // TODO
+		log.Panicln(sym)
+	case cc1.Union: // TODO
+		log.Panicln(sym)
+	case cc1.Enum: // TODO
+		log.Panicln(sym)
+	case cc1.Function:
+		ty := cty.Result()
+		// log.Println(cp.name, sym, cty.Kind(), ty.Kind(), ty)
+		return cp.gotypeof2(sym, ty, resty)
+	case cc1.Void:
+		return types.NewTuple()
+	case cc1.UintPtr:
+		return types.Typ[types.Uintptr]
+	case cc1.Ptr:
+		switch tk2 := cty.Element().Kind(); tk2 {
+		case cc1.Void:
+			return types.Typ[types.Voidptr]
+		case cc1.Char, cc1.SChar, cc1.UChar:
+			return types.Typ[types.Byteptr]
+		}
+		undty := cp.gotypeof2(sym, cty.Element(), resty)
+		return types.NewPointer(undty)
+	case cc1.Char, cc1.SChar:
+		return types.Typ[types.Int8]
+	case cc1.UChar:
+		return types.Typ[types.Byte]
+	case cc1.Bool:
+		return types.Typ[types.Bool]
+	case cc1.ULong, cc1.ULongLong:
+		return types.Typ[types.Uint64]
+	case cc1.Long, cc1.LongLong:
+		return types.Typ[types.Int64]
+	case cc1.UInt:
+		return types.Typ[types.Uint]
+	case cc1.Int:
+		return types.Typ[types.Int]
+	case cc1.UShort:
+		return types.Typ[types.Uint16]
+	case cc1.Short:
+		return types.Typ[types.Int16]
+	case cc1.Double:
+		return types.Typ[types.Float64]
+	case cc1.FLOAT:
+		return types.Typ[types.Float32]
+	default:
+		log.Println(cp.name, sym, cty.Kind(), cty)
+	}
+	return nil
+}
+
+func (cp *cparser2) collects1() {
+	ctu1 := cp.ctu1
+	declids1 := ctu1.Declarations.Identifiers
+	decltags1 := ctu1.Declarations.Tags // struct/union/enum here
+	for ikey, ido := range declids1 {
+		_ = ikey
+		ddl := ido.Node.(*cc1.DirectDeclarator)
+		td := ddl.TopDeclarator()
+		// log.Println(ikey, td.Type, "//", ddl.EnumVal, td.Type.Kind(),
+		//	ddl.Token, "//", ddl.Token2, "//", ddl.Token3)
+		// ddl.Token format: 3 parts: file id name
+		idname := strings.Trim(strings.Split(ddl.Token.String(), " ")[2], "\"")
+		cp.syms[idname] = newcsymdata2(idname, int(td.Type.Kind()), td.Type)
+	}
+	for ikey, tagx := range decltags1 {
+		_ = ikey
+		switch tago := tagx.Node.(type) {
+		case *cc1.StructOrUnionSpecifier:
+			sty := tago.Declarator().Type
+			// members, _ := sty.Members()
+			stname := strings.Split(sty.String(), " ")[1]
+			// log.Println(ikey, sty.Kind(), stname, sty, "fieldcnt", len(members))
+			cp.syms[stname] = newcsymdata2(stname, csym_struct, sty)
+		case *cc1.EnumSpecifier:
+			// log.Println(ikey, "enum", tago.EnumeratorList.Enumerator.Value)
+		case xc.Token:
+			// log.Println(ikey, "xc.Token?", tago.Val)
+		default:
+			log.Println(ikey, reftyof(tagx.Node))
+		}
+	}
+	for ikey, macx := range ctu1.Macros {
+		_ = ikey
+		idname := strings.Trim(strings.Split(macx.DefTok.String(), " ")[2], "\"")
+		// log.Println(ikey, idname, macx.Type, macx.Value)
+		cp.syms[idname] = newcsymdata2(idname, csym_define, nil)
+	}
+
+	log.Println("macros", len(ctu1.Macros), "syms", len(cp.syms))
+}
+
+func (cp *cparser2) dumpdecls1() {
 	ctu1 := cp.ctu1
 	declids1 := ctu1.Declarations.Identifiers
 	decltags1 := ctu1.Declarations.Tags // struct/union/enum here
