@@ -980,7 +980,7 @@ func next_cu_header(dbg Debug) (cuhdr *CUHeader, dwerr Error) {
 	ret := C.dwarf_next_cu_header(dbg, &cuhdr.Length, &cuhdr.Verstamp,
 		&cuhdr.Abbrevoff, &cuhdr.Addrsize, &cuhdr.NextOff, &dwerr)
 	dwerr = packerror(ret, dwerr)
-	return cuhdr
+	return
 }
 
 func siblingof2(dbg Debug, die Die) (siblingdie Die, dwerr Error) {

@@ -11,6 +11,7 @@ import (
 	"go/ast"
 	"go/constant"
 	"go/token"
+	"log"
 	"math"
 )
 
@@ -243,9 +244,6 @@ func representableConst(x constant.Value, check *Checker, typ *Basic, rounded *c
 			case Uint64:
 				return 0 <= x
 			default:
-				if typ.kind >= ctypebase {
-					return true
-				}
 				switch typ.kind {
 				case Voidptr, Byteptr, Charptr:
 					return true
@@ -1003,6 +1001,9 @@ func (check *Checker) rawExpr(x *operand, e ast.Expr, hint Type) exprKind {
 		val = x.val
 	default:
 		typ = x.typ
+	}
+	if !(x.expr != nil && typ != nil) {
+		log.Println(x, e, hint, x.expr != nil, typ != nil)
 	}
 	assert(x.expr != nil && typ != nil)
 

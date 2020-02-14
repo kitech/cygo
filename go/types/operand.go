@@ -218,12 +218,6 @@ func (x *operand) assignableTo(check *Checker, T Type, reason *string) bool {
 	Vu := V.Underlying()
 	Tu := T.Underlying()
 
-	if isCdefType(V) || isCdefType(T) {
-		return true
-	}
-	if isCdefType(Vu) || isCdefType(Tu) {
-		return true
-	}
 	if isVoidptr(T) || isByteptr(T) || isCharptr(T) {
 		return true
 	}
@@ -290,9 +284,6 @@ func (x *operand) assignableTo(check *Checker, T Type, reason *string) bool {
 		return true
 	}
 	if isPointer(V) && isPointer(T) {
-		return true
-	}
-	if isCdefType(V) || isCdefType(T) {
 		return true
 	}
 

@@ -622,7 +622,22 @@ func getvarname(s string) (string, string) {
 func (cp *cparser1) symtype(sym string) (tystr string, tyobj types.Type) {
 	csi, incache := cp1cache.getsym(sym)
 	log.Println(cp.name, sym, "incache", incache)
+	var symkind ast.ObjKind = ast.Bad
+	_ = symkind
+
 	if incache {
+		switch csi.kind {
+		case csym_define, csym_enum:
+			symkind = ast.Con
+		case csym_var:
+			symkind = ast.Var
+		case csym_func:
+			symkind = ast.Fun
+		case csym_type:
+			symkind = ast.Typ
+		}
+		log.Println(cp.name, sym, "incache", incache, symkind)
+
 		switch csi.kind {
 		case csym_define:
 			defexpr := csi.define
@@ -648,6 +663,7 @@ func (cp *cparser1) symtype(sym string) (tystr string, tyobj types.Type) {
 				}
 			case *ast.Ident:
 				if sym == ety.Name {
+					_, tyobj = cp.ctype2go2(sym, csi)
 					break
 				}
 				log.Println("redir", sym, "=>", ety.Name)
@@ -656,12 +672,22 @@ func (cp *cparser1) symtype(sym string) (tystr string, tyobj types.Type) {
 				vev := types.ExprString(defexpr)
 				log.Println("todo", cp.name, sym, defexpr, reftyof(ety), vev)
 			}
+			log.Println(cp.name, sym, "incache", incache, symkind, tyobj)
 		case csym_enum:
 			tyobj = types.Typ[types.UntypedInt]
 			return
 		case csym_var, csym_func, csym_type:
-			tystr, tyobj = cp.ctype2go(sym, csi.tyval)
+			tystr, tyobj = cp.ctype2go2(sym, csi)
 			return
+		case csym_struct:
+			log.Println(sym, csi.tyval)
+			if csi.tyval == "" { // why
+				csi.tyval = sym
+			}
+			tyobj = cp.tostructy(csi) // sym
+			return
+		default:
+			log.Println(cp.name, sym, "incache", incache, csi.kind)
 		}
 
 	}
@@ -669,31 +695,75 @@ func (cp *cparser1) symtype(sym string) (tystr string, tyobj types.Type) {
 	return
 }
 
+// foo* => foo
+func (cp *cparser1) topointee(csi *csymdata) *csymdata {
+	tystr := csi.tyval
+	gopp.Assert(strings.HasSuffix(tystr, "*"), "wtfff", tystr)
+
+	newcsi := *csi
+	newcsi.tyval = tystr[:len(tystr)-1]
+	return &newcsi
+}
+func (cp *cparser1) ctype2go2(sym string, csi *csymdata) (
+	tystr2 string, tyobj types.Type) {
+	tystr2, tyobj = cp.ctype2go(sym, csi.tyval)
+	if tyobj != nil {
+		log.Println("non primitive_type?", sym, tystr2)
+		return
+	}
+
+	log.Println("non primitive_type?", sym, "//", csi.tyval, "//", tystr2)
+	tystr := csi.tyval
+	if tystr == "" && sym != "" {
+		tystr = sym
+	}
+	if strings.HasPrefix(tystr, "struct ") {
+		log.Println("non primitive_type?", sym, tystr2)
+		if strings.HasSuffix(tystr, "*") {
+			// tyobj = types.Typ[types.Voidptr]
+			newcsi := cp.topointee(csi)
+			tystr3, tyobj3 := cp.ctype2go2(sym, newcsi)
+			tystr2 = tystr3
+			tyobj = types.NewPointer(tyobj3)
+			return
+		} else {
+			// POD
+			log.Println("non primitive_type?", sym, tystr2)
+			tyobj = cp.tostructy(csi)
+			return
+		}
+	}
+	log.Println("non primitive_type?", sym, tystr2)
+
+	return
+}
 func (cp *cparser1) ctype2go(sym, tystr string) (tystr2 string, tyobj types.Type) {
 	log.Println(cp.name, sym, tystr)
 	tystr = strings.TrimSpace(tystr)
 	tystr2 = tystr
 
 	switch tystr {
-	case "char*":
+	case "cxstring*":
+		tyobj = types.Typ[types.String]
+	case "char*", "char *":
 		tyobj = types.Typ[types.Byteptr]
 	case "unsigned char*":
 		tyobj = types.Typ[types.Byteptr]
-	case "cxstring*":
-		tyobj = types.Typ[types.String]
 	case "char**":
 		tyobj = types.NewPointer(types.Typ[types.Byteptr])
 	case "void *", "void*":
 		tyobj = types.Typ[types.Voidptr]
 	case "void":
-		tyobj = types.NewTuple()
-	case "int*":
+		tyobj = (*types.Tuple)(nil)
+	case "int*", "int *":
 		tyobj = types.NewPointer(types.Typ[types.Int])
-	case "long int":
-		tyobj = types.Typ[types.Int64]
 	case "long long int":
 		tyobj = types.Typ[types.Int64]
+	case "long int", "long":
+		tyobj = types.Typ[types.Int64]
 	case "unsigned long", "unsigned long int", "ulong":
+		tyobj = types.Typ[types.Uint64]
+	case "unsigned long long", "unsigned long long int", "ulonglong":
 		tyobj = types.Typ[types.Uint64]
 	case "unsigned", "unsigned int", "uint":
 		tyobj = types.Typ[types.Uint]
@@ -715,8 +785,8 @@ func (cp *cparser1) ctype2go(sym, tystr string) (tystr2 string, tyobj types.Type
 		tyobj = types.Typ[types.Bool]
 
 	default:
-		if strings.HasPrefix(tystr, "struct ") && strings.HasSuffix(tystr, "*") {
-			tyobj = types.Typ[types.Voidptr]
+		if sym == "SOCK_STREAM" {
+			tyobj = types.Typ[types.Int] // TODO auto detect
 			return
 		}
 		if strings.HasSuffix(tystr, "*") {
@@ -730,14 +800,16 @@ func (cp *cparser1) ctype2go(sym, tystr string) (tystr2 string, tyobj types.Type
 				return cp.ctype2go(sym, newty)
 			}
 		}
+		log.Println(cp.name, sym, tystr)
 		csi, ok := cp1cache.csyms[tystr]
 		if ok && strings.HasPrefix(csi.tyval, "enum {") {
 			tyobj = types.Typ[types.Int]
 			return
 		} else if ok && csi.tyval != tystr {
+			log.Println(cp.name, sym, tystr)
 			return cp.ctype2go(sym, csi.tyval)
 		}
-		log.Println(cp.name, tystr, cp1cache.csyms[tystr])
+		log.Println(cp.name, sym, tystr, cp1cache.csyms[tystr], cp1cache.csyms[sym])
 	}
 	return
 }
@@ -754,17 +826,56 @@ func (cp *cparser1) fillstructy(sym string, csi *csymdata) {
 	}
 	for fldname, fldo := range csi.struc {
 		fldty, tyobj := cp.ctype2go(fldname, fldo.tystr)
-		log.Println(cp.name, sym, fldname, fldo.tystr, "//", fldty, "//", tyobj)
+		log.Println(cp.name, sym, fldname, fldo.tystr, "//", fldty, "//", tyobj, tyobj != nil)
 		if tyobj != nil {
 			fldo.tyobj = tyobj
 		} else {
+			log.Println(sym, fldo.name, fldo.tystr)
 			if strings.HasPrefix(fldo.tystr, "struct ") {
 				csi2, ok := cp1cache.getsym(fldo.tystr)
 				if ok {
 					cp.fillstructy(fldname, csi2)
+					log.Println(sym, fldo.name, fldo.tystr, csi2.tyobj)
+				} else {
+					log.Println(sym, fldo.name, fldo.tystr)
 				}
+			} else {
+				log.Println(sym, fldo.name, fldo.tystr)
 			}
 		}
 	}
 	return
+}
+
+func (cp *cparser1) tostructy(csi *csymdata) types.Type {
+	tystr := csi.tyval
+	if tystr == "" {
+		tystr = csi.name
+	}
+	tystr2 := strings.ReplaceAll(tystr, "struct ", "struct_")
+	gopp.Assert(strings.HasPrefix(tystr2, "struct_"), "wtfff", tystr, tystr2)
+	stname := tystr2
+
+	var fldvars []*types.Var
+	for fldname, fldo := range csi.struc {
+		log.Println(stname, fldname, fldo.tystr, fldo.tyobj)
+		var tyobj types.Type
+		_, tyobj = cp.ctype2go(fldo.tystr, fldo.tystr)
+		csi2, incache := cp1cache.getsym(fldo.tystr)
+		if incache && tyobj == nil {
+			_, tyobj = cp.ctype2go2(fldo.tystr, csi2)
+		}
+		if tyobj == nil {
+			log.Println(stname, fldname, fldo.tystr, fldo.tyobj, incache)
+		}
+
+		fldvar := types.NewVar(token.NoPos, fcpkg, fldo.name, tyobj)
+		fldvars = append(fldvars, fldvar)
+	}
+	sty1 := &types.Struct{}
+	sty1 = types.NewStruct(fldvars, nil)
+	// keep NewTypeName's type arg nil, so next step get a valid struct type
+	stobj := types.NewTypeName(token.NoPos, fcpkg, stname, nil)
+	stobj2 := types.NewNamed(stobj, sty1, nil)
+	return stobj2
 }

@@ -148,9 +148,6 @@ func (x *operand) convertibleTo(check *Checker, T Type) bool {
 	if isCharptr(V) || isCharptr(Tu) || isCharptr(Vu) || isCharptr(T) {
 		return true
 	}
-	if isCdefType(V) || isCdefType(Tu) || isCdefType(Vu) || isCdefType(T) {
-		return true
-	}
 
 	return false
 }

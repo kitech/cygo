@@ -43,7 +43,7 @@
 * [ ] 变量声明解构为每条语句一个变量，如果有多个的话
 * [x] 末尾没有return的要补上
 * [ ] 现在的ast在插入删除语句上有点弱 
-
+      实现了一种transform，可以添加语句，保持正确语序
 
 ### 类似项目
 * https://github.com/DQNEO/minigo
@@ -51,4 +51,10 @@
 ### BUGS
 * crash: Collecting from unknown thread
   curl thread based DNS resolve
+
+### Deps
+* go
+* gcc
+* tcc
+* tree-sitter
 

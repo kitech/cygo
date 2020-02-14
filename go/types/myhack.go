@@ -152,34 +152,6 @@ type Cnull struct {
 
 func TypeAlias() []*Basic { return aliases[:] }
 
-///
-const ctypebase = 200
-
-var ctypeno int = ctypebase
-var ctypetys = map[string]Type{}
-
-func NewCtype(tyname string) Type {
-	if ty, ok := ctypetys[tyname]; ok {
-		return ty
-	}
-	no := ctypeno
-	ctypeno++
-
-	ty := &Basic{}
-	ty.name = tyname
-	ty.kind = BasicKind(no)
-	ty.info = BasicInfo(no) | IsOrdered | IsNumeric | IsPointer
-	// ty.info = BasicInfo(no) | IsOrdered
-	// ty.info = BasicInfo(no) | IsNumeric
-	ctypetys[tyname] = ty
-
-	return ty
-}
-
-func isCdefType(typ Type) bool {
-	t, ok := typ.Underlying().(*Basic)
-	return ok && t.kind >= ctypebase
-}
 func isVoidptr(typ Type) bool {
 	// TODO(gri): Is this (typ.Underlying() instead of just typ) correct?
 	//            The spec does not say so, but gc claims it is. See also

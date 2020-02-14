@@ -173,6 +173,7 @@ func newLitFloat(v float32) *ast.BasicLit {
 
 var trueidt = newIdent("true")
 var falseidt = newIdent("false")
+var nilidtcon = newIdent("nil")
 
 func newLitBool(v bool) *ast.Ident {
 	if v {

@@ -37,7 +37,8 @@ func (sk *Socket) Connect(address string, port int) error {
 	sa.sin_family = C.AF_INET
 	sa.sin_port = C.htons(port)
 	C.inet_pton(C.AF_INET, address.ptr, &sa.sin_addr.s_addr)
-	var rv = C.connect(sk.fd, sa, sizeof(C.struct_sockaddr_in(0)))
+	var sa4sz = &C.struct_sockaddr_in{}
+	var rv = C.connect(sk.fd, sa, sizeof(*sa4sz))
 	if rv != 0 {
 	}
 	println(sk.fd, sa.sin_port)
@@ -54,7 +55,8 @@ func (sk *Socket) Bind(port int) error {
 	sa.sin_family = C.AF_INET
 	sa.sin_port = C.htons(port)
 	// rv := C.bind(sk.fd, sa, sizeof(C.struct_sockaddr_in(0))) // TODO compiler
-	rv := C.bind(sk.fd, sa, sizeof(C.struct_sockaddr_in(0)))
+	var sa4sz = &C.struct_sockaddr_in{}
+	rv := C.bind(sk.fd, sa, sizeof(*sa4sz))
 	if rv != 0 {
 	}
 	return nil
@@ -71,7 +73,8 @@ func (sk *Socket) Listen() error {
 func (sk *Socket) Accept() error {
 	var sa = &C.struct_sockaddr_in{}
 	sa.sin_family = C.AF_INET
-	rv := C.accept(sk.fd, sa, sizeof(C.struct_sockaddr_in(0)))
+	var sa4sz = &C.struct_sockaddr_in{}
+	rv := C.accept(sk.fd, sa, sizeof(*sa4sz))
 	if rv < 0 {
 		println("accept error", rv)
 	}

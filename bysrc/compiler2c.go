@@ -49,7 +49,6 @@ func (this *g2nc) genpkgs() {
 		this.curpkg = pkg.Name
 		this.pkgo = pkg
 
-		this.gentypeofs(pkg)
 		this.genpkg(pname, pkg)
 		this.calcClosureInfo(pkg.Scope, pkg)
 		this.calcDeferInfo(pkg.Scope, pkg)
@@ -139,44 +138,6 @@ func (c *g2nc) genfile(scope *ast.Scope, name string, f *ast.File) {
 	// for _, d := range f.Decls {
 	// 	c.genDecl(scope, d)
 	// }
-}
-func (c *g2nc) gentypeofs(pkg *ast.Package) {
-	c.outf("// __typeof__ types %d in %v", len(c.psctx.csymbols), pkg.Name).outnl()
-	defer c.outnl()
-	for nx, _ := range c.psctx.csymbols {
-		switch ne := nx.(type) {
-		case *ast.CallExpr:
-			fe := ne.Fun.(*ast.SelectorExpr)
-			c.outf("typedef __typeof__((%v)(", fe.Sel.Name)
-			for idx, _ := range ne.Args {
-				c.out("0")
-				if idx == len(ne.Args)-1 {
-				} else {
-					c.out(",")
-				}
-			}
-			c.outf(")) %v__ctype;", fe.Sel.Name).outnl()
-			c.outf("typedef __typeof__(%v) %v__cfunc_type", fe.Sel, fe.Sel).outfh().outnl()
-		case *ast.SelectorExpr:
-			isstruct := strings.HasPrefix(ne.Sel.Name, "struct_")
-			if isstruct {
-				structname := strings.Replace(ne.Sel.Name, "_", " ", 1)
-				c.outf("typedef %s %s;", structname, ne.Sel.Name).outnl()
-			} else {
-				c.outf("typedef __typeof__(%v) %v__const__ctype;", ne.Sel.Name, ne.Sel.Name).outnl()
-			}
-			c.outf("typedef __typeof__(%v) %v__ctype;", ne.Sel.Name, ne.Sel.Name).outnl()
-		case *ast.Ident:
-			// should be format struct_xxx.fieldxxx
-			segs := strings.Split(ne.Name, ".")
-			structname := strings.Replace(segs[0], "_", " ", 1)
-			c.outf("typedef %s %s;", structname, segs[0]).outnl() // fix map order problem
-			c.outf("typedef __typeof__(((%v*)0)->%v) %v__%v__ctype;",
-				segs[0], segs[1], segs[0], segs[1]).outnl()
-		default:
-			log.Println("wtfff", ne)
-		}
-	}
 }
 func (c *g2nc) calcClosureInfo(scope *ast.Scope, pkg *ast.Package) {
 	fds := map[*ast.FuncDecl]int{}
