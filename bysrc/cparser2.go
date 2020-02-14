@@ -4,11 +4,14 @@ package main
 
 import (
 	"fmt"
+	"go/token"
 	"go/types"
 	"gopp"
 	"io/ioutil"
 	"log"
 	"math/rand"
+	"os"
+	"reflect"
 	"runtime"
 	"strings"
 
@@ -18,12 +21,14 @@ import (
 	"modernc.org/xc"
 )
 
+// 突然发现不支持 C11 atomic
 type cparser2 struct {
-	name string
-	ctu  *cc.AST
-	cfg  *cc.Config
-	ctu1 *cc1.TranslationUnit
-	syms map[string]*csymdata2 // identity/struct/type name =>
+	name    string
+	predefs string // like -DGC_THREADS
+	ctu     *cc.AST
+	cfg     *cc.Config
+	ctu1    *cc1.TranslationUnit
+	syms    map[string]*csymdata2 // identity/struct/type name =>
 }
 type csymdata2 struct {
 	name string
@@ -69,24 +74,58 @@ const codepfx = "#include <stdio.h>\n" +
 
 var preincdirs = []string{"/home/me/oss/src/cxrt/src",
 	"/home/me/oss/src/cxrt/3rdparty/cltc/src",
-	"/home/me/oss/src/cxrt/3rdparty/tcc"}
+	"/home/me/oss/src/cxrt/3rdparty/cltc/src/include",
+	"/home/me/oss/src/cxrt/3rdparty/tcc",
+	"/usr/include/gc",
+	"/usr/include/curl",
+}
 var presysincs = []string{"/usr/include", "/usr/local/include",
 	"/usr/lib/gcc/x86_64-pc-linux-gnu/9.2.1/include"}
 
-func ccHostConfig() (predefs string, incpaths, sysincs []string, err error) {
+// "-DFOO=1 -DBAR -DBAZ=fff"
+func cp2_split_predefs(predefs string) map[string]interface{} {
+	items := strings.Split(predefs, " ")
+	res := map[string]interface{}{}
+	for _, item := range items {
+		item = strings.TrimSpace(item)
+		if item == "" {
+			continue
+		}
+		gopp.Assert(strings.HasPrefix(item, "-D"), "wtfff", item)
+		item = item[2:]
+		kv := strings.Split(item, "=")
+		if len(kv) == 1 {
+			res[item] = 1
+		} else {
+			res[kv[0]] = kv[1]
+		}
+	}
+	return res
+}
+
+func (cp *cparser2) ccHostConfig() (
+	predefsm map[string]interface{}, incpaths, sysincs []string, err error) {
+	var predefs string
 	predefs, incpaths, sysincs, err = cc.HostConfig("")
-	gopp.ErrPrint(err)
+	gopp.ErrPrint(err, cp.name)
 	if err != nil {
 		incpaths = append(incpaths, preincdirs...)
 		sysincs = append(sysincs, presysincs...)
 		err = nil
+	}
+	predefs += " " + cp.predefs + " -DGC_THREADS"
+	predefsm = cp2_split_predefs(predefs)
+
+	pwdir, err := os.Getwd()
+	if pwdir != "" {
+		incpaths = append(incpaths, pwdir)
 	}
 	log.Println(predefs, incpaths, sysincs)
 	return
 }
 
 func (cp *cparser2) parsefile(filename string) error {
-	_, incpaths, sysincs, err := ccHostConfig()
+	predefs, incpaths, sysincs, err := cp.ccHostConfig()
 	cfg := &cc.Config{}
 	cfg.ABI, err = cc.NewABI(runtime.GOOS, runtime.GOARCH)
 	gopp.ErrPrint(err)
@@ -104,6 +143,11 @@ func (cp *cparser2) parsefile(filename string) error {
 		cfg := &cc1x.Config{}
 		cfg.IncludePaths = paths
 		cfg.SourcesPaths = []string{filename}
+		cfg.Defines = predefs
+		// cfg.CCDefs = true
+		// cfg.CCIncl = true
+		// patch cc1x:100: 	model := *models[cfg.archBits]
+		// patch cc1x:106:  // cc.EnableIncludeNext(),
 		ctu, err1 := cc1x.ParseWith(cfg)
 		err = err1
 		gopp.ErrPrint(err, filename)
@@ -117,16 +161,42 @@ func (cp *cparser2) parsefile(filename string) error {
 }
 
 func (cp *cparser2) gotypeof(sym string) types.Type {
+	if strings.HasPrefix(sym, "struct_") {
+		old := sym
+		sym = sym[7:]
+		log.Println("mapsymto", old, sym)
+	}
+
 	csi, found := cp.syms[sym]
-	log.Println(cp.name, sym, "insyms", found)
 	if found {
 		if csi.kind == csym_define {
 			return types.Typ[types.UntypedInt]
 		}
-		cty := csi.typ
-		log.Println(cp.name, sym, "insyms", found, cty.Kind())
-		return cp.gotypeof2(sym, cty, true)
+
+		// TODO symbol kind
+		return cp.gotypeof2(sym, csi.typ, true)
 	} else {
+		syms := map[string]types.Type{
+			"__FILE__": types.Typ[types.String],
+			"__LINE__": types.Typ[types.Int],
+		}
+		if tyobj, ok := syms[sym]; ok {
+			return tyobj
+		}
+
+		// primitive_type
+		amdl := cp.ctu1.Model
+		vmdl := reflect.ValueOf(amdl).Elem()
+		for tk, _ := range amdl.Items {
+			if sym == strings.ToLower(tk.String()) ||
+				sym == tk.CString() {
+				tyfname := fmt.Sprintf("%sType", tk.String())
+				fval := vmdl.FieldByName(tyfname)
+				fval2 := fval.Interface().(cc1.Type)
+				// log.Println(fval, reftyof(fval2), fval2.String(), fval2.Kind())
+				return cp.gotypeof2(sym, fval2, true)
+			}
+		}
 		// log.Fatalln("symbol not found", sym)
 	}
 	return nil
@@ -134,12 +204,54 @@ func (cp *cparser2) gotypeof(sym string) types.Type {
 
 func (cp *cparser2) gotypeof2(sym string, cty cc1.Type, resty bool) types.Type {
 	switch cty.Kind() {
-	case cc1.Struct: // TODO
-		log.Panicln(sym)
+	case cc1.Struct:
+		fields, iscomplete := cty.Members()
+		if !iscomplete {
+			log.Println(cty, iscomplete, len(fields), cty.Declarator().Type)
+		}
+		tyn1 := types.NewTypeName(token.NoPos, fcpkg, cty.String(), nil)
+		named1 := types.NewNamed(tyn1, nil, nil)
+		var fldvars []*types.Var
+		for idx, fldx := range fields {
+			fldtyx := fldx.Type
+			iscyclerefty2 := fldtyx.String() == cty.String() ||
+				fldtyx.String() == cty.Pointer().String()
+			var fldty types.Type
+			if iscyclerefty2 {
+				fldty = named1
+			} else {
+				if fldtyx.Kind() == cc1.Array {
+					fldty = cp.gotypeof2(sym, fldtyx, resty)
+				} else {
+					fldty = cp.gotypeof2(sym, fldtyx, resty)
+				}
+			}
+
+			tkval, bindings := fldtyx.Declarator().Identifier()
+			gopp.Assert(tkval == fldx.Name, "wtfff", bindings)
+			fldidtx := bindings.Lookup(cc1.NSIdentifiers, tkval)
+			dirdecl := fldidtx.Node.(*cc1.DirectDeclarator)
+			fldname := cp2_token_toname(dirdecl.Token.String())
+			log.Println(idx, fldx.Name, fldtyx.Kind(), fldtyx,
+				iscyclerefty2, fldname, fldty, cty.Pointer())
+		}
+		st1 := types.NewStruct(fldvars, nil)
+		named1.SetUnderlying(st1)
+		return named1
 	case cc1.Union: // TODO
 		log.Panicln(sym)
-	case cc1.Enum: // TODO
-		log.Panicln(sym)
+	case cc1.Array:
+		ety := cty.Element()
+		goety := cp.gotypeof2(sym, ety, resty)
+		if cty.Elements() == 0 {
+			goty := types.NewSlice(goety)
+			return goty
+		} else {
+			goty := types.NewArray(goety, int64(cty.Elements()))
+			return goty
+		}
+	case cc1.Enum:
+		return types.Typ[types.Int]
 	case cc1.Function:
 		ty := cty.Result()
 		// log.Println(cp.name, sym, cty.Kind(), ty.Kind(), ty)
@@ -183,6 +295,12 @@ func (cp *cparser2) gotypeof2(sym string, cty cc1.Type, resty bool) types.Type {
 		log.Println(cp.name, sym, cty.Kind(), cty)
 	}
 	return nil
+}
+
+// ddl.Token format: 3 parts: file id name
+func cp2_token_toname(tkstr string) string {
+	idname := strings.Trim(strings.Split(tkstr, " ")[2], "\"")
+	return idname
 }
 
 func (cp *cparser2) collects1() {
