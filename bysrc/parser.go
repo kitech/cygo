@@ -128,6 +128,12 @@ func (this *ParserContext) Init_no_cgocmd(semachk bool) error {
 	if err != nil {
 		log.Fatalln(bdpkgs.Name, err)
 	}
+	cp2 := newcparser2(bdpkgs.Name)
+	err = cp2.parsestr(this.ccode)
+	if err != nil {
+		log.Fatalln(bdpkgs.Name, err)
+	}
+	// os.Exit(-1)
 
 	this.walkpass_valid_files()
 	this.walkpass_dotransforms(false)

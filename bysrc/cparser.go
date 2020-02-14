@@ -169,15 +169,8 @@ func (cp *cparser1) parsestr(code string) error {
 	cp1cache.ppfiles[filename] = 1
 
 	// TODO hard code path
-	incdirs := []string{"/home/me/oss/src/cxrt/src",
-		"/home/me/oss/src/cxrt/3rdparty/cltc/src",
-		"/home/me/oss/src/cxrt/3rdparty/tcc"}
-	code = "#include <stdio.h>\n" + code
-	code = "#include <stdlib.h>\n" + code
-	code = "#include <string.h>\n" + code
-	code = "#include <errno.h>\n" + code
-	code = "#include <pthread.h>\n" + code
-	code = "#include <cxrtbase.h>\n" + code
+	incdirs := preincdirs
+	code = codepfx + code
 	btime := time.Now()
 	err := tccpp(code, filename, incdirs)
 	gopp.ErrPrint(err, cp.name, filename)
