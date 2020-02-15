@@ -9,6 +9,8 @@ package builtin
 #include <string.h>
 #include <signal.h>
 #include <cxrtbase.h>
+
+// void**(*foofn)() = 0;
 */
 import "C"
 

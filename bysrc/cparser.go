@@ -26,8 +26,10 @@ import (
 
 	sitter "github.com/smacker/go-tree-sitter"
 	trspc "github.com/smacker/go-tree-sitter/c"
+	cc1 "modernc.org/cc"
 )
 
+// tree sitter 缺少像样的类型系统
 type cparser1 struct {
 	name string
 
@@ -230,45 +232,120 @@ func (cp *cparser1) collect() {
 		"csyms":    len(cp1cache.csyms),
 	}
 	log.Println(cp.name, results, len(cp1cache.csyms), time.Since(btime))
+
+	// ctx := &cp1walkcontext{}
+	// cp.walk2(cp.trn.RootNode(), ctx)
+	// os.Exit(-1)
 }
 
 func (cp *cparser1) walk(n *sitter.Node, lvl int) {
 	var txt string
 
 	switch n.Type() {
-	case "declaration":
+	case tsDeclaration:
 		fallthrough
-	case "function_definition":
+	case tsFunctionDefinition:
 		fallthrough
-	case "enumerator":
+	case tsEnumerator:
 		fallthrough
-	case "struct_specifier":
+	case tsStructSpecifier:
 		fallthrough
-	case "field_declaration":
+	case tsFieldDeclaration:
 		fallthrough
-	case "type_definition": // typedef xxx yyy;
+	case tsTypeDefinition: // typedef xxx yyy;
 		fallthrough
-	case "primitive_type":
+	case tsPrimitiveType:
 		fallthrough
-	case "assignment_expression":
+	case tsAssignmentExpression:
 		txt = cp.exprtxt(n)
 		txt = strings.TrimSpace(txt)
 	}
 
 	switch n.Type() {
-	case "declaration":
+	case tsDeclaration:
 		gopp.Assert(len(txt) > 0, "wtfff", txt)
 
 		// log.Println(n.Type(), n.ChildCount(), len(txt), txt)
 		isfunc := false
 		nc := int(n.ChildCount())
+		// 查找是否是函数，查找类型节点
+		tynpos := -1
+		symname := "" // var/func name
+		symtype := ""
+		// 要想遍历，还是要用递归，纯手写不行。
+		// 而且向上递归，向下递归都挺麻烦，而且还可能遇到需要平级转向
 		for i := 0; i < nc; i++ {
 			nx := n.Child(i)
-			// log.Println(n.Type(), i, n.Child(i).Type(), len(txt), txt)
-			if nx.Type() == "function_declarator" {
+			estr := cp.exprtxt(nx)
+			switch nx.Type() {
+			case tsStorageClassSpecifier:
+			case tsTypeQualifier:
+			case tsPrimitiveType:
+				tynpos = i
+				symtype = estr
+			case tsTypeIdentifier:
+				tynpos = i
+				symtype = estr
+			case tsSizedTypeSpecifier:
+				tynpos = i
+				symtype = estr
+			case tsStructSpecifier:
+				tynpos = i
+				symtype = estr
+			case tsUnionSpecifier:
+				tynpos = i
+				symtype = estr
+			case tsEnumSpecifier:
+				tynpos = i
+				symtype = estr
+			case tsPointerDeclarator:
+				symtype += tsStar
+				for j := 0; j < int(nx.ChildCount()); j++ {
+					ny := nx.Child(j)
+					// log.Println(j, ny.Type(), cp.exprtxt(ny))
+					switch ny.Type() {
+					case tsFunctionDeclarator:
+						symname = cp.exprtxt(ny.Child(0))
+					case tsIdentifier:
+						symname = cp.exprtxt(ny)
+					case tsArrayDeclarator:
+						symtype += tsStar
+						symname = cp.exprtxt(ny)
+					case tsPointerDeclarator:
+						symtype += tsStar
+					}
+				}
+			case tsFunctionDeclarator: // 还有可能是 function pointer
 				isfunc = true
-				break
+				is_funcptr_type := false
+				_ = is_funcptr_type
+				for j := 0; j < int(nx.ChildCount()); j++ {
+					ny := nx.Child(j)
+					switch ny.Type() {
+					case tsParenthesizedDeclarator:
+						is_funcptr_type = true
+						isfunc = false
+					case tsParameterList:
+					case tsIdentifier:
+						symname = cp.exprtxt(ny)
+					default:
+						log.Panicln(j, ny.Type(), cp.exprtxt(ny))
+					}
+				}
+			case tsIdentifier: // var name
+				symname = estr
+			case tsSemiColon:
+			case tsInitDeclarator:
+			default:
+				log.Panicln(nx.Type(), "|", estr, "|", txt)
 			}
+			// log.Println(n.Type(), i, nx.Type(), "//", len(txt), txt)
+		}
+		_, _ = symname, symtype
+		if false {
+			gopp.Assert(tynpos >= 0, "wtfff", len(txt), txt)
+			gopp.Assert(symname != "", "wtfff", len(txt), txt)
+			gopp.Assert(symtype != "", "wtfff", len(txt), txt)
 		}
 		if strings.HasSuffix(txt, ";") {
 			txt2 := strings.TrimRight(txt, ";")
@@ -277,6 +354,7 @@ func (cp *cparser1) walk(n *sitter.Node, lvl int) {
 				isfunc = true
 			}
 		}
+		// TODO 还有可能有函数指针类型
 		declkind := gopp.IfElseStr(isfunc, "func", "var")
 		// func
 		if isfunc {
@@ -286,19 +364,88 @@ func (cp *cparser1) walk(n *sitter.Node, lvl int) {
 		} else {
 			// var
 			funcname, functype := getvarname(txt)
-			// log.Println(n.Type(), declkind, functype, "//", funcname, txt+"//", )
+			// log.Println(n.Type(), declkind, functype, "//", funcname, "//", txt+"//")
 			cp1cache.add(csym_var, funcname, functype)
 		}
 
 		if false {
 			log.Println(n.Type(), n.ChildCount(), declkind, len(txt), txt)
 		}
-	case "function_definition":
+	case tsFunctionDeclarator:
+		if true {
+			break
+		}
+		pn := n.Parent()
+		funcname := cp.exprtxt(n.Child(0))
+		functype := ""
+		istop := true // 相对于在 param, field中来说
+		var upwalk func(n1 *sitter.Node, lvl int, fnty *string)
+		upwalk = func(n1 *sitter.Node, lvl int, fnty *string) {
+			// log.Println(lvl, n1.Type(), funcname, cp.exprtxt(n1))
+			pn := n1.Parent()
+			if pn == nil {
+				return
+			}
+			switch n1.Type() {
+			case tsTranslateUnit:
+				return
+			case tsTypeQualifier:
+				return
+			case tsStorageClassSpecifier:
+				return
+			case tsParameterList:
+				istop = false
+				return
+			case tsPointerDeclarator:
+				*fnty = "*" + *fnty
+				// log.Println(n1.PrevSibling().Type(), *fnty)
+				upwalk(n1.PrevSibling(), lvl+1, fnty)
+				return
+			case tsTypeIdentifier:
+				*fnty = cp.exprtxt(n1) + *fnty
+				return
+			case tsPrimitiveType:
+				*fnty = cp.exprtxt(n1) + *fnty
+				return
+			case tsDeclaration:
+				for i := 0; i < int(n1.ChildCount()); i++ {
+					nx := n1.Child(i)
+					if nx.Type() == tsStorageClassSpecifier ||
+						nx.Type() == tsTypeQualifier {
+						continue
+					}
+					*fnty = cp.exprtxt(nx) + *fnty
+					break
+				}
+				return
+			case tsFunctionDefinition:
+				for i := 0; i < int(n1.ChildCount()); i++ {
+					nx := n1.Child(i)
+					if nx.Type() == tsStorageClassSpecifier ||
+						nx.Type() == tsTypeQualifier {
+						continue
+					}
+					*fnty = cp.exprtxt(nx) + *fnty
+					break
+				}
+				return
+			}
+			upwalk(pn, lvl+1, fnty)
+		}
+		upwalk(pn, 0, &functype)
+		if !istop {
+			break
+		}
+		log.Println(funcname, pn.Type(), istop, functype)
+		if false {
+			gopp.Assert(functype != "", "wtfff")
+		}
+	case tsFunctionDefinition:
 		ipos := strings.Index(txt, "{")
 		declstr := strings.TrimSpace(txt[:ipos])
 		funcname, functype := getfuncname(declstr + ";")
 		cp1cache.add(csym_func, funcname, functype)
-	case "enumerator":
+	case tsEnumerator:
 		if false {
 			log.Println(n.Type(), len(txt), txt)
 		}
@@ -311,7 +458,7 @@ func (cp *cparser1) walk(n *sitter.Node, lvl int) {
 			fld1 = txt[ipos+1:]
 		}
 		cp1cache.add(csym_enum, fld0, fld1)
-	case "struct_specifier":
+	case tsStructSpecifier:
 		gopp.Assert(len(txt) > 0, "wtfff", txt)
 		// if _, ok := cp.structs[txt]; ok {
 		// 	break
@@ -326,16 +473,16 @@ func (cp *cparser1) walk(n *sitter.Node, lvl int) {
 		if false {
 			log.Println(n.Type(), len(txt), txt)
 		}
-	case "field_declaration":
+	case tsFieldDeclaration:
 		gopp.Assert(len(txt) > 0, "wtfff", txt)
 
 		pn := n.Parent()   // field_declaration_list
 		ppn := pn.Parent() // struct_specifier
-		if ppn.Type() == "translation_unit" ||
-			ppn.Type() == "union_specifier" {
+		if ppn.Type() == tsTranslateUnit ||
+			ppn.Type() == tsUnionSpecifier {
 			break
 		}
-		gopp.Assert(ppn.Type() == "struct_specifier", "wtfff", ppn.Type())
+		gopp.Assert(ppn.Type() == tsStructSpecifier, "wtfff", ppn.Type())
 
 		stbody := cp.exprtxt(ppn)
 		stname := strings.Split(stbody, "{")[0]
@@ -358,7 +505,7 @@ func (cp *cparser1) walk(n *sitter.Node, lvl int) {
 			log.Println(n.Type(), len(txt), txt, ppn.Type(),
 				instruct, stname, fldcnt, "//", tystr, "//", fldname)
 		}
-	case "type_definition": // typedef xxx yyy;
+	case tsTypeDefinition: // typedef xxx yyy;
 		gopp.Assert(len(txt) > 0, "wtfff", txt)
 
 		txt = strings.TrimRight(txt, ";")
@@ -381,7 +528,7 @@ func (cp *cparser1) walk(n *sitter.Node, lvl int) {
 		if false {
 			log.Println(n.Type(), len(txt), txt)
 		}
-	case "assignment_expression":
+	case tsAssignmentExpression:
 		pn := n.Parent()
 		ppn := pn.Parent()
 		pppn := ppn.Parent()
@@ -395,9 +542,9 @@ func (cp *cparser1) walk(n *sitter.Node, lvl int) {
 		if false {
 			log.Println(n.Type(), pn.Type(), ppn.Type(), pppn.Type(), len(txt), txt)
 		}
-	case "primitive_type":
+	case tsPrimitiveType:
 		cp1cache.add(csym_type, txt, txt)
-	case "translation_unit": // full text
+	case tsTranslateUnit: // full text
 	default:
 		if false {
 			txt := cp.exprtxt(n)
@@ -416,7 +563,183 @@ func (cp *cparser1) walk(n *sitter.Node, lvl int) {
 	}
 }
 
+type cp1walkcontext struct {
+	lvl   int
+	tystr string
+	ident string
+	kind  string // var/func/signature from declaration
+	scope string // like tsDeclaration
+}
+
+func (ctx *cp1walkcontext) reset() {
+	ctx.tystr = ""
+	ctx.ident = ""
+	ctx.kind = ""
+	ctx.scope = ""
+}
+
+func (ctx *cp1walkcontext) repr1() string {
+	return fmt.Sprintf("L%d, kind %s, ident %s, tystr %s",
+		ctx.lvl, ctx.kind,
+		strings.TrimSpace(ctx.ident), strings.TrimSpace(ctx.tystr))
+}
+
+// 去噪，像 void**, tree sitter 会有一层 primitive_type, 两层 pointer_declarator
+func (cp *cparser1) walk2(n *sitter.Node, ctx *cp1walkcontext) {
+	// check node
+	ctx.lvl += 1
+
+	switch n.Type() {
+	case tsDeclaration:
+		ctx.scope = n.Type()
+		tystr := cp.gettypespec(n)
+		namestr, isfunc := cp.getdeclname(n)
+		log.Println(tystr, namestr, isfunc, "//", cp.exprtxt(n))
+		gopp.Assert(tystr != "", "wtfff")
+		gopp.Assert(namestr != "", "wtfff")
+	case tsIdentifier:
+		ctx.ident += " " + cp.exprtxt(n)
+	case tsPrimitiveType:
+		ctx.tystr += " " + cp.exprtxt(n)
+	case tsTypeIdentifier:
+		ctx.tystr += " " + cp.exprtxt(n)
+	case tsEnumSpecifier:
+		ctx.tystr += " " + "enum"
+	case tsPointerDeclarator:
+		ctx.tystr += "" + tsStar
+	case tsFunctionDeclarator:
+		// log.Println(ctx.repr1())
+		// ctx.reset()
+	case tsParameterList:
+		ctx.kind += " " + "func"
+		// log.Println(ctx.repr1())
+	}
+
+	// walk to subnodes
+	for i := 0; i < int(n.ChildCount()); i++ {
+		nx := n.Child(i)
+		cp.walk2(nx, ctx)
+	}
+
+	switch n.Type() {
+	case tsSemiColon:
+		// log.Println(ctx.repr1())
+		// log.Println(n.Type(), ctx.kind, ctx.ident, ctx.tystr)
+		ctx.reset()
+	case tsDeclaration:
+		// log.Println(n.Type(), ctx.kind, ctx.ident, ctx.tystr)
+	}
+
+	ctx.lvl -= 1
+}
+
+// tsDeclaration
+// TODO func pointer type: void**(*foofn)() = 0;
+func (cp *cparser1) gettypespec(n *sitter.Node) string {
+	tystr := ""
+	nc := int(n.ChildCount())
+	for i := 0; i < nc; i++ {
+		nx := n.Child(i)
+		estr := cp.exprtxt(nx)
+		switch nx.Type() {
+		case tsStorageClassSpecifier:
+		case tsTypeQualifier:
+		case tsPrimitiveType:
+			tystr += " " + estr
+		case tsTypeIdentifier:
+			tystr += " " + estr
+		case tsSizedTypeSpecifier:
+			tystr += " " + estr
+		case tsStructSpecifier:
+			tystr += " " + estr
+		case tsUnionSpecifier:
+		case tsEnumSpecifier:
+			tystr += " " + estr
+		case tsPointerDeclarator:
+			tystr += tsStar
+			tystr += cp.gettypespec(nx)
+			tt1 := ""
+			if nx.NextSibling() != nil {
+				tt1 = nx.NextSibling().Type()
+			}
+			log.Println(nx.NextSibling() != nil, tt1)
+		case tsFunctionDeclarator: // 还有可能是 function pointer
+			log.Println(nx.Type(), cp.exprtxt(nx))
+		case tsIdentifier: // var name
+		case tsSemiColon:
+		case tsStar:
+			// tystr += tsStar
+		case tsArrayDeclarator:
+			tystr += " " + tsStar
+		case tsInitDeclarator:
+			tystr += " " + cp.gettypespec(nx)
+		case "=":
+		case "number_literal":
+		default:
+			log.Panicln(nx.Type(), "|", estr, "|")
+		}
+		// log.Println(n.Type(), i, nx.Type(), "//", len(txt), txt)
+	}
+	return tystr
+}
+
+// tsDeclaration
+func (cp *cparser1) getdeclname(n *sitter.Node) (string, bool) {
+	tystr := ""
+	isfunc := false
+	nc := int(n.ChildCount())
+	for i := 0; i < nc; i++ {
+		nx := n.Child(i)
+		estr := cp.exprtxt(nx)
+		switch nx.Type() {
+		case tsStorageClassSpecifier:
+		case tsTypeQualifier:
+		case tsPrimitiveType:
+		case tsTypeIdentifier:
+		case tsSizedTypeSpecifier:
+		case tsStructSpecifier:
+		case tsUnionSpecifier:
+		case tsEnumSpecifier:
+		case tsPointerDeclarator:
+		case tsFunctionDeclarator: // 还有可能是 function pointer
+		case tsIdentifier: // var name
+			tystr = estr
+			isfunc = nx.NextSibling() != nil
+		case tsSemiColon:
+		case tsStar:
+		case tsArrayDeclarator:
+		case tsParameterList:
+		default:
+			// log.Panicln(nx.Type(), "|", estr, "|")
+		}
+		// log.Println(n.Type(), i, nx.Type(), "//", len(txt), txt)
+	}
+	if tystr == "" {
+		for i := 0; i < nc; i++ {
+			nx := n.Child(i)
+			tystr, isfunc = cp.getdeclname(nx)
+			if tystr != "" {
+				break
+			}
+		}
+	}
+	return tystr, isfunc
+}
+
 func (cp *cparser1) exprtxt(n *sitter.Node) string {
+	res := n.Content(cp.ppsrc)
+	res = strings.ReplaceAll(res, "\n", " ")
+	res = strings.ReplaceAll(res, "\t", " ")
+	for {
+		newstr := strings.ReplaceAll(res, "  ", " ")
+		if newstr == res {
+			break
+		}
+		res = newstr
+	}
+	return res
+}
+func (cp *cparser1) exprtxt_dep(n *sitter.Node) string {
 	bpos := n.StartPoint()
 	epos := n.EndPoint()
 
@@ -589,7 +912,17 @@ func getfuncname(s string) (string, string) {
 
 // s : type funcname();
 func getvarname(s string) (string, string) {
+	if strings.Contains(s, "=") {
+		// int a = 0; or void(*aaa)() = 0;
+		s = strings.Split(s, "=")[0]
+	}
 	fields := strings.Split(s, ";")
+	if len(fields) == 1 && strings.Contains(s, "(") {
+		// function pointer
+		fields = strings.Split(s, "(")
+		fields = strings.Split(fields[1], ")")
+		return strings.Trim(fields[0], "*"), "void*"
+	}
 	gopp.Assert(len(fields) > 1, "wtfff", s)
 	fields2 := strings.Split(strings.TrimSpace(fields[0]), " ")
 	fields3 := []string{}
@@ -874,4 +1207,57 @@ func (cp *cparser1) tostructy(csi *csymdata) types.Type {
 	stobj := types.NewTypeName(token.NoPos, fcpkg, stname, nil)
 	stobj2 := types.NewNamed(stobj, sty1, nil)
 	return stobj2
+}
+
+// tree sitter type system
+const (
+	tsTranslateUnit  = "translation_unit"
+	tsPrimitiveType  = "primitive_type"
+	tsIdentifier     = "identifier"
+	tsTypeIdentifier = "type_identifier"
+	tsTypeDefinition = "type_definition"
+	tsTypeQualifier  = "type_qualifier"
+
+	tsStructSpecifier       = "struct_specifier"
+	tsUnionSpecifier        = "union_specifier"
+	tsEnumSpecifier         = "enum_specifier"
+	tsSizedTypeSpecifier    = "sized_type_specifier"
+	tsStorageClassSpecifier = "storage_class_specifier"
+
+	tsDeclaration             = "declaration"
+	tsFunctionDeclarator      = "function_declarator"
+	tsPointerDeclarator       = "pointer_declarator"
+	tsEnumerator              = "enumerator"
+	tsParenthesizedDeclarator = "parenthesized_declarator"
+	tsArrayDeclarator         = "array_declarator"
+	tsInitDeclarator          = "init_declarator"
+
+	tsFunctionDefinition   = "function_definition"
+	tsFieldDeclaration     = "field_declaration"
+	tsFieldDeclarationList = "field_declaration_list"
+
+	tsParameterList        = "parameter_list"
+	tsParameterDeclaration = "parameter_declaration"
+	tsAssignmentExpression = "assignment_expression"
+	tsSemiColon            = ";"
+	tsStar                 = "*"
+)
+
+type Tstype interface {
+	Kind() int
+	Elem() Tstype
+}
+
+type cctype struct {
+	kind cc1.Kind
+	elem *cctype
+	name string
+}
+
+type Tsnode struct {
+	un *sitter.Node
+}
+
+func (n *Tsnode) Text() string {
+	return ""
 }

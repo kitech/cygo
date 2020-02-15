@@ -17,6 +17,7 @@ import (
 
 	cc1x "github.com/xlab/c-for-go/parser"
 	cc1 "modernc.org/cc"
+	cc2 "modernc.org/cc/v2"
 	"modernc.org/cc/v3"
 	"modernc.org/xc"
 )
@@ -27,8 +28,10 @@ type cparser2 struct {
 	predefs string // like -DGC_THREADS
 	ctu     *cc.AST
 	cfg     *cc.Config
+	ctu2    *cc2.TranslationUnit
 	ctu1    *cc1.TranslationUnit
 	syms    map[string]*csymdata2 // identity/struct/type name =>
+
 }
 type csymdata2 struct {
 	name string
@@ -152,13 +155,29 @@ func (cp *cparser2) parsefile(filename string) error {
 	// log.Println(cfg.ABI)
 
 	if false {
+		// not work for bits/types.h
 		srco := newfilesource(filename)
+		cfg.RejectIncludeNext = false
 		ctu, err := cc.Parse(cfg, incpaths, sysincs, []cc.Source{*srco})
 		// ctu, err := cc.Translate(cfg, incpaths, sysincs, []cc.Source{*srco})
 		gopp.ErrPrint(err, ctu != nil, filename)
 		cp.ctu = ctu
+		os.Exit(-1)
+	}
+	if false {
+		// not work for stdarg.h
+		srco, err := cc2.NewFileSource(filename)
+		gopp.ErrPrint(err, filename)
+		cfg := &cc2.Tweaks{}
+		cfg.EnableImplicitBuiltins = true
+		cfg.EnableImplicitDeclarations = true
+		ctu, err := cc2.Translate(cfg, incpaths, sysincs, srco)
+		gopp.ErrPrint(err)
+		cp.ctu2 = ctu
+		os.Exit(-1)
 	}
 	if true {
+		// not work for c11 stdatomic.h
 		paths := append(incpaths, sysincs...)
 		cfg := &cc1x.Config{}
 		cfg.IncludePaths = paths

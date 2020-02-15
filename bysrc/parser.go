@@ -129,13 +129,6 @@ func (this *ParserContext) Init_no_cgocmd(semachk bool) error {
 	if err != nil {
 		log.Fatalln(bdpkgs.Name, err)
 	}
-	cp2 := newcparser2(bdpkgs.Name)
-	err = cp2.parsestr(this.ccode)
-	if err != nil {
-		log.Fatalln(bdpkgs.Name, err)
-	}
-	this.cpr2 = cp2
-	// os.Exit(-1)
 
 	this.walkpass_valid_files()
 	this.walkpass_dotransforms(false)
@@ -635,13 +628,6 @@ func (pc *ParserContext) walkpass_fill_fakecpkg() {
 		// log.Println("gen fakectype", csi.idt)
 		ctystr, ctyobj := pc.cpr.symtype(idtname)
 		log.Println(cnter, csi.String(), ctystr, ctyobj)
-		{
-			ctyobj := pc.cpr2.gotypeof(idtname)
-			log.Println(cnter, idtname, ctyobj)
-			if ctyobj == nil {
-				log.Fatalln("symbol not found", idtname)
-			}
-		}
 
 		if csi.isfunc {
 			funo := fakecfunc2(newIdent(idtname), fcpkg, ctyobj)
