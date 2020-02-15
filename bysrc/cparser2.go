@@ -75,12 +75,23 @@ const codepfx = "#include <stdio.h>\n" +
 var preincdirs = []string{"/home/me/oss/src/cxrt/src",
 	"/home/me/oss/src/cxrt/3rdparty/cltc/src",
 	"/home/me/oss/src/cxrt/3rdparty/cltc/src/include",
-	"/home/me/oss/src/cxrt/3rdparty/tcc",
+	//	"/home/me/oss/src/cxrt/3rdparty/tcc",
 	"/usr/include/gc",
 	"/usr/include/curl",
 }
 var presysincs = []string{"/usr/include", "/usr/local/include",
 	"/usr/lib/gcc/x86_64-pc-linux-gnu/9.2.1/include"}
+
+// https://github.com/gcc-mirror/gcc/blob/master/gcc/memmodel.h
+var c11_builtin_atomic_defs = `
+#define __ATOMIC_RELAXED  0
+#define __ATOMIC_CONSUME  1
+#define __ATOMIC_ACQUIRE  2
+#define __ATOMIC_RELEASE  3
+#define __ATOMIC_ACQ_REL  4
+#define __ATOMIC_SEQ_CST  5
+#define __ATOMIC_LAST  6
+`
 
 // "-DFOO=1 -DBAR -DBAZ=fff"
 func cp2_split_predefs(predefs string) map[string]interface{} {
@@ -97,9 +108,17 @@ func cp2_split_predefs(predefs string) map[string]interface{} {
 		if len(kv) == 1 {
 			res[item] = 1
 		} else {
-			res[kv[0]] = kv[1]
+			if gopp.IsInteger(kv[1]) {
+				res[kv[0]] = gopp.MustInt(kv[1])
+			} else {
+				res[kv[0]] = kv[1]
+			}
 		}
 	}
+	for k, v := range res {
+		log.Println("predefsm", k, v, reftyof(v))
+	}
+
 	return res
 }
 
@@ -107,13 +126,14 @@ func (cp *cparser2) ccHostConfig() (
 	predefsm map[string]interface{}, incpaths, sysincs []string, err error) {
 	var predefs string
 	predefs, incpaths, sysincs, err = cc.HostConfig("")
-	gopp.ErrPrint(err, cp.name)
+	gopp.ErrPrint(err, cp.name, "can ignore")
 	if err != nil {
 		incpaths = append(incpaths, preincdirs...)
 		sysincs = append(sysincs, presysincs...)
 		err = nil
 	}
-	predefs += " " + cp.predefs + " -DGC_THREADS"
+	predefs = " -D__ATOMIC_RELAXED=0 -D__ATOMIC_CONSUME=1 -D__ATOMIC_ACQUIRE=2 -D__ATOMIC_RELEASE=3 -D__ATOMIC_ACQ_REL=4 -D__ATOMIC_SEQ_CST=5 " + predefs
+	predefs += " " + cp.predefs + " -DGC_THREADS "
 	predefsm = cp2_split_predefs(predefs)
 
 	pwdir, err := os.Getwd()
@@ -386,7 +406,7 @@ func cprsavetmp(cpname string, code string) (string, error) {
 }
 
 func (cp *cparser2) parsestr(code string) error {
-	code += codepfx
+	code = c11_builtin_atomic_defs + codepfx + code
 	filename, err := cprsavetmp(cp.name, code)
 	err = cp.parsefile(filename)
 	return err

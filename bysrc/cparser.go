@@ -163,13 +163,16 @@ func rmoldtccppfiles() {
 		gopp.ErrPrint(err, filename)
 	}
 }
+
+var cp1_preincdirs = append(preincdirs, "/home/me/oss/src/cxrt/3rdparty/tcc")
+
 func (cp *cparser1) parsestr(code string) error {
 	rmoldtccppfiles()
 	filename := fmt.Sprintf("/tmp/tcctrspp.%s.%d.c", cp.name, rand.Intn(10000000)+50000)
 	cp1cache.ppfiles[filename] = 1
 
 	// TODO hard code path
-	incdirs := preincdirs
+	incdirs := cp1_preincdirs
 	code = codepfx + code
 	btime := time.Now()
 	err := tccpp(code, filename, incdirs)
