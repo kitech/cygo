@@ -96,6 +96,10 @@ func (c *g2nc) genpkg(name string, pkg *ast.Package) {
 	for name, f := range pkg.Files {
 		c.genPredefsFile(pkg.Scope, name, f)
 	}
+	for stname, _ := range c.psctx.gomangles {
+		stname = strings.ReplaceAll(stname, "_", "_")
+		c.outf("typedef struct %s %s", stname[7:], stname).outfh().outnl()
+	}
 	c.genFunctypesDecl(pkg.Scope)
 	for name, f := range pkg.Files {
 		c.genfile(pkg.Scope, name, f)
