@@ -1082,6 +1082,10 @@ func (cp *cparser1) ctype2go2(sym string, csi *csymdata) (
 			return
 		}
 	}
+	if strings.HasPrefix(tystr, "union ") {
+		tyobj = cp.tostructy(csi)
+		return
+	}
 	log.Println("non primitive_type?", sym, tystr2)
 
 	return
