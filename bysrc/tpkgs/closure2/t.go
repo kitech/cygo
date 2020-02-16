@@ -11,6 +11,7 @@ type bar struct {
 
 func useclos(fff func()) {
 	fff()
+	println(999)
 }
 
 func main() {
@@ -22,10 +23,11 @@ func main() {
 	stv1 := &bar{}
 
 	f1 := func() {
-		println(v)
+		println("closvar", v)
 		println(s1)
 		println(fv1)
 		println(stv1)
+		v += 1
 	}
 
 	f1()
@@ -34,6 +36,7 @@ func main() {
 	f2()
 
 	useclos(f2)
+	println("clos add var", v)
 
 	// f2 := foo
 	// f2()

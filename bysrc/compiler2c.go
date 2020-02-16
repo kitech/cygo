@@ -2185,11 +2185,15 @@ func (c *g2nc) genCallExprClosure(scope *ast.Scope, te *ast.CallExpr, fnlit *ast
 	}
 	c.out(")").outfh().outnl()
 	// assign back in case modified
-	if false {
+	if true {
+		c.outf("%s%s* %s = %s->obj", c.pkgpfx(), closi.argtyname, argtv, fnidt.Name)
+		c.outfh().outnl()
 		for _, ido := range closi.idents {
+			c.outf("if (%s->%s != %s) {", argtv, ido.Name, ido.Name)
 			c.out(ido.Name).outeq()
 			c.out(argtv, "->", ido.Name)
 			c.outfh().outnl()
+			c.out("}").outnl()
 		}
 	}
 

@@ -209,6 +209,10 @@ func (tf *TfTmpvars2) apply(ctx *TransformContext) {
 				if funk.Contains([]string{"make"}, idt.Name) {
 					skip0 = true
 				}
+			} else if fnlit, ok := te.Fun.(*ast.FuncLit); ok {
+				as := newtmpassign(fnlit)
+				te.Fun = as.Lhs[0]
+				ctx.addline(te, as)
 			}
 			for idx, ae := range te.Args {
 				if idx == 0 && skip0 {
