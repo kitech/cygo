@@ -686,8 +686,8 @@ func (pc *ParserContext) walkpass_fill_fakecpkg() {
 	pc.fcdefscc = "// " + strings.ReplaceAll(string(buf.Bytes()), "\n", "\n// ")
 	cdefsfile := fmt.Sprintf("./opkgs/%s.cdefs", pc.bdpkgs.Name)
 	ioutil.WriteFile(cdefsfile, buf.Bytes(), 0644)
-	if strings.Contains(string(buf.Bytes()), "<nil>") {
-		log.Println(pc.bdpkgs.Name, "still have unresolved type")
+	if nilcnt := strings.Count(string(buf.Bytes()), "<nil>"); nilcnt > 0 {
+		log.Println(pc.bdpkgs.Name, "still have unresolved type", nilcnt)
 	}
 }
 

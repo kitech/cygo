@@ -8,8 +8,10 @@ package xos
 #include <sys/stat.h>
 #include <fcntl.h>
 #include <unistd.h>
-
 #include <sys/syscall.h>
+
+#include <sys/types.h>
+#include <dirent.h>
 
 int xos_gettid3() {
 #ifdef SYS_gettid
@@ -26,6 +28,8 @@ int xos_gettid3() {
    extern char** cxrt_get_argv();
 */
 import "C"
+
+// import "errors"
 
 // import "unsafe"
 
@@ -81,6 +85,102 @@ func Args() []string {
 		args = append(args, arg)
 	}
 	return args
+}
+
+func Mkdir(dir string) error {
+	rv := C.mkdir(dir.ptr, 0755)
+	if rv != 0 {
+		println("TODO error", Errmsg())
+		return nil
+	}
+	return nil
+}
+func MkdirAll(dir string) error {
+	rv := C.mkdir(dir.ptr, 0755)
+	if rv != 0 {
+		println("TODO error", Errmsg())
+		return nil
+	}
+	return nil
+}
+
+func Rmdir(dir string) error {
+	rv := C.rmdir(dir.ptr)
+	if rv != 0 {
+		println("TODO error", Errmsg())
+		return nil
+	}
+	return nil
+}
+
+func RmdirAll(dir string) error {
+	rv := C.rmdir(dir.ptr)
+	if rv != 0 {
+		println("TODO error", Errmsg())
+		return nil
+	}
+	return nil
+}
+
+func Listdir(dir string) []string {
+	var res []string
+	var diro voidptr
+	diro = C.opendir(dir.ptr)
+	defer C.closedir(diro)
+	for {
+		item := C.readdir(diro)
+		if item == nil {
+			break
+		}
+		cdname := item.d_name
+		dname := gostring(cdname)
+		res.append(dname)
+	}
+
+	return res
+}
+
+// func Copy(from, to string) error { // TODO compiler
+func Copy(from string, to string) error { // TODO compiler
+	return nil
+}
+
+func Move(from string, to string) error {
+	return nil
+}
+
+func Remove(filename string) error {
+	return nil
+}
+
+func WriteFile(filename string, data []byte) error {
+	return nil
+}
+
+func ReadFile(filename string) ([]byte, error) {
+	return nil, nil
+}
+
+func FileExist(filename string) bool {
+	rv := C.access(filename.ptr, C.F_OK)
+	return rv == 0
+}
+func IsReadable(filename string) bool {
+	rv := C.access(filename.ptr, C.R_OK)
+	return rv == 0
+}
+func IsWritable(filename string) bool {
+	rv := C.access(filename.ptr, C.W_OK)
+	return rv == 0
+}
+func IsExcutable(filename string) bool {
+	rv := C.access(filename.ptr, C.X_OK)
+	return rv == 0
+}
+
+func Umask(mask int) int {
+	rv := C.umask(0)
+	return rv
 }
 
 func Keep() {}

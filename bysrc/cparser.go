@@ -143,8 +143,8 @@ func (cp1c *cparser1cache) add(kind int, symname string, tyvalx interface{}) {
 	cp1c.csyms[symname] = csi
 }
 func (cp1c *cparser1cache) add_field(stname string, fldname string, fldty string) *csymdata {
-	stname = strings.Replace(stname, " ", "_", -1)
-	csi := cp1c.csyms[stname]
+	stname2 := strings.ReplaceAll(stname, " ", "_")
+	csi := cp1c.csyms[stname2]
 	csi.struc[fldname] = &stfield{fldname, fldty, nil, len(csi.struc)}
 	return csi
 }
@@ -855,15 +855,21 @@ func (cp *cparser1) cltdefines() {
 		bcc, err := ioutil.ReadFile(hdrfile)
 		gopp.ErrPrint(err, hdrfile)
 		lines := strings.Split(string(bcc), "\n")
-		for _, line := range lines {
-			if !strings.HasPrefix(line, "#define ") &&
-				!strings.HasPrefix(line, "# define ") {
+		for lineno, line := range lines {
+			_ = lineno
+			line = strings.TrimSpace(line)
+			if !strings.HasPrefix(line, "#") {
+				continue
+			} else { // pragma
+				line = trimcomment1(line)
+				line = refmtdefineline(line)
+			}
+			if !strings.HasPrefix(line, "#define ") {
 				continue
 			}
-			line = trimcomment1(line)
-			line = refmtdefineline(line)
-			fields := strings.Split(line, " ")
-			// log.Println("define?", line, len(fields), fields, strings.Contains(line, "\t"))
+			// log.Println(line)
+			fields := strings.Fields(line)
+			// log.Println("define?", line, len(fields), fields)
 			if len(fields) == 2 {
 				// bool
 				ve, err := parser.ParseExpr("true")
@@ -874,7 +880,10 @@ func (cp *cparser1) cltdefines() {
 
 			defname := fields[1]
 			defval := strings.Join(fields[2:], " ")
-			// log.Println("define?", defname, "=", defval, line, fields)
+			// log.Println("define?", defname, "=", defval, line, fields, hdrfile, lineno)
+			if defname == defval {
+				continue // bits/socket_type.h:27 #define SOCK_STREAM SOCK_STREAM???
+			}
 			codeline := strings.TrimSpace(defval)
 			ve, err := parser.ParseExpr(codeline)
 			if false {
@@ -1021,7 +1030,7 @@ func (cp *cparser1) symtype(sym string) (tystr string, tyobj types.Type) {
 		case csym_type:
 			symkind = ast.Typ
 		}
-		log.Println(cp.name, sym, "incache", incache, symkind)
+		log.Println(cp.name, sym, "incache", incache, symkind, csi.KindName())
 
 		switch csi.kind {
 		case csym_define:
@@ -1047,10 +1056,7 @@ func (cp *cparser1) symtype(sym string) (tystr string, tyobj types.Type) {
 					log.Println("todo", cp.name, sym, defexpr, reftyof(ety), reftyof(xe))
 				}
 			case *ast.Ident:
-				if sym == ety.Name {
-					_, tyobj = cp.ctype2go2(sym, csi)
-					break
-				}
+				gopp.Assert(sym != ety.Name, "wtfff", sym)
 				log.Println("redir", sym, "=>", ety.Name)
 				return cp.symtype(ety.Name)
 			default:
@@ -1124,9 +1130,44 @@ func (cp *cparser1) ctype2go2(sym string, csi *csymdata) (
 		return
 	}
 	log.Println("non primitive_type?", sym, tystr2)
+	if strings.HasPrefix(tystr2, "enum {") {
+		tyobj = types.Typ[types.Int]
+		return
+	}
+
+	if strings.HasSuffix(tystr, "*") {
+		starcnt := strings.Count(tystr, "*")
+		canty := strings.TrimRight(tystr, "*")
+		csi2, ok := cp1cache.csyms[canty]
+		issame := ok && csi2.tyval == canty // avoid infinite cycle
+		if ok && !issame {
+			undty := csi2.tyval
+			newty := undty + strings.Repeat("*", starcnt)
+			log.Println(sym, tystr, "=>", newty)
+			tystr2, tyobj = cp.ctype2go(sym, newty)
+			if tyobj != nil {
+				return
+			}
+			tystr3, tyobj3 := cp.ctype2go2(sym, csi2)
+			tystr2 = tystr3 + strings.Repeat("*", starcnt)
+			tyobj = tyobj3
+			for i := 0; i < starcnt; i++ {
+				tyobj = types.NewPointer(tyobj)
+			}
+			return
+		} else if ok && issame {
+		}
+	}
+
+	csi2, found := cp1cache.getsym(tystr2)
+	if found {
+		return cp.ctype2go2(sym, csi2)
+	}
 
 	return
 }
+
+// primitive_type only
 func (cp *cparser1) ctype2go(sym, tystr string) (tystr2 string, tyobj types.Type) {
 	log.Println(cp.name, sym, tystr)
 	tystr = strings.TrimSpace(tystr)
@@ -1177,32 +1218,6 @@ func (cp *cparser1) ctype2go(sym, tystr string) (tystr2 string, tyobj types.Type
 		tyobj = types.Typ[types.Bool]
 
 	default:
-		if sym == "SOCK_STREAM" {
-			tyobj = types.Typ[types.Int] // TODO auto detect
-			return
-		}
-		if strings.HasSuffix(tystr, "*") {
-			starcnt := strings.Count(tystr, "*")
-			canty := strings.TrimRight(tystr, "*")
-			csi, ok := cp1cache.csyms[canty]
-			issame := ok && csi.tyval == canty // avoid infinite cycle
-			if ok && !issame {
-				undty := csi.tyval
-				newty := undty + strings.Repeat("*", starcnt)
-				log.Println(sym, tystr, "=>", newty)
-				return cp.ctype2go(sym, newty)
-			} else if ok && issame {
-			}
-		}
-		log.Println(cp.name, sym, tystr)
-		csi, ok := cp1cache.csyms[tystr]
-		if ok && strings.HasPrefix(csi.tyval, "enum {") {
-			tyobj = types.Typ[types.Int]
-			return
-		} else if ok && csi.tyval != tystr {
-			log.Println(cp.name, sym, tystr)
-			return cp.ctype2go(sym, csi.tyval)
-		}
 		log.Println(cp.name, sym, tystr, cp1cache.csyms[tystr], cp1cache.csyms[sym])
 	}
 	return
@@ -1250,9 +1265,13 @@ func (cp *cparser1) tostructy(csi *csymdata) types.Type {
 	tystr2 = strings.ReplaceAll(tystr, "struct ", "struct_")
 	// gopp.Assert(strings.HasPrefix(tystr2, "struct_"), "wtfff", tystr, tystr2)
 	stname := tystr2
-
+	csi2, found := cp1cache.getsym(tystr2)
+	log.Println(tystr2, csi.tyval, len(csi.struc), csi2, found)
+	if !found {
+		csi2 = csi
+	}
 	var fldvars []*types.Var
-	for fldname, fldo := range csi.struc {
+	for fldname, fldo := range csi2.struc {
 		log.Println(stname, fldname, fldo.tystr, fldo.tyobj)
 		var tyobj types.Type
 		_, tyobj = cp.ctype2go(fldo.tystr, fldo.tystr)

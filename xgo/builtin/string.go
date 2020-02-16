@@ -340,6 +340,11 @@ func (s string) totitle() string {
 	return ns
 }
 
+// sep with space or \t
+func (s string) fields() []string {
+	return nil
+}
+
 // TODO
 func (s string) tomd5() string {
 	return s
