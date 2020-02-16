@@ -500,6 +500,10 @@ func (this *g2nc) genFuncDecl(scope *ast.Scope, fd *ast.FuncDecl) {
 	this.out("(")
 	if fd.Recv != nil {
 		this.genFieldList(scope, fd.Recv, false, true, ",", true)
+		if len(fd.Recv.List[0].Names) == 0 {
+			// empty arg name
+			this.out(tmpvarname())
+		}
 		if fd.Type.Params != nil && fd.Type.Params.NumFields() > 0 {
 			this.out(",")
 		}
@@ -1827,6 +1831,7 @@ func (c *g2nc) getCallExprAttr(scope *ast.Scope, te *ast.CallExpr) *FuncCallAttr
 
 	return fca
 }
+
 func (c *g2nc) genCallExprNorm(scope *ast.Scope, te *ast.CallExpr) {
 	// funame := te.Fun.(*ast.Ident).Name
 	fca := c.getCallExprAttr(scope, te)
@@ -1930,7 +1935,8 @@ func (c *g2nc) genCallExprNorm(scope *ast.Scope, te *ast.CallExpr) {
 	c.out("(")
 	// reciever this
 	if fca.isselfn && !fca.iscfn && !fca.ispkgsel && fca.isrcver {
-		c.genExpr(scope, fca.selfn.X)
+		selx := fca.selfn.X
+		c.genExpr(scope, selx)
 		c.out(gopp.IfElseStr(fca.isifacesel, "->data", ""))
 		c.out(gopp.IfElseStr(len(te.Args) > 0, ",", ""))
 	}

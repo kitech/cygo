@@ -234,7 +234,20 @@ func (tf *TfTmpvars2) apply(ctx *TransformContext) {
 				as := newtmpassign(fnlit)
 				te.Fun = as.Lhs[0]
 				ctx.addline(te, as)
+			} else if selo, ok := te.Fun.(*ast.SelectorExpr); ok {
+				if idt, ok1 := selo.X.(*ast.Ident); ok1 &&
+					idt.Obj != nil && idt.Obj.Kind == ast.Typ {
+					// tyfoo.bar() 静态调用 => (tyfoo{}).bar()
+					compexpr := &ast.CompositeLit{Type: idt}
+					andexpr := &ast.UnaryExpr{Op: token.AND, X: compexpr}
+					starexpr := &ast.StarExpr{X: &ast.ParenExpr{X: andexpr}}
+					starexpr.Star = te.Pos()
+					as := newtmpassign(starexpr)
+					selo.X = as.Lhs[0]
+					ctx.addline(te, as)
+				}
 			}
+
 			for idx, ae := range te.Args {
 				if idx == 0 && skip0 {
 					continue
@@ -243,6 +256,61 @@ func (tf *TfTmpvars2) apply(ctx *TransformContext) {
 					as := newtmpassign(ae)
 					te.Args[idx] = as.Lhs[0]
 					ctx.addline(te, as)
+				}
+			}
+		default:
+			_ = te
+		}
+	} else {
+		switch te := n.(type) {
+		default:
+			_ = te
+		}
+	}
+	return
+}
+
+///
+type TfTmpvars3 struct {
+}
+
+func init() { regtransformer(&TfTmpvars3{}) }
+
+func (tf *TfTmpvars3) afterchk() bool { return false }
+func (tf *TfTmpvars3) apply(ctx *TransformContext) {
+	c := ctx.c
+	n := ctx.n
+	_ = c
+
+	if ctx.ispre {
+		switch te := n.(type) {
+		case *ast.TypeSpec:
+			if _, ok := te.Type.(*ast.StructType); ok {
+				log.Println(te.Name, reftyof(te.Type))
+				// insert after
+				newfn := &ast.FuncDecl{}
+				newfn.Name = newIdent("new")
+				rcv := &ast.Field{}
+				rcv.Type = te.Name
+				reto := &ast.Field{}
+				rete := &ast.StarExpr{}
+				rete.X = te.Name
+				newfn.Recv = &ast.FieldList{}
+				newfn.Recv.List = append(newfn.Recv.List, rcv)
+
+				sig := &ast.FuncType{}
+				sig.Params = &ast.FieldList{}
+				sig.Results = &ast.FieldList{}
+				sig.Results.List = append(sig.Results.List, reto)
+				newfn.Type = sig
+
+				body := &ast.BlockStmt{}
+				newfn.Body = body
+
+				ds := &ast.DeclStmt{}
+				ds.Decl = newfn
+				if false {
+					ctx.addline(te, ds)
 				}
 			}
 		default:

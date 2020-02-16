@@ -1376,7 +1376,10 @@ func (pc *ParserContext) walkpass_dotransforms_impl(afterchk bool) int {
 								valsp.Values = append(valsp.Values, as.Rhs[0])
 								newspecs = append(newspecs, valsp)
 							}
+						} else if spx == c.Node() {
+							log.Println("wtttt")
 						}
+
 						newspecs = append(newspecs, spx)
 					}
 					if len(newspecs) > oldcnt {
