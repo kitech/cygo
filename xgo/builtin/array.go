@@ -15,6 +15,17 @@ func mirarray_new() *mirarray {
 	arr := &mirarray{}
 	return arr
 }
+func mirarray_new2(cap int, elemsz int) *mirarray {
+	arr := &mirarray{}
+	arr.elemsz = elemsz
+	len := cap
+	arr.len = len
+	if cap < 8 {
+		cap = 9
+	}
+	arr.cap = cap
+	return arr
+}
 
 func (arr *mirarray) dummy() {
 
@@ -66,6 +77,19 @@ func (arr *mirarray) clear() *mirarray {
 
 func (arr *mirarray) join(sep string) string {
 	return ""
+}
+
+//export cxarray2_slice2
+func (arr *mirarray) slice(start int, end int) *mirarray {
+	assert(arr != nil)
+	assert(start >= 0)
+	assert(end >= 0)
+	assert(end >= start)
+
+	newarr := mirarray_new2(end-start+1, arr.elemsz)
+	memcpy3(newarr.ptr, voidptr(usize(arr.ptr)+usize(start)), end-start)
+	newarr.len = end - start
+	return newarr
 }
 
 // array.ptr()

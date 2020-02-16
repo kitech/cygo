@@ -174,6 +174,27 @@ func (tf *TfTmpvars) apply(ctx *TransformContext) {
 				bs.List = append(bs.List, initst, te)
 				c.Replace(bs)
 			}
+		case *ast.SliceExpr:
+			if _, ok := te.Low.(*ast.Ident); !ok && te.Low != nil {
+				as := newtmpassign(te.Low)
+				te.Low = as.Lhs[0]
+				ctx.addline(te, as)
+			}
+			if _, ok := te.High.(*ast.Ident); !ok && te.High != nil {
+				as := newtmpassign(te.High)
+				te.High = as.Lhs[0]
+				ctx.addline(te, as)
+			}
+			if _, ok := te.Max.(*ast.Ident); !ok && te.Max != nil {
+				as := newtmpassign(te.Max)
+				te.Max = as.Lhs[0]
+				ctx.addline(te, as)
+			}
+			if _, ok := te.X.(*ast.Ident); !ok {
+				as := newtmpassign(te.X)
+				te.X = as.Lhs[0]
+				ctx.addline(te, as)
+			}
 		default:
 			_ = te
 		}

@@ -2849,12 +2849,16 @@ func (this *g2nc) genExpr2(scope *ast.Scope, e ast.Expr) {
 			}
 			this.out(")")
 		} else if isslicety2(varty) {
-			this.outf("cxarray2_slice(%v, ", te.X)
+			this.outf("cxarray2_slice(")
+			this.genExpr(scope, te.X)
+			this.out(",")
 			this.genExpr(scope, lowe)
 			this.out(",")
 
 			if highe == nil {
-				this.outf("cxarray2_size(%v)", te.X)
+				this.outf("cxarray2_size(")
+				this.genExpr(scope, te.X)
+				this.out(")")
 			} else {
 				this.genExpr(scope, te.High)
 			}
