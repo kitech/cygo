@@ -1275,7 +1275,7 @@ func (pc *ParserContext) walkpass_fill_funcvars() {
 // 在 check 之前做 ast 修改，不需要涉及类型问题
 func (pc *ParserContext) walkpass_dotransforms(afterchk bool) {
 	for i := 0; ; i++ {
-		addtot := pc.walkpass_dotransforms_impl(afterchk)
+		addtot := pc.walkpass_dotransforms_impl(afterchk, i)
 		if addtot == 0 {
 			log.Println("total cycles", i+1)
 			break
@@ -1283,7 +1283,7 @@ func (pc *ParserContext) walkpass_dotransforms(afterchk bool) {
 		// log.Println("continue", i, addtot)
 	}
 }
-func (pc *ParserContext) walkpass_dotransforms_impl(afterchk bool) int {
+func (pc *ParserContext) walkpass_dotransforms_impl(afterchk bool, cycle int) int {
 	pkgs := pc.pkgs
 
 	addlines := map[ast.Node][]ast.Stmt{}
@@ -1296,13 +1296,21 @@ func (pc *ParserContext) walkpass_dotransforms_impl(afterchk bool) int {
 	}
 	for _, tfo := range transforms {
 		for _, pkg := range pkgs {
+			var fiobj *ast.File
 			astutil.Apply(pkg, func(c *astutil.Cursor) bool {
+				if fio, ok := c.Node().(*ast.File); ok {
+					fiobj = fio
+				}
 				tfctx := newTransformContext(pc, c, true)
+				tfctx.fio = fiobj
+				tfctx.cycle = cycle
 				tfo.apply(tfctx)
 				mrgaddlines(tfctx.inslines)
 				return true
 			}, func(c *astutil.Cursor) bool {
 				tfctx := newTransformContext(pc, c, false)
+				tfctx.fio = fiobj
+				tfctx.cycle = cycle
 				tfo.apply(tfctx)
 				return true
 			})

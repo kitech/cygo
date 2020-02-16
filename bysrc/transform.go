@@ -1,9 +1,12 @@
 package main
 
 import (
+	"bytes"
 	"go/ast"
+	"go/printer"
 	"go/token"
 	"log"
+	"strings"
 
 	"github.com/thoas/go-funk"
 	"golang.org/x/tools/go/ast/astutil"
@@ -15,6 +18,8 @@ type TransformContext struct {
 	s     *astutil.Cursor // current stmt
 	ispre bool
 	pc    *ParserContext
+	fio   *ast.File // current file
+	cycle int
 
 	inslines map[ast.Node][]ast.Stmt
 }
@@ -282,35 +287,62 @@ func (tf *TfTmpvars3) apply(ctx *TransformContext) {
 	n := ctx.n
 	_ = c
 
+	if ctx.cycle > 0 {
+		return
+	}
 	if ctx.ispre {
 		switch te := n.(type) {
 		case *ast.TypeSpec:
 			if _, ok := te.Type.(*ast.StructType); ok {
-				log.Println(te.Name, reftyof(te.Type))
+				log.Println(te.Name, reftyof(te.Type), ctx.fio.Name)
 				// insert after
 				newfn := &ast.FuncDecl{}
-				newfn.Name = newIdent("new")
+				newfn.Name = newIdent("new0")
 				rcv := &ast.Field{}
 				rcv.Type = te.Name
-				reto := &ast.Field{}
+
 				rete := &ast.StarExpr{}
 				rete.X = te.Name
 				newfn.Recv = &ast.FieldList{}
 				newfn.Recv.List = append(newfn.Recv.List, rcv)
+				reto := &ast.Field{}
+				reto.Type = rete
 
 				sig := &ast.FuncType{}
+				sig.Func = te.Pos()
 				sig.Params = &ast.FieldList{}
 				sig.Results = &ast.FieldList{}
 				sig.Results.List = append(sig.Results.List, reto)
 				newfn.Type = sig
 
 				body := &ast.BlockStmt{}
+				body.Lbrace = te.Pos()
 				newfn.Body = body
+				retexpr := &ast.ReturnStmt{}
+				as := newtmpassign(&ast.UnaryExpr{
+					Op: token.AND, X: &ast.CompositeLit{Type: te.Name},
+				})
+				as.TokPos = te.Pos()
+				retexpr.Results = append(retexpr.Results, as.Lhs[0])
+				retexpr.Return = te.Pos()
+				body.List = append(body.List, as, retexpr)
 
 				ds := &ast.DeclStmt{}
 				ds.Decl = newfn
+
+				if false {
+					buf := bytes.NewBuffer(nil)
+					err := printer.Fprint(buf, ctx.pc.fset, newfn)
+					bufcc := string(buf.Bytes())
+					bufcc = strings.ReplaceAll(bufcc, "\n", " ")
+					log.Println(err, len(bufcc), bufcc)
+				}
 				if false {
 					ctx.addline(te, ds)
+				}
+				if true {
+					fio := ctx.fio
+					fio.Decls = append(fio.Decls, ds.Decl)
 				}
 			}
 		default:
