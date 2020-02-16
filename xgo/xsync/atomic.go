@@ -11,7 +11,8 @@ int mylang_sync_atomic_addint(int* v, int delta) {
     return atomic_fetch_add(v, delta);
 }
 uint32_t mylang_sync_atomic_addu32(uint32_t* v, uint32_t delta) {
-    extern uint32_t __atomic_fetch_add(uint32_t*, uint32_t, int);
+    // extern __atomic_fetch_add 表示符号不存在
+    // extern uint32_t __atomic_fetch_add(uint32_t*, uint32_t, int);
     return atomic_fetch_add(v, delta);
 }
 int32_t mylang_sync_atomic_addi32(int32_t* v, int32_t delta) {

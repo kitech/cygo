@@ -5,6 +5,7 @@ import (
 	"go/token"
 	"log"
 
+	"github.com/thoas/go-funk"
 	"golang.org/x/tools/go/ast/astutil"
 )
 
@@ -203,7 +204,16 @@ func (tf *TfTmpvars2) apply(ctx *TransformContext) {
 		switch te := n.(type) {
 		case *ast.CallExpr:
 			// 检查每个元素是否是常量，IDENT
+			skip0 := false
+			if idt, ok := te.Fun.(*ast.Ident); ok {
+				if funk.Contains([]string{"make"}, idt.Name) {
+					skip0 = true
+				}
+			}
 			for idx, ae := range te.Args {
+				if idx == 0 && skip0 {
+					continue
+				}
 				if _, ok := ae.(*ast.Ident); !ok {
 					as := newtmpassign(ae)
 					te.Args[idx] = as.Lhs[0]
