@@ -12,7 +12,9 @@ func init() {
 		// impl1 // TODO
 		// sz1 := sizeof(Mutex{}) // TODO compiler
 		sz1 := sizeof(Mutex) // TODO compiler
-		assert(sz1 == sizeof(C.pthread_mutex_t))
+		pthmu := &C.pthread_mutex_t{}
+		// assert(sz1 == sizeof(C.pthread_mutex_t)) // TODO compiler
+		assert(sz1 == sizeof(*pthmu))
 
 		// impl2
 		// sz2 := unsafe.Sizeof(Mutex{}) // TODO compiler

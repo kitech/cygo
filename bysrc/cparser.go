@@ -130,6 +130,7 @@ func (cp1c *cparser1cache) add(kind int, symname string, tyvalx interface{}) {
 	if _, ok := cp1c.csyms[symname]; ok {
 		return
 	}
+
 	csi := newcsymdata(symname, kind)
 	switch kind {
 	case csym_define:
@@ -250,6 +251,8 @@ func (cp *cparser1) walk(n *sitter.Node, lvl int) {
 	case tsEnumerator:
 		fallthrough
 	case tsStructSpecifier:
+		fallthrough
+	case tsUnionSpecifier:
 		fallthrough
 	case tsFieldDeclaration:
 		fallthrough
@@ -461,9 +464,6 @@ func (cp *cparser1) walk(n *sitter.Node, lvl int) {
 		cp1cache.add(csym_enum, fld0, fld1)
 	case tsStructSpecifier:
 		gopp.Assert(len(txt) > 0, "wtfff", txt)
-		// if _, ok := cp.structs[txt]; ok {
-		// 	break
-		// }
 		if _, ok := cp1cache.csyms[txt]; ok {
 			break
 		}
@@ -480,23 +480,53 @@ func (cp *cparser1) walk(n *sitter.Node, lvl int) {
 		if false {
 			log.Println(n.Type(), len(txt), txt)
 		}
+	case tsUnionSpecifier:
+		gopp.Assert(len(txt) > 0, "wtfff", txt)
+		if _, ok := cp1cache.csyms[txt]; ok {
+			break
+		}
+
+		stname := strings.Split(txt, "{")[0]
+		stname = strings.TrimSpace(stname)
+		if stname == "union" { // typedef union {xxx} yyy;
+			log.Println("noname union, maybe known other where", txt)
+			stname = cp.exprtxt(n.NextSibling())
+			cp1cache.add(csym_struct, stname, stfieldlist{})
+		} else {
+			cp1cache.add(csym_struct, stname, stfieldlist{})
+		}
+		if true {
+			log.Println(n.Type(), stname, len(txt), txt)
+		}
 	case tsFieldDeclaration:
 		gopp.Assert(len(txt) > 0, "wtfff", txt)
 
 		pn := n.Parent()   // field_declaration_list
 		ppn := pn.Parent() // struct_specifier
-		if ppn.Type() == tsTranslateUnit || ppn.Type() == tsUnionSpecifier {
+		if ppn.Type() == tsTranslateUnit {
 			break
 		}
-		gopp.Assert(ppn.Type() == tsStructSpecifier, "wtfff", ppn.Type())
+		gopp.Assert(ppn.Type() == tsStructSpecifier ||
+			ppn.Type() == tsUnionSpecifier, "wtfff", ppn.Type())
 
 		stbody := cp.exprtxt(ppn)
 		stname := strings.Split(stbody, "{")[0]
 		stname = strings.TrimSpace(stname)
-		if stname == "struct" { // typedef struct {xxx} yyy;
+		if stname == "struct" { // nonamed typedef struct {xxx} yyy;
 			log.Println("noname struct, maybe known other where", txt)
 			log.Println("noname struct, maybe known other where", ppn.NextSibling())
 			stname = cp.exprtxt(ppn.NextSibling())
+		} else if stname == "union" {
+			log.Println("noname union, maybe known other where", txt)
+			log.Println("noname union, maybe known other where", ppn.NextSibling())
+			stname = cp.exprtxt(ppn.NextSibling())
+			if stname == tsSemiColon {
+				// maybe in struct noname union!!!
+				break
+			}
+			if _, ok := cp1cache.getsym(stname); !ok {
+				break
+			}
 		}
 		_, instruct := cp1cache.getsym(stname)
 		gopp.Assert(instruct, "wtfff", stname)
@@ -510,6 +540,7 @@ func (cp *cparser1) walk(n *sitter.Node, lvl int) {
 			tystr = strings.Join(arr1[:len(arr1)-1], " ")
 			tystr += strings.Repeat("*", strings.Count(txt, "["))
 		}
+		log.Println(stname, fldname, tystr)
 		csi := cp1cache.add_field(stname, fldname, tystr)
 		fldcnt := len(csi.struc)
 		if false {
@@ -531,6 +562,12 @@ func (cp *cparser1) walk(n *sitter.Node, lvl int) {
 		} else {
 			// typedef struct {xxx} foo;
 			if strings.Contains(txt, "struct {") {
+				log.Println(n.ChildCount(), n.Child(1).Type())
+				n1 := n.Child(1)
+				gopp.Assert(n1.Type() == tsStructSpecifier ||
+					n1.Type() == tsUnionSpecifier, "wtfff", txt)
+
+			} else if strings.Contains(txt, "union {") {
 				log.Println(n.ChildCount(), n.Child(1).Type())
 				n1 := n.Child(1)
 				gopp.Assert(n1.Type() == tsStructSpecifier ||
