@@ -54,10 +54,18 @@ type Locdesc struct {
 
 func init() {
 	// assert(sizeof(FormData16) == sizeof(C.Dwarf_Form_Data16))
-	assert(sizeof(Sig8) == sizeof(C.Dwarf_Sig8))
-	assert(sizeof(Block) == sizeof(C.Dwarf_Block))
-	assert(sizeof(Loc) == sizeof(C.Dwarf_Loc))
-	assert(sizeof(Locdesc) == sizeof(C.Dwarf_Locdesc))
+	gosig8 := &Sig8{}
+	csig8 := &C.Dwarf_Sig8{}
+	assert(sizeof(*gosig8) == sizeof(*csig8))
+	goblk := &Block{}
+	cblk := &C.Dwarf_Block{}
+	assert(sizeof(*goblk) == sizeof(*cblk))
+	goloc := &Loc{}
+	cloc := &C.Dwarf_Loc{}
+	assert(sizeof(*goloc) == sizeof(*cloc))
+	golocdesc := &Locdesc{}
+	clocdesc := &C.Dwarf_Locdesc{}
+	assert(sizeof(*golocdesc) == sizeof(*clocdesc))
 }
 
 const (
@@ -905,7 +913,6 @@ func init_a(fd int) (dbg Debug, dwerr Error) {
 }
 
 func add_file_path(dbg Debug, filename string) (dwerr Error) {
-	var dwerr Error
 	rv := C.dwarf_add_file_path(dbg, filename.cstr(), &dwerr)
 	dwerr = packerror(rv, dwerr)
 	return

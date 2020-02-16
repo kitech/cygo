@@ -6,9 +6,9 @@ package xsync
 #include <stdatomic.h>
 
 int mylang_sync_atomic_addint(int* v, int delta) {
-    extern int __atomic_fetch_add(int*, int, int);
-    return __atomic_fetch_add(v, delta, memory_order_seq_cst);
-    // return atomic_fetch_add(v, delta);
+    // extern int __atomic_fetch_add(int*, int, int);
+    // return __atomic_fetch_add(v, delta, memory_order_seq_cst);
+    return atomic_fetch_add(v, delta);
 }
 uint32_t mylang_sync_atomic_addu32(uint32_t* v, uint32_t delta) {
     extern uint32_t __atomic_fetch_add(uint32_t*, uint32_t, int);

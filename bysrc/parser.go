@@ -191,20 +191,19 @@ func (pc *ParserContext) pkgimperror(err error) {
 		strings.Contains(err.Error(), "invalid statement") ||
 		strings.Contains(err.Error(), "not declared by package") ||
 		strings.Contains(err.Error(), "wrong number of return values") ||
+		strings.Contains(err.Error(), "redeclared in this block") ||
 		false {
 		log.Println("fatalerr", err)
 		pc.chkerrs = append(pc.chkerrs, err)
-	} else if strings.Contains(err.Error(), "__ctype ") ||
-		// TODO
-		strings.Contains(err.Error(), "(type) is not an expression") ||
+	} else if // TODO
+	strings.Contains(err.Error(), "(type) is not an expression") ||
 		false {
 		log.Println("warn5err", err)
 	} else if strings.Contains(err.Error(), "declared but not used") ||
 		strings.Contains(err.Error(), "not exported by package C") ||
 		strings.Contains(err.Error(), "too many arguments") ||
 		strings.Contains(err.Error(), "not exported by package") ||
-		(strings.Contains(err.Error(), "cannot convert") &&
-			(strings.Contains(err.Error(), "__ctype "))) {
+		false {
 		// log.Println(err)
 		chkwarns = append(chkwarns, err)
 	} else {
@@ -574,9 +573,11 @@ func (pc *ParserContext) walkpass_fill_fakecpkg() {
 						if false {
 							log.Println(fe.Args[0], reftyof(fe.Args[0]))
 						}
+					} else if fe, ok := pn.(*ast.CompositeLit); ok {
+						atye = fe.Type
 					}
 					istype := atye == te // 是否是在type的位置上
-					// log.Println("got111", te.X, te.Sel, c.Index(), inconst, reftyof(pn), atye, reftyof(atye), atye == te, istype, exprpos(pc, te))
+					log.Println("got111", te.X, te.Sel, c.Index(), inconst, reftyof(pn), atye, reftyof(atye), atye == te, istype, exprpos(pc, te))
 					csi := newcsyminfo(te.Sel, nil)
 					csi.istype = istype
 					csi.isconst = inconst
@@ -652,8 +653,19 @@ func (pc *ParserContext) walkpass_fill_fakecpkg() {
 			fcscope.Insert(ctyobj.(*types.Named).Obj())
 			struct_gomangles[idtname] = true
 		} else if csi.istype {
-			tyty := fakectype(newIdent(idtname), fcpkg, ctyobj)
-			fcscope.Insert(tyty.Obj())
+			switch te := ctyobj.(type) {
+			case *types.Named:
+				fcscope.Insert(te.Obj())
+				log.Println(te.Obj().Name(), idtname)
+				if idtname != te.Obj().Name() {
+					// need an alias type $idtname $te.Obj().Name()
+					tyname1 := types.NewTypeName(token.NoPos, fcpkg, idtname, ctyobj)
+					fcscope.Insert(tyname1)
+				}
+			default:
+				tyty := fakectype(newIdent(idtname), fcpkg, ctyobj)
+				fcscope.Insert(tyty.Obj())
+			}
 		} else if csi.isvar() {
 			varo := fakecvar2(newIdent(idtname), fcpkg, ctyobj)
 			fcscope.Insert(varo)

@@ -107,6 +107,7 @@ func newcsymdata(name string, kind int) *csymdata {
 	d.kind = kind
 	return d
 }
+func (csym *csymdata) KindName() string { return csym_kind2str(csym.kind) }
 
 // 当前进程有效
 type cparser1cache struct {
@@ -469,7 +470,13 @@ func (cp *cparser1) walk(n *sitter.Node, lvl int) {
 
 		stname := strings.Split(txt, "{")[0]
 		stname = strings.TrimSpace(stname)
-		cp1cache.add(csym_struct, stname, stfieldlist{})
+		if stname == "struct" { // typedef struct {xxx} yyy;
+			log.Println("noname struct, maybe known other where", txt)
+			stname = cp.exprtxt(n.NextSibling())
+			cp1cache.add(csym_struct, stname, stfieldlist{})
+		} else {
+			cp1cache.add(csym_struct, stname, stfieldlist{})
+		}
 		if false {
 			log.Println(n.Type(), len(txt), txt)
 		}
@@ -478,8 +485,7 @@ func (cp *cparser1) walk(n *sitter.Node, lvl int) {
 
 		pn := n.Parent()   // field_declaration_list
 		ppn := pn.Parent() // struct_specifier
-		if ppn.Type() == tsTranslateUnit ||
-			ppn.Type() == tsUnionSpecifier {
+		if ppn.Type() == tsTranslateUnit || ppn.Type() == tsUnionSpecifier {
 			break
 		}
 		gopp.Assert(ppn.Type() == tsStructSpecifier, "wtfff", ppn.Type())
@@ -487,6 +493,11 @@ func (cp *cparser1) walk(n *sitter.Node, lvl int) {
 		stbody := cp.exprtxt(ppn)
 		stname := strings.Split(stbody, "{")[0]
 		stname = strings.TrimSpace(stname)
+		if stname == "struct" { // typedef struct {xxx} yyy;
+			log.Println("noname struct, maybe known other where", txt)
+			log.Println("noname struct, maybe known other where", ppn.NextSibling())
+			stname = cp.exprtxt(ppn.NextSibling())
+		}
 		_, instruct := cp1cache.getsym(stname)
 		gopp.Assert(instruct, "wtfff", stname)
 
@@ -511,19 +522,27 @@ func (cp *cparser1) walk(n *sitter.Node, lvl int) {
 		txt = strings.TrimRight(txt, ";")
 		txt = strings.TrimSpace(txt)
 		// func type
-		isfuncty := strings.Contains(txt, " (*") &&
-			!strings.Contains(txt, "{")
+		isfuncty := strings.Contains(txt, " (*") && !strings.Contains(txt, "{")
 		if isfuncty {
 			reg := regexp.MustCompile(`.* \(\*(.+)\).*`)
 			mats := reg.FindAllStringSubmatch(txt, -1)
 			tyname := mats[0][1]
 			cp1cache.add(csym_type, tyname, "void*")
 		} else {
-			fields := strings.Split(txt, " ")
-			tyname := fields[len(fields)-1]
-			realty := strings.Join(fields[1:len(fields)-1], " ")
-			// log.Println(n.Type(), len(fields), fields, tyname, realty)
-			cp1cache.add(csym_type, tyname, realty)
+			// typedef struct {xxx} foo;
+			if strings.Contains(txt, "struct {") {
+				log.Println(n.ChildCount(), n.Child(1).Type())
+				n1 := n.Child(1)
+				gopp.Assert(n1.Type() == tsStructSpecifier ||
+					n1.Type() == tsUnionSpecifier, "wtfff", txt)
+
+			} else {
+				fields := strings.Split(txt, " ")
+				tyname := fields[len(fields)-1]
+				realty := strings.Join(fields[1:len(fields)-1], " ")
+				log.Println(n.Type(), len(fields), fields, tyname, realty)
+				cp1cache.add(csym_type, tyname, realty)
+			}
 		}
 		if false {
 			log.Println(n.Type(), len(txt), txt)
@@ -1057,7 +1076,8 @@ func (cp *cparser1) ctype2go2(sym string, csi *csymdata) (
 			return
 		} else {
 			// POD
-			log.Println("non primitive_type?", sym, tystr2)
+			log.Println("non primitive_type?", sym,
+				csi.kind, csi.KindName(), csi.name, len(csi.struc), tystr2)
 			tyobj = cp.tostructy(csi)
 			return
 		}
@@ -1098,6 +1118,8 @@ func (cp *cparser1) ctype2go(sym, tystr string) (tystr2 string, tyobj types.Type
 		tyobj = types.Typ[types.Uint]
 	case "int":
 		tyobj = types.Typ[types.Int]
+	case "unsigned char":
+		tyobj = types.Typ[types.Byte]
 	case "char":
 		tyobj = types.Typ[types.Byte]
 	case "uint16_t", "unsigned short", "unsigned short int", "ushort":
@@ -1122,11 +1144,13 @@ func (cp *cparser1) ctype2go(sym, tystr string) (tystr2 string, tyobj types.Type
 			starcnt := strings.Count(tystr, "*")
 			canty := strings.TrimRight(tystr, "*")
 			csi, ok := cp1cache.csyms[canty]
-			if ok {
+			issame := ok && csi.tyval == canty // avoid infinite cycle
+			if ok && !issame {
 				undty := csi.tyval
 				newty := undty + strings.Repeat("*", starcnt)
 				log.Println(sym, tystr, "=>", newty)
 				return cp.ctype2go(sym, newty)
+			} else if ok && issame {
 			}
 		}
 		log.Println(cp.name, sym, tystr)
@@ -1181,8 +1205,9 @@ func (cp *cparser1) tostructy(csi *csymdata) types.Type {
 	if tystr == "" {
 		tystr = csi.name
 	}
-	tystr2 := strings.ReplaceAll(tystr, "struct ", "struct_")
-	gopp.Assert(strings.HasPrefix(tystr2, "struct_"), "wtfff", tystr, tystr2)
+	tystr2 := tystr
+	tystr2 = strings.ReplaceAll(tystr, "struct ", "struct_")
+	// gopp.Assert(strings.HasPrefix(tystr2, "struct_"), "wtfff", tystr, tystr2)
 	stname := tystr2
 
 	var fldvars []*types.Var

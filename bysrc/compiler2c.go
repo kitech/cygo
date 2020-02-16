@@ -97,8 +97,14 @@ func (c *g2nc) genpkg(name string, pkg *ast.Package) {
 		c.genPredefsFile(pkg.Scope, name, f)
 	}
 	for stname, _ := range c.psctx.gomangles {
-		stname = strings.ReplaceAll(stname, "_", "_")
-		c.outf("typedef struct %s %s", stname[7:], stname).outfh().outnl()
+		if strings.HasPrefix(stname, "struct_{") {
+			c.out("/* wtfff").outnl()
+			c.outf("typedef struct %s %s", stname[7:], stname).outfh().outnl()
+			c.out("*/").outnl()
+		} else {
+			stname = strings.ReplaceAll(stname, "_", "_")
+			c.outf("typedef struct %s %s /*ooo*/", stname[7:], stname).outfh().outnl()
+		}
 	}
 	c.genFunctypesDecl(pkg.Scope)
 	for name, f := range pkg.Files {
@@ -3116,90 +3122,15 @@ func (this *g2nc) exprTypeName(scope *ast.Scope, e ast.Expr) string {
 	if tyname == "unknownty" {
 		// log.Panicln(tyname, e, reflect.TypeOf(e), this.exprpos(e))
 	}
+	if strings.Contains(tyname, "literal)") {
+		log.Panicln(tyname, e, reflect.TypeOf(e), this.exprpos(e))
+	}
 	return tyname
 }
 func (this *g2nc) exprTypeNameImpl(scope *ast.Scope, e ast.Expr) string {
 
 	{
 		// return "unknownty"
-	}
-	{ // C.xxx or C.xxx() // TODO depcreate
-		if iscsel(e) {
-			name := exprstr(e)[2:]
-			if false {
-				return fmt.Sprintf("%s__ctype/*000*/", name)
-			}
-		}
-		if ce, ok := e.(*ast.CallExpr); ok {
-			if iscsel(ce.Fun) {
-				name := exprstr(ce.Fun)[2:]
-				if false {
-					return fmt.Sprintf("%s__ctype/*111*/", name)
-				}
-			}
-			log.Println(ce.Fun, reftyof(ce.Fun), len(this.info.Types))
-			if idt, ok := ce.Fun.(*ast.Ident); ok {
-				if funk.Contains([]string{"int"}, idt.Name) {
-					if false {
-						return idt.Name + "/*a111*/"
-					}
-				}
-			}
-		}
-		if se, ok := e.(*ast.StarExpr); ok {
-			log.Println(se, reftyof(se), se.X, reftyof(se.X))
-			if iscsel(se.X) {
-				name := exprstr(se.X)[2:]
-				return fmt.Sprintf("%s__ctype/*222*/", name)
-			}
-			if ce, ok := se.X.(*ast.CallExpr); ok {
-				if iscsel(ce.Fun) {
-					name := exprstr(ce.Fun)[2:]
-					return fmt.Sprintf("%s__ctype/*333*/", name)
-				}
-			}
-		}
-		if se, ok := e.(*ast.UnaryExpr); ok {
-			log.Println(se, reftyof(se), se.X, reftyof(se.X))
-			if iscsel(se.X) {
-				name := exprstr(se.X)[2:]
-				return fmt.Sprintf("%s__ctype/*444*/", name)
-			}
-			if ce, ok := se.X.(*ast.CompositeLit); ok {
-				if iscsel(ce.Type) {
-					name := exprstr(ce.Type)[2:]
-					if false {
-						return fmt.Sprintf("%s__ctype*/*555*/", name)
-					}
-				}
-			}
-		}
-		if ie, ok := e.(*ast.IndexExpr); ok {
-			log.Println(exprstr(ie), ie.X, reftyof(ie.X), this.info.TypeOf(ie.X))
-			xty := this.info.TypeOf(ie.X)
-			// gopp.Assert(xty != nil, "waitdep", ie)
-			if (xty == nil || isinvalidty2(xty)) || isctydeftype2(xty) {
-				// c type???
-				dimn := strings.Count(exprstr(ie), "[")
-				dimstr := strings.Repeat("[0]", dimn)
-				tope := ie.X
-				for i := 0; i < dimn-1; i++ {
-					ie2 := ie.X.(*ast.IndexExpr)
-					tope = ie2.X
-				}
-				return fmt.Sprintf("__typeof__(%s%s)/*a222*/", tope, dimstr)
-			} else if xty != nil && xty.String() == "byte" {
-				// multiple dimision index of c type???
-				dimn := strings.Count(exprstr(ie), "[")
-				dimstr := strings.Repeat("[0]", dimn)
-				tope := ie.X
-				for i := 0; i < dimn-1; i++ {
-					ie2 := ie.X.(*ast.IndexExpr)
-					tope = ie2.X
-				}
-				return fmt.Sprintf("__typeof__(%s%s)/*a333*/", tope, dimstr)
-			}
-		}
 	}
 
 	goty := this.info.TypeOf(e)
@@ -3248,6 +3179,9 @@ func (this *g2nc) exprTypeNameImpl2(scope *ast.Scope, ety types.Type, e ast.Expr
 
 	switch te := goty.(type) {
 	case *types.Basic:
+		if te.Kind() == types.Invalid {
+			return "typpp_" + strings.ReplaceAll(te.String(), " ", "_")
+		}
 		if isstrty(te.Name()) {
 			return "cxstring*"
 		} else {
@@ -3435,7 +3369,7 @@ func (c *g2nc) genPredefTypeDecl(scope *ast.Scope, d *ast.GenDecl) {
 			case *ast.StructType:
 				c.outf("// %v", exprpos(c.psctx, tspec)).outnl()
 				specname := tspec.Name.Name
-				c.outf("typedef struct %s%s %s%s",
+				c.outf("typedef struct %s%s %s%s /*hhh*/",
 					c.pkgpfx(), specname, c.pkgpfx(), specname).outfh().outnl()
 			case *ast.Ident:
 				log.Println(tspec.Type, reflect.TypeOf(tspec.Type))
@@ -3460,7 +3394,7 @@ func (c *g2nc) genFunctypesDecl(scope *ast.Scope) {
 			log.Fatalln("not support multirets functypes", exprpos(c.psctx, fntyx))
 			c.outf("// notimpl multirets").outnl().out("//").outsp()
 		}
-		c.outf("typedef").outsp()
+		c.outf("typedef /*ddd*/").outsp()
 		if fnty.Results != nil {
 			for idx, fldo := range fnty.Results.List {
 				tystr := c.exprTypeName(scope, fldo.Type)
@@ -3824,14 +3758,6 @@ func (this *g2nc) clinema(e ast.Node) *g2nc {
 // TODO fix by typedef order
 func (this *g2nc) genPrecgodefs() string {
 	precgodefs := `
-typedef void _Ctype_void;
-typedef int32 _Ctype_int;
-typedef int64 _Ctype_long;
-typedef uint64 _Ctype_ulong;
-typedef uint32 _Ctype_uint;
-typedef int8 _Ctype_char;
-typedef float32 _Ctype_float;
-typedef _Ctype_long _Ctype_ptrdiff_t;
 typedef uint32_t u32;
 typedef int32_t i32;
 typedef uint16_t u16;

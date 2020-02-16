@@ -450,7 +450,9 @@ func (dw *Dwarf) pc_in_die(die Die, pc Addr) (found bool) {
 			for i := 0; i < listlen; i++ {
 				// cur := ranges + i // TODO compiler
 				var cur *Ranges
-				cur = usize(ranges) + usize(i*sizeof(Ranges))
+				z0rg := &Ranges{}
+				// cur = usize(ranges) + usize(i*sizeof(Ranges{})) // TODO compiler
+				cur = usize(ranges) + usize(i*sizeof(*z0rg)) // TODO compiler
 				if cur.dwr_type == DW_RANGES_ENTRY {
 					rglowpc := baseaddr + cur.dwr_addr1
 					rghighpc := baseaddr + cur.dwr_addr2
@@ -820,7 +822,8 @@ func (dw *Dwarf) calc_minmax_pc() {
 				for i := 0; i < rgcnt; i++ {
 					// cur := ranges + i // TODO compiler
 					var cur *Ranges
-					cur = usize(ranges) + usize(i*sizeof(Ranges))
+					z0rg := &Ranges{}
+					cur = usize(ranges) + usize(i*sizeof(*z0rg))
 					if cur.dwr_type == DW_RANGES_ENTRY {
 						rglowpc := baseaddr + cur.dwr_addr1
 						rghighpc := baseaddr + cur.dwr_addr2
