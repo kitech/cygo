@@ -775,6 +775,7 @@ func (c *g2nc) genStmtTmps(scope *ast.Scope, stmt ast.Stmt) {
 	}
 }
 
+// TODO too large, how split
 func (c *g2nc) genAssignStmt(scope *ast.Scope, s *ast.AssignStmt) {
 	// log.Println(s.Tok.String(), s.Tok.Precedence(), s.Tok.IsOperator(), s.Tok.IsLiteral(), s.Lhs)
 	for i := 0; i < len(s.Rhs); i++ {
@@ -856,7 +857,7 @@ func (c *g2nc) genAssignStmt(scope *ast.Scope, s *ast.AssignStmt) {
 			} else {
 				c.out("error_new_zero()").outfh().outnl()
 				c.genExpr(scope, s.Lhs[i])
-				c.outf("->data").outeq()
+				c.outf("->thisptr").outeq()
 				c.genExpr(scope, s.Rhs[i])
 				c.outfh().outnl()
 				c.genExpr(scope, s.Lhs[i])
@@ -938,6 +939,7 @@ func (c *g2nc) genAssignStmt(scope *ast.Scope, s *ast.AssignStmt) {
 	}
 
 }
+
 func (this *g2nc) genGoStmt(scope *ast.Scope, stmt *ast.GoStmt) {
 	// calleename := stmt.Call.Fun.(*ast.Ident).Name
 	// this.genCallExpr(scope, stmt.Call)
@@ -1940,7 +1942,7 @@ func (c *g2nc) genCallExprNorm(scope *ast.Scope, te *ast.CallExpr) {
 	if fca.isselfn && !fca.iscfn && !fca.ispkgsel && fca.isrcver {
 		selx := fca.selfn.X
 		c.genExpr(scope, selx)
-		c.out(gopp.IfElseStr(fca.isifacesel, "->data", ""))
+		c.out(gopp.IfElseStr(fca.isifacesel, "->thisptr", ""))
 		c.out(gopp.IfElseStr(len(te.Args) > 0, ",", ""))
 	}
 
@@ -2025,7 +2027,7 @@ func (c *g2nc) genCallExprExceptionJump(scope *ast.Scope, te *ast.CallExpr) {
 		fnrety := upfd.Type
 		if fnrety.Results == nil || len(fnrety.Results.List) == 0 {
 			c.outf(" // panic").outfh().outnl()
-			c.outf("panic(0x1)").outfh().outnl()
+			c.outf("panic((voidptr)0x1)").outfh().outnl()
 		} else if len(fnrety.Results.List) == 1 {
 			retfld := fnrety.Results.List[0]
 			if fmt.Sprintf("%v", retfld.Type) == "error" {
@@ -2160,36 +2162,7 @@ func (c *g2nc) genCallExprClosure(scope *ast.Scope, te *ast.CallExpr, fnlit *ast
 	_ = iscfn
 	_ = ispkgsel
 	_ = isfnlit
-	/*
-		if isselfn {
-			if iscfn {
-				c.genExpr(scope, selfn.Sel)
-			} else {
-				vartystr := c.exprTypeName(scope, selfn.X)
-				vartystr = strings.TrimRight(vartystr, "*")
-				c.out(vartystr + "_" + selfn.Sel.Name)
-			}
-		} else if isfnlit {
-			closi := c.getclosinfo(fnlit)
-			c.outf("%s%s", c.pkgpfx(), closi.fnname)
-		} else {
-			c.genExpr(scope, te.Fun)
-		}
 
-		c.out("(")
-		if isselfn && !iscfn && !ispkgsel {
-			c.genExpr(scope, selfn.X)
-			c.out(gopp.IfElseStr(len(te.Args) > 0, ",", ""))
-		}
-		c.out(argtv)
-		c.out(gopp.IfElseStr(len(te.Args) > 0, ",", ""))
-		for idx, e1 := range te.Args {
-			c.genExpr(scope, e1)
-			c.out(gopp.IfElseStr(idx == len(te.Args)-1, "", ", "))
-		}
-		c.out(")")
-		c.outfh().outnl()
-	*/
 	fnidt := te.Fun.(*ast.Ident)
 	c.outf("((%s%s)(%s->fnptr))(%s->obj",
 		c.pkgpfx(), closi.fntype, fnidt.Name, fnidt.Name)
@@ -2391,7 +2364,7 @@ func (c *g2nc) genReturnStmt(scope *ast.Scope, e *ast.ReturnStmt) {
 					c.outeq()
 					c.outf("%s_new_zero()", strings.Trim(tystr, "*")).outfh().outnl()
 					undty := ne.Underlying().(*types.Interface)
-					c.outf("%s->data =", idt.Name)
+					c.outf("%s->thisptr =", idt.Name)
 					c.genExpr(scope, ae)
 					c.outfh().outnl()
 					if isnilident(ae) {
@@ -2579,9 +2552,6 @@ func (this *g2nc) genExpr2(scope *ast.Scope, e ast.Expr) {
 		idname := te.Name
 		idname = gopp.IfElseStr(idname == "nil", "nilptr", idname)
 		idname = gopp.IfElseStr(idname == "string", "cxstring*", idname)
-		if strings.HasPrefix(idname, "_Ctype_") {
-			idname = idname[7:]
-		}
 		eobj := this.info.ObjectOf(te)
 		log.Println(e, eobj, isglobalid(this.psctx, te))
 		if eobj != nil {
@@ -2591,7 +2561,7 @@ func (this *g2nc) genExpr2(scope *ast.Scope, e ast.Expr) {
 			}
 		}
 		// TODO 要查看是否有上级,否则无法判断包前缀
-		if strings.HasPrefix(idname, "_Cfunc_") || isglobalid(this.psctx, te) {
+		if isglobalid(this.psctx, te) {
 			eobj := this.info.ObjectOf(te)
 			if eobj != nil && eobj.Pkg().Name() == "C" {
 			} else {
@@ -2938,7 +2908,7 @@ func (this *g2nc) genExpr2(scope *ast.Scope, e ast.Expr) {
 		tystr := this.exprTypeName(scope, te.Type)
 		this.outf("(%s)(", tystr)
 		this.genExpr(scope, te.X)
-		this.out("->data)")
+		this.out("->thisptr)")
 	case *ast.ParenExpr:
 		this.out("(")
 		this.genExpr(scope, te.X)
@@ -3229,30 +3199,20 @@ func (this *g2nc) exprTypeNameImpl2(scope *ast.Scope, ety types.Type, e ast.Expr
 			if pkgo == nil { // builtin???
 				return teobj.Name() + "*"
 			}
-			return fmt.Sprintf("%s%s%s", pkgo.Name(), pkgsep, teobj.Name())
+			return fmt.Sprintf("%s%s%s*", pkgo.Name(), pkgsep, teobj.Name())
 		case *types.Struct:
 			tyname := teobj.Name()
-			if strings.HasPrefix(tyname, "_Ctype_") {
-				return fmt.Sprintf("%s%s%s", pkgo.Name(), pkgsep, tyname[7:])
-			}
 			if pkgo.Name() == "C" {
 				return fmt.Sprintf("%s", tyname)
 			}
 			return fmt.Sprintf("%s%s%s", pkgo.Name(), pkgsep, teobj.Name())
 		case *types.Basic:
-			tyname := teobj.Name()
-			if strings.HasPrefix(tyname, "_Ctype_") {
-				return tyname[7:]
-			}
 			if pkgo.Name() == "C" {
 				return undty.String()
 			}
 			return fmt.Sprintf("%s%s%s", pkgo.Name(), pkgsep, teobj.Name())
 		case *types.Array:
-			tyname := teobj.Name()
-			if strings.HasPrefix(tyname, "_Ctype_") {
-				return tyname[7:]
-			}
+			// tyname := teobj.Name()
 		default:
 			gopp.G_USED(ne)
 		}
@@ -3357,18 +3317,6 @@ func (this *g2nc) exprTypeFmt(scope *ast.Scope, e ast.Expr) string {
 			}
 		}
 	case *types.Named:
-		segs := strings.Split(te.String(), "._Ctype_")
-		if len(segs) == 2 {
-			switch segs[1] {
-			case "int", "int32", "int64", "long", "short":
-				return "d"
-			case "float", "double":
-				return "g"
-				// return "f"
-			default:
-				log.Println("todo", segs)
-			}
-		}
 		return "p"
 	case *types.Pointer:
 		return "p"
@@ -3530,7 +3478,7 @@ func (this *g2nc) genTypeSpec(scope *ast.Scope, spec *ast.TypeSpec) {
 		this.outf("typedef struct %s%s %s%s", this.pkgpfx(), spec.Name,
 			this.pkgpfx(), spec.Name).outfh().outnl()
 		this.outf("struct %s%s {", this.pkgpfx(), spec.Name).outnl()
-		this.out("voidptr value").outfh().outnl()
+		this.out("voidptr thisptr").outfh().outnl()
 		for _, fld := range te.Methods.List {
 			switch fldty := fld.Type.(type) {
 			case *ast.FuncType:

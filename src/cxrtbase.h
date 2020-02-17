@@ -152,7 +152,7 @@ extern cxarray2* cxstring_splitch(cxstring* s0, int s1);
 
 typedef struct error error;
 struct error {
-    void* data; // error's this object
+    void* thisptr; // error's this object
     cxstring*(*Error)(error*);
 };
 error* error_new_zero();

@@ -52,7 +52,7 @@ const (
 	Ptr
 	Chan
 	Func
-	Interface
+	// Interface
 )
 
 const (
@@ -167,3 +167,18 @@ func (mty *Metatype) KindName() string {
 
 func (mty *Metatype) sizeof() int  { return mty.Size }
 func (mty *Metatype) alignof() int { return mty.Align }
+
+type Interface struct {
+}
+
+func (ifc *Interface) Empty() bool {
+	return true
+}
+
+func (ifc *Interface) NumMethods() int {
+	return 0
+}
+
+func (ifc *Interface) NumEmbeddeds() int {
+	return 0
+}

@@ -105,7 +105,7 @@ error* error_new_zero() {
     return (error*)cxmalloc(sizeof(error));
 }
 cxstring* error_Error(error* err) {
-    return cxstring_new_cstr(err->data);
+    return cxstring_new_cstr(err->thisptr);
 }
 
 void printlndep(const char* fmt, ...) {
