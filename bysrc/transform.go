@@ -5,6 +5,7 @@ import (
 	"go/ast"
 	"go/printer"
 	"go/token"
+	"gopp"
 	"log"
 	"strings"
 
@@ -232,6 +233,113 @@ func (tf *TfTmpvars2) apply(ctx *TransformContext) {
 			// 检查每个元素是否是常量，IDENT
 			skip0 := false
 			if idt, ok := te.Fun.(*ast.Ident); ok {
+				if idt.Name == "ifelse" {
+					// log.Println("got ifelse", reftyof(c.Parent()))
+					var lexpr ast.Expr
+					var astok token.Token
+					pn := c.Parent()
+					switch pnty := pn.(type) {
+					case *ast.ExprStmt: // dont care value
+					case *ast.AssignStmt: // need value
+						gopp.Assert(len(pnty.Lhs) == 1, "not support")
+						lexpr = pnty.Lhs[0]
+						astok = pnty.Tok
+					default:
+						log.Panicln("not support", reftyof(pnty))
+					}
+					// 看是否能够查找出来表达式的值类型
+					var valty ast.Expr // 用于在 if () {} else {} 之外声明变量
+					for i := 1; i < len(te.Args); i++ {
+						if valty != nil {
+							break
+						}
+						ae := te.Args[i]
+						switch aty := ae.(type) {
+						case *ast.BasicLit:
+							switch aty.Kind {
+							case token.STRING:
+								valty = newIdent("string")
+							case token.INT:
+								valty = newIdent("int")
+							case token.FLOAT:
+								valty = newIdent("float64")
+							default:
+								log.Panicln("notimpl", aty.Kind)
+							}
+						case *ast.Ident:
+							obj := aty.Obj
+							if obj != nil && obj.Type != nil {
+								valty = obj.Type.(ast.Expr)
+							}
+						default:
+							log.Panicln("notimpl", reftyof(aty))
+						}
+					}
+					// 简单语法检查
+					if lexpr != nil && astok == token.DEFINE {
+						gopp.Assert(valty != nil, "wtfff", reftyof(te.Args[1]))
+					}
+
+					// if 语句之前的临时赋值变量
+					tmpidt := newIdent(tmpvarname())
+					tmpval := &ast.ValueSpec{}
+					tmpval.Type = valty
+					tmpval.Names = append(tmpval.Names, tmpidt)
+
+					// 转换成if语句
+					ifst := &ast.IfStmt{}
+					ifst.Cond = te.Args[0]
+					ifbody := &ast.BlockStmt{}
+					ifst.Body = ifbody
+					elbody := &ast.BlockStmt{}
+					ifst.Else = elbody
+
+					// 填充 if/else分支语句
+					if lexpr != nil {
+						as1 := newtmpassign(te.Args[1])
+						as2 := newtmpassign(te.Args[2])
+						ifbody.List = append(ifbody.List, as1)
+						elbody.List = append(elbody.List, as2)
+						as3 := newassign2(tmpidt, as1.Lhs[0])
+						as3.Tok = token.ASSIGN
+						as4 := newassign2(tmpidt, as2.Lhs[0])
+						as4.Tok = token.ASSIGN
+						ifbody.List = append(ifbody.List, as3)
+						elbody.List = append(elbody.List, as4)
+					} else {
+						exprst1 := &ast.ExprStmt{}
+						exprst2 := &ast.ExprStmt{}
+						exprst1.X = te.Args[1]
+						exprst2.X = te.Args[2]
+						ifbody.List = append(ifbody.List, exprst1)
+						elbody.List = append(elbody.List, exprst2)
+					}
+
+					if false {
+						log.Println(astnodestr(ctx.pc.fset, ifst, true))
+					}
+
+					tmpgend := &ast.GenDecl{}
+					tmpgend.Tok = token.VAR
+					tmpgend.Specs = append(tmpgend.Specs, tmpval)
+					tmpdecl := &ast.DeclStmt{}
+					tmpdecl.Decl = tmpgend
+					if lexpr != nil {
+						ctx.addline(c.Parent(), tmpdecl)
+					}
+					ctx.addline(c.Parent(), ifst)
+					// 替换当前表达式
+					if lexpr != nil {
+						c.Replace(tmpidt)
+					} else {
+						nop := &ast.BinaryExpr{Op: token.EQL}
+						nop.X = trueidt
+						nop.Y = trueidt
+						c.Replace(nop)
+					}
+
+					break
+				}
 				if funk.Contains([]string{"make"}, idt.Name) {
 					skip0 = true
 				}
@@ -240,10 +348,10 @@ func (tf *TfTmpvars2) apply(ctx *TransformContext) {
 				te.Fun = as.Lhs[0]
 				ctx.addline(te, as)
 			} else if selo, ok := te.Fun.(*ast.SelectorExpr); ok {
-				if idt, ok1 := selo.X.(*ast.Ident); ok1 &&
-					idt.Obj != nil && idt.Obj.Kind == ast.Typ {
+				xidt, ok1 := selo.X.(*ast.Ident)
+				if ok1 && xidt.Obj != nil && xidt.Obj.Kind == ast.Typ {
 					// tyfoo.bar() 静态调用 => (tyfoo{}).bar()
-					compexpr := &ast.CompositeLit{Type: idt}
+					compexpr := &ast.CompositeLit{Type: xidt}
 					andexpr := &ast.UnaryExpr{Op: token.AND, X: compexpr}
 					starexpr := &ast.StarExpr{X: &ast.ParenExpr{X: andexpr}}
 					starexpr.Star = te.Pos()

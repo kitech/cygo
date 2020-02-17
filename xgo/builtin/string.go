@@ -89,6 +89,10 @@ func (s string) Ptr() byteptr {
 	return s.ptr
 }
 func (s string) Len() int {
+	var saddr *voidptr = &s
+	if *saddr == nil {
+		return 0
+	}
 	return s.len
 }
 func (s string) cstr() byteptr {

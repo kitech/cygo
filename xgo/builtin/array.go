@@ -9,6 +9,7 @@ type mirarray struct {
 	len    int
 	cap    int
 	elemsz int
+	typ    *Metatype
 }
 
 func mirarray_new() *mirarray {
@@ -24,6 +25,10 @@ func mirarray_new2(cap int, elemsz int) *mirarray {
 		cap = 9
 	}
 	arr.cap = cap
+	return arr
+}
+func mirarray_new3(ty *Metatype) *mirarray {
+	arr := &mirarray{}
 	return arr
 }
 
@@ -63,7 +68,10 @@ func (arr *mirarray) delete(idx int) *mirarray {
 	return arr
 }
 
-func (arr *mirarray) append() *mirarray {
+func (arr *mirarray) append(v voidptr) *mirarray {
+	return arr
+}
+func (arr *mirarray) prepend(v voidptr) *mirarray {
 	return arr
 }
 
@@ -72,6 +80,12 @@ func (arr *mirarray) reverse() *mirarray {
 }
 
 func (arr *mirarray) clear() *mirarray {
+	if arr.len == 0 {
+		return arr
+	}
+	totsz := arr.len * arr.elemsz
+	memset3(arr.ptr, 0, totsz)
+	arr.len = 0
 	return arr
 }
 
@@ -90,6 +104,50 @@ func (arr *mirarray) slice(start int, end int) *mirarray {
 	memcpy3(newarr.ptr, voidptr(usize(arr.ptr)+usize(start)), end-start)
 	newarr.len = end - start
 	return newarr
+}
+
+// It takes a list as argument, and returns its first element.
+func (arr *mirarray) car() voidptr {
+	return nil
+}
+
+// It takes a list as argument, and returns a list without the first element
+func (arr *mirarray) cdr() *mirarray {
+	return nil
+}
+
+// cdr -> car
+func (arr *mirarray) cadr() voidptr {
+	return nil
+}
+
+func (arr *mirarray) exist(v voidptr) bool {
+	return false
+}
+
+func (arr *mirarray) first() voidptr {
+	return nil
+}
+func (arr *mirarray) last() voidptr {
+	return nil
+}
+
+// support idx < 0, then from last
+func (arr *mirarray) get(idx int) voidptr {
+	pos1 := arr.len + idx
+	var pos int
+	// pos := ifelse(idx < 0, arr.len+idx, idx) // TODO compiler
+	// pos := ifelse(idx < 0, pos1, idx) // TODO compiler
+	assert(pos >= 0)
+	assert(pos < arr.len)
+	return nil
+}
+
+func (arr *mirarray) left(n int) *mirarray {
+	return nil
+}
+func (arr *mirarray) right(n int) *mirarray {
+	return nil
 }
 
 // array.ptr()

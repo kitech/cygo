@@ -48,8 +48,6 @@ typedef void* voidptr;
 typedef char* byteptr;
 typedef char* charptr; // with tailing 0
 typedef void voidty;
-typedef int C_int;
-typedef unsigned int C_uint;
 
 #define nilptr NULL
 #define iota 0
@@ -125,7 +123,7 @@ void* cxmemdup(void* ptr, int sz);
 // cxstring begin
 typedef struct cxstring { char* ptr; int len; } cxstring;
 typedef struct cxarray2_s {
-    uint8* ptr;  int len;  int cap;  int elemsz;
+    uint8* ptr;  int len;  int cap;  int elemsz; voidptr typ;
 } cxarray2;
 typedef struct wideptr { voidptr ptr; voidptr obj; } wideptr;
 

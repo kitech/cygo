@@ -913,6 +913,8 @@ func trimcomment1(line string) string {
 	}
 	return line
 }
+
+// TODO some #define has \\
 func refmtdefineline(line string) string {
 	str := ""
 	lastsp := false

@@ -1,13 +1,17 @@
 package main
 
 import (
+	"bytes"
 	"fmt"
 	"go/ast"
+	"go/printer"
 	"go/token"
+	"gopp"
 	"log"
 	"path/filepath"
 	"reflect"
 	"strconv"
+	"strings"
 
 	"golang.org/x/tools/go/ast/astutil"
 )
@@ -180,4 +184,45 @@ func newLitBool(v bool) *ast.Ident {
 		return trueidt
 	}
 	return falseidt
+}
+
+func newnopexpr() ast.Expr {
+	nop := &ast.BinaryExpr{Op: token.EQL}
+	nop.X = trueidt
+	nop.Y = trueidt
+	return nop
+}
+func newnopstmt() ast.Stmt {
+	nopst := &ast.ExprStmt{}
+	nopst.X = newnopexpr()
+	return nopst
+}
+func newvarstmt(valty ast.Expr, varname string) ast.Stmt {
+	tmpidt := newIdent(varname)
+	tmpval := &ast.ValueSpec{}
+	tmpval.Type = valty
+	tmpval.Names = append(tmpval.Names, tmpidt)
+
+	tmpgend := &ast.GenDecl{}
+	tmpgend.Tok = token.VAR
+	tmpgend.Specs = append(tmpgend.Specs, tmpval)
+	tmpdecl := &ast.DeclStmt{}
+	tmpdecl.Decl = tmpgend
+
+	return tmpdecl
+}
+
+func astnodestr(fset *token.FileSet, node ast.Node, oneline bool) string {
+	buf := bytes.NewBuffer(nil)
+	err := printer.Fprint(buf, fset, node)
+	gopp.ErrPrint(err, reftyof(node))
+	str := string(buf.Bytes())
+	if oneline {
+		str = strings.ReplaceAll(str, "\n", " ")
+		str = strings.ReplaceAll(str, "\t", " ")
+		for strings.Contains(str, "  ") {
+			str = strings.ReplaceAll(str, "  ", " ")
+		}
+	}
+	return str
 }

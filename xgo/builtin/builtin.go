@@ -292,3 +292,6 @@ type mirerror struct {
 func error_Errorddd(err error) string {
 	return ""
 }
+
+// if only two arguments, then what?
+func ifelse(cond bool, expr1 Type, expr2 Type) Type

@@ -55,7 +55,12 @@
 
 ### Deps
 * go
-* gcc
-* tcc
-* tree-sitter
+* gcc 编译最终结果
+* tcc C语言宏预处理 gcc -E
+* tree-sitter 解析C符号类型
+
+### 目标语言 
+* [x] C
+* [ ] javascript/wasm
+* [ ] llvmir
 
