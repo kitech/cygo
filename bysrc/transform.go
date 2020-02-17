@@ -236,47 +236,26 @@ func (tf *TfTmpvars2) apply(ctx *TransformContext) {
 				if idt.Name == "ifelse" {
 					// log.Println("got ifelse", reftyof(c.Parent()))
 					var lexpr ast.Expr
-					var astok token.Token
 					pn := c.Parent()
 					switch pnty := pn.(type) {
 					case *ast.ExprStmt: // dont care value
 					case *ast.AssignStmt: // need value
 						gopp.Assert(len(pnty.Lhs) == 1, "not support")
 						lexpr = pnty.Lhs[0]
-						astok = pnty.Tok
 					default:
 						log.Panicln("not support", reftyof(pnty))
 					}
 					// 看是否能够查找出来表达式的值类型
 					var valty ast.Expr // 用于在 if () {} else {} 之外声明变量
 					for i := 1; i < len(te.Args); i++ {
+						ae := te.Args[i]
+						valty = exprtype(ae)
 						if valty != nil {
 							break
 						}
-						ae := te.Args[i]
-						switch aty := ae.(type) {
-						case *ast.BasicLit:
-							switch aty.Kind {
-							case token.STRING:
-								valty = newIdent("string")
-							case token.INT:
-								valty = newIdent("int")
-							case token.FLOAT:
-								valty = newIdent("float64")
-							default:
-								log.Panicln("notimpl", aty.Kind)
-							}
-						case *ast.Ident:
-							obj := aty.Obj
-							if obj != nil && obj.Type != nil {
-								valty = obj.Type.(ast.Expr)
-							}
-						default:
-							log.Panicln("notimpl", reftyof(aty))
-						}
 					}
 					// 简单语法检查
-					if lexpr != nil && astok == token.DEFINE {
+					if lexpr != nil {
 						gopp.Assert(valty != nil, "wtfff", reftyof(te.Args[1]))
 					}
 

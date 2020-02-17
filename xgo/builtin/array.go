@@ -134,10 +134,7 @@ func (arr *mirarray) last() voidptr {
 
 // support idx < 0, then from last
 func (arr *mirarray) get(idx int) voidptr {
-	pos1 := arr.len + idx
-	var pos int
-	// pos := ifelse(idx < 0, arr.len+idx, idx) // TODO compiler
-	// pos := ifelse(idx < 0, pos1, idx) // TODO compiler
+	pos := ifelse(idx < 0, arr.len+idx, idx)
 	assert(pos >= 0)
 	assert(pos < arr.len)
 	return nil

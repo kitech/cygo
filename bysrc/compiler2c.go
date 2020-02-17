@@ -1777,6 +1777,9 @@ func (c *g2nc) getCallExprAttr(scope *ast.Scope, te *ast.CallExpr) *FuncCallAttr
 		if idt, ok := fca.selfn.X.(*ast.Ident); ok {
 			fca.isbuiltin = idt.Name == "builtin"
 		}
+		fca.idtfn = fca.selfn.Sel
+	} else if idt, ok := te.Fun.(*ast.Ident); ok {
+		fca.idtfn = idt
 	}
 	gotyx := c.info.TypeOf(te.Fun)
 	if gotyx == nil {
@@ -1972,7 +1975,6 @@ func (c *g2nc) genCallExprNorm(scope *ast.Scope, te *ast.CallExpr) {
 
 }
 func (c *g2nc) genCallExprExceptionJump(scope *ast.Scope, te *ast.CallExpr) {
-	// funame := te.Fun.(*ast.Ident).Name
 	fca := c.getCallExprAttr(scope, te)
 	// gopp.Assert(!fca.isvardic, "moved", te.Fun)
 
@@ -1998,6 +2000,13 @@ func (c *g2nc) genCallExprExceptionJump(scope *ast.Scope, te *ast.CallExpr) {
 			c.genExpr(scope, fca.lexpr)
 		}
 		c.outfh().outnl()
+		// 如果是创建新的error对象，则放行, .New() error,
+		// 但太hacky了，需要更好的方式
+		if fca.fnty.Results().Len() == 1 &&
+			funk.Contains([]string{"New", "Wrap", "Errorf"}, fca.idtfn.Name) {
+			c.outf("gxtvtoperr =nilptr").outfh().outnl()
+		}
+
 		tmphaslval := tmptyname() + "lval"
 		c.outf("bool %v = %v", tmphaslval, fca.haslval).outfh().outnl()
 		c.outf("if (%v && gxtvtoperr != nilptr) {", tmphaslval).outnl()
@@ -2016,7 +2025,7 @@ func (c *g2nc) genCallExprExceptionJump(scope *ast.Scope, te *ast.CallExpr) {
 		fnrety := upfd.Type
 		if fnrety.Results == nil || len(fnrety.Results.List) == 0 {
 			c.outf(" // panic").outfh().outnl()
-			c.outf("panic(nilptr)").outfh().outnl()
+			c.outf("panic(0x1)").outfh().outnl()
 		} else if len(fnrety.Results.List) == 1 {
 			retfld := fnrety.Results.List[0]
 			if fmt.Sprintf("%v", retfld.Type) == "error" {
