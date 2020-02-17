@@ -799,6 +799,7 @@ func (c *g2nc) genAssignStmt(scope *ast.Scope, s *ast.AssignStmt) {
 		}
 		idxase, isidxas := s.Lhs[i].(*ast.IndexExpr) // index assign
 
+		mytyx := c.info.TypeOf(s.Lhs[i])
 		retyx := c.info.TypeOf(s.Rhs[i])
 		if ischrv {
 			if s.Tok == token.DEFINE {
@@ -847,12 +848,13 @@ func (c *g2nc) genAssignStmt(scope *ast.Scope, s *ast.AssignStmt) {
 			}
 			c.outf("cxfree(%s)", tvname).outfh().outnl()
 		} else if iserrorty2(retyx) {
+			// log.Panicln("TODO waitdep, after full iface assign support")
 			c.out("error*").outsp()
 			c.genExpr(scope, s.Lhs[i])
 			c.outeq()
 			lety := c.info.TypeOf(s.Lhs[i])
 			gopp.Assert(lety != nil, "wtfff", retyx, s.Rhs[i], s.Lhs[i])
-			if c.info.TypeOf(s.Rhs[i]) == c.info.TypeOf(s.Lhs[i]) {
+			if retyx == mytyx {
 				c.genExpr(scope, s.Rhs[i])
 			} else {
 				c.out("error_new_zero()").outfh().outnl()
@@ -863,6 +865,39 @@ func (c *g2nc) genAssignStmt(scope *ast.Scope, s *ast.AssignStmt) {
 				c.genExpr(scope, s.Lhs[i])
 				c.outf("->Error").outeq()
 				c.outf("%s_Error", strings.Trim(c.exprTypeName(scope, s.Rhs[i]), "*"))
+			}
+		} else if isiface2(mytyx) {
+			if retyx == mytyx {
+				c.genExpr(scope, s.Rhs[i])
+			} else {
+				// iface assign
+				c.genExpr(scope, s.Lhs[i])
+				c.outeq()
+				tystr := c.exprTypeName(scope, s.Lhs[i])
+				tystr = strings.Trim(tystr, "*")
+				c.outf("%s_new_zero()", tystr).outfh().outnl()
+				c.genExpr(scope, s.Lhs[i])
+				c.out("->thisptr /*ifaceas*/").outeq()
+				c.genExpr(scope, s.Rhs[i])
+				if isiface2(retyx) {
+					c.out("->thisptr")
+				}
+				c.outfh().outnl()
+				unty := mytyx.Underlying().(*types.Interface)
+				for j := 0; j < unty.NumMethods(); j++ {
+					mtho := unty.Method(j)
+					c.genExpr(scope, s.Lhs[i])
+					c.outf("->%v /*ifaceas*/ = ", mtho.Name())
+					if isiface2(retyx) {
+						c.genExpr(scope, s.Rhs[i])
+						c.out("->thisptr")
+					} else {
+						retystr := c.exprTypeName(scope, s.Rhs[i])
+						retystr = strings.TrimRight(retystr, "*")
+						c.outf("%s_%s", retystr, mtho.Name())
+					}
+					c.outfh().outnl()
+				}
 			}
 		} else if rety, ok := retyx.(*types.Signature); ok {
 			log.Println(s.Lhs[i], retyx, reftyof(retyx), rety, reftyof(s.Rhs[i]))
@@ -3581,8 +3616,6 @@ func (c *g2nc) genValueSpec(scope *ast.Scope, spec *ast.ValueSpec, validx int) {
 				c.out("HashTable*")
 			} else if ischanty2(varty) {
 				c.out("voidptr")
-			} else if strings.HasPrefix(vartystr, "C_struct_") {
-				c.out(vartystr[2:])
 			} else if strings.Contains(vartystr, "func(") {
 				tyname := tmpvarname()
 				c.outf("typedef voidptr (*%s)()", tyname).outfh().outnl()

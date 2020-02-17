@@ -55,19 +55,42 @@ func isarrayty(tystr string) bool {
 	}
 	return strings.HasPrefix(s, "[]") && !strings.HasPrefix(tystr, "[]")
 }
-func isarrayty2(typ types.Type) bool   { return isarrayty(typ.String()) }
-func iseface(tystr string) bool        { return strings.HasPrefix(tystr, "interface{}") }
-func iseface2(typ types.Type) bool     { return typ != nil && iseface(typ.String()) }
-func isiface(tystr string) bool        { return strings.HasPrefix(tystr, "interface{") }
-func isiface2(typ types.Type) bool     { return typ != nil && isiface(typ.String()) }
-func istypety(tystr string) bool       { return strings.HasPrefix(tystr, "type ") }
-func istypety2(typ types.Type) bool    { return istypety(typ.String()) }
-func ischanty(tystr string) bool       { return strings.HasPrefix(tystr, "chan ") }
-func ischanty2(typ types.Type) bool    { return ischanty(typ.String()) }
-func isvarty(tystr string) bool        { return strings.HasPrefix(tystr, "var ") }
-func isvarty2(typ types.Type) bool     { return isvarty(typ.String()) }
-func isstructty(tystr string) bool     { return strings.Contains(tystr, "/.") } // struct ???
-func isstructty2(typ types.Type) bool  { return isstructty(typ.String()) }
+func isarrayty2(typ types.Type) bool { return isarrayty(typ.String()) }
+func iseface(tystr string) bool      { return strings.HasPrefix(tystr, "interface{}") }
+func iseface2(typ types.Type) bool   { return typ != nil && iseface(typ.String()) }
+func isiface(tystr string) bool {
+	return strings.HasPrefix(tystr, "interface{") &&
+		!strings.HasPrefix(tystr, "interface{}")
+}
+func isiface2(typ types.Type) bool {
+	if typtr, ok := typ.(*types.Pointer); ok {
+		return isiface2(typtr.Elem())
+	}
+	tyn, ok := typ.(*types.Named)
+	if !ok {
+		return isiface(typ.String())
+	}
+	return typ != nil && isiface(tyn.Underlying().String())
+}
+func istypety(tystr string) bool    { return strings.HasPrefix(tystr, "type ") }
+func istypety2(typ types.Type) bool { return istypety(typ.String()) }
+func ischanty(tystr string) bool    { return strings.HasPrefix(tystr, "chan ") }
+func ischanty2(typ types.Type) bool { return ischanty(typ.String()) }
+func isvarty(tystr string) bool     { return strings.HasPrefix(tystr, "var ") }
+func isvarty2(typ types.Type) bool  { return isvarty(typ.String()) }
+func isstructty(tystr string) bool {
+	return strings.HasPrefix(tystr, "struct{")
+} // struct ???
+func isstructty2(typ types.Type) bool {
+	if typtr, ok := typ.(*types.Pointer); ok {
+		return isstructty2(typtr.Elem())
+	}
+	tyn, ok := typ.(*types.Named)
+	if !ok {
+		return isstructty(typ.String())
+	}
+	return isstructty(tyn.Underlying().String())
+}
 func isinvalidty(tystr string) bool    { return strings.HasPrefix(tystr, "invalid ") }
 func isinvalidty2(typ types.Type) bool { return isinvalidty(typ.String()) }
 func isuntypedty(tystr string) bool    { return strings.HasPrefix(tystr, "untyped ") }
