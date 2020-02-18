@@ -358,6 +358,10 @@ func (a *application) apply(parent ast.Node, name string, iter *iterator, n ast.
 		a.apply(n, "Init", nil, n.Init)
 		a.apply(n, "Tag", nil, n.Tag)
 		a.apply(n, "Body", nil, n.Body)
+	case *ast.CatchStmt:
+		a.apply(n, "Init", nil, n.Init)
+		a.apply(n, "Tag", nil, n.Tag)
+		a.apply(n, "Body", nil, n.Body)
 
 	case *ast.TypeSwitchStmt:
 		a.apply(n, "Init", nil, n.Init)
