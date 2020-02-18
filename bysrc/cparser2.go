@@ -15,6 +15,7 @@ import (
 	"runtime"
 	"strings"
 
+	"github.com/thoas/go-funk"
 	cc1x "github.com/xlab/c-for-go/parser"
 	cc1 "modernc.org/cc"
 	cc2 "modernc.org/cc/v2"
@@ -75,6 +76,32 @@ const codepfx = "#include <stdio.h>\n" +
 	"#include <cxrtbase.h>\n" +
 	"\n"
 
+var (
+	cxrtroot = "/home/me/oss/cxrt"
+)
+
+// 使用单独init函数名
+func init() { init_cxrtroot() }
+func init_cxrtroot() {
+	if !gopp.FileExist(cxrtroot) {
+		gopaths := gopp.Gopaths()
+		for _, gopath := range gopaths {
+			d := gopath + "/src/cxrt" // github actions runner
+			if gopp.FileExist(d) {
+				cxrtroot = d
+				break
+			}
+		}
+	}
+	for _, item := range []string{"src", "3rdparty/cltc/src", "3rdparty/cltc/include"} {
+		d := cxrtroot + "/" + item
+		if funk.Contains(preincdirs, d) {
+			continue
+		}
+		preincdirs = append(preincdirs, d)
+	}
+}
+
 var preincdirs = []string{"/home/me/oss/src/cxrt/src",
 	"/home/me/oss/src/cxrt/3rdparty/cltc/src",
 	"/home/me/oss/src/cxrt/3rdparty/cltc/src/include",
@@ -83,6 +110,7 @@ var preincdirs = []string{"/home/me/oss/src/cxrt/src",
 	"/usr/include/curl",
 }
 var presysincs = []string{"/usr/include", "/usr/local/include",
+	"/usr/include/x86_64-linux-gnu/", // ubuntu
 	"/usr/lib/gcc/x86_64-pc-linux-gnu/9.2.1/include"}
 
 // https://github.com/gcc-mirror/gcc/blob/master/gcc/memmodel.h

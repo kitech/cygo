@@ -34,7 +34,9 @@ jobs:
       - name: prep install
         run: |
           sudo apt install -y libxcb1-dev libxcb-xkb-dev libx11-xcb-dev libxcb-cursor-dev libxcb-render0-dev libxkbcommon-x11-dev libxkbcommon-dev libdbus-1-dev libcurl4-openssl-dev
+          sudo apt install -y tcc libtcc-dev
           sudo apt remove -y libgc1c2
+
       - name: build corona-c
         env:
           BINTRAY_APIKEY: ${{ secrets.BINTRAY_APIKEY }}
@@ -49,6 +51,7 @@ jobs:
           ./scripts/build-bysrc.sh
 
       - name: irc report
+        if: always()
         uses: rectalogic/notify-irc@v1
         with:
           #server: ${{ secrets.IRCSRV }}
@@ -56,6 +59,6 @@ jobs:
           tls: true
           channel: "#vknuts"
           nickname: gareport
-          message: finished https://github.com/${{ github.repository }}/commit/${{ github.sha }}/checks?check_suite_id=  https://github.com/${{ github.repository }}/commit/${{ github.sha }}/checks/0/logs
+          message: status ${{ job.status }} https://github.com/${{ github.repository }}/commit/${{ github.sha }}/checks?check_suite_id=  https://github.com/${{ github.repository }}/commit/${{ github.sha }}/checks/0/logs
 
 

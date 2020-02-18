@@ -155,13 +155,18 @@ func restorestdout(cfp *C.FILE) {
 	cmod := C.CString(mod)
 	defer C.free(unsafe.Pointer(cmod))
 
+	// TODO not work on github ubuntu runner
 	rv := C.freopen(cfilename, cmod, C.stdout)
-	log.Println(rv, rv != nil)
-	gopp.Assert(rv != nil, "wtfff")
-	C.fclose(cfp)
+	if rv == nil {
+		C.fclose(cfp)
+	} else {
+		log.Println(rv, rv != nil)
+		// gopp.Assert(rv != nil, "wtfff")
+	}
 }
 
 ///
+// TODO stdio.h:27: error: include file 'bits/libc-header-start.h' not found
 func tccpp(codebuf string, filename string, incdirs []string) error {
 	if true {
 		return tccppfly(codebuf, filename, incdirs)

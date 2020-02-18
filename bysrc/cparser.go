@@ -202,7 +202,7 @@ func (cp *cparser1) parsestr(code string) error {
 	log.Println("clrpp", cp.name, time.Since(btime))
 
 	btime = time.Now()
-	trn := cp.prsit.Parse(bcc)
+	trn := cp.prsit.Parse(nil, bcc)
 	cp.trn = trn
 	log.Println("trsit parse", cp.name, time.Since(btime))
 
