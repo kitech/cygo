@@ -3458,7 +3458,7 @@ func (this *g2nc) genTypeSpec(scope *ast.Scope, spec *ast.TypeSpec) {
 		this.outf(".tystr = \"%s%s\"", this.pkgpfx(), specname).outnl()
 		this.out("}").outfh().outnl()
 		this.outnl()
-		this.out("static").outsp()
+		// this.out("static").outsp()
 		this.outf("%s%s* %s%s_new_zero() {",
 			this.pkgpfx(), specname, this.pkgpfx(), specname).outnl()
 		this.outf("  %s%s* obj = (%s%s*)cxmalloc(sizeof(%s%s))",
@@ -3478,6 +3478,15 @@ func (this *g2nc) genTypeSpec(scope *ast.Scope, spec *ast.TypeSpec) {
 				} else if ischanty2(fldty) {
 					log.Println("how to", fld.Type.(*ast.ChanType).Value)
 					this.outf("obj->%s = cxrt_chan_new(0)", fldname.Name).outfh().outnl()
+				} else if isstructty2(fldty) {
+					tystr := this.exprTypeNameImpl2(scope, fldty, nil)
+					tystr = strings.TrimRight(tystr, "*")
+					// TODO function semantic order
+					this.outf("extern %s* %s_new_zero()", tystr, tystr).outfh().outnl()
+					// 像有些地方使用结构体字段是否nil做判断,
+					// 并且即使像python也不会自动初始化结构体成员的，默认是None
+					this.out("//").outsp()
+					this.outf("obj->%s = (voidptr) %s_new_zero()", fldname.Name, tystr).outfh().outnl()
 				}
 			}
 		}

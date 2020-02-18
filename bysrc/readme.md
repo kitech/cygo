@@ -39,6 +39,8 @@
 * [ ] 三元运算符号，值表达式只准使用常量或者ident
 * [ ] 生成 enum 名字
 * [ ] 如果没有return，则返回默认值
+* [ ] integer 类型的 minval()/maxval()方法，取各类型的最大值最小值 
+* [ ] 在结构体声明的时候，可以给成员赋初值,类py,rb。机制，默认初始化为0,如果为nil,则不初始化
 
 ### 语法树重写
 * [ ] 变量声明解构为每条语句一个变量，如果有多个的话
@@ -58,9 +60,10 @@
 * gcc 编译最终结果
 * tcc C语言宏预处理 gcc -E
 * tree-sitter 解析C符号类型
+* vendor/{go,internal} 来自 go 官方编译器源码，有些改动
 
 ### 目标语言 
 * [x] C
 * [ ] javascript/wasm
-* [ ] llvmir
+* [ ] llvmir https://godoc.org/llvm.org/llvm/bindings/go https://github.com/llir/llvm pure Go
 

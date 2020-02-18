@@ -130,7 +130,7 @@ func typesize(kind int) int {
 		// return sizeof(int) // TODO compiler
 		return sizeof(int(0))
 	case Voidptr:
-		return sizeof(voidptr(0))
+		return sizeof(voidptr(uintptr(0)))
 	}
 	return -1
 }
