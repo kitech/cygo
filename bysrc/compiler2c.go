@@ -3718,9 +3718,13 @@ func (c *g2nc) genValueSpec(scope *ast.Scope, spec *ast.ValueSpec, validx int) {
 			} else if ismapty2(varty) {
 				c.out("cxhashtable_new()")
 			} else if isstructty2(varty) {
-				tystr := c.exprTypeNameImpl2(scope, varty, varname)
-				tystr = strings.Trim(tystr, "*")
-				c.outf("%s_new_zero()", tystr)
+				if ok := ispointer2(varty); ok {
+					tystr := c.exprTypeNameImpl2(scope, varty, varname)
+					tystr = strings.Trim(tystr, "*")
+					c.outf("%s_new_zero()", tystr)
+				} else {
+					c.out(cuzero)
+				}
 			} else {
 				c.outf("%v /* 222 */", cuzero)
 			}

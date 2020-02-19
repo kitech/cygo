@@ -138,6 +138,11 @@ func iserrorty2(typ types.Type) bool {
 	return segs[len(segs)-1] == "error"
 }
 
+func ispointer2(typ types.Type) bool {
+	_, ok := typ.(*types.Pointer)
+	return ok
+}
+
 func typesty2str(typ types.Type) string {
 	ret := ""
 	switch aty := typ.(type) {
