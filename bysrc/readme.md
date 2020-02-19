@@ -40,6 +40,7 @@
 * [ ] 生成 enum 名字
 * [ ] 如果没有return，则返回默认值
 * [ ] integer 类型的 minval()/maxval()方法，取各类型的最大值最小值 
+* [ ] 结构体setfinalizer/setdtor方法
 * [ ] 在结构体声明的时候，可以给成员赋初值,类py,rb。机制，默认初始化为0,如果为nil,则不初始化
 
 ### 语法树重写
