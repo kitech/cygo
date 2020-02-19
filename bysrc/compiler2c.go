@@ -916,6 +916,41 @@ func (c *g2nc) genAssignStmt(scope *ast.Scope, s *ast.AssignStmt) {
 				c.genExpr(scope, s.Lhs[i])
 				c.out("").outeq()
 				c.outf("gxcallable_new(%s%s, %s)", c.pkgpfx(), closi.fnname, tmpvname)
+			case *ast.SelectorExpr: // in case method
+				ismth := true // how check
+				selxtyx := c.info.TypeOf(aty.X)
+				selxty2 := selxtyx.(*types.Pointer).Elem().(*types.Named).Underlying()
+				selxty3 := selxty2.(*types.Struct)
+				for j := 0; j < selxty3.NumFields(); j++ {
+					fvx := selxty3.Field(j)
+					// log.Println(j, fvx.Name(), fvx.Type())
+					if fvx.Name() == aty.Sel.Name {
+						ismth = false
+						break
+					}
+				}
+				// log.Println(selxtyx, reftyof(selxtyx), reftyof(selxty2))
+				if !ismth { // should be field, so just direct assign
+					if s.Tok == token.DEFINE {
+						c.out("__typeof__(")
+						c.genExpr(scope, aty)
+						c.out(")").outsp()
+					}
+					c.genExpr(scope, s.Lhs[i])
+					c.outeq()
+					c.genExpr(scope, s.Rhs[i])
+				} else {
+					if s.Tok == token.DEFINE {
+						c.out("gxcallable*").outsp()
+					}
+					c.genExpr(scope, s.Lhs[i])
+					c.out("").outeq()
+					tystr := c.exprTypeName(scope, aty.X)
+					tystr = strings.TrimRight(tystr, "*")
+					c.outf("gxcallable_new(%s%s%s,", tystr, mthsep, aty.Sel.Name)
+					c.genExpr(scope, aty.X)
+					c.out(")")
+				}
 			default:
 				if idt, ok := s.Rhs[i].(*ast.Ident); ok && idt.Obj.Kind == ast.Fun {
 					if s.Tok == token.DEFINE {

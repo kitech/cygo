@@ -63,7 +63,10 @@ func (t *Time) Unix() int64 {
 }
 
 func (t *Time) Iszero() bool {
-	if t != nil && t.unix > 0 {
+	if t == nil {
+		return true
+	}
+	if t.unix > 0 {
 		return false
 	}
 	return true

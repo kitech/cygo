@@ -154,6 +154,9 @@ type mirmap struct {
 
 	keyalg *typealg
 
+	keytyp *Metatype
+	valtyp *Metatype
+
 	bucketsz  int
 	threshold int
 	expcnt    int

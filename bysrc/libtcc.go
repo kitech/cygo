@@ -234,15 +234,25 @@ func xccppsave(codebuf string, filename string) (string, error) {
 	return srcfile, err
 }
 
-func tccppcmd(codebuf string, filename string, incdirs []string) error {
-	srcfile, err := xccppsave(codebuf, filename)
-	defer os.Remove(srcfile)
+// contains -Dfoo=1 -I bar
+func xccpp_cmd_args(isgcc bool, srcfile, filename string) []string {
 	var args []string
+	args = append(args, gopp.IfElseStr(isgcc, "gcc", "tcc"))
 	for _, incdir := range get_compile_incdirs(false) {
 		args = append(args, "-I", incdir)
 	}
+	for _, defitem := range get_compile_predefs() {
+		args = append(args, defitem)
+	}
 	args = append(args, "-E", "-o", filename, srcfile)
-	cmdo := exec.Command("tcc", args...)
+	return args
+}
+
+func tccppcmd(codebuf string, filename string, incdirs []string) error {
+	srcfile, err := xccppsave(codebuf, filename)
+	defer os.Remove(srcfile)
+	args := xccpp_cmd_args(false, srcfile, filename)
+	cmdo := exec.Command(args[0], args[1:]...)
 	errout, err := cmdo.CombinedOutput()
 	gopp.ErrPrint(err, cmdo.Path, cmdo.Args, string(errout))
 
@@ -252,12 +262,8 @@ func tccppcmd(codebuf string, filename string, incdirs []string) error {
 func gccppcmd(codebuf string, filename string, incdirs []string) error {
 	srcfile, err := xccppsave(codebuf, filename)
 	defer os.Remove(srcfile)
-	var args []string
-	for _, incdir := range get_compile_incdirs(true) {
-		args = append(args, "-I", incdir)
-	}
-	args = append(args, "-E", "-o", filename, srcfile)
-	cmdo := exec.Command("gcc", args...)
+	args := xccpp_cmd_args(true, srcfile, filename)
+	cmdo := exec.Command(args[0], args[1:]...)
 	errout, err := cmdo.CombinedOutput()
 	gopp.ErrPrint(err, cmdo.Path, cmdo.Args, string(errout))
 
@@ -306,6 +312,9 @@ func init_cxrtroot() {
 // default tcc
 func get_compile_incdirs(isgcc bool) []string {
 	var incdirs []string
+	wkdir, err := os.Getwd()
+	gopp.ErrPrint(err)
+	incdirs = append(incdirs, wkdir)
 
 	for _, item := range cxrtincs {
 		d := cxrtroot + "/" + item
@@ -321,6 +330,12 @@ func get_compile_incdirs(isgcc bool) []string {
 		incdirs = append(incdirs, "/usr/lib/tcc/include/")
 	}
 	return incdirs
+}
+
+// -Dfoo=1 -Dbar=2
+func get_compile_predefs() []string {
+	predefs := "-DGC_THREADS" // TODO auto from #cgo pragma
+	return strings.Fields(predefs)
 }
 
 // "-DFOO=1 -DBAR -DBAZ=fff"
