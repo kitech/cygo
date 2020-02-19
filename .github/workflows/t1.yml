@@ -5,11 +5,18 @@ jobs:
   job1st:
     name: job1st
     strategy:
+      fail-fast: false
       matrix:
         go-version: [1.13.x]
         #go-version: [1.12.x, 1.13.x]
         # platform: [ubuntu-latest, macos-latest, windows-latest]
-    runs-on: ubuntu-18.04
+        # platform: [ubuntu-latest, ubuntu-18.04, macos-latest]
+        platform: [ubuntu-18.04, ubuntu-16.04, macos-latest, windows-latest]
+    runs-on: ${{ matrix.platform }}
+    #runs-on: ubuntu-18.04
+    #runs-on: [ubuntu-18.04, macos-latest]
+    #runs-on: macos-latest
+
     steps:
       - name: Install Go
         uses: actions/setup-go@v1
@@ -18,7 +25,12 @@ jobs:
       - name: Checkout
         uses: actions/checkout@master
 
-      - name: runmysh
+      - name: runmysh-win
+        if: matrix.platform == 'windows-latest'
+        run: dir
+
+      - name: runmysh-nowin
+        if: matrix.platform != 'windows-latest'
         run: |
           env
           date
@@ -28,20 +40,18 @@ jobs:
           echo '====='
           pwd && ls -lh ../..
           ./scripts/date.sh
-          mkdir /opt/test1
+          mkdir /opt/test1 || echo "mkdir error, noperm write /opt/"
+          sudo mkdir /opt/test2 || echo "mkdir error2, noperm write /opt/"
           cat ${{ runner.temp }}/_github_workflow/event.json
 
       - name: prep install
-        run: |
-          sudo apt install -y libxcb1-dev libxcb-xkb-dev libx11-xcb-dev libxcb-cursor-dev libxcb-render0-dev libxkbcommon-x11-dev libxkbcommon-dev libdbus-1-dev libcurl4-openssl-dev
-          sudo apt install -y tcc libtcc-dev
-          sudo apt remove -y libgc1c2
+        run: ./scripts/preinstall.sh
 
       - name: build corona-c
         env:
           BINTRAY_APIKEY: ${{ secrets.BINTRAY_APIKEY }}
         run: |
-          ./scripts/build-libgc-8.0.4x.sh
+          # ./scripts/build-libgc-8.0.4x.sh
           make -C corona-c
 
       - name: build bysrc
@@ -59,6 +69,6 @@ jobs:
           tls: true
           channel: "#vknuts"
           nickname: gareport
-          message: status ${{ job.status }} https://github.com/${{ github.repository }}/commit/${{ github.sha }}/checks?check_suite_id=  https://github.com/${{ github.repository }}/commit/${{ github.sha }}/checks/0/logs
+          message: status ${{ matrix.platform }} ${{ job.status }} https://github.com/${{ github.repository }}/commit/${{ github.sha }}/checks?check_suite_id=  https://github.com/${{ github.repository }}/commit/${{ github.sha }}/checks/0/logs
 
 

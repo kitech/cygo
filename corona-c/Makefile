@@ -4,7 +4,12 @@
 # win上能用的是啥
 # GC_THREADS not GC_PTHREADS
 # -finstrument-functions
-CFLAGS=-g -O0 -std=c11 -D_GNU_SOURCE -DNRDEBUG -DCORO_STACKALLOC -DCORO_UCONTEXT -DHAVE_UCONTEXT_H -DHAVE_SETJMP_H -DHAVE_SIGALTSTACK -I. -I../3rdparty/cltc/src -DGC_THREADS -fstack-usage # -finstrument-functions
+# TODO -fstack-usage not work on macos
+# TODO ucontex hard depcreated on macos
+MAC_CFLAGS=-D_XOPEN_SOURCE
+LNX_CFLAGS=-fstack-usage
+CFLAGS=-g -O0 -std=c11 -D_GNU_SOURCE -DNRDEBUG -DCORO_STACKALLOC -DCORO_UCONTEXT -DHAVE_UCONTEXT_H -DHAVE_SETJMP_H -DHAVE_SIGALTSTACK -I. -I../3rdparty/cltc/src -DGC_THREADS ${MAC_CFLAGS} # -finstrument-functions
+
 # -I../bdwgc/include
 # -L ../bdwgc/.libs
 LDFLAGS=-levent -levent_pthreads -lgc -lpthread -ldl -Wl,--export-dynamic
