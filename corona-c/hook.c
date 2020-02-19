@@ -27,8 +27,6 @@
 #endif
 
 pipe_t pipe_f = NULL;
-inotify_init_t inotify_init_f = NULL;
-inotify_init1_t inotify_init1_f = NULL;
 socket_t socket_f = NULL;
 socketpair_t socketpair_f = NULL;
 connect_t connect_f = NULL;
@@ -74,6 +72,9 @@ pcond_signal_t pcond_signal_f = NULL;
 pcond_broadcast_t pcond_broadcast_f = NULL;
 
 #if defined(LIBGO_SYS_Linux)
+inotify_init_t inotify_init_f = NULL;
+inotify_init1_t inotify_init1_f = NULL;
+
 pipe2_t pipe2_f = NULL;
 gethostbyname_r_t gethostbyname_r_f = NULL;
 gethostbyname2_r_t gethostbyname2_r_f = NULL;
@@ -458,7 +459,14 @@ ssize_t send(int sockfd, const void *buf, size_t len, int flags)
     if (!crn_in_procer()) return send_f(sockfd, buf, len, flags);
     // linfo("%d %d %d fdnb=%d\n", sockfd, len, flags, fd_is_nonblocking(sockfd));
 
-    flags |= MSG_NOSIGNAL; // fix SIGPIPE and exit with errro code 141
+    int msgnosig = 0;
+#ifdef __APPLE__
+#elif _WIN32
+#else
+    msgnosig = MSG_NOSIGNAL;
+#endif
+
+    flags |= msgnosig; // fix SIGPIPE and exit with errro code 141
     while (true) {
         ssize_t rv = send_f(sockfd, buf, len, flags);
         int eno = rv < 0 ? errno : 0;
@@ -519,6 +527,15 @@ ssize_t sendmsg(int sockfd, const struct msghdr *msg, int flags)
 
 
 static int getiocinq(int fd)  {
+    // fix macos
+#ifndef TIOCINQ
+#ifdef FIONREAD
+#define TIOCINQ FIONREAD
+#else
+#define TIOCINQ 0x541B
+#endif
+#endif
+
     int val = 0;
     int rv = ioctl_f(fd, TIOCINQ, &val);
     if (rv == -1) {
@@ -1266,8 +1283,6 @@ static int doInitHook()
 
     if (connect_f) {
         pipe_f = (pipe_t)dlsym(RTLD_NEXT, "pipe");
-        inotify_init_f = (inotify_init_t)dlsym(RTLD_NEXT, "inotify_init");
-        inotify_init1_f = (inotify_init1_t)dlsym(RTLD_NEXT, "inotify_init1");
         socket_f = (socket_t)dlsym(RTLD_NEXT, "socket");
         socketpair_f = (socketpair_t)dlsym(RTLD_NEXT, "socketpair");
         connect_f = (connect_t)dlsym(RTLD_NEXT, "connect");
@@ -1312,6 +1327,8 @@ static int doInitHook()
         pcond_broadcast_f = (pcond_broadcast_t)dlsym(RTLD_NEXT, "pthread_cond_broadcast");
 
 #if defined(LIBGO_SYS_Linux)
+        inotify_init_f = (inotify_init_t)dlsym(RTLD_NEXT, "inotify_init");
+        inotify_init1_f = (inotify_init1_t)dlsym(RTLD_NEXT, "inotify_init1");
         pipe2_f = (pipe2_t)dlsym(RTLD_NEXT, "pipe2");
         gethostbyname_r_f = (gethostbyname_r_t)dlsym(RTLD_NEXT, "gethostbyname_r");
         gethostbyname2_r_f = (gethostbyname2_r_t)dlsym(RTLD_NEXT, "gethostbyname2_r");

@@ -331,7 +331,12 @@ error unknown or unsupported architecture
 
 #if CORO_UCONTEXT
 
+#ifdef __APPLE__
+// TODO for macos, avoid "ucontext routines are deprecated"
+# include <sys/ucontext.h>
+#else
 # include <ucontext.h>
+#endif
 
 struct coro_context
 {

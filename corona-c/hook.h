@@ -7,7 +7,14 @@
 #include <netdb.h>
 #include <poll.h>
 
+#ifdef __APPLE__
+#define LIBGO_SYS_Macos
+#elif _WIN32
+#define LIBGO_SYS_Windows
+#else
 #define LIBGO_SYS_Linux
+#endif
+
 #include <pthread.h>
 #if defined(LIBGO_SYS_Linux)
 #include <sys/epoll.h>
