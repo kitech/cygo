@@ -55,7 +55,7 @@ typedef void voidty;
 typedef uint8 metaflag;
 typedef int typealg;
 typedef struct _metatype {
-    usize size;
+    int size;
     voidptr ptrdata;
     uint32 hash;
     metaflag tflag;

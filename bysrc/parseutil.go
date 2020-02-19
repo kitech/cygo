@@ -56,7 +56,7 @@ func cltbuiltin_methods(builtin_pkgpath string) map[string][]*ast.FuncDecl {
 					mths[recvty_str] = append(mths[recvty_str], fndecl)
 				case "mirmap":
 					mths["map"] = append(mths["map"], fndecl)
-				case "mirarray":
+				case "cxarray3":
 					mths["array"] = append(mths["array"], fndecl)
 				default:
 					mths[recvty_str] = append(mths[recvty_str], fndecl)
@@ -170,7 +170,7 @@ func tyname2typobj(tyname string, tyexpr ast.Expr) types.Type {
 		} else {
 			typobj = types.NewSlice(voidptrty)
 		}
-	case "mirarray":
+	case "cxarray3":
 		typobj = types.NewSlice(voidptrty)
 	case "f64":
 		typobj = types.Typ[types.Float64]

@@ -4,7 +4,8 @@ package builtin
  */
 import "C"
 
-type mirarray struct {
+// 定义为array3，比 array2多了类型信息
+type cxarray3 struct {
 	ptr    voidptr
 	len    int
 	cap    int
@@ -12,74 +13,82 @@ type mirarray struct {
 	typ    *Metatype
 }
 
-func mirarray_new() *mirarray {
-	arr := &mirarray{}
-	return arr
-}
-func mirarray_new2(cap int, elemsz int) *mirarray {
-	arr := &mirarray{}
+func cxarray3_new2(cap int, elemsz int) *cxarray3 {
+	arr := &cxarray3{}
 	arr.elemsz = elemsz
 	len := cap
 	arr.len = len
-	if cap < 8 {
-		cap = 9
-	}
+	cap = ifelse(cap < 8, 9, cap)
 	arr.cap = cap
-	return arr
-}
-func mirarray_new3(ty *Metatype) *mirarray {
-	arr := &mirarray{}
-	return arr
-}
 
-func (arr *mirarray) dummy() {
-
-}
-
-func (arr *mirarray) each(fn func(idx int, elem voidptr)) {
-
-}
-
-func (arr *mirarray) mapfn(fn func(idx int, elem voidptr) *mirarray) {
-
-}
-
-func (arr *mirarray) reduce(fn func(idx int, elem voidptr) bool) {
-
-}
-func (arr *mirarray) filter(fn func(idx int, elem voidptr) bool) {
-
-}
-
-func (arr *mirarray) Ptr() voidptr {
-	return arr.ptr
-}
-func (arr *mirarray) Len() int {
-	return arr.len
-}
-func (arr *mirarray) Cap() int {
-	return arr.cap
-}
-func (arr *mirarray) Elemsz() int {
-	return arr.elemsz
-}
-
-func (arr *mirarray) delete(idx int) *mirarray {
+	sz := cap * elemsz
+	arr.ptr = malloc3(sz)
 	return arr
 }
 
-func (arr *mirarray) append(v voidptr) *mirarray {
-	return arr
-}
-func (arr *mirarray) prepend(v voidptr) *mirarray {
-	return arr
-}
-
-func (arr *mirarray) reverse() *mirarray {
+//export cxarray3_new
+func cxarray3_new3(cap int, ty *Metatype) *cxarray3 {
+	arr := cxarray3_new2(cap, ty.Size)
+	arr.typ = ty
 	return arr
 }
 
-func (arr *mirarray) clear() *mirarray {
+func (arr *cxarray3) dummy() {
+
+}
+
+func (arr *cxarray3) each(fn func(idx int, elem voidptr)) {
+
+}
+
+func (arr *cxarray3) mapfn(fn func(idx int, elem voidptr) *cxarray3) {
+
+}
+
+func (arr *cxarray3) reduce(fn func(idx int, elem voidptr) bool) {
+
+}
+func (arr *cxarray3) filter(fn func(idx int, elem voidptr) bool) {
+
+}
+
+func (arr *cxarray3) Ptr() voidptr { return arr.ptr }
+func (arr *cxarray3) Len() int     { return arr.len }
+func (arr *cxarray3) Cap() int     { return arr.cap }
+func (arr *cxarray3) Elemsz() int  { return arr.elemsz }
+
+func (a0 *cxarray3) expand(n int) {
+	assert(n > 0)
+	sz := a0.len + n
+	if sz >= a0.cap {
+		cap := a0.cap * 2
+		cap = ifelse(cap <= 0, n, cap)
+		cap = ifelse(cap <= sz, cap*2, cap)
+		ptr := malloc3(cap * a0.elemsz)
+		memcpy3(ptr, a0.ptr, a0.len*a0.elemsz)
+		a0.ptr = ptr
+		a0.cap = cap
+	}
+	assert(a0.cap >= a0.len+n)
+}
+
+//export cxarray3_append
+func (a0 *cxarray3) append(v voidptr) *cxarray3 {
+	assert(a0 != nil)
+	assert(v != nil)
+	a0.expand(1)
+	offset := a0.len * a0.elemsz
+	dstptr := voidptr(usize(a0.ptr) + usize(offset))
+	memcpy3(dstptr, v, a0.elemsz)
+	a0.len += 1
+	return a0
+}
+func (arr *cxarray3) prepend(v voidptr) *cxarray3 {
+	return arr
+}
+
+//export cxarray3_clear
+func (arr *cxarray3) clear() *cxarray3 {
 	if arr.len == 0 {
 		return arr
 	}
@@ -89,79 +98,73 @@ func (arr *mirarray) clear() *mirarray {
 	return arr
 }
 
-func (arr *mirarray) join(sep string) string {
+//export cxarray2_clear
+func (arr *cxarray3) clear2() *cxarray3 {
+	if arr.len == 0 {
+		return arr
+	}
+	totsz := arr.len * arr.elemsz
+	memset3(arr.ptr, 0, totsz)
+	arr.len = 0
+	return arr
+}
+
+func (arr *cxarray3) join(sep string) string {
 	return ""
 }
 
-//export cxarray2_slice2
-func (arr *mirarray) slice(start int, end int) *mirarray {
+//export cxarray3_slice
+func (arr *cxarray3) slice(start int, end int) *cxarray3 {
 	assert(arr != nil)
 	assert(start >= 0)
 	assert(end >= 0)
 	assert(end >= start)
 
-	newarr := mirarray_new2(end-start+1, arr.elemsz)
+	newarr := cxarray3_new3(end-start+1, arr.typ)
 	memcpy3(newarr.ptr, voidptr(usize(arr.ptr)+usize(start)), end-start)
 	newarr.len = end - start
 	return newarr
 }
 
 // It takes a list as argument, and returns its first element.
-func (arr *mirarray) car() voidptr {
+func (arr *cxarray3) car() voidptr {
 	return nil
 }
 
 // It takes a list as argument, and returns a list without the first element
-func (arr *mirarray) cdr() *mirarray {
+func (arr *cxarray3) cdr() *cxarray3 {
 	return nil
 }
 
 // cdr -> car
-func (arr *mirarray) cadr() voidptr {
+func (arr *cxarray3) cadr() voidptr {
 	return nil
 }
 
-func (arr *mirarray) exist(v voidptr) bool {
-	return false
-}
-
-func (arr *mirarray) first() voidptr {
-	return nil
-}
-func (arr *mirarray) last() voidptr {
+func (arr *cxarray3) first() voidptr {
 	return nil
 }
 
 // support idx < 0, then from last
-func (arr *mirarray) get(idx int) voidptr {
-	pos := ifelse(idx < 0, arr.len+idx, idx)
+//export array3_get_at
+func (a0 *cxarray3) get(idx int) *voidptr {
+	assert(a0 != nil)
+	pos := ifelse(idx < 0, a0.len+idx, idx)
 	assert(pos >= 0)
-	assert(pos < arr.len)
-	return nil
-}
+	assert(pos < a0.len)
 
-func (arr *mirarray) left(n int) *mirarray {
-	return nil
-}
-func (arr *mirarray) right(n int) *mirarray {
-	return nil
+	offset := pos * a0.elemsz
+	var out *voidptr
+	out = a0.ptr + offset
+	return out
 }
 
 // array.ptr()
 
-//export cxarray2_ptr
-func cxarray2_ptr(arrx voidptr) voidptr {
-	var arr *mirarray
-	arr = (*mirarray)(arrx)
-	return arr.ptr
-}
-
-//export cxarray2_delete
-func cxarray2_delete(arrx voidptr, idx int) voidptr {
-	assert(arrx != nil)
+//export cxarray3_delete
+func (arr *cxarray3) delete(idx int) *cxarray3 {
+	assert(arr != nil)
 	assert(idx >= 0)
-	var arr *mirarray
-	arr = (*mirarray)(arrx)
 	if idx > arr.len-1 {
 	} else if idx == arr.len-1 {
 		arr.len -= 1
@@ -173,27 +176,11 @@ func cxarray2_delete(arrx voidptr, idx int) voidptr {
 		C.memmove(offset1, offset2, cpsz)
 		arr.len -= 1
 	}
-	return arrx
+	return arr
 }
 
-//export cxarray2_clear
-func cxarray2_clear(arrx voidptr) voidptr {
-	var arr *mirarray
-	arr = (*mirarray)(arrx)
-
-	alen := arr.len
-	arr.len = 0
-
-	opsz := alen * arr.elemsz
-	C.memset(arr.ptr, 0, opsz)
-	return arrx
-}
-
-//export cxarray2_reverse
-func cxarray2_reverse(arrx voidptr) voidptr {
-	var arr *mirarray
-	arr = (*mirarray)(arrx)
-
+//export cxarray3_reverse
+func (arr *cxarray3) reverse() *cxarray3 {
 	mem := malloc3(arr.elemsz)
 	alen := arr.len
 	for i := 0; i < alen/2; i++ {
@@ -205,34 +192,28 @@ func cxarray2_reverse(arrx voidptr) voidptr {
 		memcpy3(offset2, mem, arr.elemsz)
 	}
 
-	return arrx
+	return arr
 }
 
-//export cxarray2_left
-func cxarray2_left(arrx voidptr, count int) voidptr {
+//export cxarray3_left
+func (arr *cxarray3) left(count int) *cxarray3 {
 	if count <= 0 {
-		return arrx
+		return arr
 	}
-
-	var arr *mirarray
-	arr = (*mirarray)(arrx)
 
 	clrsz := (arr.len - count) * arr.elemsz
 	arr.len = count
 	offset1 := voidptr(usize(arr.ptr) + usize((count-1)*arr.elemsz))
 	memset3(offset1, 0, clrsz)
 
-	return arrx
+	return arr
 }
 
-//export cxarray2_right
-func cxarray2_right(arrx voidptr, count int) voidptr {
+//export cxarray3_right
+func (arr *cxarray3) right(count int) *cxarray3 {
 	if count <= 0 {
-		return arrx
+		return nil
 	}
-
-	var arr *mirarray
-	arr = (*mirarray)(arrx)
 
 	clrsz := (arr.len - count) * arr.elemsz
 	cpsz := count * arr.elemsz
@@ -242,24 +223,18 @@ func cxarray2_right(arrx voidptr, count int) voidptr {
 	memmove3(arr.ptr, offset1, cpsz)
 	memset3(offset2, 0, clrsz)
 
-	return arrx
+	return arr
 }
 
-//export cxarray2_mid
-func cxarray2_mid(arrx voidptr, low int, high int) voidptr {
-	var arr *mirarray
-	arr = (*mirarray)(arrx)
-
+//export cxarray3_mid
+func (arr *cxarray3) mid(low int, high int) *cxarray3 {
 	// TODO
 
-	return arrx
+	return arr
 }
 
-//export cxarray2_last
-func cxarray2_last(arrx voidptr) voidptr {
-	var arr *mirarray
-	arr = (*mirarray)(arrx)
-
+//export cxarray3_last
+func (arr *cxarray3) last() voidptr {
 	if arr.len == 0 {
 		return nil
 	}
@@ -270,11 +245,8 @@ func cxarray2_last(arrx voidptr) voidptr {
 
 // TODO support string?
 
-//export cxarray2_has
-func cxarray2_has(arrx voidptr, elem voidptr) bool {
-	var arr *mirarray
-	arr = (*mirarray)(arrx)
-
+//export cxarray3_exist
+func (arr *cxarray3) exist(elem voidptr) bool {
 	if arr.len == 0 {
 		return false
 	}
@@ -288,10 +260,4 @@ func cxarray2_has(arrx voidptr, elem voidptr) bool {
 		}
 	}
 	return false
-}
-
-// TODO
-func cxarray2_append(arrx voidptr, elem voidptr) voidptr {
-	//arrx = append(arrx, elem)
-	return arrx
 }

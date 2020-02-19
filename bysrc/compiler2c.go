@@ -63,6 +63,7 @@ func (this *g2nc) genpkgs() {
 const pkgsep = "__"  // between pkg and type/function
 const mthsep = "_"   // between type and method
 const cuzero = "{0}" // pointer, array, struct?
+const stzero = "{}"
 const cmtpfx = "//"
 
 func (c *g2nc) pkgpfx() string {
@@ -915,7 +916,7 @@ func (c *g2nc) genAssignStmt(scope *ast.Scope, s *ast.AssignStmt) {
 				}
 				c.genExpr(scope, s.Lhs[i])
 				c.out("").outeq()
-				c.outf("gxcallable_new(%s%s, %s)", c.pkgpfx(), closi.fnname, tmpvname)
+				c.outf("gxcallable_new((voidptr)&%s%s, %s)", c.pkgpfx(), closi.fnname, tmpvname)
 			case *ast.SelectorExpr: // in case method
 				ismth := true // how check
 				selxtyx := c.info.TypeOf(aty.X)
@@ -947,7 +948,7 @@ func (c *g2nc) genAssignStmt(scope *ast.Scope, s *ast.AssignStmt) {
 					c.out("").outeq()
 					tystr := c.exprTypeName(scope, aty.X)
 					tystr = strings.TrimRight(tystr, "*")
-					c.outf("gxcallable_new(%s%s%s,", tystr, mthsep, aty.Sel.Name)
+					c.outf("gxcallable_new((voidptr)&%s%s%s,", tystr, mthsep, aty.Sel.Name)
 					c.genExpr(scope, aty.X)
 					c.out(")")
 				}
@@ -958,7 +959,7 @@ func (c *g2nc) genAssignStmt(scope *ast.Scope, s *ast.AssignStmt) {
 					}
 					c.genExpr(scope, s.Lhs[i])
 					c.out("").outeq()
-					c.outf("gxcallable_new(%s%s_gxcallable, nilptr)", c.pkgpfx(), idt.Name)
+					c.outf("gxcallable_new((voidptr)&%s%s_gxcallable, nilptr)", c.pkgpfx(), idt.Name)
 				} else {
 					if s.Tok == token.DEFINE {
 						c.out("__typeof__(")
@@ -3723,7 +3724,7 @@ func (c *g2nc) genValueSpec(scope *ast.Scope, spec *ast.ValueSpec, validx int) {
 					tystr = strings.Trim(tystr, "*")
 					c.outf("%s_new_zero()", tystr)
 				} else {
-					c.out(cuzero)
+					c.out(stzero)
 				}
 			} else {
 				c.outf("%v /* 222 */", cuzero)
@@ -3828,6 +3829,7 @@ typedef void voidty;
 #define have_gxcallbale
 typedef struct gxcallable gxcallable;
 struct gxcallable {voidptr obj; voidptr fnptr; };
+extern voidptr gxcallable_new(voidptr fnptr, voidptr obj);
 #endif
 `
 	return precgodefs

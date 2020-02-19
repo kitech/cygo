@@ -66,7 +66,7 @@ const (
 )
 
 type Metatype struct {
-	Size       uintptr  // type size
+	Size       int      // type size
 	Ptrdata    uintptr  // size of memory prefix holding all pointers
 	Hash       uint32   // hash of type; avoids computation in hash tables
 	Tflag      uint8    // tflag   // extra type information flags
