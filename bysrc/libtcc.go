@@ -85,10 +85,13 @@ func (tcc *Tcc) AddSysIncdirs(dirs ...string) {
 }
 
 ///
+// temporary disable this for signature not match in some env
 func (tcc *Tcc) AddFile(filename string) int {
 	cfilename := C.CString(filename)
 	defer cgopp.Cfree3(cfilename)
-	rv := C.tcc_add_file(tcc.cobj, cfilename)
+	log.Panicln("todo")
+	rv := 0
+	// rv := C.tcc_add_file(tcc.cobj, cfilename)
 	return int(rv)
 }
 func (tcc *Tcc) CompileStr(buf string) int {
@@ -235,7 +238,7 @@ func tccppcmd(codebuf string, filename string, incdirs []string) error {
 	srcfile, err := xccppsave(codebuf, filename)
 	defer os.Remove(srcfile)
 	var args []string
-	for _, incdir := range append(cp1_preincdirs, presysincs...) {
+	for _, incdir := range get_compile_incdirs(false) {
 		args = append(args, "-I", incdir)
 	}
 	args = append(args, "-E", "-o", filename, srcfile)
@@ -250,7 +253,7 @@ func gccppcmd(codebuf string, filename string, incdirs []string) error {
 	srcfile, err := xccppsave(codebuf, filename)
 	defer os.Remove(srcfile)
 	var args []string
-	for _, incdir := range append(preincdirs, presysincs...) {
+	for _, incdir := range get_compile_incdirs(true) {
 		args = append(args, "-I", incdir)
 	}
 	args = append(args, "-E", "-o", filename, srcfile)
@@ -261,16 +264,16 @@ func gccppcmd(codebuf string, filename string, incdirs []string) error {
 	return err
 }
 
-var preincdirs = []string{"/home/me/oss/src/cxrt/src",
-	"/home/me/oss/src/cxrt/3rdparty/cltc/src",
-	"/home/me/oss/src/cxrt/3rdparty/cltc/src/include",
-	//	"/home/me/oss/src/cxrt/3rdparty/tcc",
+var preincdirs = []string{cxrtroot + "/src",
+	cxrtroot + "/3rdparty/cltc/src",
+	cxrtroot + "/3rdparty/cltc/src/include",
+	// cxrtroot+"/3rdparty/tcc",
 	"/usr/include/gc",
 	"/usr/include/curl",
 }
 var presysincs = []string{"/usr/include", "/usr/local/include",
 	"/usr/include/x86_64-linux-gnu/", // ubuntu
-	"/usr/lib/gcc/x86_64-pc-linux-gnu/9.2.1/include"}
+}
 
 const codepfx = "#include <stdio.h>\n" +
 	"#include <stdlib.h>\n" +
@@ -281,9 +284,9 @@ const codepfx = "#include <stdio.h>\n" +
 	"#include <cxrtbase.h>\n" +
 	"\n"
 
-var cxrtroot = "/home/me/oss/cxrt"
+var cxrtroot = "/home/none/oss/cxrt" // not exist one, force dynamic populate
 
-var cp1_preincdirs = append(preincdirs, "/home/me/oss/src/cxrt/3rdparty/tcc")
+var cxrtincs = []string{"src", "3rdparty/cltc/src", "3rdparty/cltc/include"}
 
 // 使用单独init函数名
 func init() { init_cxrtroot() }
@@ -298,13 +301,26 @@ func init_cxrtroot() {
 			}
 		}
 	}
-	for _, item := range []string{"src", "3rdparty/cltc/src", "3rdparty/cltc/include"} {
+}
+
+// default tcc
+func get_compile_incdirs(isgcc bool) []string {
+	var incdirs []string
+
+	for _, item := range cxrtincs {
 		d := cxrtroot + "/" + item
-		if funk.Contains(preincdirs, d) {
+		if funk.Contains(incdirs, d) {
 			continue
 		}
-		preincdirs = append(preincdirs, d)
+		incdirs = append(incdirs, d)
 	}
+	if isgcc {
+		incdirs = append(incdirs, "/usr/lib/gcc/x86_64-pc-linux-gnu/9.2.1/include")
+	} else {
+		incdirs = append(incdirs, cxrtroot+"/3rdparty/tcc")
+		incdirs = append(incdirs, "/usr/lib/tcc/include/")
+	}
+	return incdirs
 }
 
 // "-DFOO=1 -DBAR -DBAZ=fff"

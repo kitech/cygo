@@ -173,11 +173,9 @@ func (cp *cparser1) parsestr(code string) error {
 	filename := fmt.Sprintf("/tmp/tcctrspp.%s.%d.c", cp.name, rand.Intn(10000000)+50000)
 	cp1cache.ppfiles[filename] = 1
 
-	// TODO hard code path
-	incdirs := cp1_preincdirs
 	code = codepfx + code
 	btime := time.Now()
-	err := tccpp(code, filename, incdirs)
+	err := tccpp(code, filename, nil)
 	gopp.ErrPrint(err, cp.name, filename)
 	log.Println("tccpp", cp.name, err, time.Since(btime))
 	if err != nil {
@@ -200,6 +198,7 @@ func (cp *cparser1) parsestr(code string) error {
 	log.Println("clrpp", cp.name, time.Since(btime))
 
 	btime = time.Now()
+	// TODO 现在只能parse tcc -E 的结果，parse gcc -E的结果有问题
 	trn := cp.prsit.Parse(nil, bcc)
 	cp.trn = trn
 	log.Println("trsit parse", cp.name, time.Since(btime))
