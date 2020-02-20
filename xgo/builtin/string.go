@@ -12,6 +12,7 @@ extern builtin__cxstring3* cxstring3_new_char(byte ch);
 extern bool cxstring3_eq(builtin__cxstring3* this, builtin__cxstring3* s1);
 extern builtin__cxstring3* cxstring3_add(builtin__cxstring3* this, builtin__cxstring3* s1);
 extern builtin__cxstring3* cxstring3_sub(builtin__cxstring3* this, int start, int end);
+extern bool builtin__cxstring3_eq(builtin__cxstring3* s0, builtin__cxstring3* s1);
 extern builtin__cxstring3* builtin__cxstring3_replace(builtin__cxstring3* s, builtin__cxstring3* old, builtin__cxstring3* new, int n);
 extern builtin__cxarray3* builtin__cxstring3_split(builtin__cxstring3* s, builtin__cxstring3* sep);
 extern builtin__cxarray3* cxstring_split(cxstring* s, cxstring* sep);
@@ -121,22 +122,88 @@ func (s string) empty() bool {
 }
 
 //export cxstring3_sub
-func (s string) sub(start int, end int) string {
-	return s
+func (s0 string) sub(start int, end int) string {
+	// assert(s0 != nil)
+	ns := &cxstring3{}
+	rlen := end - start
+	rs := malloc3(rlen + 1)
+	memcpy3(rs, voidptr(usize(s0.ptr)+usize(start)), rlen)
+	ns.ptr = rs
+	ns.len = rlen
+	return ns
 }
 
 //export cxstring3_add
-func (s string) add(s1 string) string {
-	return s
+func (s0 string) add(s1 string) string {
+	ns := &cxarray3{}
+	rlen := s0.len + s1.len
+	rs0 := malloc3(rlen + 1)
+	memcpy3(rs0, s0.ptr, s0.len)
+	memcpy3(voidptr(usize(rs0)+usize(s0.len)), s1.ptr, s1.len)
+	ns.ptr = rs0
+	ns.len = rlen
+	return ns
 }
 
 //export cxstring3_eq
-func (s string) eq(s1 string) bool {
-	return false
+func (s0 string) eq(s1 string) bool {
+	var pp0 *voidptr
+	var pp1 *voidptr
+	pp0 = &s0
+	pp1 = &s1
+	p0 := *pp0
+	p1 := *pp1
+	if p0 == nil && p1 == nil {
+		return true
+	}
+	if p0 == nil {
+		if p1 != nil && s1.len == 0 {
+			return true
+		}
+	}
+	if p1 == nil {
+		if p0 != nil && s0.len == 0 {
+			return true
+		}
+	}
+	if s0.len != s1.len {
+		return false
+	}
+	return memcmp3(s0.ptr, s1.ptr, s0.len) == 0
 }
 
 //export cxstring3_ne
-func (s string) ne(s1 string) bool {
+func (s0 string) ne(s1 string) bool {
+	return !s0.eq(s1)
+}
+
+//export cxstring3_le
+func (s0 string) le(s1 string) bool {
+	return false
+}
+
+//export cxstring3_ge
+func (s0 string) ge(s1 string) bool {
+	return false
+}
+
+//export cxstring3_lt
+func (s0 string) lt(s1 string) bool {
+	for i := 0; i < s0.len; i++ {
+		if i >= s1.len || s0.ptr[i] > s1.ptr[i] {
+			return false
+		} else if s0.ptr[i] < s1.ptr[i] {
+			return true
+		}
+	}
+	if s0.len < s1.len {
+		return true
+	}
+	return false
+}
+
+//export cxstring3_gt
+func (s0 string) gt(s1 string) bool {
 	return false
 }
 

@@ -141,6 +141,11 @@ type mapnode struct {
 	hash usize
 	next *mapnode
 }
+type mapiter struct {
+	mobj *mirmap
+	pvec int // pos in vector
+	plst int // pos in linked list
+}
 
 type mirmap struct {
 	len_ int
@@ -162,15 +167,17 @@ type mirmap struct {
 	expcnt    int
 }
 
-func mirmap_new(keykind int) *mirmap {
+//export cxhmap3_new
+func mirmap_new(keykind int, valkind int) *mirmap {
 	mp := &mirmap{}
 	mp.keykind = keykind
+	mp.valkind = valkind
 	mp.bucketsz = 16
 	mp.cap_ = 1
 	var vptrsz int = sizeof(voidptr(0))
 	mp.ptr = malloc3(1 * vptrsz)
 	mp.initkeyalg(keykind)
-
+	mp.initvalsz(valkind)
 	return mp
 }
 
@@ -203,7 +210,7 @@ func (mp *mirmap) initkeyalg(keykind int) {
 		alg.hash = htkey_hash_str2
 		alg.equal = htkey_eq_str2
 		mp.keysz = sizeof(voidptr(0))
-	case Voidptr:
+	case Voidptr, Uintptr:
 		alg.hash = htkey_hash_ptr
 		alg.equal = htkey_eq_ptr
 		mp.keysz = sizeof(voidptr(0))
@@ -212,12 +219,57 @@ func (mp *mirmap) initkeyalg(keykind int) {
 	mp.keyalg = alg
 }
 
+func (mp *mirmap) initvalsz(valkind int) {
+	switch valkind {
+	case Int, Uint:
+		mp.valsz = sizeof(int(0))
+	case Int64, Uint64:
+		mp.valsz = sizeof(int64(0))
+	case Float32:
+		mp.valsz = sizeof(float32(0))
+	case Float64:
+		mp.valsz = sizeof(float64(0))
+	case String:
+		mp.keysz = sizeof(voidptr(0))
+	case Voidptr, Uintptr:
+		mp.valsz = sizeof(voidptr(0))
+	case Int16, Uint16:
+		mp.valsz = sizeof(int16(0))
+	case Bool:
+		mp.valsz = sizeof(int(0))
+	}
+}
+
 func (mp *mirmap) dummy() {
 
 }
 
 //export mirmap_dummy2
 func (mp *mirmap) dummy2() {}
+
+func (mp *mirmap) itnew() *mapiter {
+	mit := &mapiter{}
+	mit.mobj = mp
+	return mit
+}
+
+func (it *mapiter) itnext() *mapnode {
+	optr := it.mobj.ptr
+	ocap := it.mobj.cap_
+
+	for i := it.pvec; i < ocap; i++ {
+		var node *mapnode = optr[i]
+		for j := 0; node != nil; j++ {
+			if j == it.plst {
+				it.plst += 1
+				return node
+			}
+		}
+		it.pvec += 1
+		it.plst = 0
+	}
+	return nil
+}
 
 func (mp *mirmap) each(fn func(key voidptr, val voidptr)) {
 	optr := mp.ptr
@@ -233,7 +285,7 @@ func (mp *mirmap) each(fn func(key voidptr, val voidptr)) {
 
 // TODO fn return map's key/value type?
 func (mp *mirmap) mapfn(fn func(key voidptr, val voidptr) *mirmap) *mirmap {
-	res := mirmap_new(mp.keykind)
+	res := mirmap_new(mp.keykind, mp.valkind)
 	optr := mp.ptr
 	ocap := mp.cap_
 	for i := 0; i < ocap; i++ {
@@ -257,7 +309,7 @@ func (mp *mirmap) mapfn(fn func(key voidptr, val voidptr) *mirmap) *mirmap {
 }
 
 func (mp *mirmap) reduce(fn func(key voidptr, val voidptr) bool) *mirmap {
-	res := mirmap_new(mp.keykind)
+	res := mirmap_new(mp.keykind, mp.valkind)
 
 	optr := mp.ptr
 	ocap := mp.cap_
@@ -337,6 +389,9 @@ func (mp *mirmap) useratio() int {
 	return r
 }
 
+func (mp *mirmap) exist(k voidptr) bool {
+	return mp.haskey(k)
+}
 func (mp *mirmap) haskey(k voidptr) bool {
 	ocap := mp.cap_
 	optr := mp.ptr
@@ -446,8 +501,12 @@ func (mp *mirmap) insert(k voidptr, v voidptr) bool {
 	}
 
 	node := &mapnode{}
-	node.key = k
-	node.val = v
+	// node.key = k
+	// node.val = v
+	node.key = malloc3(mp.keysz)
+	memcpy3(node.key, k, mp.keysz)
+	node.val = malloc3(mp.valsz)
+	memcpy3(node.val, v, mp.valsz)
 	node.hash = hash
 	node.next = mp.ptr[idx]
 

@@ -22,8 +22,7 @@ func cxarray3_new(cap int, elemsz int) *cxarray3 {
 	arr := &cxarray3{}
 
 	arr.elemsz = elemsz
-	len := cap
-	arr.len = len
+	arr.len = cap
 	cap = ifelse(cap < 8, 9, cap)
 	arr.cap = cap
 
@@ -138,11 +137,14 @@ func (arr *cxarray3) slice(start int, end int) *cxarray3 {
 
 // It takes a list as argument, and returns its first element.
 func (arr *cxarray3) car() voidptr {
-	return nil
+	return arr.get(0)
 }
 
 // It takes a list as argument, and returns a list without the first element
 func (arr *cxarray3) cdr() *cxarray3 {
+	if arr.len > 0 {
+		return arr.slice(1, arr.len)
+	}
 	return nil
 }
 
@@ -152,7 +154,7 @@ func (arr *cxarray3) cadr() voidptr {
 }
 
 func (arr *cxarray3) first() voidptr {
-	return nil
+	return arr.get(0)
 }
 
 // support idx < 0, then from last
@@ -170,15 +172,24 @@ func (a0 *cxarray3) get(idx int) *voidptr {
 }
 
 //export cxarray3_replace_at
-func (a0 *cxarray3) set(idx int, v voidptr, out *voidptr) voidptr {
+func (a0 *cxarray3) set(v voidptr, idx int, out *voidptr) voidptr {
 	assert(a0 != nil)
+	assert(idx >= 0)
 	assert(idx < a0.len)
 
 	offset := idx * a0.elemsz
 	if out != nil {
-		memcpy3(out, voidptr(usize(a0.ptr)+usize(offset)), a0.elemsz)
+		if v == nil {
+			*out = nil
+		} else {
+			memcpy3(out, voidptr(usize(a0.ptr)+usize(offset)), a0.elemsz)
+		}
 	}
-	memcpy3(voidptr(usize(a0.ptr)+usize(offset)), v, a0.elemsz)
+	if v == nil {
+		memcpy3(voidptr(usize(a0.ptr)+usize(offset)), &v, a0.elemsz)
+	} else {
+		memcpy3(voidptr(usize(a0.ptr)+usize(offset)), v, a0.elemsz)
+	}
 	return out
 }
 
