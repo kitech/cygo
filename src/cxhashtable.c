@@ -61,7 +61,7 @@ HashTable* cxhashtable_new_uintptr() {
 
     return cxhashtable_new_conf(&htconf);
 }
-HashTable* cxhashtable_new() {
+HashTable* cxhashtable_new(int keykind, int valkind) {
     return cxhashtable_new_uintptr();
 }
 HashTable* cxhashtable_new_cxstr() {

@@ -598,3 +598,24 @@ func newAnnotation(cmts *ast.CommentGroup) *Annotation {
 
 	return ant
 }
+
+func type2rtkind(ty types.Type) string {
+	rtkind := ""
+	switch ty2 := ty.(type) {
+	case *types.Basic:
+		rtkind = ty2.String()
+	case *types.Pointer:
+		rtkind = "voidptr"
+	case *types.Slice:
+		rtkind = "voidptr"
+	case *types.Array:
+		rtkind = "voidptr"
+	case *types.Map:
+		rtkind = "voidptr"
+	default:
+		rtkind = "voidptr"
+		log.Println("wtfff", ty2.String(), reftyof(ty2))
+	}
+	rtkind += "_metatype.kind"
+	return rtkind
+}

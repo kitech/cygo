@@ -159,7 +159,7 @@ error* error_new_zero();
 cxstring* error_Error(error* err);
 
 // cxhashtable begin
-HashTable* cxhashtable_new();
+HashTable* cxhashtable_new(int keykind, int valkind);
 size_t cxhashtable_hash_str(const char *key);
 size_t cxhashtable_hash_str2(const char *key, int len);
 int HashTable_len(HashTable* ht);

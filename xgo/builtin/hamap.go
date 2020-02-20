@@ -167,8 +167,10 @@ type mirmap struct {
 	expcnt    int
 }
 
-//export cxhmap3_new
+//export cxhashtable3_new
 func mirmap_new(keykind int, valkind int) *mirmap {
+	assert(keykind > 0)
+	assert(valkind > 0)
 	mp := &mirmap{}
 	mp.keykind = keykind
 	mp.valkind = valkind
@@ -214,6 +216,8 @@ func (mp *mirmap) initkeyalg(keykind int) {
 		alg.hash = htkey_hash_ptr
 		alg.equal = htkey_eq_ptr
 		mp.keysz = sizeof(voidptr(0))
+	default:
+		assert(1 == 2)
 	}
 	assert(alg.hash != nil)
 	mp.keyalg = alg
@@ -237,6 +241,8 @@ func (mp *mirmap) initvalsz(valkind int) {
 		mp.valsz = sizeof(int16(0))
 	case Bool:
 		mp.valsz = sizeof(int(0))
+	default:
+		assert(1 == 2)
 	}
 }
 
@@ -376,6 +382,7 @@ func (mp *mirmap) values2() []voidptr {
 	return res
 }
 
+//export cxhashtable3_size
 func (mp *mirmap) len() int {
 	return mp.len_
 }
@@ -411,6 +418,7 @@ func (mp *mirmap) haskey(k voidptr) bool {
 	return false
 }
 
+//export cxhashtable3_get
 func (mp *mirmap) access1(k voidptr) voidptr {
 	ocap := mp.cap_
 	optr := mp.ptr
@@ -430,6 +438,12 @@ func (mp *mirmap) access1(k voidptr) voidptr {
 	return nil
 }
 
+//export cxhashtable3_get2 // TODO compiler
+func (mp *mirmap) get2(k voidptr, out *voidptr) bool {
+	res, ok := mp.access2(k)
+	*out = res
+	return ok
+}
 func (mp *mirmap) access2(k voidptr) (voidptr, bool) {
 	ocap := mp.cap_
 	optr := mp.ptr
@@ -455,6 +469,7 @@ func (mp *mirmap) clear() bool {
 	return true
 }
 
+//export cxhashtable3_remove
 func (mp *mirmap) delete(k voidptr) bool {
 	fnptr := mp.keyalg.hash
 	hash := fnptr(k, mp.keysz)
@@ -481,6 +496,7 @@ func (mp *mirmap) delete(k voidptr) bool {
 	return false
 }
 
+//export cxhashtable3_add
 func (mp *mirmap) insert(k voidptr, v voidptr) bool {
 	mp.expand()
 

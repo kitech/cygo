@@ -2706,7 +2706,10 @@ func (this *g2nc) genExpr2(scope *ast.Scope, e ast.Expr) {
 	case *ast.CompositeLit:
 		switch be := te.Type.(type) {
 		case *ast.MapType:
-			this.outf("cxhashtable_new()").outfh().outnl()
+			tym := this.info.TypeOf(te).(*types.Map)
+			keykind := type2rtkind(tym.Key())
+			valkind := type2rtkind(tym.Elem())
+			this.outf("cxhashtable_new(%v, %v)", keykind, valkind).outfh().outnl()
 			var vo = scope.Lookup("varname")
 			for idx, ex := range te.Elts {
 				switch be := ex.(type) {
@@ -3511,8 +3514,13 @@ func (this *g2nc) genTypeSpec(scope *ast.Scope, spec *ast.TypeSpec) {
 					tystr := this.exprTypeNameImpl2(scope, elemty, nil)
 					this.outf("obj->%s = cxarray3_new(0, sizeof(%s))", fldname.Name, tystr).outfh().outnl()
 				} else if ismapty2(fldty) {
-					this.outf("obj->%s = cxhashtable_new()", fldname.Name).outfh().outnl()
+					tym := fldty.(*types.Map)
+					keykind := type2rtkind(tym.Key())
+					valkind := type2rtkind(tym.Elem())
+					this.outf("obj->%s = cxhashtable_new(%v, %v)",
+						fldname.Name, keykind, valkind).outfh().outnl()
 				} else if ischanty2(fldty) {
+					// elemkind := 0
 					log.Println("how to", fld.Type.(*ast.ChanType).Value)
 					this.outf("obj->%s = cxrt_chan_new(0)", fldname.Name).outfh().outnl()
 				} else if isstructty2(fldty) {
@@ -3718,7 +3726,10 @@ func (c *g2nc) genValueSpec(scope *ast.Scope, spec *ast.ValueSpec, validx int) {
 				tystr := c.exprTypeNameImpl2(scope, elemty, nil)
 				c.outf("cxarray3_new(0, sizeof(%s))", tystr)
 			} else if ismapty2(varty) {
-				c.out("cxhashtable_new()")
+				tym := varty.(*types.Map)
+				keykind := type2rtkind(tym.Key())
+				valkind := type2rtkind(tym.Elem())
+				c.outf("cxhashtable_new(%v, %v)", keykind, valkind)
 			} else if isstructty2(varty) {
 				if ok := ispointer2(varty); ok {
 					tystr := c.exprTypeNameImpl2(scope, varty, varname)
