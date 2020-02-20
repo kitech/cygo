@@ -241,7 +241,7 @@ func (c *g2nc) genMultiretTypes(scope *ast.Scope, pkg *ast.Package) {
 				case *types.Basic:
 					if fldty.Kind() == types.String {
 						recurzero = true
-						c.outf("obj->%s=cxstring_new()", tmpvarname2(cnter)).outfh().outnl()
+						c.outf("obj->%s=cxstring3_new()", tmpvarname2(cnter)).outfh().outnl()
 					}
 				case *types.Slice:
 					recurzero = true
@@ -552,7 +552,7 @@ func (this *g2nc) genFuncDecl(scope *ast.Scope, fd *ast.FuncDecl) {
 					switch fldty := fldtyx.(type) {
 					case *types.Basic:
 						if fldty.Kind() == types.String {
-							this.outf("%v=cxstring_new()", name).outfh().outnl()
+							this.outf("%v=cxstring3_new()", name).outfh().outnl()
 						}
 					case *types.Slice:
 						this.outf("%v=cxarray3_new(0,", name)
@@ -993,7 +993,7 @@ func (c *g2nc) genAssignStmt(scope *ast.Scope, s *ast.AssignStmt) {
 				}
 			}
 			if isstrty2(goty) && s.Tok == token.ADD_ASSIGN {
-				c.out("cxstring_add(")
+				c.out("cxstring3_add(")
 				c.genExpr(scope, s.Lhs[i])
 				c.out(",")
 			}
@@ -1299,7 +1299,7 @@ func (c *g2nc) genSwitchStmtStr(scope *ast.Scope, s *ast.SwitchStmt) {
 		c.outf("// %v", exprpos(c.psctx, stmt)).outnl()
 		c.outf("if (")
 		for idx2, exprx := range stmt.List {
-			c.out("cxstring_eq(")
+			c.out("cxstring3_eq(")
 			c.genExpr(scope, s.Tag)
 			c.out(",")
 			c.genExpr(scope, exprx)
@@ -1691,7 +1691,7 @@ func (c *g2nc) genCallExprLen(scope *ast.Scope, te *ast.CallExpr) {
 			log.Println("todo", reflect.TypeOf(arg0))
 		}
 	} else if isstrty(argty.String()) {
-		c.out("cxstring_len(")
+		c.out("cxstring3_len(")
 		c.genExpr(scope, arg0)
 		c.out(")")
 	} else if isslicety(argty.String()) || isarrayty(argty.String()) {
@@ -1730,7 +1730,7 @@ func (c *g2nc) genCallExprAppend(scope *ast.Scope, te *ast.CallExpr) {
 		}
 	} else if isstrty(argty.String()) {
 		panic(argty.String())
-		c.out("cxstring_len(")
+		c.out("cxstring3_len(")
 		c.genExpr(scope, arg0)
 		c.out(")")
 	} else if isslicety(argty.String()) || isarrayty(argty.String()) {
@@ -1786,7 +1786,7 @@ func (c *g2nc) genCallExprPrintln(scope *ast.Scope, te *ast.CallExpr) {
 			switch tety.(type) {
 			case *types.Basic:
 				tname := tmpvarname()
-				c.outf("cxstring* %s = ", tname)
+				c.outf("builtin__cxstring3* %s = ", tname)
 				c.genExpr(scope, e1)
 				c.outfh().outnl()
 				tmpnames[idx] = tname
@@ -1938,7 +1938,7 @@ func (c *g2nc) genCallExprNorm(scope *ast.Scope, te *ast.CallExpr) {
 					}
 				}
 				tyname := c.exprTypeName(scope, e1)
-				if tyname == "cxstring*" {
+				if tyname == "builtin__cxstring3*" {
 					tyname = "string"
 				}
 				tvar := tmpvarname()
@@ -2029,7 +2029,7 @@ func (c *g2nc) genCallExprNorm(scope *ast.Scope, te *ast.CallExpr) {
 			if _, ok := prmn.(*types.Interface); ok {
 				c.out("cxrt_type2eface((voidptr)&")
 				tyname := c.exprTypeName(scope, e1)
-				if strings.Contains(tyname, "cxstring") {
+				if strings.Contains(tyname, "cxstring3") {
 					c.out("string")
 				} else {
 					c.out(tyname)
@@ -2145,18 +2145,18 @@ func (c *g2nc) genTypeCtor(scope *ast.Scope, te *ast.CallExpr) {
 			arg0 := te.Args[0]
 			switch ce := arg0.(type) {
 			case *ast.BasicLit:
-				c.outf("cxstring_new_char(%v)", ce.Value)
+				c.outf("cxstring3_new_char(%v)", ce.Value)
 			case *ast.Ident:
 				varty := c.info.TypeOf(arg0)
 				if isslicety2(varty) {
-					c.outf("cxstring_new_cstr2((%v)->ptr, (%v)->len)", ce.Name, ce.Name)
+					c.outf("cxstring3_new_cstr2((%v)->ptr, (%v)->len)", ce.Name, ce.Name)
 				} else if iscstrty2(varty) {
-					c.outf("cxstring_new_cstr(%v)", ce.Name)
+					c.outf("cxstring3_new_cstr(%v)", ce.Name)
 				} else if funk.Contains(
 					[]string{"voidptr", "charptr", "byteptr"}, varty.String()) {
-					c.outf("cxstring_new_cstr(%v)", ce.Name)
+					c.outf("cxstring3_new_cstr(%v)", ce.Name)
 				} else {
-					c.outf("cxstring_new_char(%v)", ce.Name)
+					c.outf("cxstring3_new_char(%v)", ce.Name)
 				}
 			default:
 				log.Println("todo", te.Fun, ce)
@@ -2175,7 +2175,7 @@ func (c *g2nc) genTypeCtor(scope *ast.Scope, te *ast.CallExpr) {
 		c.genFuncArgs(scope, te.Args)
 		c.out(")")
 	case *ast.ArrayType:
-		c.out("cxstring_dup(")
+		c.out("cxstring3_dup(")
 		c.genExpr(scope, te.Args[0])
 		c.out(")")
 	default:
@@ -2623,7 +2623,7 @@ func (this *g2nc) genExpr2(scope *ast.Scope, e ast.Expr) {
 	case *ast.Ident:
 		idname := te.Name
 		idname = gopp.IfElseStr(idname == "nil", "nilptr", idname)
-		idname = gopp.IfElseStr(idname == "string", "cxstring*", idname)
+		idname = gopp.IfElseStr(idname == "string", "builtin__cxstring3*", idname)
 		eobj := this.info.ObjectOf(te)
 		log.Println(e, eobj, isglobalid(this.psctx, te))
 		if eobj != nil {
@@ -2766,7 +2766,7 @@ func (this *g2nc) genExpr2(scope *ast.Scope, e ast.Expr) {
 				types.Uint, types.Int64, types.Uint64:
 				this.out(te.Value)
 			case types.String, types.UntypedString:
-				this.out(fmt.Sprintf("cxstring_new_cstr(%s)", te.Value))
+				this.out(fmt.Sprintf("cxstring3_new_cstr(%s)", te.Value))
 			case types.Float64, types.Float32, types.UntypedFloat:
 				this.out(te.Value)
 			case types.Uint8, types.Int8, types.Uint32, types.Int32:
@@ -2790,11 +2790,11 @@ func (this *g2nc) genExpr2(scope *ast.Scope, e ast.Expr) {
 		if isstrty2(opty) {
 			switch te.Op {
 			case token.EQL:
-				this.out("cxstring_eq(")
+				this.out("cxstring3_eq(")
 			case token.NEQ:
-				this.out("cxstring_ne(")
+				this.out("cxstring3_ne(")
 			case token.ADD:
-				this.out("cxstring_add(")
+				this.out("cxstring3_add(")
 			default:
 				log.Println("todo", te.Op)
 			}
@@ -2838,13 +2838,13 @@ func (this *g2nc) genExpr2(scope *ast.Scope, e ast.Expr) {
 			}
 		} else if isstrty(varty.String()) {
 			if vo == nil { // right value
-				this.out("((cxstring*)")
+				this.out("((builtin__cxstring3*)")
 				this.genExpr(scope, te.X)
 				this.out(")->ptr[")
 				this.genExpr(scope, te.Index)
 				this.out("]")
 			} else { // left value
-				this.out("((cxstring*)")
+				this.out("((builtin__cxstring3*)")
 				this.genExpr(scope.Outer, te.X) // temporarily left value
 				this.out(")->ptr[")
 				this.genExpr(scope, te.Index)
@@ -2895,7 +2895,7 @@ func (this *g2nc) genExpr2(scope *ast.Scope, e ast.Expr) {
 			lowe = newLitInt(0)
 		}
 		if isstrty2(varty) {
-			this.outf("cxstring_sub(%v, ", te.X)
+			this.outf("cxstring3_sub(%v, ", te.X)
 			this.genExpr(scope, lowe)
 			this.out(",")
 
@@ -3000,7 +3000,7 @@ func (c *g2nc) genCxmapAddkv(scope *ast.Scope, vnamex interface{}, ke ast.Expr, 
 	case *ast.BasicLit:
 		switch be.Kind {
 		case token.STRING:
-			keystr = fmt.Sprintf("cxstring_new_cstr(%s)", be.Value)
+			keystr = fmt.Sprintf("cxstring3_new_cstr(%s)", be.Value)
 		default:
 			// log.Println("unknown index key kind", be.Kind)
 			keystr = fmt.Sprintf("%v", be.Value)
@@ -3065,7 +3065,7 @@ func (c *g2nc) genCxmapGetkv(scope *ast.Scope, vnamex interface{}, ke ast.Expr, 
 	case *ast.BasicLit:
 		switch be.Kind {
 		case token.STRING:
-			keystr = fmt.Sprintf("cxstring_new_cstr(%s)", be.Value)
+			keystr = fmt.Sprintf("cxstring3_new_cstr(%s)", be.Value)
 		default:
 			// log.Println("unknown index key kind", be.Kind)
 			keystr = fmt.Sprintf("%v", be.Value)
@@ -3248,7 +3248,7 @@ func (this *g2nc) exprTypeNameImpl2(scope *ast.Scope, ety types.Type, e ast.Expr
 			return "typpp_" + strings.ReplaceAll(te.String(), " ", "_")
 		}
 		if isstrty(te.Name()) {
-			return "cxstring*"
+			return "builtin__cxstring3*"
 		} else {
 			if strings.Contains(te.Name(), "string") {
 				log.Println(te.Name())
@@ -3505,7 +3505,7 @@ func (this *g2nc) genTypeSpec(scope *ast.Scope, spec *ast.TypeSpec) {
 			fldty := this.info.TypeOf(fld.Type)
 			for _, fldname := range fld.Names {
 				if isstrty2(fldty) {
-					this.outf("obj->%s = cxstring_new()", fldname.Name).outfh().outnl()
+					this.outf("obj->%s = cxstring3_new()", fldname.Name).outfh().outnl()
 				} else if isslicety2(fldty) {
 					elemty := fldty.(*types.Slice).Elem()
 					tystr := this.exprTypeNameImpl2(scope, elemty, nil)
@@ -3655,7 +3655,7 @@ func (c *g2nc) genValueSpec(scope *ast.Scope, spec *ast.ValueSpec, validx int) {
 		} else {
 			c.out("/*var*/").outsp()
 			if isstrty2(varty) {
-				c.out("cxstring*")
+				c.out("builtin__cxstring3*")
 			} else if isarrayty2(varty) || isslicety2(varty) {
 				c.out("builtin__cxarray3*")
 			} else if ismapty2(varty) {
@@ -3712,7 +3712,7 @@ func (c *g2nc) genValueSpec(scope *ast.Scope, spec *ast.ValueSpec, validx int) {
 			} else if isglobvar {
 				c.outf("%v /* 111 */", cuzero) // must constant for c
 			} else if isstrty2(varty) {
-				c.out("cxstring_new()")
+				c.out("cxstring3_new()")
 			} else if isslicety2(varty) {
 				elemty := varty.(*types.Slice).Elem()
 				tystr := c.exprTypeNameImpl2(scope, elemty, nil)

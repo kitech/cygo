@@ -1,7 +1,9 @@
 package builtin
 
 /*
- */
+typedef struct builtin__cxstring3 builtin__cxstring3;
+extern builtin__cxstring3* cxstring3_new_cstr(byteptr);
+*/
 import "C"
 
 func (ch byte) isspace() bool {

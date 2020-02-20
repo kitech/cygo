@@ -6,13 +6,22 @@ package builtin
 #include <errno.h>
 #include <string.h>
 
+extern builtin__cxstring3* cxstring3_new();
+extern builtin__cxstring3* cxstring3_new_cstr(byteptr sptr);
+extern builtin__cxstring3* cxstring3_new_char(byte ch);
+extern bool cxstring3_eq(builtin__cxstring3* this, builtin__cxstring3* s1);
+extern builtin__cxstring3* cxstring3_add(builtin__cxstring3* this, builtin__cxstring3* s1);
+extern builtin__cxstring3* cxstring3_sub(builtin__cxstring3* this, int start, int end);
+extern builtin__cxstring3* builtin__cxstring3_replace(builtin__cxstring3* s, builtin__cxstring3* old, builtin__cxstring3* new, int n);
+extern builtin__cxarray3* builtin__cxstring3_split(builtin__cxstring3* s, builtin__cxstring3* sep);
 extern builtin__cxarray3* cxstring_split(cxstring* s, cxstring* sep);
 extern voidptr* cxarray3_get_at(builtin__cxarray3* this, int idx);
+
 */
 import "C"
 
 ///
-type mirstring struct {
+type cxstring3 struct {
 	ptr byteptr
 	len int
 }
@@ -39,12 +48,13 @@ func gostringn(ptr byteptr, n int) string {
 	return s
 }
 
-func mirstring_new() string {
-	var s string
-	return s
+//export cxstring3_new
+func cxstring3_new() string {
+	p := &cxarray3{}
+	return p
 }
 
-func mirstring_new_cstr_ref(sptr byteptr) string {
+func cxstring3_new_cstr_ref(sptr byteptr) string {
 	var s string
 	s.ptr = sptr
 	s.len = strlen3(sptr)
@@ -52,20 +62,23 @@ func mirstring_new_cstr_ref(sptr byteptr) string {
 	return s
 }
 
-func mirstring_new_cstr(sptr byteptr) string {
+//export cxstring3_new_cstr
+func cxstring3_new_cstr(sptr byteptr) string {
 	var s string
 	s.ptr = strdup3(sptr)
 	s.len = strlen3(sptr)
 	return s
 }
 
-func mirstring_new_cstr2(sptr byteptr, len int) string {
+func cxstring3_new_cstr2(sptr byteptr, len int) string {
 	var s string
 	s.ptr = strndup3(sptr, len)
 	s.len = len
 	return s
 }
-func mirstring_new_char(ch byte) string {
+
+//export cxstring3_new_char
+func string3_new_char(ch byte) string {
 	var s string
 	s.ptr = malloc3(8)
 	s.ptr[0] = ch
@@ -74,7 +87,7 @@ func mirstring_new_char(ch byte) string {
 }
 
 // TODO
-func mirstring_new_rune(ch rune) string {
+func cxstring3_new_rune(ch rune) string {
 	var s string
 	s.ptr = malloc3(8)
 	s.len = 3
@@ -91,6 +104,8 @@ func mirstring_new_rune(ch rune) string {
 func (s string) Ptr() byteptr {
 	return s.ptr
 }
+
+//export cxstring3_len
 func (s string) Len() int {
 	var saddr *voidptr = &s
 	if *saddr == nil {
@@ -103,6 +118,26 @@ func (s string) cstr() byteptr {
 }
 func (s string) empty() bool {
 	return s.len == 0
+}
+
+//export cxstring3_sub
+func (s string) sub(start int, end int) string {
+	return s
+}
+
+//export cxstring3_add
+func (s string) add(s1 string) string {
+	return s
+}
+
+//export cxstring3_eq
+func (s string) eq(s1 string) bool {
+	return false
+}
+
+//export cxstring3_ne
+func (s string) ne(s1 string) bool {
+	return false
 }
 
 func (s string) split(sep string) []string {
