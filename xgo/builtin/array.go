@@ -1,7 +1,10 @@
 package builtin
 
 /*
- */
+typedef struct builtin__cxarray3 builtin__cxarray3;
+extern builtin__cxarray3* cxarray3_new(int, int);
+extern builtin__cxarray3* cxarray3_append(builtin__cxarray3* this, voidptr v);
+*/
 import "C"
 
 // 定义为array3，比 array2多了类型信息
@@ -13,8 +16,11 @@ type cxarray3 struct {
 	typ    *Metatype
 }
 
-func cxarray3_new2(cap int, elemsz int) *cxarray3 {
+//go:nodefer
+//export cxarray3_new
+func cxarray3_new(cap int, elemsz int) *cxarray3 {
 	arr := &cxarray3{}
+
 	arr.elemsz = elemsz
 	len := cap
 	arr.len = len
@@ -26,9 +32,9 @@ func cxarray3_new2(cap int, elemsz int) *cxarray3 {
 	return arr
 }
 
-//export cxarray3_new
+//export cxarray3_new3
 func cxarray3_new3(cap int, ty *Metatype) *cxarray3 {
-	arr := cxarray3_new2(cap, ty.Size)
+	arr := cxarray3_new(cap, ty.Size)
 	arr.typ = ty
 	return arr
 }
@@ -56,6 +62,9 @@ func (arr *cxarray3) Ptr() voidptr { return arr.ptr }
 func (arr *cxarray3) Len() int     { return arr.len }
 func (arr *cxarray3) Cap() int     { return arr.cap }
 func (arr *cxarray3) Elemsz() int  { return arr.elemsz }
+
+//export cxarray3_size
+func (arr *cxarray3) size() int { return arr.len }
 
 func (a0 *cxarray3) expand(n int) {
 	assert(n > 0)
@@ -120,7 +129,8 @@ func (arr *cxarray3) slice(start int, end int) *cxarray3 {
 	assert(end >= 0)
 	assert(end >= start)
 
-	newarr := cxarray3_new3(end-start+1, arr.typ)
+	newarr := cxarray3_new(end-start+1, arr.elemsz)
+	newarr.typ = arr.typ
 	memcpy3(newarr.ptr, voidptr(usize(arr.ptr)+usize(start)), end-start)
 	newarr.len = end - start
 	return newarr
@@ -146,7 +156,7 @@ func (arr *cxarray3) first() voidptr {
 }
 
 // support idx < 0, then from last
-//export array3_get_at
+//export cxarray3_get_at
 func (a0 *cxarray3) get(idx int) *voidptr {
 	assert(a0 != nil)
 	pos := ifelse(idx < 0, a0.len+idx, idx)
@@ -156,6 +166,19 @@ func (a0 *cxarray3) get(idx int) *voidptr {
 	offset := pos * a0.elemsz
 	var out *voidptr
 	out = a0.ptr + offset
+	return out
+}
+
+//export cxarray3_replace_at
+func (a0 *cxarray3) set(idx int, v voidptr, out *voidptr) voidptr {
+	assert(a0 != nil)
+	assert(idx < a0.len)
+
+	offset := idx * a0.elemsz
+	if out != nil {
+		memcpy3(out, voidptr(usize(a0.ptr)+usize(offset)), a0.elemsz)
+	}
+	memcpy3(voidptr(usize(a0.ptr)+usize(offset)), v, a0.elemsz)
 	return out
 }
 

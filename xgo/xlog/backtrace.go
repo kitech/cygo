@@ -76,7 +76,7 @@ func line2frame(line string) *Frame {
 }
 func lines2frames(lines []string) []*Frame {
 	res := []*Frame{}
-	for idx := 0; idx < lines.len(); idx++ {
+	for idx := 0; idx < lines.len; idx++ {
 		line := lines[idx]
 		frm := line2frame(line)
 		frm.Btdepth = idx
@@ -121,7 +121,7 @@ func Callers() []*Frame {
 	lazyinit_dwarf()
 
 	frms := Backtrace()
-	for idx := 0; idx < frms.len(); idx++ {
+	for idx := 0; idx < frms.len; idx++ {
 		frm := frms[idx]
 		// file, lineno := addr2line1(frm.Funcaddr) // TODO crash
 		// file, lineno := "unimpl", 0 // TODO compiler

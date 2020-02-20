@@ -5,6 +5,9 @@ package builtin
 #include <stdio.h>
 #include <errno.h>
 #include <string.h>
+
+extern builtin__cxarray3* cxstring_split(cxstring* s, cxstring* sep);
+extern voidptr* cxarray3_get_at(builtin__cxarray3* this, int idx);
 */
 import "C"
 

@@ -550,6 +550,7 @@ type Annotation struct {
 	systemstack    bool
 	linkname       string
 	noinline       bool
+	nodefer        bool
 
 	exported   bool
 	exportname string
@@ -579,6 +580,9 @@ func newAnnotation(cmts *ast.CommentGroup) *Annotation {
 			}
 			if strings.HasPrefix(line, "//go:noinline") {
 				ant.noinline = true
+			}
+			if strings.HasPrefix(line, "//go:nodefer") {
+				ant.nodefer = true
 			}
 			if strings.HasPrefix(line, "//go:linkname ") {
 				fields := strings.Split(line, " ")
