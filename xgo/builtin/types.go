@@ -1,5 +1,9 @@
 package builtin
 
+/*
+   extern void* cxmalloc(size_t);
+*/
+import "C"
 import "unsafe"
 
 type BasicKind int

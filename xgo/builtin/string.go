@@ -15,7 +15,7 @@ extern builtin__cxstring3* cxstring3_sub(builtin__cxstring3* this, int start, in
 extern bool builtin__cxstring3_eq(builtin__cxstring3* s0, builtin__cxstring3* s1);
 extern builtin__cxstring3* builtin__cxstring3_replace(builtin__cxstring3* s, builtin__cxstring3* old, builtin__cxstring3* new, int n);
 extern builtin__cxarray3* builtin__cxstring3_split(builtin__cxstring3* s, builtin__cxstring3* sep);
-extern builtin__cxarray3* cxstring_split(cxstring* s, cxstring* sep);
+extern builtin__cxarray3* cxstring_split(builtin__cxstring3* s, builtin__cxstring3* sep);
 extern voidptr* cxarray3_get_at(builtin__cxarray3* this, int idx);
 
 */

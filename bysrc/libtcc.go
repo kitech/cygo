@@ -270,7 +270,8 @@ func gccppcmd(codebuf string, filename string, incdirs []string) error {
 	return err
 }
 
-var preincdirs = []string{cxrtroot + "/src",
+var preincdirs = []string{
+	// cxrtroot + "/src",
 	cxrtroot + "/3rdparty/cltc/src",
 	cxrtroot + "/3rdparty/cltc/src/include",
 	// cxrtroot+"/3rdparty/tcc",
@@ -287,12 +288,14 @@ const codepfx = "#include <stdio.h>\n" +
 	"#include <errno.h>\n" +
 	"#include <pthread.h>\n" +
 	"#include <time.h>\n" +
-	"#include <cxrtbase.h>\n" +
+	// "#include <cxrtbase.h>\n" +
 	"\n"
 
 var cxrtroot = "/home/none/oss/cxrt" // not exist one, force dynamic populate
 
-var cxrtincs = []string{"src", "3rdparty/cltc/src", "3rdparty/cltc/include"}
+var cxrtincs = []string{
+	// "src",
+	"3rdparty/cltc/src", "3rdparty/cltc/include"}
 
 // 使用单独init函数名
 func init() { init_cxrtroot() }

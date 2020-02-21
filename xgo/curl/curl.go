@@ -3,7 +3,7 @@ package curl
 /*
 #include <curl/curl.h>
 #include <curl/easy.h>
-#include <cxrtbase.h>
+// #include <cxrtbase.h>
 
 CURL* curl_easy_init();
 */

@@ -2,7 +2,12 @@ package builtin
 
 /*
 #include <stdlib.h>
+#include <stdio.h>
+#include <string.h>
 #include <stdarg.h>
+#include <unistd.h>
+#include <time.h>
+
 
 extern void crn_init_and_wait_done();
 

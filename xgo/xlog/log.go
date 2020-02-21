@@ -6,7 +6,7 @@ package xlog
 #include <stdarg.h>
 #include <dlfcn.h>
 #include <string.h>
-#include <cxrtbase.h>
+// #include <cxrtbase.h>
 
 char* cxstring_unrefpp(cxstring** spp) {
     printf("%s\n", (*spp)->ptr);

@@ -8,8 +8,11 @@ package builtin
 #include <errno.h>
 #include <string.h>
 #include <signal.h>
-#include <cxrtbase.h>
+// #include <cxrtbase.h>
+#include <assert.h>
+#include <pthread.h>
 
+extern void* cxmalloc(size_t);
 error* error_new_zero() {
     return (error*)cxmalloc(sizeof(error));
 }
@@ -21,31 +24,31 @@ import "C"
 func keep() {}
 
 func malloc3(sz int) voidptr {
-	ptr := C.cxmalloc(sz)
+	ptr := bdwgc_malloc(sz)
 	return ptr
 }
 
 func realloc3(ptr voidptr, sz int) voidptr {
-	ptr2 := C.cxrealloc(ptr, sz)
+	ptr2 := bdwgc_realloc(ptr, sz)
 	return ptr2
 }
 
 func free3(ptr voidptr) {
-	C.cxfree(ptr)
+	bdwgc_free(ptr)
 }
 
 func strdup3(ptr voidptr) voidptr {
 	if ptr == nil {
 		return nil
 	}
-	return C.cxstrdup(ptr)
+	return bdwgc_strdup(ptr)
 }
 
 func strndup3(ptr voidptr, n int) voidptr {
 	if ptr == nil {
 		return nil
 	}
-	return C.cxstrndup(ptr, n)
+	return bdwgc_strndup(ptr, n)
 }
 
 func strlen3(ptr voidptr) int {

@@ -3833,6 +3833,25 @@ func (this *g2nc) clinema(e ast.Node) *g2nc {
 // TODO fix by typedef order
 func (this *g2nc) genPrecgodefs() string {
 	precgodefs := `
+#include <stdint.h>
+#include <stdbool.h>
+
+// go types
+typedef unsigned int uint;
+typedef uint32_t uint32;
+typedef uint32_t rune;
+typedef int32_t int32;
+typedef uint16_t uint16;
+typedef int16_t int16;
+typedef float float32;
+typedef double float64;
+typedef uint64_t uint64;
+typedef int64_t int64;
+typedef uintptr_t uintptr;
+typedef uint8_t uint8;
+typedef int8_t int8;
+
+// rust types
 typedef uint32_t u32;
 typedef int32_t i32;
 typedef uint16_t u16;
@@ -3842,24 +3861,86 @@ typedef double f64;
 typedef uint64_t u64;
 typedef int64_t i64;
 typedef uintptr_t usize;
-typedef uintptr_t uintptr;
+// typedef uint8_t u8;
+// typedef int8_t i8;
+
 // typedef void* error;
 typedef void* voidptr;
 typedef char* byteptr;
+typedef char* charptr;
 typedef void voidty;
+typedef unsigned char byte;
+
 #ifndef have_gxcallbale
+#define nilptr NULL
+#define iota 0
+
 #define have_gxcallbale
 typedef struct gxcallable gxcallable;
 struct gxcallable {voidptr obj; voidptr fnptr; };
 extern voidptr gxcallable_new(voidptr fnptr, voidptr obj);
 #endif
+
+`
+	return precgodefs
+}
+
+func (this *g2nc) genPreStructDefs() string {
+	precgodefs := `
+
+typedef uint8 metaflag;
+typedef int typealg;
+typedef struct _metatype {
+    int size;
+    voidptr ptrdata;
+    uint32 hash;
+    metaflag tflag;
+    uint8 align;
+    uint8 fieldalign;
+    uint8 kind;
+    typealg alg;
+    byteptr gcdata;
+    charptr tystr;
+    voidptr ptr2this;
+} _metatype;
+typedef struct cxeface {
+    _metatype* _type; // _type
+    voidptr data;
+} cxeface;
+typedef struct ifacetab {
+    voidptr inner; // interfacetype*
+    _metatype* _type;
+    struct ifacetab* link;
+    int32 bad;
+    int32 inhash;
+    usize fun[1];
+} ifacetab;
+typedef struct cxiface {
+    ifacetab* itab; // itab
+    voidptr data;
+} cxiface;
+
+typedef struct builtin__cxstring3 builtin__cxstring3;
+typedef struct error error;
+struct error {
+    void* thisptr; // error's this object
+    builtin__cxstring3* (*Error)(error*);
+};
+
+typedef struct wideptr wideptr;
+struct wideptr { voidptr ptr; voidptr obj; };
+
 `
 	return precgodefs
 }
 
 func (c *g2nc) genBuiltinTypesMetatype() string {
 	s := "#include <stdalign.h>\n"
-	s += "#include <cxrtbase.h>\n"
+	s += "#include <stdbool.h>\n"
+
+	// s += "#include <cxrtbase.h>\n"
+	s += c.genPrecgodefs()
+	s += c.genPreStructDefs()
 	bitypes := append(types.Typ, types.TypeAlias()...)
 	for idx, bityp := range bitypes {
 		tyname := bityp.Name()
@@ -3900,7 +3981,7 @@ func (this *g2nc) code() (string, string) {
 		this.psctx.fcdefscc + "\n*/\n\n"
 	code += "#include <stddef.h>\n"
 	code += "#include <stdalign.h>\n"
-	code += "#include <cxrtbase.h>\n\n"
+	// code += "#include <cxrtbase.h>\n\n"
 	code += this.genPrecgodefs() + "\n"
 	code += this.sb.String()
 	return code, "c"
