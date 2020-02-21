@@ -201,6 +201,13 @@ func (tf *TfTmpvars) apply(ctx *TransformContext) {
 				te.X = as.Lhs[0]
 				ctx.addline(te, as)
 			}
+		case *ast.IndexExpr:
+			// index key to ident
+			if _, ok := te.Index.(*ast.Ident); !ok {
+				as := newtmpassign(te.Index)
+				te.Index = as.Lhs[0]
+				ctx.addline(te, as)
+			}
 		default:
 			_ = te
 		}

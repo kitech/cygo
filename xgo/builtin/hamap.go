@@ -88,6 +88,7 @@ func htkey_unhash_int64(hv usize) int64 {
 func htkey_hash_str(k1 voidptr, len int) usize {
 	var k1p byteptr = (byteptr)(k1)
 	var hash usize
+
 	hash = 0 + 5381 + len + 1
 	for i := 0; i < len; i++ {
 		c := k1p[i]
@@ -96,8 +97,9 @@ func htkey_hash_str(k1 voidptr, len int) usize {
 
 	return hash
 }
-func htkey_hash_str2(k1 string, len int) usize {
-	return htkey_hash_str(k1.ptr, k1.len)
+func htkey_hash_str2(k1 *string, len int) usize {
+	k2 := *k1
+	return htkey_hash_str(k2.ptr, k2.len)
 }
 
 // len = 0
@@ -259,7 +261,7 @@ func (mp *mirmap) itnew() *mapiter {
 	return mit
 }
 
-func (it *mapiter) itnext() *mapnode {
+func (it *mapiter) next() *mapnode {
 	optr := it.mobj.ptr
 	ocap := it.mobj.cap_
 
@@ -270,6 +272,7 @@ func (it *mapiter) itnext() *mapnode {
 				it.plst += 1
 				return node
 			}
+			node = node.next
 		}
 		it.pvec += 1
 		it.plst = 0
@@ -487,6 +490,7 @@ func (mp *mirmap) delete(k voidptr) bool {
 				} else {
 					prev.next = node.next
 				}
+				mp.len_--
 				return true
 			}
 			prev = node
@@ -510,7 +514,7 @@ func (mp *mirmap) insert(k voidptr, v voidptr) bool {
 	for onode != nil {
 		if onode.hash == hash {
 			// println("replace", idx, k)
-			onode.val = v
+			memcpy3(onode.val, v, mp.valsz)
 			return true
 		}
 		onode = onode.next

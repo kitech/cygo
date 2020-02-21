@@ -1665,6 +1665,7 @@ func (pc *ParserContext) walkpass_tmpvars() {
 					_ = upstmt
 				}
 			case *ast.AssignStmt: // processing _ name
+				// TODO depcreated
 				for idx, ae := range te.Lhs {
 					aidt, ok := ae.(*ast.Ident)
 					if !ok {
@@ -1692,13 +1693,37 @@ func (pc *ParserContext) walkpass_tmpvars() {
 					}
 				}
 			case *ast.IndexExpr:
+				log.Println(te.X, te.Index)
 				stmt := upfindstmt(pc, c, 0)
 				// dont left value
 				if ae, ok := stmt.(*ast.AssignStmt); ok {
 					leftval := false
-					for _, be := range ae.Lhs {
+					for idx, be := range ae.Lhs {
 						if be == te {
 							leftval = true
+							// 查看右值是否是ident
+							xty := pc.info.TypeOf(te.X)
+							maparrsli := false
+							switch xty.(type) {
+							case *types.Map, *types.Slice, *types.Array:
+								maparrsli = true
+							}
+							if !maparrsli {
+								break
+							}
+							re := ae.Rhs[idx]
+							if _, ok2 := re.(*ast.Ident); !ok2 {
+								vsp2 := &ast.AssignStmt{}
+								vsp2.Lhs = []ast.Expr{newIdent(tmpvarname())}
+								vsp2.Rhs = []ast.Expr{re}
+								vsp2.Tok = token.DEFINE
+								vsp2.TokPos = c.Node().Pos()
+								ae.Rhs[idx] = vsp2.Lhs[0]
+								tmpvars[stmt] = append(tmpvars[stmt], vsp2)
+								tyval := types.TypeAndValue{}
+								tyval.Type = pc.info.TypeOf(re)
+								pc.info.Types[vsp2.Lhs[0]] = tyval
+							}
 							break
 						}
 					}

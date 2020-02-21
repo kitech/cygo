@@ -1137,23 +1137,22 @@ func (c *g2nc) genRangeStmt(scope *ast.Scope, s *ast.RangeStmt) {
 
 		c.out("{").outnl()
 		c.outf("  int %s = -1", idxidstr).outfh().outnl()
-		c.out("  HashTableIter htiter").outfh().outnl()
-		c.out("  hashtable_iter_init(&htiter, ")
+		c.out("builtin__mapiter* htiter = builtin__mirmap_itnew(")
 		c.genExpr(scope, s.X)
 		c.out(")").outfh().outnl()
-		c.out("  TableEntry *entry").outfh().outnl()
-		c.out("  while (hashtable_iter_next(&htiter, &entry) != CC_ITER_END) {").outnl()
+		c.out("builtin__mapnode* htnode = nilptr").outfh().outnl()
+		c.out("while ((htnode = builtin__mapiter_next(htiter)) != nilptr) {").outnl()
 		c.outf("  %s++", idxidstr).outfh().outnl()
 		keyvname := fmt.Sprintf("%v", s.Key)
 		keyvname = gopp.IfElseStr(s.Key == nil, tmpvarname(), keyvname)
 		keyvname = gopp.IfElseStr(keyvname == "_", tmpvarname(), keyvname)
-		c.outf("    %s %v = entry->key", keytystr, keyvname).outfh().outnl()
+		c.outf("    %s %v = *(%s*)htnode->key", keytystr, keyvname, keytystr).outfh().outnl()
 		valvname := fmt.Sprintf("%v", s.Value)
 		valvname = gopp.IfElseStr(s.Value == nil, tmpvarname(), valvname)
 		valvname = gopp.IfElseStr(valvname == "_", tmpvarname(), valvname)
-		c.outf("    %s %v = entry->value", valtystr, valvname).outfh().outnl()
+		c.outf("    %s %v = *(%s*)htnode->val", valtystr, valvname, valtystr).outfh().outnl()
 		c.genBlockStmt(scope, s.Body)
-		c.out("  }").outnl()
+		c.out("}").outnl()
 		c.out("// TODO gc safepoint code").outnl()
 		c.out("}").outnl()
 	case *types.Slice:
@@ -1680,9 +1679,9 @@ func (c *g2nc) genCallExprLen(scope *ast.Scope, te *ast.CallExpr) {
 	if ismapty(argty.String()) {
 		switch be := arg0.(type) {
 		case *ast.Ident:
-			c.outf("hashtable_size(%s)", be.Name)
+			c.outf("cxhashtable3_size(%s)", be.Name)
 		case *ast.SelectorExpr:
-			c.out("hashtable_size(")
+			c.out("cxhashtable3_size(")
 			c.genExpr(scope, be.X)
 			c.out("->")
 			c.genExpr(scope, be.Sel)
@@ -1718,9 +1717,9 @@ func (c *g2nc) genCallExprAppend(scope *ast.Scope, te *ast.CallExpr) {
 		panic(argty.String())
 		switch be := arg0.(type) {
 		case *ast.Ident:
-			c.outf("hashtable_size(%s)", be.Name)
+			c.outf("cxhashtable3_size(%s)", be.Name)
 		case *ast.SelectorExpr:
-			c.out("hashtable_size(")
+			c.out("cxhashtable3_size(")
 			c.genExpr(scope, be.X)
 			c.out("->")
 			c.genExpr(scope, be.Sel)
@@ -1762,7 +1761,7 @@ func (c *g2nc) genCallExprDelete(scope *ast.Scope, te *ast.CallExpr) {
 		case *ast.BasicLit:
 			switch te.Kind {
 			case token.STRING:
-				keystr = fmt.Sprintf("cxhashtable_hash_str(%s)", te.Value)
+				keystr = fmt.Sprintf("cxhashtable3_hash_str(%s)", te.Value)
 			default:
 				log.Println("todo", te.Kind)
 			}
@@ -1771,7 +1770,7 @@ func (c *g2nc) genCallExprDelete(scope *ast.Scope, te *ast.CallExpr) {
 		default:
 			log.Println("todo", reflect.TypeOf(arg1), arg1, c.exprstr(arg1), c.exprpos(arg0))
 		}
-		c.outf("hashtable_remove(")
+		c.outf("cxhashtable3_remove(")
 		c.genExpr(scope, arg0)
 		c.outf(", (voidptr)(uintptr)%s, 0)", keystr).outfh().outnl()
 	} else {
@@ -2709,7 +2708,7 @@ func (this *g2nc) genExpr2(scope *ast.Scope, e ast.Expr) {
 			tym := this.info.TypeOf(te).(*types.Map)
 			keykind := type2rtkind(tym.Key())
 			valkind := type2rtkind(tym.Elem())
-			this.outf("cxhashtable_new(%v, %v)", keykind, valkind).outfh().outnl()
+			this.outf("cxhashtable3_new(%v, %v)", keykind, valkind).outfh().outnl()
 			var vo = scope.Lookup("varname")
 			for idx, ex := range te.Elts {
 				switch be := ex.(type) {
@@ -3043,10 +3042,10 @@ func (c *g2nc) genCxmapAddkv(scope *ast.Scope, vnamex interface{}, ke ast.Expr, 
 		log.Println("unknown", vei, reflect.TypeOf(ke), reflect.TypeOf(vei))
 	}
 
-	c.outf("hashtable_add(")
+	c.outf("cxhashtable3_add(")
 	c.genExpr(scope, vnamex.(ast.Expr))
-	c.outf(", (voidptr)(uintptr)%v,", keystr)
-	c.out("(voidptr)(uintptr)(")
+	c.outf(", (voidptr)(uintptr)&%v,", keystr)
+	c.out("(voidptr)(uintptr)(&")
 	switch ve := vei.(type) {
 	case ast.Expr:
 		c.genExpr(scope, ve)
@@ -3102,7 +3101,7 @@ func (c *g2nc) genCxmapGetkv(scope *ast.Scope, vnamex interface{}, ke ast.Expr, 
 	c.out(cuzero).outfh().outnl()
 
 	c.outf("int %v =", tmpvarname()).outsp()
-	c.outf("hashtable_get(")
+	c.outf("cxhashtable3_get(")
 	c.genExpr(scope, vnamex.(ast.Expr))
 	if false { // waitdep
 		c.outf(", (voidptr)(uintptr)%v,", keystr)
@@ -3314,7 +3313,7 @@ func (this *g2nc) exprTypeNameImpl2(scope *ast.Scope, ety types.Type, e ast.Expr
 	case *types.Chan:
 		return "voidptr"
 	case *types.Map:
-		return "HashTable*"
+		return "builtin__mirmap*"
 	case *types.Signature:
 		switch fe := e.(type) {
 		case *ast.FuncLit:
@@ -3517,7 +3516,7 @@ func (this *g2nc) genTypeSpec(scope *ast.Scope, spec *ast.TypeSpec) {
 					tym := fldty.(*types.Map)
 					keykind := type2rtkind(tym.Key())
 					valkind := type2rtkind(tym.Elem())
-					this.outf("obj->%s = cxhashtable_new(%v, %v)",
+					this.outf("obj->%s = cxhashtable3_new(%v, %v)",
 						fldname.Name, keykind, valkind).outfh().outnl()
 				} else if ischanty2(fldty) {
 					// elemkind := 0
@@ -3667,7 +3666,7 @@ func (c *g2nc) genValueSpec(scope *ast.Scope, spec *ast.ValueSpec, validx int) {
 			} else if isarrayty2(varty) || isslicety2(varty) {
 				c.out("builtin__cxarray3*")
 			} else if ismapty2(varty) {
-				c.out("HashTable*")
+				c.out("builtin__mirmap*")
 			} else if ischanty2(varty) {
 				c.out("voidptr")
 			} else if strings.Contains(vartystr, "func(") {
@@ -3729,7 +3728,7 @@ func (c *g2nc) genValueSpec(scope *ast.Scope, spec *ast.ValueSpec, validx int) {
 				tym := varty.(*types.Map)
 				keykind := type2rtkind(tym.Key())
 				valkind := type2rtkind(tym.Elem())
-				c.outf("cxhashtable_new(%v, %v)", keykind, valkind)
+				c.outf("cxhashtable3_new(%v, %v)", keykind, valkind)
 			} else if isstructty2(varty) {
 				if ok := ispointer2(varty); ok {
 					tystr := c.exprTypeNameImpl2(scope, varty, varname)
