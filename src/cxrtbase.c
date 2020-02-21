@@ -73,7 +73,7 @@ static void cxrt_fiber_post_pth(void (*fn)(void*), void*arg) {
     fwdarg->arg = arg;
     pthread_create(&thr, nilptr, cxrt_fiber_fwdfn, fwdarg);
 }
-void cxrt_fiber_post(void (*fn)(void*), void*arg) {
+void cxrt_fiber_post(void* fn/*void (*fn)(void*)*/, void*arg) {
     // cxrt_fiber_post_pth(fn, arg);
     int id = crn_post(fn, arg);
     assert(id > 0);

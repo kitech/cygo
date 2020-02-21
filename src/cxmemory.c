@@ -20,7 +20,7 @@ void* cxcalloc(size_t blocks, size_t size) {
     return crn_gc_malloc(blocks*size);
 }
 
-char* cxstrdup(const char* str) {
+char* cxstrdup(char* str) {
     char* ds = cxmalloc(strlen(str)+1);
     strcpy(ds, str);
     return ds;

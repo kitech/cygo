@@ -99,7 +99,7 @@ void println3(const char* origfilename, int origlineno, const char* filename, in
 #define gogorun
 
 extern void cxrt_init_env(int argc, char** argv);
-extern void cxrt_fiber_post(void (*fn)(void*), void*arg);
+extern void cxrt_fiber_post(void* fn /*void (*fn)(void*)*/, void*arg);
 extern void* cxrt_chan_new(int sz);
 extern void cxrt_chan_send(void*ch, void*arg);
 extern void* cxrt_chan_recv(void*ch);
@@ -113,7 +113,7 @@ void* cxmalloc(size_t size);
 void* cxrealloc(void*ptr, size_t size);
 void cxfree(void* ptr);
 void* cxcalloc(size_t nmemb, size_t size);
-char* cxstrdup(const char* str);
+char* cxstrdup(char* str);
 char* cxstrndup(char* str, int n);
 void* cxmemdup(void* ptr, int sz);
 

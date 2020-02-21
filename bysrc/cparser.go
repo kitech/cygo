@@ -337,6 +337,7 @@ func (cp *cparser1) walk(n *sitter.Node, lvl int) {
 				symname = estr
 			case tsSemiColon:
 			case tsInitDeclarator:
+			case "ERROR": // for thread local define: static __thread char foo[8]
 			default:
 				log.Panicln(nx.Type(), "|", estr, "|", txt)
 			}
@@ -978,7 +979,7 @@ func getfuncname(s string) (string, string) {
 func getvarname(s string) (string, string) {
 	if strings.Contains(s, "=") {
 		// int a = 0; or void(*aaa)() = 0;
-		s = strings.Split(s, "=")[0]
+		s = strings.Split(s, "=")[0] + ";"
 	}
 	fields := strings.Split(s, ";")
 	if len(fields) == 1 && strings.Contains(s, "(") {
@@ -987,7 +988,14 @@ func getvarname(s string) (string, string) {
 		fields = strings.Split(fields[1], ")")
 		return strings.Trim(fields[0], "*"), "void*"
 	}
-	gopp.Assert(len(fields) > 1, "wtfff", s)
+	for {
+		if fields[0] == "static" || fields[0] == "__thread" {
+			fields = fields[1:]
+		} else {
+			break
+		}
+	}
+	gopp.Assert(len(fields) > 1, "wtfff", len(fields), s)
 	fields2 := strings.Split(strings.TrimSpace(fields[0]), " ")
 	fields3 := []string{}
 	for _, fld := range fields2 {
