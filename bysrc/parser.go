@@ -18,6 +18,7 @@ import (
 	"path/filepath"
 	"reflect"
 	"strings"
+	"time"
 
 	"golang.org/x/tools/go/ast/astutil"
 
@@ -1272,12 +1273,14 @@ func (pc *ParserContext) walkpass_fill_funcvars() {
 * 第三遍遍历做插入操作，根据快照向上回溯找最近可插入点
 */
 
+// TODO too too slow
 // 在 check 之前做 ast 修改，不需要涉及类型问题
 func (pc *ParserContext) walkpass_dotransforms(afterchk bool) {
+	btime := time.Now()
 	for i := 0; ; i++ {
 		addtot := pc.walkpass_dotransforms_impl(afterchk, i)
 		if addtot == 0 {
-			log.Println("total cycles", i+1)
+			log.Println("total cycles", pc.bdpkgs.Name, i+1, time.Since(btime))
 			break
 		}
 		// log.Println("continue", i, addtot)
@@ -1319,27 +1322,6 @@ func (pc *ParserContext) walkpass_dotransforms_impl(afterchk bool, cycle int) in
 	log.Println("addlines", pc.bdpkgs.Name, len(addlines), addtot)
 	pc.walkpass_flat_cursors()
 	cursors := pc.cursors
-	var findupinsable func(e ast.Node) *astutil.Cursor
-	findupinsable = func(e ast.Node) *astutil.Cursor {
-		c := cursors[e]
-		if c == nil {
-			return nil
-		}
-		pe := c.Parent()
-		if pe == nil {
-			return nil
-		}
-		if _, ok := pe.(*ast.BlockStmt); ok {
-			return c
-		}
-		if _, ok := pe.(*ast.CaseClause); ok {
-			return c
-		}
-		if _, ok := pe.(*ast.File); ok {
-			return c
-		}
-		return findupinsable(pe)
-	}
 	for curexpr, stmts := range addlines {
 		// log.Println("addlines", len(addlines))
 		found := false
@@ -1358,11 +1340,11 @@ func (pc *ParserContext) walkpass_dotransforms_impl(afterchk bool, cycle int) in
 
 				found = true
 				te := n
-				inscs := findupinsable(te)
+				inscs := findupinsable(cursors, te, 0)
 				if inscs == nil {
 					// TODO not found, but maybe global
 					pn := c.Parent()
-					log.Println("not found", reftyof(te), reftyof(pn), te)
+					log.Println("not found", reftyof(te), reftyof(pn), te, exprpos(pc, te))
 				}
 				if false {
 					log.Println(inscs != nil, inscs.Index(), reftyof(inscs.Node()))
@@ -1693,37 +1675,13 @@ func (pc *ParserContext) walkpass_tmpvars() {
 					}
 				}
 			case *ast.IndexExpr:
-				log.Println(te.X, te.Index)
 				stmt := upfindstmt(pc, c, 0)
 				// dont left value
 				if ae, ok := stmt.(*ast.AssignStmt); ok {
 					leftval := false
-					for idx, be := range ae.Lhs {
+					for _, be := range ae.Lhs {
 						if be == te {
 							leftval = true
-							// 查看右值是否是ident
-							xty := pc.info.TypeOf(te.X)
-							maparrsli := false
-							switch xty.(type) {
-							case *types.Map, *types.Slice, *types.Array:
-								maparrsli = true
-							}
-							if !maparrsli {
-								break
-							}
-							re := ae.Rhs[idx]
-							if _, ok2 := re.(*ast.Ident); !ok2 {
-								vsp2 := &ast.AssignStmt{}
-								vsp2.Lhs = []ast.Expr{newIdent(tmpvarname())}
-								vsp2.Rhs = []ast.Expr{re}
-								vsp2.Tok = token.DEFINE
-								vsp2.TokPos = c.Node().Pos()
-								ae.Rhs[idx] = vsp2.Lhs[0]
-								tmpvars[stmt] = append(tmpvars[stmt], vsp2)
-								tyval := types.TypeAndValue{}
-								tyval.Type = pc.info.TypeOf(re)
-								pc.info.Types[vsp2.Lhs[0]] = tyval
-							}
 							break
 						}
 					}

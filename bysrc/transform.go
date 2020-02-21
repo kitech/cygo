@@ -13,6 +13,35 @@ import (
 	"golang.org/x/tools/go/ast/astutil"
 )
 
+var findupinsable func(cursors map[ast.Node]*astutil.Cursor,
+	e ast.Node, lvl int) *astutil.Cursor
+
+func init() {
+	findupinsable = func(cursors map[ast.Node]*astutil.Cursor,
+		e ast.Node, lvl int) *astutil.Cursor {
+		c := cursors[e]
+		if c == nil {
+			log.Println(lvl, reftyof(e))
+			return nil
+		}
+		pe := c.Parent()
+		if pe == nil {
+			log.Println(lvl, reftyof(e), reftyof(pe))
+			return nil
+		}
+		if _, ok := pe.(*ast.BlockStmt); ok {
+			return c
+		}
+		if _, ok := pe.(*ast.CaseClause); ok {
+			return c
+		}
+		if _, ok := pe.(*ast.File); ok {
+			return c
+		}
+		return findupinsable(cursors, pe, lvl+1)
+	}
+}
+
 type TransformContext struct {
 	c     *astutil.Cursor // curent cursor
 	n     ast.Node        // c.Node
@@ -102,7 +131,13 @@ func (tf *TfTmpvars) apply(ctx *TransformContext) {
 				te.Lhs = te.Lhs[cnt-1:]
 				te.Rhs = te.Rhs[cnt-1:]
 			} else if len(te.Lhs) == 1 && len(te.Rhs) == len(te.Lhs) {
-				if _, ok := te.Rhs[0].(*ast.Ident); !ok {
+				if _, ok := te.Lhs[0].(*ast.IndexExpr); ok {
+					if _, ok2 := te.Rhs[0].(*ast.Ident); !ok2 {
+						// right non ident expr to ident
+						as := newtmpassign(te.Rhs[0])
+						te.Rhs[0] = as.Lhs[0]
+						ctx.addline(te, as)
+					}
 				}
 			}
 		case *ast.CompositeLit:
@@ -203,11 +238,7 @@ func (tf *TfTmpvars) apply(ctx *TransformContext) {
 			}
 		case *ast.IndexExpr:
 			// index key to ident
-			if _, ok := te.Index.(*ast.Ident); !ok {
-				as := newtmpassign(te.Index)
-				te.Index = as.Lhs[0]
-				ctx.addline(te, as)
-			}
+			// moved to seperate cycle
 		default:
 			_ = te
 		}
@@ -222,7 +253,7 @@ func (tf *TfTmpvars) apply(ctx *TransformContext) {
 	return
 }
 
-///
+/// call args to ident
 type TfTmpvars2 struct {
 }
 
@@ -369,7 +400,7 @@ func (tf *TfTmpvars2) apply(ctx *TransformContext) {
 	return
 }
 
-///
+/// add new0 method for struct to ast
 type TfTmpvars3 struct {
 }
 
@@ -437,6 +468,41 @@ func (tf *TfTmpvars3) apply(ctx *TransformContext) {
 				if true {
 					fio := ctx.fio
 					fio.Decls = append(fio.Decls, ds.Decl)
+				}
+			}
+		default:
+			_ = te
+		}
+	} else {
+		switch te := n.(type) {
+		default:
+			_ = te
+		}
+	}
+	return
+}
+
+/// index key to ident
+type TfTmpvars4 struct {
+}
+
+func init() { regtransformer(&TfTmpvars4{}) }
+
+func (tf *TfTmpvars4) afterchk() bool { return false }
+func (tf *TfTmpvars4) apply(ctx *TransformContext) {
+	c := ctx.c
+	n := ctx.n
+	_ = c
+
+	if ctx.ispre {
+		switch te := n.(type) {
+		case *ast.IndexExpr:
+			// index key to ident
+			if _, ok := te.Index.(*ast.Ident); !ok {
+				if true {
+					as := newtmpassign(te.Index)
+					te.Index = as.Lhs[0]
+					ctx.addline(te, as)
 				}
 			}
 		default:

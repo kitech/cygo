@@ -465,6 +465,17 @@ func (c *g2nc) genFuncDeclCallable(scope *ast.Scope, fd *ast.FuncDecl, ant *Anno
 	c.out(")").outfh().outnl()
 	c.out("}").outnl().outnl()
 }
+func (c *g2nc) hasdefer(fd *ast.FuncDecl) bool {
+	has := false
+	for _, defero := range c.psctx.defers {
+		tmpfd := upfindFuncDeclNode(c.psctx, defero, 0)
+		if tmpfd == fd {
+			has = true
+			break
+		}
+	}
+	return has
+}
 func (this *g2nc) genFuncDecl(scope *ast.Scope, fd *ast.FuncDecl) {
 	ant := newAnnotation(fd.Doc)
 	this.outf("// %v", ant.original).outnl()
@@ -534,7 +545,7 @@ func (this *g2nc) genFuncDecl(scope *ast.Scope, fd *ast.FuncDecl) {
 	} else if fd.Body != nil {
 		gendeferprep := func() {
 			this.out("// int array").outnl()
-			this.out(gopp.IfElseStr(ant.nodefer, "//", ""))
+			this.out(gopp.IfElseStr(!this.hasdefer(fd), "//", ""))
 			this.outf("builtin__cxarray3* deferarr=cxarray3_new(0, sizeof(int))").outfh().outnl()
 		}
 		gennamedrets := func() {

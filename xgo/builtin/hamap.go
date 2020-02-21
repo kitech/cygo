@@ -422,6 +422,11 @@ func (mp *mirmap) haskey(k voidptr) bool {
 }
 
 //export cxhashtable3_get
+func (mp *mirmap) access0(k voidptr, v *voidptr) int {
+	v1 := mp.access1(k)
+	*v = v1
+	return 0
+}
 func (mp *mirmap) access1(k voidptr) voidptr {
 	ocap := mp.cap_
 	optr := mp.ptr

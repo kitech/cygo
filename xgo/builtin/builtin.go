@@ -16,24 +16,20 @@ import "C"
 
 func keep() {}
 
-//go:nodefer
 func malloc3(sz int) voidptr {
 	ptr := C.cxmalloc(sz)
 	return ptr
 }
 
-//go:nodefer
 func realloc3(ptr voidptr, sz int) voidptr {
 	ptr2 := C.cxrealloc(ptr, sz)
 	return ptr2
 }
 
-//go:nodefer
 func free3(ptr voidptr) {
 	C.cxfree(ptr)
 }
 
-//go:nodefer
 func strdup3(ptr voidptr) voidptr {
 	if ptr == nil {
 		return nil
@@ -41,7 +37,6 @@ func strdup3(ptr voidptr) voidptr {
 	return C.cxstrdup(ptr)
 }
 
-//go:nodefer
 func strndup3(ptr voidptr, n int) voidptr {
 	if ptr == nil {
 		return nil
@@ -49,19 +44,16 @@ func strndup3(ptr voidptr, n int) voidptr {
 	return C.cxstrndup(ptr, n)
 }
 
-//go:nodefer
 func strlen3(ptr voidptr) int {
 	rv := C.strlen(ptr)
 	return rv
 }
 
-//go:nodefer
 func memcpy3(dst voidptr, src voidptr, n int) voidptr {
 	rv := C.memcpy(dst, src, n)
 	return rv
 }
 
-//go:nodefer
 func memdup3(src voidptr, n int) voidptr {
 	if src == nil {
 		return nil
@@ -71,19 +63,16 @@ func memdup3(src voidptr, n int) voidptr {
 	return dst
 }
 
-//go:nodefer
 func memmove3(dst voidptr, src voidptr, n int) voidptr {
 	rv := C.memmove(dst, src, n)
 	return rv
 }
 
-//go:nodefer
 func memset3(ptr voidptr, c int, n int) voidptr {
 	rv := C.memset(ptr, c, n)
 	return rv
 }
 
-//go:nodefer
 func memcmp3(p1 voidptr, p2 voidptr, n int) int {
 	rv := C.memcmp(p1, p2, n)
 	return rv

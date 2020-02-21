@@ -193,7 +193,7 @@ func sign2rety(v string) string {
 		retstr = retstr[pos+1:]
 	}
 	if isstrty(retstr) {
-		return "cxstring*"
+		return "builtin__cxstring3*"
 	}
 	if iseface(retstr) {
 		retstr = "cxeface"
@@ -497,6 +497,9 @@ func pkgpfxof(pc *ParserContext, e ast.Expr) string {
 	case *ast.Ident:
 		obj := pc.info.ObjectOf(te)
 		// log.Println(e, obj.Pkg().Name(), obj.Pkg())
+		if obj == nil {
+			return ""
+		}
 		return obj.Pkg().Name() + pkgsep
 	default:
 		log.Println("noimpl", e, reftyof(e))
@@ -580,9 +583,6 @@ func newAnnotation(cmts *ast.CommentGroup) *Annotation {
 			}
 			if strings.HasPrefix(line, "//go:noinline") {
 				ant.noinline = true
-			}
-			if strings.HasPrefix(line, "//go:nodefer") {
-				ant.nodefer = true
 			}
 			if strings.HasPrefix(line, "//go:linkname ") {
 				fields := strings.Split(line, " ")
