@@ -6,6 +6,9 @@ package xgc
 
 #include <pthread.h>
 #include <gc/gc.h>
+
+// finalization entries
+extern GC_word GC_fo_entries;
 */
 import "C"
 
@@ -141,6 +144,13 @@ func GetBytesSinceGC() int { return C.GC_get_bytes_since_gc() }
 func GetMemoryUse() int    { return C.GC_get_memory_use() }
 func GetNonGCBytes() int   { return C.GC_get_non_gc_bytes() }
 func GetTotalBytes() int   { return C.GC_get_total_bytes() }
+func GetFinalizerObjectEntries() int {
+	// why undefined reference
+	// libgc.so 符号表没有，完全没有曝漏出来
+	// focnt := C.GC_fo_entries
+	focnt := 0
+	return focnt
+}
 
 type Stats struct {
 	Version      uint

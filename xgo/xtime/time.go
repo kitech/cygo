@@ -31,29 +31,37 @@ func Sleepms(msec int) int {
 	return rv
 }
 
+func Unix() int64 {
+	uts := C.time(0)
+	return int64(uts)
+}
+
 type Duration int64
 
 type Time struct {
-	unix int64 // usec
+	unix int64 // usec, not the same with Go
 	zone int
 }
 
 func Now() *Time {
 	var tv = &C.struct_timeval{}
 	rv := C.gettimeofday(tv, 0)
-	uts := C.time(0)
 	t := &Time{}
 	sec := tv.tv_sec
 	usec := tv.tv_usec
 	newts := sec*US + usec
 	t.unix = newts
 	t.unix = tv.tv_sec*US + tv.tv_usec
-	t.unix = uts * US
-	t.zone = zone()
+	if tmzone == -1 {
+		tmzone = zoneno()
+	}
+	t.zone = tmzone
 	return t
 }
 
-func zone() int {
+var tmzone int = -1
+
+func zoneno() int {
 	rv := C.timezone
 	return rv
 }
@@ -72,12 +80,90 @@ func (t *Time) Iszero() bool {
 	return true
 }
 
+func (t *Time) Since(t2 *Time) Duration {
+	duri := t.unix - t2.unix
+	// duro := Duration(duri) // TODO compiler
+	return duri
+}
+
+func (dur Duration) String() string {
+	var dur2 int64 = int64(dur)
+	daydur := int64(3600 * 24 * US)
+	hourdur := int64(3600 * US)
+	mindur := int64(60 * US)
+	secdur := int64(US)
+
+	days := dur2 / daydur
+	hours := (dur2 % daydur) / hourdur
+	mins := (dur2 % hourdur) / mindur
+	secs := (dur2 % mindur) / secdur
+	msecs := (dur2 % secdur) / MS
+
+	// TODO reduce allocation
+	var str string
+	seenpfx := false
+	if days > 0 {
+		str += days.repr() + "d"
+		seenpfx = true
+	}
+	if hours > 0 || seenpfx {
+		str += hours.repr() + "h"
+		seenpfx = true
+	}
+	if mins > 0 || seenpfx {
+		str += mins.repr() + "m"
+		seenpfx = true
+	}
+	if secs > 0 || seenpfx {
+		str += secs.repr() + "s"
+		seenpfx = true
+	}
+	if msecs > 0 {
+		str += msecs.repr() + "ms"
+	}
+	return str
+}
+
 func (t *Time) Format(format string) string {
 	return ""
 }
 
 // yyyy-mm-dd hh:MM:ss.iii
 func (t *Time) Format1(withms bool) string {
+	return ""
+}
+
+func (t *Time) Tostr1() string {
+	var ep usize
+	ep = t.unix / US
+
+	// var tmo *C.struct_tm // TODO compiler
+	tmo := C.localtime(&ep)
+	buf := malloc3(32)
+	C.sprintf(buf, "%04d-%02d-%02d %02d:%02d:%02d".ptr,
+		tmo.tm_year+1900, tmo.tm_mon, tmo.tm_mday, tmo.tm_hour, tmo.tm_min, tmo.tm_sec)
+	return gostring(buf)
+}
+
+// with msec
+func (t *Time) Tostr2() string {
+	var ep int64
+	ep = t.unix / US
+	msec := (t.unix % US) / MS
+
+	// var tmo *C.struct_tm // TODO compiler
+	tmo := C.localtime(&ep)
+	buf := malloc3(32)
+	C.sprintf(buf, "%04d-%02d-%02d %02d:%02d:%02d.%03d".ptr,
+		tmo.tm_year+1900, tmo.tm_mon, tmo.tm_mday,
+		tmo.tm_hour, tmo.tm_min, tmo.tm_sec, msec)
+	return gostring(buf)
+}
+
+func (t *Time) Toiso() string {
+	var ep usize
+	ep = t.unix / US
+
 	return ""
 }
 

@@ -27,18 +27,25 @@ type cxstring3 struct {
 	len int
 }
 
+// no clone
 func gostring(ptr byteptr) string {
 	if ptr == nil {
 		return ""
 	}
-	return string(ptr)
+	s := &cxstring3{}
+	s.ptr = ptr
+	s.len = strlen3(ptr)
+	return s
 }
 func gostring_clone(ptr byteptr) string {
 	if ptr == nil {
 		return ""
 	}
 	ptr2 := strdup3(ptr)
-	return string(ptr2)
+	s := &cxstring3{}
+	s.ptr = ptr2
+	s.len = strlen3(ptr)
+	return s
 }
 func gostringn(ptr byteptr, n int) string {
 	if ptr == nil {
@@ -66,14 +73,16 @@ func cxstring3_new_cstr_ref(sptr byteptr) string {
 //export cxstring3_new_cstr
 func cxstring3_new_cstr(sptr byteptr) string {
 	var s string
-	s.ptr = strdup3(sptr)
+	// s.ptr = strdup3(sptr)
+	s.ptr = sptr
 	s.len = strlen3(sptr)
 	return s
 }
 
 func cxstring3_new_cstr2(sptr byteptr, len int) string {
 	var s string
-	s.ptr = strndup3(sptr, len)
+	// s.ptr = strndup3(sptr, len)
+	s.ptr = sptr
 	s.len = len
 	return s
 }
