@@ -33,8 +33,8 @@ func gostring(ptr byteptr) string {
 		return ""
 	}
 	s := &cxstring3{}
-	s.ptr = ptr
 	s.len = strlen3(ptr)
+	s.ptr = memdup3(ptr, s.len)
 	return s
 }
 func gostring_clone(ptr byteptr) string {
@@ -51,7 +51,9 @@ func gostringn(ptr byteptr, n int) string {
 	if ptr == nil {
 		return ""
 	}
-	s := string(ptr)
+	// s := string(ptr)
+	s := &cxstring3{}
+	s.ptr = memdup3(ptr, n)
 	s.len = n
 	return s
 }
@@ -128,6 +130,17 @@ func (s string) cstr() byteptr {
 }
 func (s string) empty() bool {
 	return s.len == 0
+}
+func (s string) isnil() bool {
+	var saddr *voidptr = &s
+	if *saddr == nil {
+		return true
+	}
+	return false
+}
+func (s string) addr() voidptr {
+	var saddr *voidptr = &s
+	return *saddr
 }
 
 //export cxstring3_sub

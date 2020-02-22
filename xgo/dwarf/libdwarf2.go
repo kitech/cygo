@@ -863,7 +863,7 @@ func (dw *Dwarf) calc_cufiles() {
 		files, err2 := srcfiles(cudie)
 		fidxs := []int{}
 		for idx, filename := range files {
-			ok := fileidxs.haskey(filename)
+			ok := fileidxs.haskey(&filename)
 			fidx := fileidxs[filename]
 			if !ok {
 				a2l.cufilesv = append(a2l.cufilesv, filename)

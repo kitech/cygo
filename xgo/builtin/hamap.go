@@ -236,7 +236,7 @@ func (mp *mirmap) initvalsz(valkind int) {
 	case Float64:
 		mp.valsz = sizeof(float64(0))
 	case String:
-		mp.keysz = sizeof(voidptr(0))
+		mp.valsz = sizeof(voidptr(0))
 	case Voidptr, Uintptr:
 		mp.valsz = sizeof(voidptr(0))
 	case Int16, Uint16:
@@ -246,6 +246,7 @@ func (mp *mirmap) initvalsz(valkind int) {
 	default:
 		assert(1 == 2)
 	}
+	assert(mp.valsz != 0)
 }
 
 func (mp *mirmap) dummy() {
@@ -399,9 +400,14 @@ func (mp *mirmap) useratio() int {
 	return r
 }
 
+// k need to a pointer of original var
+// if direct use, mp.exist(&somekey)
 func (mp *mirmap) exist(k voidptr) bool {
 	return mp.haskey(k)
 }
+
+// k need to a pointer of original var
+// if direct use, mp.haskey(&somekey)
 func (mp *mirmap) haskey(k voidptr) bool {
 	ocap := mp.cap_
 	optr := mp.ptr
@@ -421,12 +427,20 @@ func (mp *mirmap) haskey(k voidptr) bool {
 	return false
 }
 
+// k need to a pointer of original var
+
 //export cxhashtable3_get
 func (mp *mirmap) access0(k voidptr, v *voidptr) int {
 	v1 := mp.access1(k)
-	*v = v1
+	// when key not exist, v1 will nil
+	if v1 != nil {
+		memcpy3(v, v1, mp.valsz)
+	}
 	return 0
 }
+
+// k need to a pointer of original var
+// return (valtype*), like, (int*)
 func (mp *mirmap) access1(k voidptr) voidptr {
 	ocap := mp.cap_
 	optr := mp.ptr
@@ -504,6 +518,8 @@ func (mp *mirmap) delete(k voidptr) bool {
 	}
 	return false
 }
+
+// k,v must pointer of orignal var
 
 //export cxhashtable3_add
 func (mp *mirmap) insert(k voidptr, v voidptr) bool {

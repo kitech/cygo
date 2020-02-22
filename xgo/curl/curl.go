@@ -160,6 +160,7 @@ func header_cltcb(buf voidptr, size usize, nitem usize, cbval voidptr) usize {
 		v := kv[1]
 		v = v.trimsp()
 		rsp.Headers[k] = v
+
 		// xlog.Println(size, nitem, cbval, k, v, s.trimsp())
 	}
 

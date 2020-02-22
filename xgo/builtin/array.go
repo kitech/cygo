@@ -80,6 +80,8 @@ func (a0 *cxarray3) expand(n int) {
 	assert(a0.cap >= a0.len+n)
 }
 
+// v need to a pointer of original var
+
 //export cxarray3_append
 func (a0 *cxarray3) append(v voidptr) *cxarray3 {
 	assert(a0 != nil)
@@ -183,6 +185,8 @@ func (a0 *cxarray3) get(idx int) *voidptr {
 	out = a0.ptr + offset
 	return out
 }
+
+// v need to a pointer of original var
 
 //export cxarray3_replace_at
 func (a0 *cxarray3) set(v voidptr, idx int, out *voidptr) voidptr {

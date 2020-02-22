@@ -3098,7 +3098,7 @@ func (c *g2nc) genCxmapGetkv(scope *ast.Scope, vnamex interface{}, ke ast.Expr, 
 	if false { // waitdep
 		c.outf(", (voidptr)(uintptr)%v,", keystr)
 	}
-	c.out(",")
+	c.out(",&")
 	c.genExpr(scope, ke)
 	c.out(", (voidptr*)(&(")
 	if varobj == nil {
