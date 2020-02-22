@@ -63,6 +63,7 @@ type ParserContext struct {
 	chanops   []ast.Expr // *ast.SendStmt
 	closures  []*ast.FuncLit
 	multirets []*ast.FuncDecl
+	tupletys  map[string]*tupleinfo // tuple string => tmptyname
 	defers    []*ast.DeferStmt
 	globvars  []ast.Node            // => ValueSpec node
 	kvpairs   map[ast.Node]ast.Node // left <=> value
@@ -1462,12 +1463,27 @@ func (pc *ParserContext) walkpass_tmpl_proc() {
 	}
 }
 
+type tupleinfo struct {
+	typ    *types.Tuple
+	tyname string // genc struct name
+	expr   ast.Expr
+}
+
 func (pc *ParserContext) walkpass_multiret() {
 	multirets := []*ast.FuncDecl{}
+	tupletys := map[string]*tupleinfo{}
 	pkgs := pc.pkgs
 	for _, pkg := range pkgs {
 		astutil.Apply(pkg, func(c *astutil.Cursor) bool {
 			switch te := c.Node().(type) {
+			case ast.Expr:
+				tetyx := pc.info.TypeOf(te)
+				if tety, ok := tetyx.(*types.Tuple); ok && tety.Len() > 0 {
+					tystr := tety.String()
+					if _, ok2 := tupletys[tystr]; !ok2 {
+						tupletys[tystr] = &tupleinfo{tety, tmptyname(), te}
+					}
+				}
 			default:
 				gopp.G_USED(te)
 			}
@@ -1490,8 +1506,9 @@ func (pc *ParserContext) walkpass_multiret() {
 			return true
 		})
 	}
-	log.Println("multirets", len(multirets))
+	log.Println("multirets", pc.bdpkgs.Name, len(multirets), len(tupletys))
 	pc.multirets = multirets
+	pc.tupletys = tupletys
 }
 
 // 一句表达不了的表达式临时变量

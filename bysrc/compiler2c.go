@@ -108,6 +108,7 @@ func (c *g2nc) genpkg(name string, pkg *ast.Package) {
 		}
 	}
 	c.genFunctypesDecl(pkg.Scope)
+	c.genTupleTypes(pkg.Scope)
 	for name, f := range pkg.Files {
 		c.genfile(pkg.Scope, name, f)
 	}
@@ -189,7 +190,7 @@ func (c *g2nc) genGostmtTypes(scope *ast.Scope, pkg *ast.Package) {
 	}
 }
 func (c *g2nc) genChanTypes(scope *ast.Scope, pkg *ast.Package) {
-	c.out("// chan types ", fmt.Sprintf("%d", len(c.psctx.chanops))).outnl()
+	c.outf("// chan types %d", len(c.psctx.chanops)).outnl()
 	defer c.outnl()
 
 	gottys := map[string]bool{}
@@ -203,6 +204,19 @@ func (c *g2nc) genChanTypes(scope *ast.Scope, pkg *ast.Package) {
 		c.genChanStargs(scope, te) // chan structure args
 		gottys[goty.String()] = true
 		c.outnl()
+	}
+}
+func (c *g2nc) genTupleTypes(scope *ast.Scope) {
+	c.outf("// tuple types %d", len(c.psctx.tupletys)).outnl()
+	for _, tpi := range c.psctx.tupletys {
+		c.outf("typedef struct %s %s", tpi.tyname, tpi.tyname).outfh().outnl()
+		c.outf("struct %s {", tpi.tyname).outnl()
+		for i := 0; i < tpi.typ.Len(); i++ {
+			tyx := tpi.typ.At(i).Type()
+			tystr := c.exprTypeNameImpl2(scope, tyx, nil)
+			c.outf("%s %s", tystr, tmpvarname2(i)).outfh().outnl()
+		}
+		c.outf("}").outfh().outnl()
 	}
 }
 func (c *g2nc) genMultiretTypes(scope *ast.Scope, pkg *ast.Package) {
@@ -839,27 +853,37 @@ func (c *g2nc) genAssignStmt(scope *ast.Scope, s *ast.AssignStmt) {
 				c.genExpr(ns, s.Rhs[i])
 			}
 		} else if istuple2(retyx) {
-			tvname := tmpvarname()
-			var ns = putscope(scope, ast.Var, "varname", newIdent(tvname))
-			c.out(c.exprTypeName(scope, s.Rhs[i]))
-			c.out(tvname).outeq()
-			c.genExpr(ns, s.Rhs[i])
-			c.outfh().outnl()
-			for idx, te := range s.Lhs {
-				if s.Tok == token.DEFINE {
-					c.out(c.exprTypeName(scope, te)).outsp()
+			rety := retyx.(*types.Tuple)
+			if len(s.Lhs) == 1 && len(s.Lhs) == len(s.Rhs) {
+				var ns = putscope(scope, ast.Var, "varname", s.Lhs[i].(*ast.Ident))
+				c.out(c.exprTypeName(scope, s.Rhs[i]))
+				c.genExpr(scope, s.Lhs[i])
+				c.outeq()
+				c.genExpr(ns, s.Rhs[i])
+			} else {
+				tvname := tmpvarname()
+				var ns = putscope(scope, ast.Var, "varname", newIdent(tvname))
+				log.Println(rety.Len(), rety.String(), len(s.Lhs), len(s.Rhs), reftyof(s.Rhs[i]), exprstr(s.Rhs[i]))
+				c.out(c.exprTypeName(scope, s.Rhs[i]))
+				c.out(tvname).outeq()
+				c.genExpr(ns, s.Rhs[i])
+				c.outfh().outnl()
+				for idx, te := range s.Lhs {
+					if s.Tok == token.DEFINE {
+						c.out(c.exprTypeName(scope, te)).outsp()
+					}
+					switch xe := te.(type) {
+					case *ast.Ident:
+						c.out(xe.Name).outeq()
+					case *ast.SelectorExpr:
+						c.genExpr(scope, xe)
+					default:
+						log.Panicln(te, reftyof(te), exprstr(te))
+					}
+					c.out(tvname).out("->").out(tmpvarname2(idx)).outfh().outnl()
 				}
-				switch xe := te.(type) {
-				case *ast.Ident:
-					c.out(xe.Name).outeq()
-				case *ast.SelectorExpr:
-					c.genExpr(scope, xe)
-				default:
-					log.Panicln(te, reftyof(te), exprstr(te))
-				}
-				c.out(tvname).out("->").out(tmpvarname2(idx)).outfh().outnl()
+				c.outf("cxfree(%s)", tvname).outfh().outnl()
 			}
-			c.outf("cxfree(%s)", tvname).outfh().outnl()
 		} else if isiface2(mytyx) {
 			if retyx == mytyx {
 				c.genExpr(scope, s.Rhs[i])
@@ -2804,6 +2828,7 @@ func (this *g2nc) genExpr2(scope *ast.Scope, e ast.Expr) {
 	case *ast.ChanType:
 		this.out("voidptr")
 	case *ast.IndexExpr:
+		etyx := this.info.TypeOf(te)
 		varty := this.info.TypeOf(te.X)
 		vo := scope.Lookup("varval")
 		if varty == nil { // c type ???
@@ -2819,7 +2844,8 @@ func (this *g2nc) genExpr2(scope *ast.Scope, e ast.Expr) {
 			this.out("]")
 		} else if ismapty(varty.String()) {
 			if vo == nil {
-				this.genCxmapGetkv(scope, te.X, te.Index, nil)
+				ety, _ := etyx.(*types.Tuple)
+				this.genCxmapGetkv(scope, te.X, te.Index, nil, ety)
 			} else {
 				this.genCxmapAddkv(scope, te.X, te.Index, vo.Data)
 			}
@@ -3050,63 +3076,53 @@ func (c *g2nc) genCxmapAddkv(scope *ast.Scope, vnamex interface{}, ke ast.Expr, 
 	}
 	c.outf(")) /* %v */", valstr) // .outfh().outnl()
 }
-func (c *g2nc) genCxmapGetkv(scope *ast.Scope, vnamex interface{}, ke ast.Expr, vei interface{}) {
+func (c *g2nc) genCxmapGetkv(scope *ast.Scope, vnamex interface{}, ke ast.Expr, vei interface{}, tupty *types.Tuple) {
 	// vei == nil, then get
 	gopp.Assert(vei == nil, "wtfff", vei)
 
-	keystr := ""
-	switch be := ke.(type) {
-	case *ast.BasicLit:
-		switch be.Kind {
-		case token.STRING:
-			keystr = fmt.Sprintf("cxstring3_new_cstr(%s)", be.Value)
-		default:
-			// log.Println("unknown index key kind", be.Kind)
-			keystr = fmt.Sprintf("%v", be.Value)
-		}
-	case *ast.Ident:
-		varty := c.info.TypeOf(ke)
-		switch varty.String() {
-		case "string":
-			keystr = be.Name
-		default:
-			log.Println("unknown", varty, ke)
-		}
-	case *ast.SelectorExpr:
-		varty := c.info.TypeOf(ke)
-		switch varty.String() {
-		case "string":
-			sym := fmt.Sprintf("%v->%v", be.X, be.Sel)
-			keystr = sym
-		default:
-			log.Println("unknown", varty, ke)
-		}
-	default:
-		log.Println("unknown index key", ke, reflect.TypeOf(ke))
-	}
-
 	varobj := scope.Lookup("varname")
 	tmpname := tmpvarname()
-	if varobj == nil {
+	if tupty != nil {
+		c.outf("cxmalloc(sizeof(*%v))", varobj.Data)
+		c.outfh().outnl()
 		c.outf("voidptr %v =", tmpname).outsp()
-	}
-	c.out(cuzero).outfh().outnl()
+		c.out(cuzero).outfh().outnl()
 
-	c.outf("int %v =", tmpvarname()).outsp()
-	c.outf("cxhashtable3_get(")
-	c.genExpr(scope, vnamex.(ast.Expr))
-	if false { // waitdep
-		c.outf(", (voidptr)(uintptr)%v,", keystr)
-	}
-	c.out(",&")
-	c.genExpr(scope, ke)
-	c.out(", (voidptr*)(&(")
-	if varobj == nil {
-		c.outf("%v", tmpname)
+		tmpok := tmpvarname()
+		c.outf("int %v =", tmpok).outsp()
+		c.outf("cxhashtable3_get(")
+		c.genExpr(scope, vnamex.(ast.Expr))
+		c.out(",&")
+		c.genExpr(scope, ke)
+		c.out(", (voidptr*)&(")
+		if varobj != nil {
+			c.outf("%v->%s", varobj.Data, tmpvarname2(0))
+		} else {
+			c.outf("%v", tmpname)
+		}
+		c.outf("))").outfh().outnl()
+		if varobj != nil {
+			c.outf("%v->%s = %s>=0", varobj.Data, tmpvarname2(1), tmpok)
+		}
 	} else {
-		c.outf("%v", varobj.Data)
+		if varobj == nil {
+			c.outf("voidptr %v =", tmpname).outsp()
+		}
+		c.out(cuzero).outfh().outnl()
+
+		c.outf("int %v =", tmpvarname()).outsp()
+		c.outf("cxhashtable3_get(")
+		c.genExpr(scope, vnamex.(ast.Expr))
+		c.out(",&")
+		c.genExpr(scope, ke)
+		c.out(", (voidptr*)(&(")
+		if varobj == nil {
+			c.outf("%v", tmpname)
+		} else {
+			c.outf("%v", varobj.Data)
+		}
+		c.outf(")))") // .outfh().outnl()
 	}
-	c.outf(")))") // .outfh().outnl()
 }
 
 func (c *g2nc) genCxarrAdd(scope *ast.Scope, vnamex interface{}, ve ast.Expr, idx int) {
@@ -3346,6 +3362,9 @@ func (this *g2nc) exprTypeNameImpl2(scope *ast.Scope, ety types.Type, e ast.Expr
 		case *ast.TypeAssertExpr:
 			return fmt.Sprintf("%v_multiret_arg*", "todoaaa")
 		default:
+			if tpi, ok := this.psctx.tupletys[te.String()]; ok {
+				return tpi.tyname + "*"
+			}
 			log.Println("todo", goty, reflect.TypeOf(goty), isudty, tyval, te, this.exprpos(e))
 		}
 	default:

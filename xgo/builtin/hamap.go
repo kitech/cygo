@@ -435,8 +435,9 @@ func (mp *mirmap) access0(k voidptr, v *voidptr) int {
 	// when key not exist, v1 will nil
 	if v1 != nil {
 		memcpy3(v, v1, mp.valsz)
+		return 0
 	}
-	return 0
+	return -1
 }
 
 // k need to a pointer of original var
