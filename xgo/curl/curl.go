@@ -38,7 +38,7 @@ func init() {
 }
 func Version() string {
 	cstr := C.curl_version()
-	return C.GoString(cstr)
+	return gostring(cstr)
 }
 
 func New() *Curl {
@@ -47,7 +47,8 @@ func New() *Curl {
 	cuh.cobj = cobj
 	cuh.rsp = &Response{}
 
-	C.cxrt_set_finalizer(cuh, curlobj_finalizer)
+	set_finalizer(cuh, curlobj_finalizer)
+	// C.cxrt_set_finalizer(cuh, curlobj_finalizer)
 	return cuh
 }
 
@@ -62,7 +63,8 @@ type Slist struct {
 
 func NewSlist() *Slist {
 	lst := &Slist{}
-	C.cxrt_set_finalizer(lst, slist_finalizer)
+	set_finalizer(lst, slist_finalizer)
+	// C.cxrt_set_finalizer(lst, slist_finalizer)
 	return lst
 }
 

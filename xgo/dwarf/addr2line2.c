@@ -601,6 +601,9 @@ void get_process_start_virt_addr()  {
 
 int init_elf_dwarf2()
 {
+    extern char** cxrt_get_argv();
+    char** cxargv = cxrt_get_argv();
+
     flagsT flags = {0};
     const char *objfile = cxargv[0];
     // populate_options(argc, argv, &objfile, &flags);

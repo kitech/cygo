@@ -6,6 +6,9 @@ package builtin
 extern void* crn_gc_malloc(size_t);
 extern void* crn_gc_realloc(void*, size_t);
 extern void crn_gc_free(void*);
+
+extern void crn_set_finalizer(void* ptr, void* fn);
+
 */
 import "C"
 
@@ -50,4 +53,9 @@ func bdwgc_memdup(ptr voidptr, sz int) voidptr {
 	dp := bdwgc_malloc(sz)
 	memcpy3(dp, ptr, sz)
 	return dp
+}
+
+//export cxrt_set_finalizer
+func set_finalizer(obj voidptr, fnptr voidptr) {
+	C.crn_set_finalizer(obj, fnptr)
 }

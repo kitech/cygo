@@ -14,7 +14,8 @@ func NewBuilder() *Builder {
 }
 
 func (sb *Builder) Write(s string) {
-	C.cxarray2_appendn(sb.data, s, len(s))
+	sb.data.appendn(s.ptr, s.len)
+	// C.cxarray2_appendn(sb.data, s, len(s))
 }
 
 func (sb *Builder) Write2() {
@@ -28,6 +29,6 @@ func (sb *Builder) Len() int {
 func (sb *Builder) String() string {
 	blen := len(sb.data)
 	// s := string(sb.data) // not work
-	s := C.GoStringN(sb, blen)
+	s := gostringn(sb, blen)
 	return s
 }

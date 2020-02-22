@@ -24,7 +24,7 @@ func addr2line1(addr voidptr) (string, int) {
 	buf := C.cxmalloc(100)
 	lineno := 0
 	C.rtdebug2_addr2line(addr, buf, &lineno)
-	filex := C.GoString(buf)
+	filex := gostring(buf)
 	return filex, lineno
 }
 
@@ -34,7 +34,7 @@ func test_addr2line() {
 	var addr voidptr = &test_addr2line
 	lineno := 0
 	C.rtdebug2_addr2line(addr, buf, &lineno)
-	filex := C.GoString(buf)
+	filex := gostring(buf)
 	var file string = filex
 	println(lineno, file)
 }

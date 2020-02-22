@@ -91,6 +91,19 @@ func (a0 *cxarray3) append(v voidptr) *cxarray3 {
 	a0.len += 1
 	return a0
 }
+
+//export cxarray3_appendn
+func (a0 *cxarray3) appendn(v voidptr, n int) *cxarray3 {
+	assert(a0 != nil)
+	assert(v != nil)
+	a0.expand(n)
+	offset := a0.len * a0.elemsz
+	dstptr := voidptr(usize(a0.ptr) + usize(offset))
+	memcpy3(dstptr, v, n*a0.elemsz)
+	a0.len += n
+	return a0
+}
+
 func (arr *cxarray3) prepend(v voidptr) *cxarray3 {
 	return arr
 }

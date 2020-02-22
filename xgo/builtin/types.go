@@ -114,6 +114,18 @@ func (efc *Eface) Toint() int {
 	return *p
 }
 
+// cxeface* cxrt_type2eface(voidptr _type, voidptr data);
+
+//export cxrt_type2eface
+func type2eface(mtype voidptr, data voidptr) *Eface {
+	var mty *Metatype = mtype
+	efc := &Eface{}
+	efc.Type = mtype
+	efc.Data = data
+	efc.Data = memdup3(data, mty.Size)
+	return efc
+}
+
 type MethodObject struct {
 	Ptr  voidptr // func pointer
 	This voidptr
@@ -173,6 +185,7 @@ func (mty *Metatype) sizeof() int  { return mty.Size }
 func (mty *Metatype) alignof() int { return mty.Align }
 
 type Interface struct {
+	todo int
 }
 
 func (ifc *Interface) Empty() bool {

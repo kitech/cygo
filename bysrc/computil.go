@@ -133,9 +133,9 @@ func iserrorty2(typ types.Type) bool {
 	}
 	segs := strings.Split(typ.String(), ".")
 	if len(segs) == 1 {
-		return segs[0] == "error"
+		return segs[0] == "builtin__error"
 	}
-	return segs[len(segs)-1] == "error"
+	return segs[len(segs)-1] == "builtin_error"
 }
 
 func ispointer2(typ types.Type) bool {

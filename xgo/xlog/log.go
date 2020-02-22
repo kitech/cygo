@@ -8,10 +8,6 @@ package xlog
 #include <string.h>
 // #include <cxrtbase.h>
 
-char* cxstring_unrefpp(cxstring** spp) {
-    printf("%s\n", (*spp)->ptr);
-    return (*spp)->ptr;
-}
 */
 import "C"
 
@@ -26,7 +22,7 @@ var gopaths []string
 
 func init() {
 	eptr := C.getenv("GOPATH".ptr)
-	estr := C.GoString(eptr)
+	estr := gostring(eptr)
 	// gopaths = xstrings.Split(estr, ":")
 	var estr2 string = estr
 	gopaths = estr2.split(":")

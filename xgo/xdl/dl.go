@@ -30,5 +30,5 @@ func sym(handle voidptr, name string) voidptr {
 
 func error() string {
 	p := C.dlerror()
-	return C.GoString(p)
+	return gotring(p)
 }

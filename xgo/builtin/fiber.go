@@ -1,6 +1,8 @@
 package builtin
 
 /*
+#cgo LDFLAGS: -lcrn
+
 #include <stdio.h>
 
 extern int crn_post(voidptr, voidptr);

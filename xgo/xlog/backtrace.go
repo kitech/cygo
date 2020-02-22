@@ -44,7 +44,7 @@ func BacktraceLines() []string {
 	frames := []string{}
 	for i := 0; i < nr; i++ {
 		symit := (byteptr)(symarr[i])
-		symstr := C.GoString(symit)
+		symstr := gostring(symit)
 		frames = append(frames, symstr)
 	}
 

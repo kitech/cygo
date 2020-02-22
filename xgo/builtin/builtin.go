@@ -12,10 +12,10 @@ package builtin
 #include <assert.h>
 #include <pthread.h>
 
-extern void* cxmalloc(size_t);
-error* error_new_zero() {
-    return (error*)cxmalloc(sizeof(error));
-}
+// extern void* cxmalloc(size_t);
+// error* error_new_zero() {
+//    return (error*)cxmalloc(sizeof(error));
+// }
 
 // void**(*foofn)() = 0;
 */
@@ -308,12 +308,16 @@ type mirerror struct {
 	Error func(obj voidptr) string
 }
 
+type error interface {
+	Error() string
+}
+
 //export error_Errorddd
 func error_Errorddd(err error) string {
 	return ""
 }
 
 // //export error_new_zero
-func error_new_zero() voidptr {
+func error_new_zero_dep() voidptr {
 	return nil
 }

@@ -862,7 +862,7 @@ func (c *g2nc) genAssignStmt(scope *ast.Scope, s *ast.AssignStmt) {
 			c.outf("cxfree(%s)", tvname).outfh().outnl()
 		} else if iserrorty2(retyx) {
 			// log.Panicln("TODO waitdep, after full iface assign support")
-			c.out("error*").outsp()
+			c.out("builtin__error*").outsp()
 			c.genExpr(scope, s.Lhs[i])
 			c.outeq()
 			lety := c.info.TypeOf(s.Lhs[i])
@@ -2112,7 +2112,7 @@ func (c *g2nc) genCallExprExceptionJump(scope *ast.Scope, te *ast.CallExpr) {
 			c.outf("panic((voidptr)0x1)").outfh().outnl()
 		} else if len(fnrety.Results.List) == 1 {
 			retfld := fnrety.Results.List[0]
-			if fmt.Sprintf("%v", retfld.Type) == "error" {
+			if fmt.Sprintf("%v", retfld.Type) == "builtin__error" {
 				c.outf("return").outsp()
 				c.genExpr(scope, fca.lexpr)
 				c.outfh().outnl()
@@ -2123,7 +2123,7 @@ func (c *g2nc) genCallExprExceptionJump(scope *ast.Scope, te *ast.CallExpr) {
 			reterridx := -1
 			for i := len(fnrety.Results.List) - 1; i >= 0; i++ {
 				retfld := fnrety.Results.List[i]
-				if fmt.Sprintf("%v", retfld.Type) == "error" {
+				if fmt.Sprintf("%v", retfld.Type) == "builtin__error" {
 					reterridx = i
 					break
 				}
@@ -3421,8 +3421,16 @@ func (c *g2nc) genPredefTypeDecl(scope *ast.Scope, d *ast.GenDecl) {
 	for _, spec := range d.Specs {
 		switch tspec := spec.(type) {
 		case *ast.TypeSpec:
-			switch tspec.Type.(type) {
+			switch spty := tspec.Type.(type) {
 			case *ast.StructType:
+				c.outf("// %v", exprpos(c.psctx, tspec)).outnl()
+				specname := tspec.Name.Name
+				c.outf("typedef struct %s%s %s%s /*hhh*/",
+					c.pkgpfx(), specname, c.pkgpfx(), specname).outfh().outnl()
+			case *ast.InterfaceType:
+				if spty.Methods.NumFields() == 0 {
+					break
+				}
 				c.outf("// %v", exprpos(c.psctx, tspec)).outnl()
 				specname := tspec.Name.Name
 				c.outf("typedef struct %s%s %s%s /*hhh*/",
@@ -3680,6 +3688,8 @@ func (c *g2nc) genValueSpec(scope *ast.Scope, spec *ast.ValueSpec, validx int) {
 				c.out("builtin__mirmap*")
 			} else if ischanty2(varty) {
 				c.out("voidptr")
+			} else if iserrorty2(varty) {
+				c.out("builtin__error*")
 			} else if strings.Contains(vartystr, "func(") {
 				tyname := tmpvarname()
 				c.outf("typedef voidptr (*%s)()", tyname).outfh().outnl()
@@ -3875,6 +3885,9 @@ typedef unsigned char byte;
 #define nilptr NULL
 #define iota 0
 
+typedef struct wideptr wideptr;
+struct wideptr { voidptr ptr; voidptr obj; };
+
 #define have_gxcallbale
 typedef struct gxcallable gxcallable;
 struct gxcallable {voidptr obj; voidptr fnptr; };
@@ -3920,15 +3933,13 @@ typedef struct cxiface {
     voidptr data;
 } cxiface;
 
-typedef struct builtin__cxstring3 builtin__cxstring3;
-typedef struct error error;
-struct error {
-    void* thisptr; // error's this object
-    builtin__cxstring3* (*Error)(error*);
-};
+//typedef struct builtin__cxstring3 builtin__cxstring3;
+//typedef struct error error;
+// struct error {
+//    void* thisptr; // error's this object
+//    builtin__cxstring3* (*Error)(error*);
+// };
 
-typedef struct wideptr wideptr;
-struct wideptr { voidptr ptr; voidptr obj; };
 
 `
 	return precgodefs

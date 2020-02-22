@@ -1215,7 +1215,7 @@ func (cp *cparser1) ctype2go(sym, tystr string) (tystr2 string, tyobj types.Type
 		tyobj = types.Typ[types.Uint16]
 	case "int16_t", "short", "short int":
 		tyobj = types.Typ[types.Int16]
-	case "size_t", "time_t", "uintptr_t":
+	case "size_t", "time_t", "uintptr_t", "usize":
 		tyobj = types.Typ[types.Usize]
 	case "double":
 		tyobj = types.Typ[types.Float64]
