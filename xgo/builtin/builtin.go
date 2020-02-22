@@ -12,11 +12,6 @@ package builtin
 #include <assert.h>
 #include <pthread.h>
 
-// extern void* cxmalloc(size_t);
-// error* error_new_zero() {
-//    return (error*)cxmalloc(sizeof(error));
-// }
-
 // void**(*foofn)() = 0;
 */
 import "C"
@@ -303,21 +298,6 @@ func nildo(obj voidptr, nilfn func()) {
 // if only two arguments, then what?
 func ifelse(cond bool, expr1 Type, expr2 Type) Type
 
-type mirerror struct {
-	obj   voidptr // error's this object
-	Error func(obj voidptr) string
-}
-
 type error interface {
 	Error() string
-}
-
-//export error_Errorddd
-func error_Errorddd(err error) string {
-	return ""
-}
-
-// //export error_new_zero
-func error_new_zero_dep() voidptr {
-	return nil
 }

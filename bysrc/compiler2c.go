@@ -860,25 +860,6 @@ func (c *g2nc) genAssignStmt(scope *ast.Scope, s *ast.AssignStmt) {
 				c.out(tvname).out("->").out(tmpvarname2(idx)).outfh().outnl()
 			}
 			c.outf("cxfree(%s)", tvname).outfh().outnl()
-		} else if iserrorty2(retyx) {
-			// log.Panicln("TODO waitdep, after full iface assign support")
-			c.out("builtin__error*").outsp()
-			c.genExpr(scope, s.Lhs[i])
-			c.outeq()
-			lety := c.info.TypeOf(s.Lhs[i])
-			gopp.Assert(lety != nil, "wtfff", retyx, s.Rhs[i], s.Lhs[i])
-			if retyx == mytyx {
-				c.genExpr(scope, s.Rhs[i])
-			} else {
-				c.out("error_new_zero()").outfh().outnl()
-				c.genExpr(scope, s.Lhs[i])
-				c.outf("->thisptr").outeq()
-				c.genExpr(scope, s.Rhs[i])
-				c.outfh().outnl()
-				c.genExpr(scope, s.Lhs[i])
-				c.outf("->Error").outeq()
-				c.outf("%s_Error", strings.Trim(c.exprTypeName(scope, s.Rhs[i]), "*"))
-			}
 		} else if isiface2(mytyx) {
 			if retyx == mytyx {
 				c.genExpr(scope, s.Rhs[i])
@@ -3688,8 +3669,6 @@ func (c *g2nc) genValueSpec(scope *ast.Scope, spec *ast.ValueSpec, validx int) {
 				c.out("builtin__mirmap*")
 			} else if ischanty2(varty) {
 				c.out("voidptr")
-			} else if iserrorty2(varty) {
-				c.out("builtin__error*")
 			} else if strings.Contains(vartystr, "func(") {
 				tyname := tmpvarname()
 				c.outf("typedef voidptr (*%s)()", tyname).outfh().outnl()
