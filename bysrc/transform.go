@@ -68,12 +68,15 @@ type TransformContext struct {
 
 func newTransformContext(pc *ParserContext, c *astutil.Cursor, ispre bool) *TransformContext {
 	ctx := &TransformContext{}
+	ctx.reset(pc, c, ispre)
+	return ctx
+}
+func (ctx *TransformContext) reset(pc *ParserContext, c *astutil.Cursor, ispre bool) {
 	ctx.inslines = map[ast.Node][]ast.Stmt{}
 	ctx.c = c
 	ctx.n = c.Node()
 	ctx.ispre = ispre
 	ctx.pc = pc
-	return ctx
 }
 func (ctx *TransformContext) addline(ce ast.Node, line ast.Stmt) {
 	ctx.inslines[ce] = append(ctx.inslines[ce], line)

@@ -71,16 +71,21 @@ func (t *Time) Unix() int64 {
 }
 
 func (t *Time) Iszero() bool {
-	if t == nil {
-		return true
-	}
-	if t.unix > 0 {
+	// sure := ifelse(t != nil && t.unix > 0, false, true) // TODO compiler
+	if t != nil && t.unix > 0 {
 		return false
 	}
 	return true
 }
 
 func (t *Time) Since(t2 *Time) Duration {
+	duri := t.unix - t2.unix
+	// duro := Duration(duri) // TODO compiler
+	return duri
+}
+
+func Since(t2 *Time) Duration {
+	t := Now()
 	duri := t.unix - t2.unix
 	// duro := Duration(duri) // TODO compiler
 	return duri

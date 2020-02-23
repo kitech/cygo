@@ -134,9 +134,11 @@ func (this *ParserContext) Init_no_cgocmd(semachk bool) error {
 	}
 
 	this.walkpass_valid_files()
-	this.walkpass_dotransforms(false)
-	this.saveastcode()
-	// os.Exit(-1)
+	if semachk { // improve speed
+		this.walkpass_dotransforms(false)
+		this.saveastcode()
+		// os.Exit(-1)
+	}
 
 	this.walkpass_fill_funcvars()
 	this.walkpass_flat_cursors()
@@ -1292,28 +1294,21 @@ func (pc *ParserContext) walkpass_dotransforms_impl(afterchk bool, cycle int) in
 
 	// 遍历，耗时还是挺多的，和transforms的个数有关
 	btime := time.Now()
-	for _, tfo := range transforms {
-		for _, pkg := range pkgs {
-			var fiobj *ast.File
-			astutil.Apply(pkg, func(c *astutil.Cursor) bool {
-				if fio, ok := c.Node().(*ast.File); ok {
-					fiobj = fio
+	tfctx := &TransformContext{}
+	tfctx.cycle = cycle
+	for _, pkg := range pkgs {
+		for _, fio := range pkg.Files {
+			tfctx.fio = fio
+			astutil.Apply(fio, func(c *astutil.Cursor) bool {
+				tfctx.reset(pc, c, true)
+				for _, tfo := range transforms {
+					tfo.apply(tfctx)
 				}
-				tfctx := newTransformContext(pc, c, true)
-				tfctx.fio = fiobj
-				tfctx.cycle = cycle
-				tfo.apply(tfctx)
-				if cnt := len(tfctx.inslines); cnt > 0 {
+				if len(tfctx.inslines) > 0 {
 					mrgaddlines(tfctx.inslines)
 				}
 				return true
-			}, func(c *astutil.Cursor) bool {
-				tfctx := newTransformContext(pc, c, false)
-				tfctx.fio = fiobj
-				tfctx.cycle = cycle
-				tfo.apply(tfctx)
-				return true
-			})
+			}, nil)
 		}
 	}
 
