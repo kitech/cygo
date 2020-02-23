@@ -27,36 +27,39 @@ const (
 	Float64
 	Complex64
 	Complex128
-	String
-	UnsafePointer
+	// String
+	// UnsafePointer
 
 	// types for untyped values
-	UntypedBool
-	UntypedInt
-	UntypedRune
-	UntypedFloat
-	UntypedComplex
-	UntypedString
-	UntypedNil
+	// UntypedBool
+	// UntypedInt
+	// UntypedRune
+	// UntypedFloat
+	// UntypedComplex
+	// UntypedString
+	// UntypedNil
 )
 
 const (
-	// endofOrignalGoType = iota + UntypedNil // TODO compiler
-	endofOrignalGoType = iota + 25
+	Array = 17
+	Chan
+	Func
+	Interface
+	Map
+	Ptr
+	Slice
+	String
+	Struct
+	UnsafePointer
+)
+
+const (
+	// yaUnsafePointer = iota + UnsafePointer // TODO compiler
+	yaUnsafePointer = iota + 26
 	Voidptr
 	Byteptr
 	Charptr
-)
-
-const (
-	Struct = 25
-	Slice
-	Array
-	Map
-	Ptr
-	Chan
-	Func
-	// Interface
+	Wideptr
 )
 
 const (
@@ -79,10 +82,11 @@ type Metatype struct {
 	Kind       uint8    // enumeration for C
 	Alg        *typealg // *typeAlg // algorithm table
 	Gcdata     byteptr  // garbage collection data
-	Str        byteptr
-	PtrToThis  voidptr
-	// int32   // nameOff // string form
-	// int32   // typeOff // type for pointer to this type, may be zero
+	Str        byteptr  // nameOff // string form
+	PtrToThis  voidptr  // typeOff // type for pointer to this type, may be zero
+	count1     uint8    // for uncommon type, like map/slice/ptr
+	count2     uint8
+	extptr     *voidptr
 }
 
 type maptype struct {
@@ -130,6 +134,12 @@ type structtype struct {
 	fields  []structfield
 }
 
+type interfacetype struct {
+	typ     Metatype
+	pkgpath byteptr
+	mhdr    voidptr // []imethod
+}
+
 type Eface struct {
 	Type *Metatype
 	Data *voidptr
@@ -159,8 +169,6 @@ func (efc *Eface) Toint() int {
 	return *p
 }
 
-// cxeface* cxrt_type2eface(voidptr _type, voidptr data);
-
 //export cxrt_type2eface
 func type2eface(mtype voidptr, data voidptr) *Eface {
 	var mty *Metatype = mtype
@@ -176,7 +184,7 @@ type MethodObject struct {
 	This voidptr
 }
 
-type Wideptr struct {
+type wideptr struct {
 	Ptr voidptr
 	Obj voidptr
 }
@@ -208,20 +216,30 @@ func (mty *Metatype) Name() string {
 
 func (mty *Metatype) KindName() string {
 	kind := mty.Kind
-	if kind >= Invalid && kind <= UnsafePointer {
-		return gostring(mty.Str)
-	}
-	switch mty.Kind {
+
+	switch kind {
 	case Struct:
 		return "struct"
-		// case Map:
-		// return "map"
-		// case Array:
-		// return "array"
-		// case Slice:
-		// return "slice"
-		// case Chan:
-		// return "chan"
+	case Map:
+		return "map"
+	case Array:
+		return "array"
+	case Slice:
+		return "slice"
+	case Chan:
+		return "chan"
+	case Voidptr:
+		return "voidptr"
+	case Byteptr:
+		return "byteptr"
+	case Charptr:
+		return "charptr"
+	case Wideptr:
+		return "wideptr"
+	}
+
+	if kind >= Invalid && kind <= UnsafePointer {
+		return gostring(mty.Str)
 	}
 	return "unktykind"
 }
@@ -229,18 +247,26 @@ func (mty *Metatype) KindName() string {
 func (mty *Metatype) sizeof() int  { return mty.Size }
 func (mty *Metatype) alignof() int { return mty.Align }
 
-type Interface struct {
-	todo int
+type ifctab struct {
+	inter *interfacetype
+	Type  *Metatype
+	hash  uint32
+	pad4  uint32
+	fun   usize // [1]uintptr
+}
+type Iface struct {
+	itab *ifctab
+	Data voidptr
 }
 
-func (ifc *Interface) Empty() bool {
+func (ifc *Iface) Empty() bool {
 	return true
 }
 
-func (ifc *Interface) NumMethods() int {
+func (ifc *Iface) NumMethods() int {
 	return 0
 }
 
-func (ifc *Interface) NumEmbeddeds() int {
+func (ifc *Iface) NumEmbeddeds() int {
 	return 0
 }

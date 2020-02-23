@@ -72,11 +72,10 @@ typedef struct cxeface {
     voidptr data;
 } cxeface;
 typedef struct ifacetab {
-    voidptr inner; // interfacetype*
+    voidptr inter; // interfacetype*
     _metatype* _type;
-    struct ifacetab* link;
-    int32 bad;
-    int32 inhash;
+    uint32 inhash;
+    uint32 pad4;
     usize fun[1];
 } ifacetab;
 typedef struct cxiface {

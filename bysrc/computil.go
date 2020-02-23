@@ -612,10 +612,43 @@ func type2rtkind(ty types.Type) string {
 		rtkind = "voidptr"
 	case *types.Map:
 		rtkind = "voidptr"
+	case *types.Struct:
+		rtkind = "struct"
 	default:
 		rtkind = "voidptr"
 		log.Println("wtfff", ty2.String(), reftyof(ty2))
 	}
 	rtkind += "_metatype.kind"
+	return rtkind
+}
+
+func type2rtkind2(ty types.Type) reflect.Kind {
+	var rtkind reflect.Kind
+	switch ty2 := ty.(type) {
+	case *types.Basic:
+		if ty2.Kind() == types.String {
+			rtkind = reflect.Kind(reflect.String)
+		} else if ty2.Kind() == types.UnsafePointer {
+			rtkind = reflect.Kind(reflect.UnsafePointer)
+		} else if ty2.Kind() >= types.Voidptr &&
+			ty2.Kind() <= types.Wideptr {
+			rtkind = reflect.Kind(uint(ty2.Kind()) + 1)
+		} else {
+			rtkind = reflect.Kind(ty2.Kind())
+		}
+	case *types.Pointer:
+		rtkind = reflect.Ptr
+	case *types.Slice:
+		rtkind = reflect.Slice
+	case *types.Array:
+		rtkind = reflect.Array
+	case *types.Map:
+		rtkind = reflect.Map
+	case *types.Struct:
+		rtkind = reflect.Struct
+	default:
+		rtkind = reflect.Ptr
+		log.Println("wtfff", ty2.String(), reftyof(ty2))
+	}
 	return rtkind
 }

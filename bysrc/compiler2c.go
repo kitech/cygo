@@ -1955,6 +1955,8 @@ func (c *g2nc) genCallExprNorm(scope *ast.Scope, te *ast.CallExpr) {
 				tyname := c.exprTypeName(scope, e1)
 				if tyname == "builtin__cxstring3*" {
 					tyname = "string"
+				} else if strings.HasSuffix(tyname, "*") {
+					tyname = strings.TrimRight(tyname, "*")
 				}
 				tvar := tmpvarname()
 				c.outf("voidptr %s= cxrt_type2eface((voidptr)&%s_metatype, (voidptr)&", tvar, tyname)
@@ -3896,48 +3898,102 @@ extern voidptr gxcallable_new(voidptr fnptr, voidptr obj);
 	return precgodefs
 }
 
+/*
+generate dynamic metatype data like this
+struct bar {
+    int size;
+    ... endof common header field
+    uint8 count1;
+    uint8 count2;
+    char* dyn[];
+};
+
+// for struct, count1 record field count, dyn1.len = count1*2 + count22*2
+// count2 record method count
+const struct bar b111 = {
+  .size = 0 ,
+  .dyn = {"aaa", "bbb", &int_metatype},
+};
+
+// for array/slice, count1 record nothing, dyn.len = 1, dyn[0] = elemtype
+const struct bar b111 = {
+  .size = 0 ,
+  .dyn = {&int_metatype},
+};
+
+// for map, dyn.len = 2, dyn[0] = keytype, dyn[1]= elemtype
+const struct bar b111 = {
+  .size = 0 ,
+  .dyn = {&int_metatype, &string_metatype},
+};
+
+// for pointer, dyn.len = 1, dyn[0] = elemtype
+const struct bar b111 = {
+  .size = 0 ,
+  .dyn = {&int_metatype},
+};
+
+// for chan, dyn.len = 1, dyn[0] = elemtype
+const struct bar b111 = {
+  .size = 0 ,
+  .dyn = {&int_metatype},
+};
+
+// for func, count1 record argc, dyn.len = count1 + count2
+// count2 record retcn
+const struct bar b111 = {
+  .size = 0 ,
+  .dyn = {&int_metatype},
+};
+
+// for interface, count1 record method count
+// if count1 == 0, then eface, dyn[0] = elemtype, dyn[1] = thisptr
+// if count1 > 0, then iface, dyn record names + types
+const struct bar b111 = {
+  .size = 0 ,
+  .dyn = {&int_metatype},
+};
+
+*/
+
 func (this *g2nc) genPreStructDefs() string {
 	precgodefs := `
 
-typedef uint8 metaflag;
-typedef int typealg;
+typedef struct typealg {
+    voidptr hashfn;
+    voidptr equalfn;
+}typealg;
 typedef struct _metatype {
     int size;
     voidptr ptrdata;
     uint32 hash;
-    metaflag tflag;
+    uint8 tflag; // tflag type
     uint8 align;
     uint8 fieldalign;
     uint8 kind;
-    typealg alg;
+    typealg* alg;
     byteptr gcdata;
-    charptr tystr;
-    voidptr ptr2this;
+    charptr tystr; // nameOff
+    voidptr ptr2this; // typeOff
+    uint8  count1;
+    uint8  count2;
+    void** extptr;
 } _metatype;
 typedef struct cxeface {
     _metatype* _type; // _type
     voidptr data;
 } cxeface;
 typedef struct ifacetab {
-    voidptr inner; // interfacetype*
+    voidptr inter; // interfacetype*
     _metatype* _type;
-    struct ifacetab* link;
-    int32 bad;
-    int32 inhash;
+    uint32 hash;
+    uint32 pad4;
     usize fun[1];
 } ifacetab;
 typedef struct cxiface {
     ifacetab* itab; // itab
     voidptr data;
 } cxiface;
-
-//typedef struct builtin__cxstring3 builtin__cxstring3;
-//typedef struct error error;
-// struct error {
-//    void* thisptr; // error's this object
-//    builtin__cxstring3* (*Error)(error*);
-// };
-
 
 `
 	return precgodefs
@@ -3966,7 +4022,8 @@ func (c *g2nc) genBuiltinTypesMetatype() string {
 
 		// tyname = gopp.IfElseStr(tyname == "string", "charptr", tyname)
 		s += fmt.Sprintf("static const _metatype %s_metatype = {", tyname)
-		s += fmt.Sprintf(".kind = %d,\n", bityp.Kind())
+		refkind := type2rtkind2(bityp)
+		s += fmt.Sprintf(".kind = %d,\n", refkind)
 		if tyname == "string" {
 			s += fmt.Sprintf(".size = sizeof(%s),\n", "charptr")
 			s += fmt.Sprintf(".align = alignof(%s),\n", "charptr")
