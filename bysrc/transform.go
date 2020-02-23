@@ -16,6 +16,18 @@ import (
 var findupinsable func(cursors map[ast.Node]*astutil.Cursor,
 	e ast.Node, lvl int) *astutil.Cursor
 
+func isinsablenode(pe ast.Node) bool {
+	if _, ok := pe.(*ast.BlockStmt); ok {
+		return true
+	}
+	if _, ok := pe.(*ast.CaseClause); ok {
+		return true
+	}
+	if _, ok := pe.(*ast.File); ok {
+		return true
+	}
+	return false
+}
 func init() {
 	findupinsable = func(cursors map[ast.Node]*astutil.Cursor,
 		e ast.Node, lvl int) *astutil.Cursor {
@@ -517,24 +529,75 @@ func (tf *TfTmpvars4) apply(ctx *TransformContext) {
 	return
 }
 
-func InsertBefore(c *astutil.Cursor, n ast.Node) {
-	cn := c.Node()
-	pn := c.Parent()
-	log.Println(reftyof(cn), reftyof(pn), c.Index())
-	if blks, ok := pn.(*ast.BlockStmt); ok {
-		var lst []ast.Stmt
-		for idx, stmt := range blks.List {
-			log.Println(idx, stmt == cn)
-			if stmt == cn {
-				lst = append(lst, n.(ast.Stmt))
+///
+func InsertBefore(pc *ParserContext, c, inscs *astutil.Cursor, stmts []ast.Stmt) {
+	if false {
+		log.Println(inscs != nil, inscs.Index(), reftyof(inscs.Node()))
+	}
+	if gend, ok := inscs.Node().(*ast.GenDecl); ok {
+		log.Println("got some", gend.Tok, len(stmts), exprpos(pc, gend))
+		valsp := &ast.ValueSpec{}
+		_ = valsp
+		var newspecs []ast.Spec
+		oldcnt := len(gend.Specs)
+		for idx, spx := range gend.Specs {
+			log.Println(idx, reftyof(spx), reftyof(c.Parent()), reftyof(c.Node()))
+			if spx == c.Parent() {
+				log.Println("got it")
+				for _, stmt := range stmts {
+					as := stmt.(*ast.AssignStmt)
+					valsp := &ast.ValueSpec{}
+					valsp.Names = append(valsp.Names, as.Lhs[0].(*ast.Ident))
+					valsp.Values = append(valsp.Values, as.Rhs[0])
+					newspecs = append(newspecs, valsp)
+				}
+			} else if spx == c.Node() {
+				log.Println("wtttt")
 			}
-			lst = append(lst, stmt)
+
+			newspecs = append(newspecs, spx)
 		}
-		if len(lst) > len(blks.List) {
-			blks.List = lst
+		if len(newspecs) > oldcnt {
+			gend.Specs = newspecs
 		}
+		return
+	}
+	curcs := inscs.Node().(ast.Stmt)
+	var oldlst []ast.Stmt
+	switch vec := inscs.Parent().(type) {
+	case *ast.BlockStmt:
+		oldlst = vec.List
+	case *ast.CaseClause:
+		oldlst = vec.Body
+	default:
+		log.Panicln(reftyof(vec))
+	}
+	oldcnt := len(oldlst)
+
+	var lst []ast.Stmt
+	for _, stmt := range oldlst {
+		if stmt == curcs {
+			lst = append(lst, stmts...)
+		}
+		lst = append(lst, stmt)
+	}
+	if len(lst) > oldcnt {
+		switch vec := inscs.Parent().(type) {
+		case *ast.BlockStmt:
+			vec.List = lst
+		case *ast.CaseClause:
+			vec.Body = lst
+		default:
+			log.Panicln(reftyof(vec))
+		}
+		// blkst.List = lst
+		// log.Println("change", len(stmts), len(lst))
+	} else {
+		log.Println("not change", len(stmts))
 	}
 }
+
+///
 
 // 当前node在 parent中的索引号
 func GetCursorIndex(c *astutil.Cursor) int {

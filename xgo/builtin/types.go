@@ -85,6 +85,51 @@ type Metatype struct {
 	// int32   // typeOff // type for pointer to this type, may be zero
 }
 
+type maptype struct {
+	typ   Metatype
+	flags uint32
+}
+
+type arraytype struct {
+	typ  Metatype
+	elem *Metatype
+	len  uintptr
+}
+
+type chantype struct {
+	typ  Metatype
+	elem *Metatype
+	dir  uintptr
+}
+
+type slicetype struct {
+	typ  Metatype
+	elem *Metatype
+}
+
+type functype struct {
+	typ    Metatype
+	incnt  uint16
+	outcnt uint16
+}
+
+type ptrtype struct {
+	typ  Metatype
+	elem *Metatype
+}
+
+type structfield struct {
+	name       byteptr
+	typ        *Metatype
+	offsetAnon uintptr
+}
+
+type structtype struct {
+	typ     Metatype
+	pkgpath byteptr
+	fields  []structfield
+}
+
 type Eface struct {
 	Type *Metatype
 	Data *voidptr

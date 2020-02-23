@@ -507,24 +507,12 @@ func (csi *csyminfo) isvar() bool {
 }
 func (csi *csyminfo) String() string {
 	s := csi.idt.Name
-	if csi.isfunc {
-		s += " func"
-	}
-	if csi.isstruct {
-		s += " struct"
-	}
-	if csi.isfield {
-		s += " field"
-	}
-	if csi.isconst {
-		s += " const"
-	}
-	if csi.istype {
-		s += " type"
-	}
-	if csi.isvar() {
-		s += " var?"
-	}
+	s += gopp.IfElseStr(csi.isfunc, " func", "")
+	s += gopp.IfElseStr(csi.isstruct, " struct", "")
+	s += gopp.IfElseStr(csi.isfield, " field", "")
+	s += gopp.IfElseStr(csi.isconst, " const", "")
+	s += gopp.IfElseStr(csi.istype, " type", "")
+	s += gopp.IfElseStr(csi.isvar(), " var?", "")
 
 	return s
 }
@@ -1278,10 +1266,13 @@ func (pc *ParserContext) walkpass_fill_funcvars() {
 // 在 check 之前做 ast 修改，不需要涉及类型问题
 func (pc *ParserContext) walkpass_dotransforms(afterchk bool) {
 	btime := time.Now()
+	totcnt := 0
 	for i := 0; ; i++ {
 		addtot := pc.walkpass_dotransforms_impl(afterchk, i)
+		totcnt += addtot
 		if addtot == 0 {
-			log.Println("total cycles", pc.bdpkgs.Name, i+1, time.Since(btime))
+			log.Println("total cycles", pc.bdpkgs.Name,
+				i+1, addtot, totcnt, time.Since(btime))
 			break
 		}
 		// log.Println("continue", i, addtot)
@@ -1290,7 +1281,7 @@ func (pc *ParserContext) walkpass_dotransforms(afterchk bool) {
 func (pc *ParserContext) walkpass_dotransforms_impl(afterchk bool, cycle int) int {
 	pkgs := pc.pkgs
 
-	addlines := map[ast.Node][]ast.Stmt{}
+	addlines := map[ast.Node][]ast.Stmt{} // step1 ast.Expr =>
 	addtot := 0
 	mrgaddlines := func(lines map[ast.Node][]ast.Stmt) {
 		for e, stmts := range lines {
@@ -1298,6 +1289,9 @@ func (pc *ParserContext) walkpass_dotransforms_impl(afterchk bool, cycle int) in
 			addtot += len(stmts)
 		}
 	}
+
+	// 遍历，耗时还是挺多的，和transforms的个数有关
+	btime := time.Now()
 	for _, tfo := range transforms {
 		for _, pkg := range pkgs {
 			var fiobj *ast.File
@@ -1309,7 +1303,9 @@ func (pc *ParserContext) walkpass_dotransforms_impl(afterchk bool, cycle int) in
 				tfctx.fio = fiobj
 				tfctx.cycle = cycle
 				tfo.apply(tfctx)
-				mrgaddlines(tfctx.inslines)
+				if cnt := len(tfctx.inslines); cnt > 0 {
+					mrgaddlines(tfctx.inslines)
+				}
 				return true
 			}, func(c *astutil.Cursor) bool {
 				tfctx := newTransformContext(pc, c, false)
@@ -1320,101 +1316,26 @@ func (pc *ParserContext) walkpass_dotransforms_impl(afterchk bool, cycle int) in
 			})
 		}
 	}
-	log.Println("addlines", pc.bdpkgs.Name, len(addlines), addtot)
+
+	dtime1 := time.Since(btime)
+	btime = time.Now()
 	pc.walkpass_flat_cursors()
 	cursors := pc.cursors
+	dtime2 := time.Since(btime)
+	log.Println("addlines", pc.bdpkgs.Name, len(addlines), addtot, dtime1, dtime2)
+
 	for curexpr, stmts := range addlines {
-		// log.Println("addlines", len(addlines))
-		found := false
-		for _, pkg := range pkgs {
-			if found {
-				break
-			}
-			astutil.Apply(pkg, func(c *astutil.Cursor) bool {
-				if found {
-					return false
-				}
-				n := c.Node()
-				if n != curexpr {
-					return true
-				}
-
-				found = true
-				te := n
-				inscs := findupinsable(cursors, te, 0)
-				if inscs == nil {
-					// TODO not found, but maybe global
-					pn := c.Parent()
-					log.Println("not found", reftyof(te), reftyof(pn), te, exprpos(pc, te))
-				}
-				if false {
-					log.Println(inscs != nil, inscs.Index(), reftyof(inscs.Node()))
-				}
-				if gend, ok := inscs.Node().(*ast.GenDecl); ok {
-					log.Println("got some", gend.Tok, len(stmts), exprpos(pc, gend))
-					valsp := &ast.ValueSpec{}
-					_ = valsp
-					var newspecs []ast.Spec
-					oldcnt := len(gend.Specs)
-					for idx, spx := range gend.Specs {
-						log.Println(idx, reftyof(spx), reftyof(c.Parent()), reftyof(c.Node()))
-						if spx == c.Parent() {
-							log.Println("got it")
-							for _, stmt := range stmts {
-								as := stmt.(*ast.AssignStmt)
-								valsp := &ast.ValueSpec{}
-								valsp.Names = append(valsp.Names, as.Lhs[0].(*ast.Ident))
-								valsp.Values = append(valsp.Values, as.Rhs[0])
-								newspecs = append(newspecs, valsp)
-							}
-						} else if spx == c.Node() {
-							log.Println("wtttt")
-						}
-
-						newspecs = append(newspecs, spx)
-					}
-					if len(newspecs) > oldcnt {
-						gend.Specs = newspecs
-					}
-					return false
-				}
-				curcs := inscs.Node().(ast.Stmt)
-				var oldlst []ast.Stmt
-				switch vec := inscs.Parent().(type) {
-				case *ast.BlockStmt:
-					oldlst = vec.List
-				case *ast.CaseClause:
-					oldlst = vec.Body
-				default:
-					log.Panicln(reftyof(vec))
-				}
-				oldcnt := len(oldlst)
-
-				var lst []ast.Stmt
-				for _, stmt := range oldlst {
-					if stmt == curcs {
-						lst = append(lst, stmts...)
-					}
-					lst = append(lst, stmt)
-				}
-				if len(lst) > oldcnt {
-					switch vec := inscs.Parent().(type) {
-					case *ast.BlockStmt:
-						vec.List = lst
-					case *ast.CaseClause:
-						vec.Body = lst
-					default:
-						log.Panicln(reftyof(vec))
-					}
-					// blkst.List = lst
-					// log.Println("change", len(stmts), len(lst))
-				} else {
-					log.Println("not change", len(stmts))
-				}
-
-				return true
-			}, nil)
+		_ = stmts
+		c := cursors[curexpr]
+		gopp.Assert(c != nil, "wtfff", curexpr)
+		inscs := findupinsable(cursors, curexpr, 0)
+		if inscs == nil {
+			// TODO not found, but maybe global
+			pn := c.Parent()
+			te := curexpr
+			log.Println("not found", reftyof(te), reftyof(pn), te, exprpos(pc, te))
 		}
+		InsertBefore(pc, c, inscs, stmts)
 	}
 	return addtot
 }
@@ -1469,6 +1390,7 @@ type tupleinfo struct {
 	expr   ast.Expr
 }
 
+// extract multirets and map get tuple
 func (pc *ParserContext) walkpass_multiret() {
 	multirets := []*ast.FuncDecl{}
 	tupletys := map[string]*tupleinfo{}
