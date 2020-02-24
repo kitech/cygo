@@ -69,7 +69,12 @@ func MapOf(key *Metatype, elem *Metatype) *Metatype {
 // }
 
 func PtrTo(elem *Metatype) *Metatype {
-	return nil
+	p2typ := &Metatype{}
+	p2typ.Kind = Ptr
+	p2typ.elemty = elem
+	p2typ.Size = sizeof(p2typ)
+
+	return p2typ
 }
 
 func StructOf(fields []*StructField) *Metatype {
@@ -84,20 +89,28 @@ type Value struct {
 }
 
 func (v *Value) Addr() *Value {
-	return nil
+	return v.ptr
 }
 func (v *Value) CanAddr() bool {
 	return true
 }
 func (v *Value) CanSet() bool {
-	return true
+	return false
 }
 func (v *Value) Pointer() uintptr {
-	return nil
+	return v.ptr
 }
 
 func (v *Value) Bool() bool {
-	return false
+	typ := v.typ
+	var rv bool
+	switch typ.Kind {
+	case Bool:
+		var tv *bool = v.ptr
+		rv = *tv
+	}
+
+	return rv
 }
 
 func (v *Value) Bytes() []byte {
@@ -118,47 +131,116 @@ func (v *Value) Close() {
 }
 
 func (v *Value) Cap() int {
+	typ := v.typ
+	switch typ.Kind {
+	case Slice, Array:
+		var arr *cxarray3 = v.ptr
+		return arr.cap
+	case Map:
+		var ht *mirmap = v.ptr
+		return ht.cap_
+	default:
+		return typ.Size
+	}
 	return 0
 }
 
 func (v *Value) Len() int {
+	typ := v.typ
+	switch typ.Kind {
+	case Slice, Array:
+		var arr *cxarray3 = v.ptr
+		return arr.len
+	case Map:
+		var ht *mirmap = v.ptr
+		return ht.len_
+	default:
+		return typ.Size
+	}
 	return 0
 }
 
+// eface/ptr
 func (v *Value) Elem() *Value {
 	return nil
 }
 
 func (v *Value) Float() float64 {
-	return 0
+	typ := v.typ
+	var rv float64
+	switch typ.Kind {
+	case Float32:
+		var tv *float32 = v.ptr
+		rv = *tv
+	case Float64:
+		var tv *float64 = v.ptr
+		rv = *tv
+	}
+
+	return rv
 }
 
+// slice/array/string
 func (v *Value) Index(i int) *Value {
+	typ := v.typ
+	switch typ.Kind {
+	case Slice, Array:
+		var arr *cxarray3 = v.ptr
+		elemval := arr.get(i)
+		elemty := metatype_bykind(typ.elemty.Kind)
+		rv := &Value{}
+		rv.typ = elemty
+		rv.ptr = elemval
+		return rv
+	case String:
+		var str *cxstring3 = v.ptr
+		ch := str.ptr[i]
+		var ih int = ch
+		rv := &Value{}
+		rv.typ = metatype_bykind(Uint8)
+		rv.ptr = memdup3(&rv, sizeof(rv))
+		return rv
+	}
 	return nil
 }
 
-func (v *Value) Int() int {
-	return 0
-}
 func (v *Value) CanInterface() bool {
 	return true
 }
 
 func (v *Value) ToInterface() interface{} {
-	return nil
+	efc := Eface_new(v.typ, v.ptr)
+	return efc
 }
 
 func (v *Value) IsNil() bool {
-	return true
+	return v.ptr == nil
 }
 func (v *Value) IsValid() bool {
-	return true
+	return v.typ.Kind > Invalid
 }
 func (v *Value) IsZero() bool {
-	return true
+	var rv bool
+	typ := v.typ
+	switch typ.Kind {
+	case Int, Uint:
+		var tv *int = v.ptr
+		rv = *tv == 0
+	case Int64, Uint64:
+		var tv *int64 = v.ptr
+		rv = *tv == 0
+	case Int32, Uint32:
+		var tv *int32 = v.ptr
+		rv = *tv == 0
+	case Int16, Uint16:
+		var tv *int64 = v.ptr
+		rv = *tv == 0
+	}
+
+	return rv
 }
 func (v *Value) Kind() int {
-	return 0
+	return v.typ.Kind
 }
 
 func (v *Value) MapIndex(key *Value) *Value {
@@ -170,7 +252,7 @@ func (v *Value) MapKeys() []*Value {
 }
 
 func (v *Value) NumMethod() int {
-	return 0
+	return v.typ.NumMethod()
 }
 
 func (v *Value) Method(i int) *Value {
@@ -182,7 +264,7 @@ func (v *Value) MethodByName(name string) *Value {
 }
 
 func (v *Value) NumField() int {
-	return 0
+	return v.typ.NumField()
 }
 
 func (v *Value) Field(i int) *Value {
@@ -194,34 +276,97 @@ func (v *Value) FieldByName(name string) *Value {
 }
 
 func (v *Value) GetType() *Metatype {
-	return nil
+	return v.typ
 }
 
 func (v *Value) Convert(typ *Metatype) *Value {
 	return nil
 }
 
-func (v *Value) ToInt() int64 {
-	return 0
+func (v *Value) Int() int64 {
+	typ := v.typ
+	var rv int64
+	switch typ.Kind {
+	case Int:
+		var tv *int = v.ptr
+		rv = *tv
+	case Int64:
+		var tv *int64 = v.ptr
+		rv = *tv
+	case Int32:
+		var tv *int32 = v.ptr
+		rv = *tv
+	case Int16:
+		var tv *int64 = v.ptr
+		rv = *tv
+	}
+
+	return rv
 }
 
 func (v *Value) Uint() uint64 {
-	return 0
+	typ := v.typ
+	var rv uint64
+	switch typ.Kind {
+	case Uint:
+		var tv *uint = v.ptr
+		rv = *tv
+	case Int64:
+		var tv *uint64 = v.ptr
+		rv = *tv
+	case Int32:
+		var tv *uint32 = v.ptr
+		rv = *tv
+	case Int16:
+		var tv *uint64 = v.ptr
+		rv = *tv
+	}
+
+	return rv
+}
+func (v *Value) String() string {
+	var rv string
+	if v.typ.Kind == Invalid {
+		return "<invalid Value>"
+	} else if v.typ.Kind == String {
+		var spp **cxstring3 = v.ptr
+		rv = *spp
+	} else {
+		return "<" + gostring(v.typ.Str) + " Value>"
+	}
+	return rv
 }
 
+func ValueOf(iv interface{}) *Value {
+	var ifcpp **Eface = &iv
+	var ifc *Eface = *ifcpp
+	val := &Value{}
+	val.typ = ifc.Type
+	val.ptr = ifc.Data
+
+	return val
+}
+
+// PtrTo'd
 func NewOf(typ *Metatype) *Value {
-	return nil
-}
-func NewAt(typ *Metatype, p voidptr) *Value {
-	return nil
+	rv := &Value{}
+	rv.typ = PtrTo(typ)
+	rv.ptr = malloc3(typ.Size)
+	return rv
 }
 
-func ValueOf(i interface{}) *Value {
-	return nil
+func NewAt(typ *Metatype, p voidptr) *Value {
+	rv := &Value{}
+	rv.typ = typ
+	rv.ptr = p
+	return rv
 }
 
 func Zero(typ *Metatype) *Value {
-	return nil
+	rv := &Value{}
+	rv.typ = typ
+	rv.ptr = malloc3(typ.Size)
+	return rv
 }
 
 func MakeSlice(typ *Metatype, len int, cap int) *Value {

@@ -1815,18 +1815,26 @@ func (c *g2nc) genCallExprPrintln(scope *ast.Scope, te *ast.CallExpr) {
 	if len(te.Args) > 0 {
 		var tyfmts []string
 		for _, e1 := range te.Args {
-			tyfmt := c.exprTypeFmt(scope, e1)
-			tyfmts = append(tyfmts, "%"+tyfmt)
+			e1tyx := c.info.TypeOf(e1)
+			if e1ty, ok := e1tyx.(*types.Basic); ok && e1ty.Kind() == types.Bool {
+				tyfmts = append(tyfmts, "%s")
+			} else {
+				tyfmt := c.exprTypeFmt(scope, e1)
+				tyfmts = append(tyfmts, "%"+tyfmt)
+			}
 		}
 		c.out(fmt.Sprintf(`"%s"`, strings.Join(tyfmts, " ")))
 		c.out(", ")
 	}
 	for idx, e1 := range te.Args {
-		tety := c.info.TypeOf(e1)
-		if isstrty2(tety) {
+		tetyx := c.info.TypeOf(e1)
+		if isstrty2(tetyx) {
 			c.outf("(%s)->len,", tmpnames[idx])
 			c.outf("(%s)->ptr", tmpnames[idx])
-		} else if iseface2(tety) {
+		} else if e1ty, ok := tetyx.(*types.Basic); ok && e1ty.Kind() == types.Bool {
+			c.genExpr(scope, e1)
+			c.out(`==0 ? "false":"true"`)
+		} else if iseface2(tetyx) {
 			c.genExpr(scope, e1)
 			c.out(".data")
 		} else {
@@ -2043,7 +2051,11 @@ func (c *g2nc) genCallExprNorm(scope *ast.Scope, te *ast.CallExpr) {
 
 		if fca.prmty != nil {
 			prmn := fca.prmty.At(idx).Type()
-			if _, ok := prmn.(*types.Interface); ok {
+			e1ty := c.info.TypeOf(e1)
+			_, e1ifc := e1ty.(*types.Interface)
+			if _, ok := prmn.(*types.Interface); ok && e1ifc {
+				c.genExpr(scope, e1)
+			} else if _, ok := prmn.(*types.Interface); ok {
 				c.out("cxrt_type2eface((voidptr)&")
 				tyname := c.exprTypeName(scope, e1)
 				if strings.Contains(tyname, "cxstring3") {
