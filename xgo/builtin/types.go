@@ -203,6 +203,7 @@ type IntegerType int
 type FloatType float32
 
 func typeof(val voidptr) *Metatype
+func valueof(val voidptr) voidptr
 
 func typeof_goimpl(tyobjx voidptr) *Metatype {
 	var tyobj *Metatype
@@ -246,6 +247,91 @@ func (mty *Metatype) KindName() string {
 
 func (mty *Metatype) sizeof() int  { return mty.Size }
 func (mty *Metatype) alignof() int { return mty.Align }
+
+// all
+func (mty *Metatype) New() int {
+	return mty.Align
+}
+
+// map
+func (mty *Metatype) KeySize() int {
+	return mty.Align
+}
+
+// map/slice/array/ptr
+func (mty *Metatype) ElemSize() int {
+	return mty.Align
+}
+
+// map/slice/array/ptr
+func (mty *Metatype) Elem() *Metatype {
+	return nil
+}
+
+// map/slice/array/ptr
+func (mty *Metatype) Len() int {
+	return mty.Align
+}
+
+// map/slice/array
+func (mty *Metatype) Cap() int {
+	return mty.Align
+}
+
+// struct
+func (mty *Metatype) NumFields() int {
+	return mty.Align
+}
+
+// struct
+func (mty *Metatype) NumMethods() int {
+	return mty.Align
+}
+
+// struct
+func (mty *Metatype) Field(i int) int {
+	return mty.Align
+}
+
+// struct
+func (mty *Metatype) FieldByName(name string) int {
+	return mty.Align
+}
+
+// struct
+func (mty *Metatype) Method(i int) int {
+	return mty.Align
+}
+
+// struct
+func (mty *Metatype) MethodByName(name string) int {
+	return mty.Align
+}
+
+// func
+func (mty *Metatype) IsVariadict() bool {
+	return false
+}
+
+// func
+func (mty *Metatype) NumIn() int {
+	return 0
+}
+
+// func
+func (mty *Metatype) NumOut() int {
+	return 0
+}
+
+// func
+func (mty *Metatype) In(i int) *Metatype {
+	return nil
+}
+
+// func
+func (mty *Metatype) Out(i int) *Metatype {
+	return nil
+}
 
 type ifctab struct {
 	inter *interfacetype

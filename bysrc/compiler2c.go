@@ -3510,12 +3510,54 @@ func (this *g2nc) genTypeSpec(scope *ast.Scope, spec *ast.TypeSpec) {
 		this.genFieldList(scope, te.Fields, false, true, ";", false)
 		this.out("}").outfh().outnl()
 		this.outnl()
+
+		fldcnt := len(te.Fields.List)
+		mthcnt := 0 // TODO where from
 		this.outf("static const _metatype %s%s_metatype = {", this.pkgpfx(), specname)
 		this.outnl()
 		this.outf(".kind = %d,", reflect.Struct).outnl()
 		this.outf(".size = sizeof(%s%s),", this.pkgpfx(), specname).outnl()
 		this.outf(".align = alignof(%s%s),", this.pkgpfx(), specname).outnl()
-		this.outf(".tystr = \"%s%s\"", this.pkgpfx(), specname).outnl()
+		this.outf(".tystr = \"%s%s\",", this.pkgpfx(), specname).outnl()
+		this.outf(".count1 = %d,", fldcnt)
+		this.outf(".count2 = %d", mthcnt)
+		if fldcnt > 0 || mthcnt > 0 {
+			this.out(",").outnl()
+			this.outf(".extptr = {").outnl()
+			for idx, fld := range te.Fields.List {
+				for _, fldname := range fld.Names {
+					this.outf("(char*)\"%s\"", fldname.Name)
+					this.out(gopp.IfElseStr(idx == fldcnt-1, ",", ","))
+					this.outnl()
+				}
+			}
+			for idx, fld := range te.Fields.List {
+				fldty := this.info.TypeOf(fld.Type)
+				tyname := this.exprTypeNameImpl2(scope, fldty, nil)
+				tyname = strings.TrimRight(tyname, "*")
+				for _, _ = range fld.Names {
+					if _, ok := fldty.(*types.Signature); ok {
+						this.outf("(char*)nilptr") // TODO
+						this.outf("// %s", tyname).outnl()
+					} else if tyname == "cxeface" {
+						this.outf("(char*)nilptr") // TODO
+						this.outf("// %s", tyname).outnl()
+					} else if strings.Contains(tyname, "__") {
+						this.outf("(char*)nilptr") // TODO compiler define order problem
+						this.outf("// %s", tyname).outnl()
+					} else if strings.HasSuffix(tyname, "_t") {
+						this.outf("(char*)nilptr") // C type
+						this.outf("// %s", tyname).outnl()
+					} else {
+						this.outf("(char*)&%s_metatype", tyname)
+					}
+					this.out(gopp.IfElseStr(idx == fldcnt-1, "", ","))
+					this.outnl()
+				}
+			}
+			// TODO method here
+			this.out("}")
+		}
 		this.out("}").outfh().outnl()
 		this.outnl()
 		// this.out("static").outsp()
@@ -3977,7 +4019,7 @@ typedef struct _metatype {
     voidptr ptr2this; // typeOff
     uint8  count1;
     uint8  count2;
-    void** extptr;
+    char* extptr[];
 } _metatype;
 typedef struct cxeface {
     _metatype* _type; // _type
