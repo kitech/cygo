@@ -54,7 +54,6 @@ func (this *g2nc) genpkgs() {
 		this.calcDeferInfo(pkg.Scope, pkg)
 		this.genGostmtTypes(pkg.Scope, pkg)
 		this.genChanTypes(pkg.Scope, pkg)
-		this.genMultiretTypes(pkg.Scope, pkg)
 		this.genFuncs(pkg)
 	}
 
@@ -217,62 +216,32 @@ func (c *g2nc) genTupleTypes(scope *ast.Scope) {
 			c.outf("%s %s", tystr, tmpvarname2(i)).outfh().outnl()
 		}
 		c.outf("}").outfh().outnl()
-	}
-}
-func (c *g2nc) genMultiretTypes(scope *ast.Scope, pkg *ast.Package) {
-	c.out("// multirets types ", fmt.Sprintf("%d", len(c.psctx.gostmts))).outnl()
-	defer c.outnl()
-	for idx, fd := range c.psctx.multirets {
-		c.outf("// %d %v %v", idx, fd.Name, fd.Type.Results.NumFields()).outnl()
-		c.outf("typedef struct %s%s_multiret_arg %s%s_multiret_arg",
-			c.pkgpfx(), fd.Name.Name, c.pkgpfx(), fd.Name.Name).outfh().outnl()
-		c.outf("struct %s%s_multiret_arg {", c.pkgpfx(), fd.Name.Name)
-
-		cnter := 0
-		for _, fld := range fd.Type.Results.List {
-			for _, _ = range fld.Names {
-				c.out(c.exprTypeName(scope, fld.Type)).outsp()
-				c.out(tmpvarname2(cnter)).outfh().outnl()
-				cnter++
-			}
-		}
-		// c.genFieldList(scope, fd.Type.Results, false, true, ";", false)
-		c.out("}").outfh().outnl()
-		c.outnl()
-	}
-	for idx, fd := range c.psctx.multirets {
-		c.outf("// %d %v %v", idx, fd.Name, fd.Type.Results.NumFields()).outnl()
-		c.outf("%s%s_multiret_arg* %s%s_multiret_arg_new_zero() {",
-			c.pkgpfx(), fd.Name.Name, c.pkgpfx(), fd.Name.Name).outnl()
-		c.outf("%s%s_multiret_arg* obj = (%s%s_multiret_arg*)cxmalloc(sizeof(%s%s_multiret_arg))",
-			c.pkgpfx(), fd.Name.Name, c.pkgpfx(), fd.Name.Name, c.pkgpfx(), fd.Name.Name).outfh().outnl()
-		cnter := 0
-		for _, fld := range fd.Type.Results.List {
-			fldtyx := c.info.TypeOf(fld.Type)
-			for _, _ = range fld.Names {
-				recurzero := false
-				switch fldty := fldtyx.(type) {
-				case *types.Basic:
-					if fldty.Kind() == types.String {
-						recurzero = true
-						c.outf("obj->%s=cxstring3_new()", tmpvarname2(cnter)).outfh().outnl()
-					}
-				case *types.Slice:
+		c.outf("%s* %s_new_zero() {", tpi.tyname, tpi.tyname).outnl()
+		c.outf("%s* obj = (%s*)cxmalloc(sizeof(%s))",
+			tpi.tyname, tpi.tyname, tpi.tyname).outfh().outnl()
+		for cnter := 0; cnter < tpi.typ.Len(); cnter++ {
+			fldtyx := tpi.typ.At(cnter).Type()
+			recurzero := false
+			switch fldty := fldtyx.(type) {
+			case *types.Basic:
+				if fldty.Kind() == types.String {
 					recurzero = true
-					c.outf("obj->%s=cxarray3_new(0,", tmpvarname2(cnter))
-					etystr := c.exprTypeNameImpl2(scope, fldty.Elem(), nil)
-					c.outf("sizeof(%s))", etystr).outfh().outnl()
+					c.outf("obj->%s=cxstring3_new()", tmpvarname2(cnter)).outfh().outnl()
 				}
-				if !recurzero {
-					c.out("//")
-					c.out(c.exprTypeName(scope, fld.Type)).outsp()
-					c.out(tmpvarname2(cnter)).outfh().outnl()
-				}
-				cnter++
+			case *types.Slice:
+				recurzero = true
+				c.outf("obj->%s=cxarray3_new(0,", tmpvarname2(cnter))
+				etystr := c.exprTypeNameImpl2(scope, fldty.Elem(), nil)
+				c.outf("sizeof(%s))", etystr).outfh().outnl()
+			}
+			if !recurzero {
+				c.out("//")
+				c.out(c.exprTypeNameImpl2(scope, fldtyx, nil)).outsp()
+				c.out(tmpvarname2(cnter)).outfh().outnl()
 			}
 		}
 		c.out("return obj").outfh().outnl()
-		c.out("}").outnl()
+		c.outf("}").outnl()
 	}
 }
 
@@ -446,10 +415,20 @@ func (c *g2nc) genFuncDeclExported(scope *ast.Scope, fd *ast.FuncDecl, ant *Anno
 
 }
 func (c *g2nc) genFuncDeclCallable(scope *ast.Scope, fd *ast.FuncDecl, ant *Annotation) {
-	// todo multirets
+	// multirets
 	ismret := fd.Type.Results.NumFields() >= 2
+	fdtyx := c.info.TypeOf(fd.Name)
+	var retup *types.Tuple
+	var tpi *tupleinfo
 	if ismret {
-		c.outf("%s%s_multiret_arg*", c.pkgpfx(), fd.Name.Name)
+		retup = fdtyx.(*types.Signature).Results()
+		tpi1, incltset := c.psctx.tupletys[tuptyhash(retup)]
+		tpi = tpi1
+		log.Println(fdtyx, reftyof(fdtyx), tuptyhash(retup))
+		gopp.Assert(incltset, "wtfff", retup)
+	}
+	if ismret {
+		c.outf("%s*", tpi.tyname)
 	} else {
 		c.genFieldList(scope, fd.Type.Results, true, false, "", false)
 	}
@@ -508,10 +487,21 @@ func (this *g2nc) genFuncDecl(scope *ast.Scope, fd *ast.FuncDecl) {
 		this.outf("// %v %s", fd, exprpos(this.psctx, fd)).outnl()
 	}
 
+	fdtyx := this.info.TypeOf(fd.Name)
+	var retup *types.Tuple
+	var tpi *tupleinfo
+	if ismret {
+		retup = fdtyx.(*types.Signature).Results()
+		tpi1, incltset := this.psctx.tupletys[tuptyhash(retup)]
+		tpi = tpi1
+		log.Println(fdtyx, reftyof(fdtyx), tuptyhash(retup))
+		gopp.Assert(incltset, "wtfff", retup)
+	}
+
 	fdname := fd.Name.Name
 	pkgpfx := this.pkgpfx()
 	if ismret {
-		this.outf("%s%s_multiret_arg*", this.pkgpfx(), fd.Name.Name)
+		this.outf("%s*", tpi.tyname)
 	} else {
 		this.genFieldList(scope, fd.Type.Results, true, false, "", false)
 	}
@@ -601,9 +591,9 @@ func (this *g2nc) genFuncDecl(scope *ast.Scope, fd *ast.FuncDecl) {
 			gennamedrets()
 			gentoperr()
 
-			this.outf("%s%s_multiret_arg*", this.pkgpfx(), fd.Name.Name).outsp().out(tvname)
+			this.outf("%s*", tpi.tyname).outsp().out(tvname)
 			this.outeq().outsp()
-			this.outf("%s%s_multiret_arg_new_zero()", this.pkgpfx(), fd.Name.Name).outfh().outnl()
+			this.outf("%s_new_zero()", tpi.tyname).outfh().outnl()
 			cnter := 0
 			for _, fld := range fd.Type.Results.List {
 				for _, name := range fld.Names {
@@ -3377,22 +3367,11 @@ func (this *g2nc) exprTypeNameImpl2(scope *ast.Scope, ety types.Type, e ast.Expr
 		return "cxeface*"
 	case *types.Tuple:
 		// log.Println(e, reflect.TypeOf(e), te.String(), pkgpfxof(this.psctx, e))
-		switch ce := e.(type) {
-		case *ast.CallExpr:
-			exstr := exprstr(ce.Fun)
-			if ipos := strings.Index(exstr, "."); ipos > 0 {
-				exstr = exstr[ipos+1:]
-			}
-			pkgpfx := pkgpfxof(this.psctx, e)
-			return fmt.Sprintf("%s%v_multiret_arg*", pkgpfx, exstr)
-		case *ast.TypeAssertExpr:
-			return fmt.Sprintf("%v_multiret_arg*", "todoaaa")
-		default:
-			if tpi, ok := this.psctx.tupletys[te.String()]; ok {
-				return tpi.tyname + "*"
-			}
-			log.Println("todo", goty, reflect.TypeOf(goty), isudty, tyval, te, this.exprpos(e))
+		tuphash := tuptyhash(te)
+		if tpi, ok := this.psctx.tupletys[tuphash]; ok {
+			return tpi.tyname + "*"
 		}
+		gopp.Assert(1 == 2, "wtfff", te.String())
 	default:
 		log.Println("todo", goty, exprstr(e), reftyof(goty), isudty, tyval, te, this.exprpos(e))
 		return te.String() + "/*todo*/"

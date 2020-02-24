@@ -194,7 +194,6 @@ func type2eface(mtype voidptr, data voidptr) *Eface {
 		return type2eface_array(mty, data)
 	}
 
-	println(mty.Kind)
 	efc := &Eface{}
 	efc.Type = mtype
 	efc.Data = data

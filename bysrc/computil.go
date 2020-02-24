@@ -159,6 +159,16 @@ func typesty2str(typ types.Type) string {
 	return ret
 }
 
+// not include name field
+func tuptyhash(ty *types.Tuple) string {
+	s := ""
+	for i := 0; i < ty.Len(); i++ {
+		s += ty.At(i).Type().String() + "|"
+	}
+	return s
+}
+
+// depcreated
 func trimCtype(s string) string {
 	if strings.HasPrefix(s, "_Ctype_") {
 		return s[7:]

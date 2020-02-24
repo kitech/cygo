@@ -62,7 +62,6 @@ type ParserContext struct {
 	gostmts   []*ast.GoStmt
 	chanops   []ast.Expr // *ast.SendStmt
 	closures  []*ast.FuncLit
-	multirets []*ast.FuncDecl
 	tupletys  map[string]*tupleinfo // tuple string => tmptyname
 	defers    []*ast.DeferStmt
 	globvars  []ast.Node            // => ValueSpec node
@@ -168,7 +167,7 @@ func (this *ParserContext) Init_no_cgocmd(semachk bool) error {
 	this.walkpass_gostmt()
 	this.walkpass_chan_send_recv()
 	this.walkpass_closures()
-	this.walkpass_multiret()
+	this.walkpass_tupletys()
 	this.walkpass_defers()
 	this.walkpass_globvars()
 	this.walkpass_functypes()
@@ -268,7 +267,7 @@ func (this *ParserContext) Init_explict_cgo() error {
 	this.walkpass_gostmt()
 	this.walkpass_chan_send_recv()
 	this.walkpass_closures()
-	this.walkpass_multiret()
+	this.walkpass_tupletys()
 	this.walkpass_defers()
 	this.walkpass_globvars()
 
@@ -1382,12 +1381,12 @@ func (pc *ParserContext) walkpass_tmpl_proc() {
 type tupleinfo struct {
 	typ    *types.Tuple
 	tyname string // genc struct name
+	hash   string
 	expr   ast.Expr
 }
 
 // extract multirets and map get tuple
-func (pc *ParserContext) walkpass_multiret() {
-	multirets := []*ast.FuncDecl{}
+func (pc *ParserContext) walkpass_tupletys() {
 	tupletys := map[string]*tupleinfo{}
 	pkgs := pc.pkgs
 	for _, pkg := range pkgs {
@@ -1395,10 +1394,16 @@ func (pc *ParserContext) walkpass_multiret() {
 			switch te := c.Node().(type) {
 			case ast.Expr:
 				tetyx := pc.info.TypeOf(te)
-				if tety, ok := tetyx.(*types.Tuple); ok && tety.Len() > 0 {
-					tystr := tety.String()
+				var tupty *types.Tuple
+				if tety, ok := tetyx.(*types.Signature); ok && tety.Results().Len() > 9 {
+					tupty = tety.Results()
+				} else if tety, ok := tetyx.(*types.Tuple); ok && tety.Len() > 0 {
+					tupty = tety
+				}
+				if tupty != nil {
+					tystr := tuptyhash(tupty)
 					if _, ok2 := tupletys[tystr]; !ok2 {
-						tupletys[tystr] = &tupleinfo{tety, tmptyname(), te}
+						tupletys[tystr] = &tupleinfo{tupty, tmptyname(), tystr, te}
 					}
 				}
 			default:
@@ -1416,15 +1421,19 @@ func (pc *ParserContext) walkpass_multiret() {
 						fld.Names = append(fld.Names, newIdent(tmpvarname2(idx)))
 					}
 				}
-				multirets = append(multirets, te)
+				tetyx := pc.info.TypeOf(te.Name)
+				tety := tetyx.(*types.Signature).Results()
+				tystr := tuptyhash(tety)
+				if _, ok := tupletys[tystr]; !ok {
+					tupletys[tystr] = &tupleinfo{tety, tmptyname(), tystr, te.Name}
+				}
 			default:
 				gopp.G_USED(te)
 			}
 			return true
 		})
 	}
-	log.Println("multirets", pc.bdpkgs.Name, len(multirets), len(tupletys))
-	pc.multirets = multirets
+	log.Println("tupletys", pc.bdpkgs.Name, len(tupletys))
 	pc.tupletys = tupletys
 }
 
