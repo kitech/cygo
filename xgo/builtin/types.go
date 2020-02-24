@@ -78,15 +78,20 @@ type Metatype struct {
 	Hash       uint32   // hash of type; avoids computation in hash tables
 	Tflag      uint8    // tflag   // extra type information flags
 	Align      uint8    // alignment of variable with this type
-	Fieldalign uint8    // alignment of struct field with this type
+	FieldAlign uint8    // alignment of struct field with this type
 	Kind       uint8    // enumeration for C
 	Alg        *typealg // *typeAlg // algorithm table
 	Gcdata     byteptr  // garbage collection data
 	Str        byteptr  // nameOff // string form
-	PtrToThis  voidptr  // typeOff // type for pointer to this type, may be zero
-	count1     uint8    // for uncommon type, like map/slice/ptr
-	count2     uint8
-	extptr     *voidptr
+	thisptr    voidptr  // typeOff // type for pointer to this type, may be zero
+
+	elemty *Metatype // for map/array/slice/ptr
+	keyty  *Metatype // for map
+	count1 uint8     // for uncommon type, like map/slice/ptr
+	count2 uint8
+	// if use this syntax, need use addr of it, like &extptr
+	// extptr *voidptr // generate to: voidptr* exptr, not work
+	extptr [0]voidptr // generate to: voidptr [], works
 }
 
 type maptype struct {
@@ -145,6 +150,13 @@ type Eface struct {
 	Data *voidptr
 }
 
+func Eface_new(typ *Metatype, data voidptr) *Eface {
+	efc := &Eface{}
+	efc.Type = typ
+	efc.Data = data
+	return efc
+}
+
 func (efc *Eface) Kind() int {
 	return efc.Type.Kind
 }
@@ -169,14 +181,95 @@ func (efc *Eface) Toint() int {
 	return *p
 }
 
+// data is pointer of orignal var
+
 //export cxrt_type2eface
 func type2eface(mtype voidptr, data voidptr) *Eface {
 	var mty *Metatype = mtype
+
+	tyname := gostring(mty.Str)
+	if mty.Kind == Struct && tyname == "builtin__mirmap" {
+		return type2eface_map(mty, data)
+	} else if mty.Kind == Struct && tyname == "builtin__cxarray3" {
+		return type2eface_array(mty, data)
+	}
+
 	efc := &Eface{}
 	efc.Type = mtype
 	efc.Data = data
 	efc.Data = memdup3(data, mty.Size)
 	return efc
+}
+
+func type2eface_map(mtype *Metatype, data voidptr) *Eface {
+	var mapobjpp **mirmap = data
+	var mapobj *mirmap = *mapobjpp
+	var newmty *Metatype
+	newmty = memdup3(mtype, sizeof(*mtype))
+	newmty.Kind = Map
+	newmty.thisptr = data
+
+	var keytyp *Metatype
+	var valtyp *Metatype
+
+	keytyp = metatype_bykind(mapobj.keykind)
+	if keytyp == nil {
+		switch mapobj.keykind {
+		case Struct:
+		}
+	}
+	assert(keytyp != nil)
+
+	valtyp = metatype_bykind(mapobj.valkind)
+	if valtyp == nil {
+		switch mapobj.valkind {
+		case Struct:
+
+		}
+	}
+	assert(valtyp != nil)
+
+	newmty.elemty = valtyp
+	newmty.keyty = keytyp
+
+	efc := Eface_new(newmty, data)
+	return efc
+}
+func type2eface_array(mtype *Metatype, data voidptr) *Eface {
+	var arrobjpp **cxarray3 = data
+	var arrobj *cxarray3 = *arrobjpp
+	var newmty *Metatype
+	newmty = memdup3(mtype, sizeof(*mtype))
+	newmty.Kind = Slice
+	newmty.thisptr = data
+
+	var valtyp *Metatype
+
+	// TODO cxarray3 need kind field
+	valtyp = metatype_bykind(Voidptr)
+	if valtyp == nil {
+	}
+	assert(valtyp != nil)
+	newmty.elemty = valtyp
+
+	efc := Eface_new(newmty, data)
+	return efc
+}
+
+func metatype_bykind(kind int) *Metatype {
+	var mty *Metatype
+	switch kind {
+	case Int:
+		mty = &int_metatype // from C
+	case String:
+		mty = &string_metatype
+	case Float32:
+		mty = &float32_metatype
+	case Voidptr:
+		mty = &voidptr_metatype
+	case Struct:
+	}
+	return mty
 }
 
 type MethodObject struct {
@@ -249,13 +342,18 @@ func (mty *Metatype) sizeof() int  { return mty.Size }
 func (mty *Metatype) alignof() int { return mty.Align }
 
 // all
-func (mty *Metatype) New() int {
-	return mty.Align
+func (mty *Metatype) New() voidptr {
+	return nil
 }
 
 // map
 func (mty *Metatype) KeySize() int {
 	return mty.Align
+}
+
+// map
+func (mty *Metatype) Key() *Metatype {
+	return mty.keyty
 }
 
 // map/slice/array/ptr
@@ -265,10 +363,10 @@ func (mty *Metatype) ElemSize() int {
 
 // map/slice/array/ptr
 func (mty *Metatype) Elem() *Metatype {
-	return nil
+	return mty.elemty
 }
 
-// map/slice/array/ptr
+// map/slice/array
 func (mty *Metatype) Len() int {
 	return mty.Align
 }
@@ -279,33 +377,72 @@ func (mty *Metatype) Cap() int {
 }
 
 // struct
-func (mty *Metatype) NumFields() int {
-	return mty.Align
+func (mty *Metatype) NumField() int {
+	return mty.count1
 }
 
 // struct
-func (mty *Metatype) NumMethods() int {
-	return mty.Align
+func (mty *Metatype) NumMethod() int {
+	return mty.count2
 }
 
 // struct
-func (mty *Metatype) Field(i int) int {
-	return mty.Align
+func (mty *Metatype) Field(i int) *StructField {
+	fldcnt := mty.NumField()
+	fldname := mty.FieldName(i)
+	fldty := mty.FieldType(i)
+
+	fldo := &StructField{}
+	fldo.Name = fldname
+	fldo.Type = fldty
+	fldo.Index = i
+	fldo.Offset = 0
+
+	return fldo
 }
 
 // struct
-func (mty *Metatype) FieldByName(name string) int {
-	return mty.Align
+// just temporary
+func (mty *Metatype) FieldName(i int) string {
+	var ptrpp *byteptr = mty.extptr
+	cstr := ptrpp[i]
+	return gostring(cstr)
 }
 
 // struct
-func (mty *Metatype) Method(i int) int {
-	return mty.Align
+// just temporary
+func (mty *Metatype) FieldType(i int) *Metatype {
+	fldcnt := mty.NumField()
+	var ptrpp *byteptr = mty.extptr
+	var fldty *Metatype
+	fldty = ptrpp[fldcnt+i]
+	return fldty
 }
 
 // struct
-func (mty *Metatype) MethodByName(name string) int {
-	return mty.Align
+func (mty *Metatype) FieldByName(name string) *StructField {
+	fldcnt := mty.NumField()
+	var ptrpp *byteptr = mty.extptr
+	for i := 0; i < fldcnt; i++ {
+		ptr := ptrpp[i]
+		fldname := gostring(ptr)
+		if fldname == name {
+			return mty.Field(i)
+		}
+	}
+	return nil
+}
+
+// struct
+func (mty *Metatype) Method(i int) *Method {
+	mtho := &Method{}
+	return mtho
+}
+
+// struct
+func (mty *Metatype) MethodByName(name string) *Method {
+	mtho := &Method{}
+	return mtho
 }
 
 // func
@@ -349,7 +486,7 @@ func (ifc *Iface) Empty() bool {
 	return true
 }
 
-func (ifc *Iface) NumMethods() int {
+func (ifc *Iface) NumMethod() int {
 	return 0
 }
 

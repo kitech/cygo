@@ -2577,9 +2577,17 @@ func (this *g2nc) genFieldList(scope *ast.Scope, flds *ast.FieldList,
 
 	for idx, fld := range flds.List {
 		_, _ = idx, fld
-		log.Println(fld.Type, this.exprTypeName(scope, fld.Type))
+		rawtystr := exprstr(fld.Type)
+		iscbrackarr := false
+		// log.Println(fld.Type, exprstr(fld.Type), this.exprTypeName(scope, fld.Type))
 		if tyname, ok := this.psctx.functypes[fld.Type]; ok {
 			this.out(tyname)
+		} else if strings.HasPrefix(rawtystr, "[0]") {
+			iscbrackarr = true
+			fldtyx := this.info.TypeOf(fld.Type)
+			// log.Println(fldtyx.String(), reftyof(fldtyx))
+			fldty := fldtyx.(*types.Array)
+			this.out(fldty.Elem().String())
 		} else {
 			// this.outf("/* %v */", exprstr(fld.Type))
 			this.genTypeExpr(scope, fld.Type)
@@ -2587,6 +2595,7 @@ func (this *g2nc) genFieldList(scope *ast.Scope, flds *ast.FieldList,
 		this.outsp()
 		if withname && len(fld.Names) > 0 {
 			this.genExpr(scope, fld.Names[0])
+			this.out(gopp.IfElseStr(iscbrackarr, "[]", ""))
 		}
 		outskip := skiplast && (idx == len(flds.List)-1)
 		this.out(gopp.IfElseStr(outskip, "", linebrk))
@@ -3316,6 +3325,9 @@ func (this *g2nc) exprTypeNameImpl2(scope *ast.Scope, ety types.Type, e ast.Expr
 		return "builtin__cxarray3*"
 	case *types.Array:
 		tystr := te.String()
+		// [0]byte, [0]byteptr, [0]voidptr
+		if strings.HasPrefix(tystr, "[0]") {
+		}
 		if tystr == "[0]byte" {
 			return "void"
 		}
@@ -4016,7 +4028,9 @@ typedef struct _metatype {
     typealg* alg;
     byteptr gcdata;
     charptr tystr; // nameOff
-    voidptr ptr2this; // typeOff
+    voidptr thisptr; // typeOff
+    voidptr elemty;
+    voidptr keyty;
     uint8  count1;
     uint8  count2;
     char* extptr[];
@@ -4051,8 +4065,8 @@ func (c *g2nc) genBuiltinTypesMetatype() string {
 	bitypes := append(types.Typ, types.TypeAlias()...)
 	for idx, bityp := range bitypes {
 		tyname := bityp.Name()
-		if strings.Contains(tyname, " ") {
-			// untyped
+		tyname = strings.ReplaceAll(tyname, " ", "_")
+		if strings.Contains(tyname, "untyped_") {
 			continue
 		}
 		if strings.HasPrefix(tyname, "complex") {
@@ -4066,7 +4080,10 @@ func (c *g2nc) genBuiltinTypesMetatype() string {
 		s += fmt.Sprintf("static const _metatype %s_metatype = {", tyname)
 		refkind := type2rtkind2(bityp)
 		s += fmt.Sprintf(".kind = %d,\n", refkind)
-		if tyname == "string" {
+		if bityp.Kind() == types.Invalid {
+			s += fmt.Sprintf(".size = 0,\n")
+			s += fmt.Sprintf(".align = 0,\n")
+		} else if bityp.Kind() == types.String {
 			s += fmt.Sprintf(".size = sizeof(%s),\n", "charptr")
 			s += fmt.Sprintf(".align = alignof(%s),\n", "charptr")
 		} else {
