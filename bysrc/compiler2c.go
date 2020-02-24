@@ -106,8 +106,9 @@ func (c *g2nc) genpkg(name string, pkg *ast.Package) {
 			c.outf("typedef struct %s %s /*ooo*/", stname[7:], stname).outfh().outnl()
 		}
 	}
-	c.genFunctypesDecl(pkg.Scope)
 	c.genTupleTypes(pkg.Scope)
+	c.genFunctypesDecl(pkg.Scope)
+
 	for name, f := range pkg.Files {
 		c.genfile(pkg.Scope, name, f)
 	}
@@ -3455,17 +3456,21 @@ func (c *g2nc) genFunctypesDecl(scope *ast.Scope) {
 	for fntyx, name := range c.psctx.functypes {
 		fnty := fntyx.(*ast.FuncType)
 		c.outf("// %v %v", exprstr(fnty), name).outnl()
+		fnres := fnty.Results
 		retcnt := 0
-		if fnty.Results != nil {
-			retcnt = len(fnty.Results.List)
-		}
-		if retcnt > 1 {
-			log.Fatalln("not support multirets functypes", exprpos(c.psctx, fntyx))
-			c.outf("// notimpl multirets").outnl().out("//").outsp()
+		if fnres != nil {
+			retcnt = len(fnres.List)
 		}
 		c.outf("typedef /*ddd*/").outsp()
-		if fnty.Results != nil {
-			for idx, fldo := range fnty.Results.List {
+		if fnres != nil && retcnt > 1 {
+			fnty2 := c.info.TypeOf(fntyx)
+			tupty := fnty2.(*types.Signature).Results()
+			tpi := c.psctx.tupletys[tuptyhash(tupty)]
+			gopp.Assert(tpi != nil, "wtfff",
+				fntyx, reftyof(fnty2), tupty, tuptyhash(tupty), name)
+			c.outf("%s*", tpi.tyname)
+		} else if fnres != nil {
+			for idx, fldo := range fnres.List {
 				tystr := c.exprTypeName(scope, fldo.Type)
 				c.outf("%v%s", tystr, gopp.IfElseStr(idx == retcnt-1, "", ","))
 			}
@@ -3506,6 +3511,7 @@ func (this *g2nc) genTypeSpec(scope *ast.Scope, spec *ast.TypeSpec) {
 	switch te := spec.Type.(type) {
 	case *ast.StructType:
 		specname := trimCtype(spec.Name.Name)
+		this.out("// structure").outnl()
 		this.outf("typedef struct %s%s %s%s",
 			this.pkgpfx(), specname, this.pkgpfx(), specname).outfh().outnl()
 		this.outf("struct %s%s {", this.pkgpfx(), specname)
@@ -3629,6 +3635,7 @@ func (this *g2nc) genTypeSpec(scope *ast.Scope, spec *ast.TypeSpec) {
 		this.out(this.pkgpfx() + specname)
 		this.outfh().outnl()
 	case *ast.InterfaceType:
+		this.out("// interface").outnl()
 		this.outf("typedef struct %s%s %s%s", this.pkgpfx(), spec.Name,
 			this.pkgpfx(), spec.Name).outfh().outnl()
 		this.outf("struct %s%s {", this.pkgpfx(), spec.Name).outnl()
@@ -3636,8 +3643,16 @@ func (this *g2nc) genTypeSpec(scope *ast.Scope, spec *ast.TypeSpec) {
 		for _, fld := range te.Methods.List {
 			switch fldty := fld.Type.(type) {
 			case *ast.FuncType:
+				fldtyx := this.info.TypeOf(fld.Type)
+				tupty := fldtyx.(*types.Signature).Results()
 				for _, name := range fld.Names {
-					this.genFieldList(scope, fldty.Results, true, false, "", true)
+					if tupty.Len() > 1 {
+						tpi := this.psctx.tupletys[tuptyhash(tupty)]
+						gopp.Assert(tpi != nil, "wtfff", fldtyx)
+						this.outf("%s*", tpi.tyname)
+					} else {
+						this.genFieldList(scope, fldty.Results, true, false, "", true)
+					}
 					this.outf("(*%s)(voidptr", name.Name)
 					this.out(gopp.IfElseStr(fldty.Params.NumFields() > 0, ",", ""))
 					this.genFieldList(scope, fldty.Params, false, false, "", true)

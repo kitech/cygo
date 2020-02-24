@@ -1395,7 +1395,7 @@ func (pc *ParserContext) walkpass_tupletys() {
 			case ast.Expr:
 				tetyx := pc.info.TypeOf(te)
 				var tupty *types.Tuple
-				if tety, ok := tetyx.(*types.Signature); ok && tety.Results().Len() > 9 {
+				if tety, ok := tetyx.(*types.Signature); ok && tety.Results().Len() > 1 {
 					tupty = tety.Results()
 				} else if tety, ok := tetyx.(*types.Tuple); ok && tety.Len() > 0 {
 					tupty = tety
