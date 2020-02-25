@@ -2417,11 +2417,46 @@ func (c *g2nc) genReturnStmt(scope *ast.Scope, e *ast.ReturnStmt) {
 				names = append(names, name)
 			}
 		}
+		fntyx := c.info.TypeOf(fd.Name)
+		fnty := fntyx.(*types.Signature)
 		for idx, re := range e.Results {
-			c.outf("%s->%s", rtvname.Name, tmpvarname2(idx))
-			c.outeq()
-			c.genExpr(scope, re)
-			c.outfh().outnl()
+			retyx := c.info.TypeOf(re)
+			mytyx := fnty.Results().At(idx).Type()
+
+			if isiface2(mytyx) && retyx != mytyx && !isnilident(re) {
+				// iface assign
+				tvname := tmpvarname()
+				tystr := c.exprTypeNameImpl2(scope, mytyx, nil)
+				tystr = strings.Trim(tystr, "*")
+				c.outf("%s* %s", tystr, tvname).outeq()
+				c.outf("%s_new_zero()", tystr).outfh().outnl()
+				c.outf("%s->thisptr /*ifaceas*/", tvname).outeq()
+				c.genExpr(scope, re)
+				if isiface2(retyx) {
+					c.out("->thisptr")
+				}
+				c.outfh().outnl()
+				unty := mytyx.Underlying().(*types.Interface)
+				for j := 0; j < unty.NumMethods(); j++ {
+					mtho := unty.Method(j)
+					c.outf("%s->%v /*ifaceas*/ = ", tvname, mtho.Name())
+					if isiface2(retyx) {
+						c.genExpr(scope, re)
+						c.out("->thisptr")
+					} else {
+						retystr := c.exprTypeName(scope, re)
+						retystr = strings.TrimRight(retystr, "*")
+						c.outf("%s_%s", retystr, mtho.Name())
+					}
+					c.outfh().outnl()
+				}
+				c.outf("%s->%s=%s", rtvname.Name, tmpvarname2(idx), tvname).outfh().outnl()
+			} else {
+				c.outf("%s->%s", rtvname.Name, tmpvarname2(idx))
+				c.outeq()
+				c.genExpr(scope, re)
+				c.outfh().outnl()
+			}
 		}
 		if len(e.Results) == 0 {
 			for idx, name := range names {
@@ -3289,10 +3324,13 @@ func (this *g2nc) exprTypeNameImpl2(scope *ast.Scope, ety types.Type, e ast.Expr
 		teobj := te.Obj()
 		pkgo := teobj.Pkg()
 		undty := te.Underlying()
-		log.Println(teobj, pkgo, undty, reftyof(undty))
+		// log.Println(teobj, "/", pkgo, "/", undty, "/", reftyof(undty))
 		switch ne := undty.(type) {
 		case *types.Interface:
 			if pkgo == nil { // builtin???
+				if teobj.Name() == "error" { // TODO dont use string compare
+					return "builtin__error*"
+				}
 				return teobj.Name() + "*"
 			}
 			return fmt.Sprintf("%s%s%s*", pkgo.Name(), pkgsep, teobj.Name())

@@ -1,5 +1,10 @@
 package xos
 
+/*
+#include <errno.h>
+*/
+import "C"
+
 type Cmd struct {
 	cmd  string
 	args []string
@@ -25,6 +30,14 @@ func (cmd *Cmd) Errout() error {
 	return nil
 }
 
-func Lookup(p string) (string, error) {
-	return "", nil
+func Lookup(exename string) (string, error) {
+	paths := Paths()
+	for _, dir := range paths {
+		exepath := dir + PathSep + exename
+		if FileExist(exepath) {
+			return exepath, nil
+		}
+	}
+
+	return "", newoserr(C.ENOENT)
 }

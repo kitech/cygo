@@ -87,6 +87,21 @@ func Unsetenv(name string) bool {
 	return rv == 0
 }
 
+func Paths() []string {
+	var res []string
+	p := C.getenv("PATH".ptr)
+	if p == nil {
+		return res
+	}
+	line := gostring(p)
+	if line.index(":") >= 0 {
+		res = line.split(":")
+	} else {
+		res = line.split(";")
+	}
+	return res
+}
+
 func Exit(code int) {
 	C.exit(code)
 }
@@ -231,6 +246,26 @@ func IsWritable(filename string) bool {
 func IsExcutable(filename string) bool {
 	rv := C.access(filename.ptr, C.X_OK)
 	return rv == 0
+}
+
+func Realpath(s string) string {
+	respath := make([]byte, PATH_MAX)
+	rv := C.realpath(s.ptr, respath.ptr)
+	if rv == nil {
+		return s
+	}
+	// return string(respath) // TODO compiler
+	return gostring(rv)
+}
+func Readlink(s string) string {
+	respath := make([]byte, PATH_MAX)
+	rv := C.readlink(s.ptr, respath.ptr, PATH_MAX)
+	if rv < 0 {
+		err := newoserr1()
+		println(err.Error())
+		return s
+	}
+	return gostringn(respath.ptr, rv)
 }
 
 func Umask(mask int) int {
