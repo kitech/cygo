@@ -481,12 +481,8 @@ func (this *g2nc) genFuncDecl(scope *ast.Scope, fd *ast.FuncDecl) {
 		this.out("extern").outsp()
 		// return
 	}
-	// _Cfunc_xxx
-	iswcfn := iswrapcfunc(this.exprstr(fd.Name))
+
 	ismret := fd.Type.Results.NumFields() >= 2
-	if iswcfn {
-		this.outf("// %v %s", fd, exprpos(this.psctx, fd)).outnl()
-	}
 
 	fdtyx := this.info.TypeOf(fd.Name)
 	var retup *types.Tuple
@@ -528,26 +524,7 @@ func (this *g2nc) genFuncDecl(scope *ast.Scope, fd *ast.FuncDecl) {
 
 	this.genFieldList(scope, fd.Type.Params, false, true, ",", true)
 	this.out(")").outnl()
-	if iswcfn {
-		this.out("{").outnl()
-		if fd.Type.Results.NumFields() > 0 {
-			this.out("return").outsp()
-		}
-		this.outf("%s(", fd.Name.Name[7:])
-		for idx1, arge := range fd.Type.Params.List {
-			_, isptrty := arge.Type.(*ast.StarExpr)
-			for idx2, name := range arge.Names {
-				this.out(gopp.IfElseStr(isptrty, "(voidptr)", ""))
-				this.outf("%s", name.Name)
-				if idx1 == fd.Type.Params.NumFields()-1 && idx2 == len(arge.Names)-1 {
-				} else {
-					this.out(",")
-				}
-			}
-		}
-		this.out(")").outfh().outnl()
-		this.out("}").outnl()
-	} else if fd.Body != nil {
+	if fd.Body != nil {
 		gendeferprep := func() {
 			this.out("// int array").outnl()
 			this.out(gopp.IfElseStr(!this.hasdefer(fd), "//", ""))
@@ -591,6 +568,7 @@ func (this *g2nc) genFuncDecl(scope *ast.Scope, fd *ast.FuncDecl) {
 			this.out("{").outnl()
 			gennamedrets()
 			gentoperr()
+			this.outnl().outnl()
 
 			this.outf("%s*", tpi.tyname).outsp().out(tvname)
 			this.outeq().outsp()
@@ -604,7 +582,7 @@ func (this *g2nc) genFuncDecl(scope *ast.Scope, fd *ast.FuncDecl) {
 				}
 			}
 			gendeferprep()
-			this.genBlockStmt(scope, fd.Body)
+			this.genBlockStmt(scope, fd.Body, true)
 			this.out("labmret:").outnl()
 			this.out("return").outsp().out(tvname).outfh().outnl()
 			this.out("}").outnl()
@@ -613,7 +591,9 @@ func (this *g2nc) genFuncDecl(scope *ast.Scope, fd *ast.FuncDecl) {
 			gendeferprep()
 			gennamedrets()
 			gentoperr()
-			this.genBlockStmt(scope, fd.Body)
+			this.outnl().outnl()
+
+			this.genBlockStmt(scope, fd.Body, true)
 			this.out("}").outnl()
 		}
 	} else {
@@ -676,8 +656,9 @@ func (c *g2nc) genCallPkgInits(pkgs []string) {
 	c.out("}").outnl()
 }
 
-func (this *g2nc) genBlockStmt(scope *ast.Scope, stmt *ast.BlockStmt) {
-	this.out("{").outnl()
+func (this *g2nc) genBlockStmt(scope *ast.Scope, stmt *ast.BlockStmt, nobracks ...bool) {
+	var nobrack = len(nobracks) > 0 && nobracks[0] == true
+	this.out(gopp.IfElseStr(nobrack, "", "{")).outnl()
 	scope = ast.NewScope(scope)
 
 	tailreturn := false
@@ -700,7 +681,7 @@ func (this *g2nc) genBlockStmt(scope *ast.Scope, stmt *ast.BlockStmt) {
 		}
 		this.genExceptionStmt(scope, stmt)
 	}
-	this.out("}").outnl()
+	this.out(gopp.IfElseStr(nobrack, "", "}")).outnl()
 }
 
 // clause index?
@@ -1779,7 +1760,7 @@ func (c *g2nc) genCallExprDelete(scope *ast.Scope, te *ast.CallExpr) {
 		}
 		c.outf("cxhashtable3_remove(")
 		c.genExpr(scope, arg0)
-		c.outf(", (voidptr)(uintptr)%s, 0)", keystr).outfh().outnl()
+		c.outf(", (voidptr)&%s, 0)", keystr).outfh().outnl()
 	} else {
 		log.Println("todo", te.Args, argty)
 	}
@@ -3113,8 +3094,8 @@ func (c *g2nc) genCxmapAddkv(scope *ast.Scope, vnamex interface{}, ke ast.Expr, 
 
 	c.outf("cxhashtable3_add(")
 	c.genExpr(scope, vnamex.(ast.Expr))
-	c.outf(", (voidptr)(uintptr)&%v,", keystr)
-	c.out("(voidptr)(uintptr)(&")
+	c.outf(", (voidptr)&%v,", keystr)
+	c.out("(voidptr)(&")
 	switch ve := vei.(type) {
 	case ast.Expr:
 		c.genExpr(scope, ve)
@@ -3143,7 +3124,7 @@ func (c *g2nc) genCxmapGetkv(scope *ast.Scope, vnamex interface{}, ke ast.Expr, 
 		c.outf("int %v =", tmpok).outsp()
 		c.outf("cxhashtable3_get(")
 		c.genExpr(scope, vnamex.(ast.Expr))
-		c.out(",&")
+		c.out(",(voidptr)&")
 		c.genExpr(scope, ke)
 		c.out(", (voidptr*)&(")
 		if varobj != nil {
@@ -3180,7 +3161,7 @@ func (c *g2nc) genCxarrAdd(scope *ast.Scope, vnamex interface{}, ve ast.Expr, id
 	// log.Println(vnamex, ve, idx)
 	tyname := c.exprTypeName(scope, ve)
 	tmpname := tmpvarname()
-	c.outf("%v %v = ", tyname, tmpname)
+	c.outf("%v %v", tyname, tmpname).outeq()
 	c.genExpr(scope, ve)
 	c.outfh().outnl()
 
@@ -3198,7 +3179,7 @@ func (c *g2nc) genCxarrSet(scope *ast.Scope, vname ast.Expr, vidx ast.Expr, elem
 	c.outfh().outnl()
 	c.outf("cxarray3_replace_at(")
 	c.genExpr(scope, vname)
-	c.outf(", (voidptr)(uintptr)&")
+	c.outf(", (voidptr)&")
 	c.out(tname)
 	c.out(",")
 	c.genExpr(scope, vidx)

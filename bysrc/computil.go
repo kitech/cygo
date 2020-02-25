@@ -95,8 +95,10 @@ func isinvalidty(tystr string) bool    { return strings.HasPrefix(tystr, "invali
 func isinvalidty2(typ types.Type) bool { return isinvalidty(typ.String()) }
 func isuntypedty(tystr string) bool    { return strings.HasPrefix(tystr, "untyped ") }
 func isuntypedty2(typ types.Type) bool { return isuntypedty(typ.String()) }
-func iswrapcfunc(name string) bool     { return strings.HasPrefix(name, "_Cfunc") }
-func istuple(tystr string) bool        { return strings.Contains(tystr, "_multiret_") }
+
+func istuple(tystr string) bool {
+	return strings.HasPrefix(tystr, "(") && strings.HasSuffix(tystr, ")")
+}
 func istuple2(typ types.Type) bool {
 	if _, ok := typ.(*types.Tuple); ok {
 		return true
@@ -518,6 +520,20 @@ func pkgpfxof(pc *ParserContext, e ast.Expr) string {
 }
 
 func reftyof(x interface{}) reflect.Type { return reflect.TypeOf(x) }
+
+func isFuncBody(pc *ParserContext, blk *ast.BlockStmt) bool {
+	blkcs, ok := pc.cursors[blk]
+	if ok {
+		pn := blkcs.Parent()
+		if _, ok := pn.(*ast.FuncDecl); ok {
+			return true
+		}
+		if _, ok := pn.(*ast.FuncLit); ok {
+			return true
+		}
+	}
+	return false
+}
 
 type FuncCallAttr struct {
 	fnty       *types.Signature
