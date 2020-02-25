@@ -1,10 +1,11 @@
 #!/bin/sh
 
-rm -rf ./congo
-git clone . congo
-du -hs congo
+foname=cygo
+rm -rf ./$foname
+git clone . $foname
+du -hs $foname
 
-cd congo
+cd $foname
 
 skip_commit()
 {
@@ -45,4 +46,5 @@ git gc
 git log --oneline | wc -l
 
 cd -
-du -hs congo
+du -hs $foname
+

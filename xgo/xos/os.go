@@ -70,6 +70,23 @@ func Environ() []string {
 	return arr
 }
 
+func Getenv(name string) string {
+	var val string
+	p := C.getenv(name.ptr)
+	if p != nil {
+		val = gostring(p)
+	}
+	return val
+}
+func Setenv(name string, value string, override bool) bool {
+	rv := C.setenv(name.ptr, value.ptr, override)
+	return rv == 0
+}
+func Unsetenv(name string) bool {
+	rv := C.unsetenv(name.ptr)
+	return rv == 0
+}
+
 func Exit(code int) {
 	C.exit(code)
 }
@@ -150,15 +167,53 @@ func Move(from string, to string) error {
 }
 
 func Remove(filename string) error {
+	rv := C.remove(filename.ptr)
+	if rv != COK {
+		return newoserr1()
+	}
 	return nil
 }
 
+// default safe, write to temp and then rename
 func WriteFile(filename string, data []byte) error {
+	mode := "w+"
+	fp := C.fopen(filename.ptr, mode.ptr)
+	if fp != nil {
+		return newoserr1()
+	}
+	defer C.fclose(fp)
+	len := data.len
+	rv := C.fwrite(data.ptr, len, 1, fp)
+	if rv != len {
+		return newoserr1()
+	}
 	return nil
 }
 
 func ReadFile(filename string) ([]byte, error) {
-	return nil, nil
+	mode := "r"
+	fp := C.fopen(filename.ptr, mode.ptr)
+	if fp != nil {
+		return nil, newoserr1()
+	}
+	defer C.fclose(fp)
+	var res []byte
+	buf := make([]byte, 8192)
+	for {
+		rv := C.fread(buf.ptr, buf.len, 1, fp)
+		if rv > 0 {
+			res = append(res, buf[:rv]...)
+		}
+		isferr := C.ferror(fp)
+		if isferr == 1 {
+			return nil, newoserr1()
+		}
+		iseof := C.feof(fp)
+		if iseof == 1 {
+			break
+		}
+	}
+	return res, nil
 }
 
 func FileExist(filename string) bool {
@@ -182,5 +237,7 @@ func Umask(mask int) int {
 	rv := C.umask(0)
 	return rv
 }
+
+func Abort() { C.abort() }
 
 func Keep() {}

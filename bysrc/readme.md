@@ -1,4 +1,8 @@
 
+### Install
+
+    go build -o cygo
+
 ### TODO
 * [ ] type assertion
 * [ ] reflect
@@ -35,24 +39,28 @@
 * [x] 内置的string要有更多的方法，用单独的strings包有点麻烦
 * [x] 内置的int/float要有更多的转换方法
 * [ ] 结构体的通用 repr 函数
-* [ ] string和array似乎可以全在builtin中用go语法实现了。
-* [ ] func type parameters
+* [x] string和array/hashmap似乎可以全在builtin中用go语法实现了。
+* [x] func type parameters
 * [ ] type order graph
-* [ ] catch 语法错误/异常处理
+* [x] catch 语法错误/异常处理
 * [ ] let 替换const
-* [ ] 三元运算符号，值表达式只准使用常量或者ident
-* [ ] 生成 enum 名字
+* [x] 三元运算符号，值表达式只准使用常量或者ident。
+      使用内置函数 ifelse 实现类似的功能
+* [ ] 生成 enum 字符串名字
 * [ ] 如果没有return，则返回默认值
 * [ ] integer 类型的 minval()/maxval()方法，取各类型的最大值最小值 
 * [ ] 结构体setfinalizer/setdtor方法
 * [ ] 在结构体声明的时候，可以给成员赋初值,类py,rb。机制，默认初始化为0,如果为nil,则不初始化
 * [ ] 目标，动态性良好的静态编译语言
+* [ ] print时自动解 tuple 不错
 
 ### 语法树重写
-* [ ] 变量声明解构为每条语句一个变量，如果有多个的话
+* [x] 变量声明解构为每条语句一个变量，如果有多个的话
 * [x] 末尾没有return的要补上
-* [ ] 现在的ast在插入删除语句上有点弱 
+* [x] 现在的ast在插入删除语句上有点弱
       实现了一种transform，可以添加语句，保持正确语序
+      一般不删除语句，采用replace语句或者表达式的方式实现，效果还不错
+* [ ] 使用 tuple 的地方，是否可以通过重写语法树，让编译器更容易处理
 
 ### 类似项目
 * https://github.com/DQNEO/minigo

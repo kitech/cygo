@@ -303,9 +303,14 @@ func init_cxrtroot() {
 	if !gopp.FileExist(cxrtroot) {
 		gopaths := gopp.Gopaths()
 		for _, gopath := range gopaths {
-			d := gopath + "/src/cxrt" // github actions runner
-			if gopp.FileExist(d) {
-				cxrtroot = d
+			d1 := gopath + "/src/cxrt" // github actions runner
+			d2 := gopath + "/src/cygo" // github actions runner
+			if gopp.FileExist(d1) {
+				cxrtroot = d1
+				break
+			}
+			if gopp.FileExist(d2) {
+				cxrtroot = d2
 				break
 			}
 		}
