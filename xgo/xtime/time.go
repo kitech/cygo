@@ -80,15 +80,15 @@ func (t *Time) Iszero() bool {
 
 func (t *Time) Since(t2 *Time) Duration {
 	duri := t.unix - t2.unix
-	// duro := Duration(duri) // TODO compiler
-	return duri
+	duro := Duration(duri)
+	return duro
 }
 
 func Since(t2 *Time) Duration {
 	t := Now()
 	duri := t.unix - t2.unix
-	// duro := Duration(duri) // TODO compiler
-	return duri
+	duro := Duration(duri)
+	return duro
 }
 
 func (dur Duration) String() string {

@@ -2182,8 +2182,10 @@ func (c *g2nc) genTypeCtor(scope *ast.Scope, te *ast.CallExpr) {
 				log.Println("todo", te.Fun, ce)
 			}
 		default:
-			// log.Println("todo", te.Fun)
-			c.outf("(%s)(", c.exprstr(te.Fun))
+			// log.Println(te.Fun, reftyof(te.Fun), c.exprstr(te.Fun))
+			c.out("(")
+			c.genExpr(scope, te.Fun)
+			c.out(")(")
 			c.genFuncArgs(scope, te.Args)
 			c.outf(")")
 		}
@@ -3562,23 +3564,21 @@ func (this *g2nc) genTypeSpec(scope *ast.Scope, spec *ast.TypeSpec) {
 		mthcnt := 0 // TODO where from
 		this.outf("static const _metatype %s%s_metatype = {", this.pkgpfx(), specname)
 		this.outnl()
-		this.outf(".kind = %d,", reflect.Struct).outnl()
+		this.outf(".kind = %d, // struct", reflect.Struct).outnl()
 		this.outf(".size = sizeof(%s%s),", this.pkgpfx(), specname).outnl()
 		this.outf(".align = alignof(%s%s),", this.pkgpfx(), specname).outnl()
 		this.outf(".tystr = \"%s%s\",", this.pkgpfx(), specname).outnl()
 		this.outf(".count1 = %d,", fldcnt)
-		this.outf(".count2 = %d", mthcnt)
+		this.outf(".count2 = %d,", mthcnt)
 		if fldcnt > 0 || mthcnt > 0 {
-			this.out(",").outnl()
 			this.outf(".extptr = {").outnl()
-			for idx, fld := range te.Fields.List {
+			for _, fld := range te.Fields.List {
 				for _, fldname := range fld.Names {
 					this.outf("(char*)\"%s\"", fldname.Name)
-					this.out(gopp.IfElseStr(idx == fldcnt-1, ",", ","))
-					this.outnl()
+					this.out(",").outnl()
 				}
 			}
-			for idx, fld := range te.Fields.List {
+			for _, fld := range te.Fields.List {
 				fldty := this.info.TypeOf(fld.Type)
 				tyname := this.exprTypeNameImpl2(scope, fldty, nil)
 				tyname = strings.TrimRight(tyname, "*")
@@ -3598,12 +3598,11 @@ func (this *g2nc) genTypeSpec(scope *ast.Scope, spec *ast.TypeSpec) {
 					} else {
 						this.outf("(char*)&%s_metatype", tyname)
 					}
-					this.out(gopp.IfElseStr(idx == fldcnt-1, "", ","))
-					this.outnl()
+					this.out(",").outnl()
 				}
 			}
 			// TODO method here
-			this.out("}")
+			this.out("},").outnl()
 		}
 		this.out("}").outfh().outnl()
 		this.outnl()
@@ -3653,6 +3652,7 @@ func (this *g2nc) genTypeSpec(scope *ast.Scope, spec *ast.TypeSpec) {
 		specname := trimCtype(spec.Name.Name)
 		this.outf("typedef %v %s%v/*111*/", tystr, this.pkgpfx(), specname).outfh().outnl()
 		// this.outf("typedef %v %s%v", spec.Type, this.pkgpfx(), spec.Name.Name).outfh().outnl()
+		this.genTypeMeta4Ident(scope, spec)
 	case *ast.StarExpr:
 		log.Println(spec.Type, reflect.TypeOf(spec.Type), te.X, reflect.TypeOf(te.X), spec.Name)
 		this.out("typedef").outsp()
@@ -3720,6 +3720,26 @@ func (this *g2nc) genTypeSpec(scope *ast.Scope, spec *ast.TypeSpec) {
 		log.Println("todo", spec.Name, spec.Type, reflect.TypeOf(spec.Type), te)
 	}
 }
+
+// syntax: type alias orignal
+func (c *g2nc) genTypeMeta4Ident(scope *ast.Scope, spec *ast.TypeSpec) {
+	specname := spec.Name.Name
+	fldcnt := 0
+	mthcnt := 0
+	c.outf("static const _metatype %s%s_metatype = {", c.pkgpfx(), specname)
+	c.outnl()
+	tykind := type2rtkind2(c.info.TypeOf(spec.Name))
+	c.outf(".kind = %d, // %v", tykind, tykind.String()).outnl()
+	c.outf(".size = sizeof(%s%s),", c.pkgpfx(), specname).outnl()
+	c.outf(".align = alignof(%s%s),", c.pkgpfx(), specname).outnl()
+	c.outf(".tystr = \"%s%s\",", c.pkgpfx(), specname).outnl()
+	c.outf(".count1 = %d,", fldcnt)
+	c.outf(".count2 = %d,", mthcnt)
+	// TODO methods
+	c.out("}").outfh().outnl()
+	c.outnl()
+}
+
 func putscope(scope *ast.Scope, k ast.ObjKind, name string, value interface{}) *ast.Scope {
 	var pscope = ast.NewScope(scope)
 	var varobj = ast.NewObj(k, name)

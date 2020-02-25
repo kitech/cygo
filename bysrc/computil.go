@@ -656,6 +656,8 @@ func type2rtkind2(ty types.Type) reflect.Kind {
 		rtkind = reflect.Map
 	case *types.Struct:
 		rtkind = reflect.Struct
+	case *types.Named:
+		return type2rtkind2(ty2.Underlying())
 	default:
 		rtkind = reflect.Ptr
 		log.Println("wtfff", ty2.String(), reftyof(ty2))
