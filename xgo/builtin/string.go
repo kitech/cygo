@@ -373,6 +373,20 @@ func (s string) index(sep string) int {
 	return res
 }
 
+func (s string) rindex(sep string) int {
+	res := -1
+	slen := s.len
+	seplen := sep.len
+	for i := slen - seplen; i >= 0; i-- {
+		if s[i:i+seplen] == sep {
+			res = i
+			break
+		}
+	}
+
+	return res
+}
+
 func (s string) left(sep string) string {
 	pos := s.index(sep)
 	if pos < 0 {

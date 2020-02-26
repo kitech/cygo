@@ -26,18 +26,34 @@ func init() {
 	}
 }
 
+/// hook and yield public use
 type Mutex struct {
-	// TODO compilerd to voidptr lock, and failed then
-	// if in somewhere have use of C.pthread_mutex_t, then it's works again
-	// oh, it is a union
-	lock C.pthread_mutex_t
+	obj C.pthread_mutex_t
 }
 
-func (mu *Mutex) Lock() {
-	C.pthread_mutex_lock(&mu.lock)
+func NewMutex() *Mutex {
+	mu := &Mutex{}
+	return mu
 }
-func (mu *Mutex) Unlock() {
-	C.pthread_mutex_unlock(&mu.lock)
+func (mu *Mutex) lock()   { C.pthread_mutex_lock(&mu.obj) }
+func (mu *Mutex) unlock() { C.pthread_mutex_unlock(&mu.obj) }
+
+type Cond struct {
+	obj C.pthread_cond_t
+}
+
+func NewCond() *Cond {
+	cd := &Cond{}
+	return cd
+}
+func (cd *Cond) wait(mu *Mutex) {
+	C.pthread_cond_wait(&cd.obj, &mu.obj)
+}
+func (cd *Cond) signal() {
+	C.pthread_cond_signal(&cd.obj)
+}
+func (cd *Cond) broadcast(mu *Mutex) {
+	C.pthread_cond_broadcast(&cd.obj)
 }
 
 type Once struct {

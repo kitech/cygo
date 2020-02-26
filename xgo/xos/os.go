@@ -267,6 +267,19 @@ func Readlink(s string) string {
 	}
 	return gostringn(respath.ptr, rv)
 }
+func Wkdir() string {
+	var s string
+	var buf voidptr
+	for blen := 8; blen <= PATH_MAX; blen *= 2 {
+		buf = realloc3(buf, blen)
+		rv := C.getcwd(buf, blen)
+		if rv != nil {
+			s = gostring(buf)
+			break
+		}
+	}
+	return s
+}
 
 func Umask(mask int) int {
 	rv := C.umask(0)

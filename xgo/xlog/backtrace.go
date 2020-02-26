@@ -103,12 +103,12 @@ func init() {
 func lazyinit_dwarf() {
 	if dwdbg == nil {
 		newed := false
-		globmu.Lock()
+		globmu.lock()
 		if dwdbg == nil {
 			newed = true
 			dwdbg = dwarf.NewDwarf()
 		}
-		globmu.Unlock()
+		globmu.unlock()
 		if newed {
 			// dwdbg.Open("./ocgui")
 			dwdbg.OpenSelf()
