@@ -36,6 +36,8 @@ func exprtype(ae ast.Expr) ast.Expr {
 				valty = declty.Type
 			case *ast.AssignStmt:
 				valty = exprtype(declty.Rhs[0])
+			case *ast.ValueSpec:
+				valty = declty.Type
 			}
 		}
 		log.Println(aty.Name, obj, obj.Decl, reftyof(obj.Decl))

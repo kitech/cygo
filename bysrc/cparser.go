@@ -1062,6 +1062,14 @@ func (cp *cparser1) symtype(sym string) (tystr string, tyobj types.Type) {
 				default:
 					log.Println("todo", cp.name, sym, defexpr, reftyof(ety), reftyof(xe))
 				}
+			case *ast.ParenExpr:
+				// log.Println(sym, csi.tyval)
+				fset := token.NewFileSet()
+				tv, err := types.Eval(fset, nil, token.NoPos, types.ExprString(ety))
+				gopp.ErrPrint(err, sym, csi.tyval, tv)
+				tystr = tv.Type.String()
+				tyobj = tv.Type
+				return
 			case *ast.Ident:
 				gopp.Assert(sym != ety.Name, "wtfff", sym)
 				log.Println("redir", sym, "=>", ety.Name)
@@ -1163,6 +1171,10 @@ func (cp *cparser1) ctype2go2(sym string, csi *csymdata) (
 			}
 			return
 		} else if ok && issame {
+		} else if !ok { // TODO hard code
+			tystr2 = "voidptr"
+			tyobj = types.Typ[types.Voidptr]
+			return
 		}
 	}
 
@@ -1183,13 +1195,13 @@ func (cp *cparser1) ctype2go(sym, tystr string) (tystr2 string, tyobj types.Type
 	switch tystr {
 	case "cxstring*":
 		tyobj = types.Typ[types.String]
-	case "char*", "char *":
+	case "char*", "char *", "byteptr", "charptr":
 		tyobj = types.Typ[types.Byteptr]
 	case "unsigned char*":
 		tyobj = types.Typ[types.Byteptr]
 	case "char**":
 		tyobj = types.NewPointer(types.Typ[types.Byteptr])
-	case "void *", "void*":
+	case "void *", "void*", "voidptr":
 		tyobj = types.Typ[types.Voidptr]
 	case "void":
 		tyobj = (*types.Tuple)(nil)

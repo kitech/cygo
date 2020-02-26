@@ -857,9 +857,16 @@ func (c *g2nc) genAssignStmt(scope *ast.Scope, s *ast.AssignStmt) {
 				c.outf("cxfree(%s)", tvname).outfh().outnl()
 			}
 		} else if isiface2(mytyx) {
-			if retyx == mytyx {
+			if retyx == mytyx || isiface2(retyx) {
+				if s.Tok == token.DEFINE {
+					// log.Println(s.Rhs[i], rety, s.Lhs)
+					c.out(c.exprTypeName(scope, s.Rhs[i])).outsp()
+				}
+				c.genExpr(scope, s.Lhs[i])
+				c.outeq()
 				c.genExpr(scope, s.Rhs[i])
 			} else {
+				// log.Println(retyx, mytyx, retyx == mytyx, isiface2(retyx), isiface2(mytyx))
 				// iface assign
 				c.genExpr(scope, s.Lhs[i])
 				c.outeq()
@@ -880,7 +887,7 @@ func (c *g2nc) genAssignStmt(scope *ast.Scope, s *ast.AssignStmt) {
 					c.outf("->%v /*ifaceas*/ = ", mtho.Name())
 					if isiface2(retyx) {
 						c.genExpr(scope, s.Rhs[i])
-						c.out("->thisptr")
+						c.out("->%s", mtho.Name())
 					} else {
 						retystr := c.exprTypeName(scope, s.Rhs[i])
 						retystr = strings.TrimRight(retystr, "*")

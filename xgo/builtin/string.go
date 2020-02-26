@@ -155,6 +155,10 @@ func (s0 string) sub(start int, end int) string {
 	return ns
 }
 
+func (s string) subnear(idx int, n int) string {
+	return s
+}
+
 //export cxstring3_add
 func (s0 string) add(s1 string) string {
 	ns := &cxarray3{}

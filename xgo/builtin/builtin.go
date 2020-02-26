@@ -295,6 +295,9 @@ func nildo(obj voidptr, nilfn func()) {
 	nilfn()
 }
 
+// TODO
+func condreturn(cond bool, args ...interface{})
+
 // if only two arguments, then what?
 // expr1 and expr2 should literal or ident, or simple BinaryExpr
 func ifelse(cond bool, expr1 Type, expr2 Type) Type

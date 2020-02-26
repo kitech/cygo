@@ -1,0 +1,5 @@
+package libc
+
+/*
+ */
+import "C"
