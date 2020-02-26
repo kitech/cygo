@@ -71,6 +71,7 @@ extern int gettid();
 
 static corona* gnr__ = 0;
 static void(*crn_thread_createcb)(void* arg) = 0;
+void crn_set_inited(corona* nr, bool v);
 
 // 前置声明一些函数
 machine* crn_machine_get(int id);
@@ -497,7 +498,9 @@ void crn_machine_signal(machine* mc) {
         return;
         assert(mc != nilptr);
     }
+    pmutex_lock(&mc->pkmu);
     pcond_signal(&mc->pkcd);
+    pmutex_unlock(&mc->pkmu);
 }
 
 static __thread int gcurmcid__ = 0; // thread local
@@ -581,7 +584,9 @@ int crn_post_sized(coro_func fn, void*arg, size_t stksz) {
     if (qsz > 128) {
         linfo("wow so many ngrs %d\n", qsz);
     }
+    pmutex_lock(&mc->pkmu);
     pcond_signal(&mc->pkcd);
+    pmutex_unlock(&mc->pkmu);
     return id;
 }
 int crn_post(coro_func fn, void*arg) {
@@ -624,16 +629,21 @@ static void* crn_procer1(void*arg) {
     mc->gchandle = GC_get_my_stackbottom(&mc->stksb);
     // linfo("%d %d\n", mc->id, gettid());
     crn_procer_setname(mc->id);
-    gnr__->inited = true;
+    crn_set_inited(gnr__, true);
+    pmutex_lock(&gnr__->initmu);
     pcond_signal(&gnr__->initcd);
+    pmutex_unlock(&gnr__->initmu);
+
 
     for (;;) {
         int newgn = crnqueue_size(mc->ngrs);
         int oldgn = crnmap_size(mc->grs);
         if (newgn == 0 && oldgn == 0) {
             mc->parking = true;
+            pmutex_lock(&mc->pkmu);
             pcond_wait(&mc->pkcd, &mc->pkmu);
             mc->parking = false;
+            pmutex_unlock(&mc->pkmu);
         }
 
         // linfo("newgr %d\n", newgn);
@@ -865,9 +875,11 @@ static void* crn_procerx(void*arg) {
 
             int rv = atomic_casbool(&mc->parking, false, true);
             assert(rv == true);
+            pmutex_lock(&mc->pkmu);
             pcond_wait(&mc->pkcd, &mc->pkmu);
             rv = atomic_casbool(&mc->parking, true, false);
             assert(rv == true);
+            pmutex_unlock(&mc->pkmu);
         }
         // sleep(3);
     }
@@ -1477,22 +1489,40 @@ void crn_destroy(corona* lnr) {
     lnr = 0;
     gnr__ = 0;
 }
+void crn_set_inited(corona* nr, bool v) {
+    pmutex_lock(&nr->initmu);
+    nr->inited = v;
+    pmutex_unlock(&nr->initmu);
+}
+static bool crn_is_inited(corona* nr) {
+    pmutex_lock(&nr->initmu);
+    bool inited = nr->inited;
+    pmutex_unlock(&nr->initmu);
+    return inited;
+}
+
 void crn_wait_init_done(corona* nr) {
     ltrace("crninited? %d\n", nr->inited);
-    if (nr->inited) { return; }
-    pcond_wait(&nr->initcd, &nr->initmu);
+    if (crn_is_inited(nr)) { return; }
+    pmutex_lock(&nr->initmu);
+    if (!nr->inited) {
+        pcond_wait(&nr->initcd, &nr->initmu);
+    }
+    pmutex_unlock(&nr->initmu);
 }
 
 corona* crn_init_and_wait_done() {
     corona* nr = crn_new();
     assert(nr != nilptr);
-    if (!nr->inited) {
+    if (!crn_is_inited(nr)) {
         crn_init(nr);
-        linfo("wait signal...%d %d\n", nr->inited, gettid());
+        if (!crn_is_inited(nr)) {
+        ltrace("wait signal...%d %d\n", nr->inited, gettid());
         crn_wait_init_done(nr);
-        linfo("wait signal done %d %d\n", nr->inited, gettid());
+        ltrace("wait signal done %d %d\n", nr->inited, gettid());
         // dumphtkeys(nr->mchs);
         checkhtkeys(nr->mchs);
+        }
     }
     return nr;
 }
