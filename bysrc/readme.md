@@ -12,7 +12,7 @@
 * [x] xbuiltin, use go syntax implement some function
 
 ### C 符号类型自动推导
-使用 tcc + tree-sitter做自动C头文件解析，C符号类型推导，支持函数返回值，全局变量，#define的常量，enum常量。
+使用 tcc + tree-sitter做自动C头文件解析，C符号类型推导，支持函数返回值，结构体（带字段）模拟，全局变量，#define的常量，enum常量。
 备用方案，clang-go。
 
 ### 关于C类型 - 已弃用

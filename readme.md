@@ -4,7 +4,7 @@ That's will generate minimal binary. The farther plan is compile any Go package 
 
 ### The pain of Go
 * Too large binary size
-* Not friendly with C
+* Not zero cost call with C
 * Builtin string/array/map no methods
 * Too verbosity error handling, not like the Go2 `try` error handling proposal
 
@@ -17,7 +17,7 @@ That's will generate minimal binary. The farther plan is compile any Go package 
 * interface
 * closure
 * string/array/map with lot builtin methods
-* `catch` statement error handling
+* `catch` statement error handling (https://github.com/kitech/cygo/blob/0f213381f06116d0f6f2ca6bf2ccbe70ab088882/bysrc/tpkgs/catch2/t.go#L18)
 
 ### Install
 
@@ -35,6 +35,13 @@ go build -o cygo
 cmake .
 make
 ```
+
+more examples/tests https://github.com/kitech/cygo/tree/master/bysrc/tpkgs/
+
+Source code structure:
+* main compiler source https://github.com/kitech/cygo/tree/master/bysrc/
+* goroutine/channel implemention in C https://github.com/kitech/cygo/tree/master/corona-c/
+* some go stdlib implemention https://github.com/kitech/cygo/tree/master/xgo/
 
 ### Supported important syntax
 * defer
