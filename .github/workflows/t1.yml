@@ -65,7 +65,7 @@ jobs:
           #server: ${{ secrets.IRCSRV }}
           #port: ${{ secrets.IRCPORT }}
           tls: true
-          channel: "#vknuts"
+          channel: "#cygo"
           nickname: gareport
           message: status ${{ matrix.platform }} ${{ job.status }} https://github.com/${{ github.repository }}/commit/${{ github.sha }}/checks?check_suite_id=  https://github.com/${{ github.repository }}/commit/${{ github.sha }}/checks/0/logs
 

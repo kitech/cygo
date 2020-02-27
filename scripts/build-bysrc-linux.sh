@@ -20,7 +20,7 @@ cp -a $GOPATH/src/github.com/kitech/goplusplus $GOPATH/src/gopp
 cp -a $PWD $GOPATH/src/
 ln -sv $PWD/xgo $GOPATH/src/
 
-cd $GOPATH/src/cxrt/bysrc
+cd $GOPATH/src/cygo/bysrc
 pwd
 
 go env

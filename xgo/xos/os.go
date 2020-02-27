@@ -9,6 +9,7 @@ package xos
 #include <fcntl.h>
 #include <unistd.h>
 #include <sys/syscall.h>
+#include <sys/utsname.h>
 
 #include <sys/types.h>
 #include <dirent.h>
@@ -279,6 +280,43 @@ func Wkdir() string {
 		}
 	}
 	return s
+}
+func Tmpdir() string {
+	var s string
+	s = Getenv("TMPDIR")
+	s = ifelse(s.len == 0, "/tmp", s)
+	return s
+}
+
+type Utsname struct {
+	sysname    string
+	nodename   string
+	release    string
+	version    string
+	machine    string
+	domainname string
+}
+
+func (uto *Utsname) String() string {
+	return uto.sysname + " " + uto.nodename + " " +
+		uto.release + " " + uto.version + " " + uto.machine
+}
+
+func Uname() string {
+	uts := &C.struct_utsname{}
+	rv := C.uname(&uts)
+	if rv != 0 {
+		println(Errmsg())
+		return ""
+	}
+	uto := &Utsname{}
+	uto.sysname = gostring(uts.sysname)
+	uto.nodename = gostring(uts.nodename)
+	uto.release = gostring(uts.release)
+	uto.version = gostring(uts.version)
+	uto.machine = gostring(uts.machine)
+	// uto.domainname = gostring(uts.domainname)
+	return uto.String()
 }
 
 func Umask(mask int) int {
