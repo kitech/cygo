@@ -60,7 +60,7 @@ func (tcc *Tcc) delete() {
 ///
 func (tcc *Tcc) SetOptions(str string) {
 	cstr := C.CString(str)
-	defer cgopp.Cfree3(cstr)
+	defer cgopp.Free3(cstr)
 	C.tcc_set_options(tcc.cobj, cstr)
 }
 
@@ -88,7 +88,7 @@ func (tcc *Tcc) AddSysIncdirs(dirs ...string) {
 // temporary disable this for signature not match in some env
 func (tcc *Tcc) AddFile(filename string) int {
 	cfilename := C.CString(filename)
-	defer cgopp.Cfree3(cfilename)
+	defer cgopp.Free3(cfilename)
 	log.Panicln("todo")
 	rv := 0
 	// rv := C.tcc_add_file(tcc.cobj, cfilename)
@@ -96,7 +96,7 @@ func (tcc *Tcc) AddFile(filename string) int {
 }
 func (tcc *Tcc) CompileStr(buf string) int {
 	cbuf := C.CString(buf)
-	defer cgopp.Cfree3(cbuf)
+	defer cgopp.Free3(cbuf)
 	rv := C.tcc_compile_string(tcc.cobj, cbuf)
 	return int(rv)
 }
@@ -114,21 +114,21 @@ func (tcc *Tcc) SetOutputType(typ int) {
 func (tcc *Tcc) SetOutputFile(filename string) int {
 	log.Println(filename)
 	cfilename := C.CString(filename)
-	defer cgopp.Cfree3(cfilename)
+	defer cgopp.Free3(cfilename)
 	rv := C.tcc_output_file(tcc.cobj, cfilename)
 	return int(rv)
 }
 
 func (tcc *Tcc) AddLibdir(dir string) int {
 	cdir := C.CString(dir)
-	defer cgopp.Cfree3(cdir)
+	defer cgopp.Free3(cdir)
 	rv := C.tcc_add_library_path(tcc.cobj, cdir)
 	return int(rv)
 }
 
 func (tcc *Tcc) AddLib(name string) int {
 	cname := C.CString(name)
-	defer cgopp.Cfree3(cname)
+	defer cgopp.Free3(cname)
 	rv := C.tcc_add_library(tcc.cobj, cname)
 	return int(rv)
 }
@@ -146,7 +146,7 @@ func (tcc *Tcc) Run(argc int, argv []string) int {
 
 func redirstdout2file(filename string) *C.FILE {
 	cfilename := C.CString(filename)
-	defer cgopp.Cfree3(cfilename)
+	defer cgopp.Free3(cfilename)
 	mod := "w+"
 	cmod := C.CString(mod)
 
@@ -158,10 +158,10 @@ func redirstdout2file(filename string) *C.FILE {
 
 func restorestdout(cfp *C.FILE) {
 	cfilename := C.CString("/dev/tty")
-	defer cgopp.Cfree3(cfilename)
+	defer cgopp.Free3(cfilename)
 	mod := "w"
 	cmod := C.CString(mod)
-	defer cgopp.Cfree3(cmod)
+	defer cgopp.Free3(cmod)
 
 	// TODO not work on github ubuntu runner
 	rv := C.freopen(cfilename, cmod, C.stdout)

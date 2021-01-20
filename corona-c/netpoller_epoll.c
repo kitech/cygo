@@ -1,4 +1,9 @@
 
+#include <stdlib.h>
+#include <stdbool.h>
+#include <errno.h>
+#include <string.h>
+#include <sys/time.h>
 
 #include <fcntl.h>
 #include <unistd.h>

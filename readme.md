@@ -18,6 +18,7 @@ That's will generate minimal binary. The farther plan is compile any Go package 
 * closure
 * string/array/map with lot builtin methods
 * `catch` statement error handling (https://github.com/kitech/cygo/blob/0f213381f06116d0f6f2ca6bf2ccbe70ab088882/bysrc/tpkgs/catch2/t.go#L18)
+* unused var warning, not error
 
 ### Install
 
