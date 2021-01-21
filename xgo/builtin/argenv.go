@@ -7,7 +7,8 @@ package builtin
 #include <stdarg.h>
 #include <unistd.h>
 #include <time.h>
-
+#include <stdbool.h>
+#include <stdint.h>
 
 extern void crn_init_and_wait_done();
 

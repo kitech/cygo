@@ -82,7 +82,7 @@ func main() {
 		for _, imppath := range psctx.bdpkgs.Imports {
 			log.Println("pkgimp", imppath, psctx.bdpkgs.Dir)
 			if imppath == "runtime" ||
-				imppath == "atomic" ||
+				//imppath == "atomic" ||
 				imppath == "runtime/cgo" ||
 				imppath == "syscall" || imppath == "syscall/js" ||
 				imppath == "internal/race" {

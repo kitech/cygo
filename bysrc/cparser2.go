@@ -238,8 +238,8 @@ func trtypespec2gotypes(trtyp cc1t.GoTypeSpec) types.Type {
 	log.Printf("%s %#v %v %v\n", trtyp.String(), trtyp, trtyp.Kind, "=>...")
 	switch trtyp.String() {
 	case "[]byte":
-		//typ := types.Typ[types.Byteptr]
-		return types.Typ[types.Byteptr]
+		typ := types.Typ[types.Byteptr]
+		return typ
 	case "[][]byte":
 		udtyp := types.Typ[types.Byteptr]
 		typ := types.NewPointer(udtyp)
@@ -252,13 +252,19 @@ func trtypespec2gotypes(trtyp cc1t.GoTypeSpec) types.Type {
 		typ := types.Typ[types.Float64]
 		return typ
 	case "int32":
-		typ := types.Typ[types.Int32]
+		typ := types.Typ[types.Int]
 		return typ
 	case "uint32":
-		typ := types.Typ[types.Uint32]
+		typ := types.Typ[types.Uint]
 		return typ
 	case "time_t", "size_t", "__pid_t":
 		typ := types.Typ[types.Usize]
+		return typ
+	case "bool":
+		typ := types.Typ[types.Bool]
+		return typ
+	case "uint64":
+		typ := types.Typ[types.Uint64]
 		return typ
 	default:
 		log.Panicln("noimpl", trtyp)
