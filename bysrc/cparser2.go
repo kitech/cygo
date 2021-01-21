@@ -5,14 +5,17 @@ package main
 import (
 	"go/types"
 	"gopp"
+	"io/ioutil"
 	"log"
 	"os"
 	"reflect"
 	"runtime"
 	"strings"
 
+	"github.com/xlab/c-for-go/generator"
 	cc1p "github.com/xlab/c-for-go/parser"
 	cc1t "github.com/xlab/c-for-go/translator"
+	"gopkg.in/yaml.v2"
 	cc1 "modernc.org/cc"
 
 	// cc2 "modernc.org/cc/v2"
@@ -195,12 +198,34 @@ func (cp *cparser2) parsefile(filename string) error {
 		cp.ctu1 = ctu
 
 		if err == nil {
+			configPath := "expall.yml"
+			cfgData, err := ioutil.ReadFile(configPath)
+			if err != nil {
+				return err
+			}
+			type ProcessConfig struct {
+				Generator  *generator.Config `yaml:"GENERATOR"`
+				Translator *cc1t.Config      `yaml:"TRANSLATOR"`
+				Parser     *cc1p.Config      `yaml:"PARSER"`
+			}
+			var cfg ProcessConfig
+			if err := yaml.Unmarshal(cfgData, &cfg); err != nil {
+				return err
+			}
+
 			tlcfg := &cc1t.Config{}
+			tlcfg = cfg.Translator
+			//tlcfg.ConstRules = cc1t.ConstRules{"defines": "expand", "enums": "expand"}
 			tl, err := cc1t.New(tlcfg)
 			gopp.ErrPrint(err)
 			tl.Learn(ctu)
 			cp.cctr = tl
 			//log.Println(tl)
+			// tl.Defines() filtered by rules
+			//log.Println(tl.Defines())
+			//log.Println(tl.Typedefs())
+			//log.Println(tl.Declares())
+			//log.Fatalln("===", "defines", len(tl.Defines()), "typedefs", len(tl.Typedefs()), "declares", len(tl.Declares()), cfg.Translator)
 		}
 	}
 	if true {
@@ -232,6 +257,9 @@ func trtypespec2gotypes(trtyp cc1t.GoTypeSpec) types.Type {
 	case "uint32":
 		typ := types.Typ[types.Uint32]
 		return typ
+	case "time_t", "size_t", "__pid_t":
+		typ := types.Typ[types.Usize]
+		return typ
 	default:
 		log.Panicln("noimpl", trtyp)
 	}
@@ -252,7 +280,7 @@ func cctype2gotypes(typ cc1.Type) types.Type {
 func (cp *cparser2) symtype(sym string) (string, types.Type) {
 	switch sym {
 	case "__FILE__", "__FUNCTION__":
-		return "string", types.Typ[types.String]
+		return "string", types.Typ[types.Byteptr]
 	case "__LINE__", "errno":
 		return "int", types.Typ[types.Int]
 	}
@@ -304,13 +332,13 @@ func (cp *cparser2) symtype(sym string) (string, types.Type) {
 		}
 	}
 	if _, ok := cp.cctr.TagMap()[sym]; ok {
-		log.Println("in TagMap")
+		log.Println("symin TagMap")
 	}
 	if _, ok := cp.cctr.ValueMap()[sym]; ok {
-		log.Println("in ValueMap")
+		log.Println("symin ValueMap")
 	}
 	if _, ok := cp.cctr.ExpressionMap()[sym]; ok {
-		log.Println("in ExpressionMap")
+		log.Println("symin ExpressionMap")
 	}
 	for idx, v := range cp.cctr.Defines() {
 		log.Println(idx, v)

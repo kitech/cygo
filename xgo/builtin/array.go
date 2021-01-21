@@ -182,7 +182,7 @@ func (a0 *cxarray3) get(idx int) *voidptr {
 
 	offset := pos * a0.elemsz
 	var out *voidptr
-	out = a0.ptr + offset
+	out = (*voidptr)(usize(a0.ptr) + usize(offset))
 	return out
 }
 

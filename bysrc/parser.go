@@ -33,12 +33,17 @@ type ParserContext struct {
 	pkgrename     string
 	builtin_psctx *ParserContext
 
-	fset     *token.FileSet
-	pkgs     map[string]*ast.Package
-	files    []*ast.File
-	typkgs   *types.Package
-	conf     types.Config
-	chkerrs  []error
+	fset   *token.FileSet
+	pkgs   map[string]*ast.Package
+	files  []*ast.File
+	typkgs *types.Package
+	conf   types.Config
+
+	chkerrs    []error
+	chkwarns   []error
+	chkunkerrs []error
+	chkfatals  []error
+
 	info     types.Info
 	cursors  map[ast.Node]*astutil.Cursor
 	grstargs map[string]bool // goroutines packed arguments structure
@@ -125,7 +130,7 @@ func (this *ParserContext) Init_no_cgocmd(semachk bool) error {
 	this.ccode = this.pickCCode()
 
 	cp2 := newcparser2(bdpkgs.Name)
-	ccodefile := "./opkgs/" + bdpkgs.Name + "_p2.c"
+	ccodefile := "./opkgs/" + bdpkgs.Name + "_embed_code.c"
 	err = ioutil.WriteFile(ccodefile, []byte(this.ccode), 0644)
 	gopp.ErrPrint(err)
 	//defer os.Remove(ccodefile)
@@ -197,9 +202,15 @@ func (pc *ParserContext) pkgimperror(err error) {
 		strings.Contains(err.Error(), "not declared by package") ||
 		strings.Contains(err.Error(), "wrong number of return values") ||
 		strings.Contains(err.Error(), "redeclared in this block") ||
+		strings.Contains(err.Error(), "invalid operation: mismatched types") ||
 		false {
-		log.Println("fatalerr", err)
 		pc.chkerrs = append(pc.chkerrs, err)
+		pc.chkfatals = append(pc.chkfatals, err)
+		if len(pc.chkfatals) >= 3 {
+			log.Fatalln("fatalerr", err)
+		} else {
+			log.Println("fatalerr", err)
+		}
 	} else if // TODO
 	strings.Contains(err.Error(), "(type) is not an expression") ||
 		false {
@@ -211,9 +222,11 @@ func (pc *ParserContext) pkgimperror(err error) {
 		false {
 		// log.Println(err)
 		chkwarns = append(chkwarns, err)
+		pc.chkwarns = append(pc.chkwarns, err)
 	} else {
 		log.Println("unkerr", err)
 		chkunks = append(chkunks, err)
+		pc.chkunkerrs = append(pc.chkunkerrs, err)
 	}
 }
 func (this *ParserContext) Init_explict_cgo() error {

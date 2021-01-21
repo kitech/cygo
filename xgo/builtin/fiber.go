@@ -1,7 +1,7 @@
 package builtin
 
 /*
-#cgo LDFLAGS: -lcrn
+// #cgo LDFLAGS: -lcrn
 
 #include <stdio.h>
 
@@ -13,6 +13,35 @@ extern void hchan_send(voidptr, voidptr);
 extern void* hchan_recv(voidptr, voidptr);
 */
 import "C"
+
+///////////////////
+
+//export crn_post
+func crn_post(fn voidptr, arg voidptr) int {
+	return 0
+}
+
+//export crn_goid
+func crn_goid() int {
+	return 0
+}
+
+//export hchan_new
+func hchan_new(n int) voidptr {
+	return 0
+}
+
+//export hchan_send
+func hchan_send(ch voidptr, val voidptr) {
+	return
+}
+
+//export hchan_recv
+func hchan_recv(ch voidptr, val voidptr) voidptr {
+	return 0
+}
+
+///////////////////
 
 //export cxrt_fiber_post
 func fiber_post(fnptr voidptr, arg voidptr) {

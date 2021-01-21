@@ -1,0 +1,14 @@
+
+TRANSLATOR:
+  ConstRules:
+    defines: expand
+    enum: expand
+  Rules:
+    global:
+      - {action: accept, from: ""}
+    const:
+      - {action: accept, from: ""}
+    function:
+      - {action: accept, from: ""}
+    type:
+      - {action: accept, from: ""}

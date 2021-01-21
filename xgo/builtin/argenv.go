@@ -31,6 +31,15 @@ void println2(const char* filename, int lineno, const char* funcname, const char
 */
 import "C"
 
+///////////////
+
+//export crn_init_and_wait_done
+func crn_init_and_wait_done() {
+
+}
+
+///////////////
+
 //export cxrt_get_argv
 func get_argv() *byteptr { return cxargv }
 
@@ -57,6 +66,7 @@ func init_env(argc int, argv *byteptr) {
 	cxargc = argc
 	cxargv = argv
 
+	memory_init()
 	// cxrt_init_gc_env();
 	C.crn_init_and_wait_done()
 }
