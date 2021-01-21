@@ -263,6 +263,8 @@ func (ctxt *Context) SrcDirs() []string {
 // if set, or else the compiled code's GOARCH, GOOS, and GOROOT.
 var Default Context = defaultContext()
 
+func ResetDefault() { Default = defaultContext() }
+
 func defaultGOPATH() string {
 	env := "HOME"
 	if runtime.GOOS == "windows" {

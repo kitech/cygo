@@ -1,6 +1,7 @@
 package main
 
 import (
+	"go/build"
 	"gopp"
 	"io/ioutil"
 	"log"
@@ -28,7 +29,7 @@ func main() {
 		log.Fatalln("Not a dir", fname)
 	}
 
-	gopaths := gopp.Gopaths()
+	gopaths := gopp.Gopaths() // include GOROOT
 	builtin_imppath := "xgo/builtin"
 	builtin_pkgpath := find_builtin_path(builtin_imppath)
 	gopp.Assert(builtin_pkgpath != "", "not found", builtin_imppath)
@@ -46,7 +47,10 @@ func main() {
 	var builtin_psctx *ParserContext
 	//gopaths = append(gopaths, runtime.GOROOT()) // runtime.GOROOT() == "go" ???
 	gopaths = append(gopaths, "/home/me/oss/src/cxrt/xgo")
+	gopp.SetGopaths(gopaths)
+	build.ResetDefault() //!!!
 	//log.Fatalln(gopaths)
+	// not use GOROOT/src/ anymore
 
 	for len(pkgpaths) > 0 {
 		fname := pkgpaths[0]

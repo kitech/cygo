@@ -5,7 +5,7 @@
 
 ### Run 
 
-    GOROOT=/usr/lib/go ./bysrc
+    ./bysrc
 
 ### TODO
 * [ ] type assertion
