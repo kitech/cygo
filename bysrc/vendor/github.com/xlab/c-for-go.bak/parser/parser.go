@@ -97,7 +97,8 @@ func ParseWith(cfg *Config) (*cc.TranslationUnit, error) {
 			}
 		}
 	}
-	model := models[cfg.archBits]
+	modelr := *models[cfg.archBits]
+	model := &modelr
 	return cc.Parse(predefined, cfg.SourcesPaths, model,
 		cc.SysIncludePaths(cfg.IncludePaths),
 		cc.EnableAnonymousStructFields(),

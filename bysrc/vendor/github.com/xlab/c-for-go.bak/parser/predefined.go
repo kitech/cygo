@@ -38,6 +38,16 @@ var builtinBase = `
 #define __builtin_fabs(x) (0)
 
 #define __INTRINSIC_PROLOG(name)
+
+#define __thread
+#define voidptr void*
+#define byteptr char*
+#define byte char
+#define bool char
+#define nilptr ((void*)0)
+#define __builtin_va_start(x, y)
+#define __builtin_va_end(x)
+
 `
 
 var builtinBaseUndef = `
