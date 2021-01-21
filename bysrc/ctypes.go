@@ -60,12 +60,18 @@ func newtyandval(typ types.Type) types.TypeAndValue {
 
 var fcpkg = types.NewPackage("C", "C")
 
+//var fakeunsafepkg = types.NewPackage("unsafe", "unsafe")
+
 // must *ast.Ident
 func fakecfunc2(nameidt ast.Expr, fcpkg *types.Package, rety types.Type) *types.Func {
 	idtname := fmt.Sprintf("%v", nameidt)
 	ty1 := rety
 	var1 := types.NewVar(token.NoPos, fcpkg, "", ty1)
 	f1rets := types.NewTuple(var1)
+	if rety == types.Voidty {
+		f1rets = nil
+	}
+
 	iftype := types.NewInterfaceType(nil, nil)
 	iflst := types.NewSlice(iftype)
 	var2 := types.NewVar(token.NoPos, fcpkg, "args", iflst)

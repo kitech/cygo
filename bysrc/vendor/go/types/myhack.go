@@ -9,6 +9,7 @@ const (
 	Byteptr = UntypedNil + 2
 	Charptr = UntypedNil + 3
 	Wideptr = UntypedNil + 4
+	Voider  = UntypedNil + 5
 
 	// aliases
 
@@ -31,6 +32,7 @@ func init() {
 }
 
 var AliasTyp []*Basic = aliases
+var Voidty = &Basic{Voider, IsUntyped, "voider"}
 
 // too late, call in universe.go:190 init(), before defPredxxx
 func HackExtraBuiltin() {

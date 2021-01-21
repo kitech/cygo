@@ -3,6 +3,10 @@
 
     go build -o cygo
 
+### Run 
+
+    GOROOT=/usr/lib/go ./bysrc
+
 ### TODO
 * [ ] type assertion
 * [ ] reflect

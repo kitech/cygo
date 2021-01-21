@@ -8,6 +8,8 @@ tcc 做 preprocessor, 然后 tree-sitter 解析为类似 ast的结构，再加�
 或者用 go-clang
 */
 
+// tree-sitter类型系统比较弱，不好用
+
 import (
 	"fmt"
 	"go/ast"

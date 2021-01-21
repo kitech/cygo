@@ -6,7 +6,6 @@ import (
 	"log"
 	"os"
 	"os/exec"
-	"runtime"
 	"strings"
 	"time"
 
@@ -45,7 +44,9 @@ func main() {
 	fill_builtin_methods(bimths)
 
 	var builtin_psctx *ParserContext
-	gopaths = append(gopaths, runtime.GOROOT())
+	//gopaths = append(gopaths, runtime.GOROOT()) // runtime.GOROOT() == "go" ???
+	gopaths = append(gopaths, "/home/me/oss/src/cxrt/xgo")
+	//log.Fatalln(gopaths)
 
 	for len(pkgpaths) > 0 {
 		fname := pkgpaths[0]

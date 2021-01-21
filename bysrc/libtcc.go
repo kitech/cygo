@@ -279,7 +279,8 @@ var preincdirs = []string{
 	"/usr/include/curl",
 }
 var presysincs = []string{"/usr/include", "/usr/local/include",
-	"/usr/include/x86_64-linux-gnu/", // ubuntu
+	"/usr/include/x86_64-linux-gnu/",                  // ubuntu
+	"/usr/lib/gcc/x86_64-pc-linux-gnu/10.2.0/include", // stddef
 }
 
 const codepfx = "#include <stdio.h>\n" +

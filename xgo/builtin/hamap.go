@@ -97,8 +97,10 @@ func htkey_hash_str(k1 voidptr, len int) usize {
 
 	return hash
 }
-func htkey_hash_str2(k1 *string, len int) usize {
-	k2 := *k1
+//func htkey_hash_str2(k1 *string, len int) usize {
+func htkey_hash_str2(k1 voidptr, len int) usize {
+    k1real := (*string)(k1)
+	k2 := *k1real
 	return htkey_hash_str(k2.ptr, k2.len)
 }
 
@@ -212,7 +214,8 @@ func (mp *mirmap) initkeyalg(keykind int) {
 		mp.keysz = sizeof(float64(0))
 	case String:
 		alg.hash = htkey_hash_str2
-		alg.equal = htkey_eq_str2
+		//alg.equal = htkey_eq_str2
+        alg.equal = htkey_eq_str
 		mp.keysz = sizeof(voidptr(0))
 	case Voidptr, Uintptr:
 		alg.hash = htkey_hash_ptr

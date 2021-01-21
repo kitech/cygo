@@ -5,6 +5,7 @@ package main
 
 #include <sys/socket.h>
 #include <unistd.h>
+#include <errno.h>
 
 */
 import "C"
