@@ -68,6 +68,36 @@ func bdwgc_malloc(n usize) voidptr {
 	return ptr
 }
 
+func mallocgc(n usize) voidptr {
+	ptr := C.crn_gc_malloc(n)
+	return ptr
+}
+func reallocgc(ptr voidptr, n usize) voidptr {
+	ptr2 := C.crn_gc_realloc(ptr, n)
+	return ptr2
+}
+func freegc(ptr voidptr) {
+	C.crn_gc_free(ptr)
+}
+
+func mallocuc(n usize) voidptr {
+	ptr := C.GC_malloc_uncollectable(n)
+	return ptr
+}
+
+// raw c
+func mallocrc(n usize) voidptr {
+	ptr := C.malloc(n)
+	return ptr
+}
+func reallocrc(ptr voidptr, n usize) voidptr {
+	ptr2 := C.realloc(ptr, n)
+	return ptr2
+}
+func freerc(ptr voidptr) {
+	C.free(ptr)
+}
+
 //export cxrealloc
 func bdwgc_realloc(ptr voidptr, size usize) voidptr {
 	ptr2 := C.crn_gc_realloc(ptr, size)

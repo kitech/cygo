@@ -123,7 +123,7 @@ func (cp *cparser2) ccHostConfig() (
 	//log.Fatalln(predefs, incpaths, sysincs)
 
 	predefs2 := " -D__ATOMIC_RELAXED=0 -D__ATOMIC_CONSUME=1 -D__ATOMIC_ACQUIRE=2 -D__ATOMIC_RELEASE=3 -D__ATOMIC_ACQ_REL=4 -D__ATOMIC_SEQ_CST=5 "
-	predefs2 += " " + cp.predefs + " -DGC_THREADS"
+	predefs2 += " " + cp.predefs + " -DGC_THREADS -DCORO_ASM"
 	predefsm = cp2_split_predefs(predefs2)
 	//predefsm = map[string]interface{}{}
 	// predefsm["__thread"] = ""

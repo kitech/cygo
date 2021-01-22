@@ -17,6 +17,7 @@
 * [ ] allocator
 * [x] xbuiltin, use go syntax implement some functions
 * [ ] improve compile speed
+* [ ] function like macro direct call
 
 ### C 符号类型自动推导
 * [ ] xlab/c-for-go + modernc.org/cc 方案，测试已经完成
@@ -84,10 +85,10 @@
 
 ### Depends
 * go
-* gcc 编译最终结果
+* gcc /clang编译最终结果
 * lab/c-for-go 和 modernc.org/cc
 * tcc C语言宏预处理 gcc -E
-* tree-sitter 解析C符号类型
+* [-] tree-sitter 解析C符号类型
 * vendor/{go,internal} 来自 go 官方编译器源码，有些改动
 
 ### 目标语言 
