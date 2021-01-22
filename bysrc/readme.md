@@ -18,6 +18,7 @@
 * [x] xbuiltin, use go syntax implement some functions
 * [ ] improve compile speed
 * [ ] function like macro direct call
+* [ ] visibility of package symbols。现在好像不管是否public，都能调用
 
 ### C 符号类型自动推导
 * [ ] xlab/c-for-go + modernc.org/cc 方案，测试已经完成

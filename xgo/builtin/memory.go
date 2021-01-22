@@ -2,7 +2,7 @@ package builtin
 
 /*
 #cgo CFLAGS: -DGC_THREADS
-#cgo LDFLAGS: -lgc
+#cgo LDFLAGS: -lgc -lpthread
 
 #include <gc/gc.h>
 
