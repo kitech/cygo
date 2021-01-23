@@ -13,6 +13,7 @@
 * [ ] dynamic stack size
 * [ ] copy stack
 * [ ] test code transpile to C???
+* [ ] auto test
 * [ ] defer in loop
 * [ ] allocator
 * [x] xbuiltin, use go syntax implement some functions

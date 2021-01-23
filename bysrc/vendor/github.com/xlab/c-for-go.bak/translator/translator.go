@@ -980,6 +980,9 @@ func (t *Translator) registerTagsOf(decl *CDecl) {
 }
 
 func (t *Translator) IsAcceptableName(target RuleTarget, name string) bool {
+	if true {
+		return true
+	}
 	if rxs, ok := t.compiledRxs[ActionAccept][target]; ok {
 		for _, rx := range rxs {
 			if rx.From.MatchString(name) {

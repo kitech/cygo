@@ -43,10 +43,37 @@ var builtinBase = `
 #define voidptr void*
 #define byteptr char*
 #define byte char
-#define bool char
+//#define bool char
 #define nilptr ((void*)0)
 #define __builtin_va_start(x, y)
 #define __builtin_va_end(x)
+
+#define _Atomic
+#define __CHAR16_TYPE__ short
+#define __CHAR32_TYPE__ int
+#define __WCHAR_TYPE__ int
+#define __INT_LEAST8_TYPE__ char
+#define __UINT_LEAST8_TYPE__ unsigned char
+#define __INT_LEAST16_TYPE__ short
+#define __UINT_LEAST16_TYPE__ unsigned short
+#define __INT_LEAST32_TYPE__ int
+#define __UINT_LEAST32_TYPE__ unsigned int
+#define __INT_LEAST64_TYPE__ long long
+#define __UINT_LEAST64_TYPE__ unsigned long long
+#define __INT_FAST8_TYPE__ char
+#define __UINT_FAST8_TYPE__ unsigned char
+#define __INT_FAST16_TYPE__ short
+#define __UINT_FAST16_TYPE__ unsigned short
+#define __INT_FAST32_TYPE__ int
+#define __UINT_FAST32_TYPE__ unsigned int
+#define __INT_FAST64_TYPE__ long long
+#define __UINT_FAST64_TYPE__ unsigned long long
+#define __INTPTR_TYPE__ long
+#define __UINTPTR_TYPE__ unsigned long
+#define __SIZE_TYPE__ unsigned long
+#define __PTRDIFF_TYPE__ unsigned long
+#define __INTMAX_TYPE__ int
+#define __UINTMAX_TYPE__ unsigned int
 
 `
 

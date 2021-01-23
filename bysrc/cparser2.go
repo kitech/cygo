@@ -3,6 +3,7 @@ package main
 // try parse C use modernc.org/cc
 
 import (
+	"go/token"
 	"go/types"
 	"gopp"
 	"io/ioutil"
@@ -222,9 +223,9 @@ func (cp *cparser2) parsefile(filename string) error {
 			cp.cctr = tl
 			//log.Println(tl)
 			// tl.Defines() filtered by rules
-			//log.Println(tl.Defines())
-			//log.Println(tl.Typedefs())
-			//log.Println(tl.Declares())
+			//log.Println("defines", len(tl.Defines()), tl.Defines())
+			//log.Println("typedefs", len(tl.Typedefs()), tl.Typedefs())
+			//log.Println("declares", len(tl.Declares()), tl.Declares())
 			//log.Fatalln("===", "defines", len(tl.Defines()), "typedefs", len(tl.Typedefs()), "declares", len(tl.Declares()), cfg.Translator)
 		}
 	}
@@ -267,7 +268,13 @@ func trtypespec2gotypes(trtyp cc1t.GoTypeSpec) types.Type {
 		typ := types.Typ[types.Uint64]
 		return typ
 	default:
-		log.Panicln("noimpl", trtyp)
+		switch trtyp.Base {
+		case "int":
+			typ := types.Typ[types.Int]
+			return typ
+		default:
+			log.Panicln("noimpl", trtyp, trtyp.Base, trtyp.Raw)
+		}
 	}
 	return types.Typ[types.Int]
 }
@@ -281,7 +288,7 @@ func cctype2gotypes(typ cc1.Type) types.Type {
 		typ := types.Typ[types.Float64]
 		return typ
 	default:
-		log.Panicln("noimpl", typ)
+		log.Panicln("noimpl", typ, typ.Kind())
 	}
 	return types.Typ[types.Int]
 }
@@ -298,9 +305,9 @@ func (cp *cparser2) symtype(sym string) (string, types.Type, interface{}) {
 	if cp.cctr == nil {
 		log.Panicln("wtt", sym)
 	}
-	for k, v := range cp.cctr.Declares() {
+	for idx, v := range cp.cctr.Declares() {
 		if sym == v.Name {
-			log.Println(k, v.Name, reflect.TypeOf(v.Spec))
+			log.Println(idx, v.Name, reflect.TypeOf(v.Spec))
 			switch spec := v.Spec.(type) {
 			case *cc1t.CFunctionSpec:
 				if spec.Return == nil {
@@ -319,6 +326,34 @@ func (cp *cparser2) symtype(sym string) (string, types.Type, interface{}) {
 				return dsty.String(), dsty, nil
 			}
 			log.Panicln("got", sym)
+		}
+	}
+	for idx, defo := range cp.cctr.Defines() {
+		if sym != defo.Name {
+			continue
+		}
+		if strings.HasSuffix(sym, "pthread_mutex_t") {
+			log.Panicln("got", idx, sym, defo)
+		}
+	}
+
+	for idx, defo := range cp.cctr.Typedefs() {
+		if sym != defo.Name {
+			continue
+		}
+		switch spec := defo.Spec.(type) {
+		//case
+		case *cc1t.CStructSpec:
+			dsty := cp.tostructy(spec)
+			return "struct_" + sym, dsty, nil
+		case *cc1t.CTypeSpec:
+			log.Printf("%#v %v\n", spec, spec.Base)
+			trtyp := cp.cctr.TranslateSpec(spec)
+			dsty := trtypespec2gotypes(trtyp)
+			log.Printf("%#v %v\n", spec, dsty)
+			return sym, dsty, nil
+		default:
+			log.Panicln("got", idx, sym, defo, reflect.TypeOf(defo.Spec))
 		}
 	}
 
@@ -359,6 +394,49 @@ func (cp *cparser2) symtype(sym string) (string, types.Type, interface{}) {
 	log.Panicln("not found???", sym)
 	typ := types.Typ[types.String]
 	return "", typ, nil
+}
+
+func (cp *cparser2) tostructy(csi *cc1t.CStructSpec) types.Type {
+	/*
+		tystr := csi.tyval
+		if tystr == "" {
+			tystr = csi.name
+		}
+		tystr2 := tystr
+		tystr2 = strings.ReplaceAll(tystr, "struct ", "struct_")
+		// gopp.Assert(strings.HasPrefix(tystr2, "struct_"), "wtfff", tystr, tystr2)
+		stname := tystr2
+		csi2, found := cp1cache.getsym(tystr2)
+		log.Println(tystr2, csi.tyval, len(csi.struc), csi2, found)
+		if !found {
+			csi2 = csi
+		}
+	*/
+	stname := csi.Typedef
+	log.Println(stname, len(csi.Members))
+	var fldvars []*types.Var
+	for idx, fldo := range csi.Members {
+		fldname := fldo.Name
+		log.Println(idx, csi.Typedef, fldname, fldo.Spec)
+		//var tyobj types.Type
+		// _, tyobj = cp.ctype2go(fldo.tystr, fldo.tystr)
+		// csi2, incache := cp1cache.getsym(fldo.tystr)
+		// if incache && tyobj == nil {
+		//	_, tyobj = cp.ctype2go2(fldo.tystr, csi2)
+		// }
+		// if tyobj == nil {
+		//	log.Println(stname, fldname, fldo.tystr, fldo.tyobj, incache)
+		//}
+
+		// fldvar := types.NewVar(token.NoPos, fcpkg, fldo.name, tyobj)
+		//fldvars = append(fldvars, fldvar)
+	}
+	sty1 := &types.Struct{}
+	sty1 = types.NewStruct(fldvars, nil)
+	// keep NewTypeName's type arg nil, so next step get a valid struct type
+	stobj := types.NewTypeName(token.NoPos, fcpkg, stname, nil)
+	stobj2 := types.NewNamed(stobj, sty1, nil)
+	return stobj2
 }
 
 // preprocessor

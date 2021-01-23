@@ -230,6 +230,7 @@ func (pc *ParserContext) pkgimperror(err error) {
 	}
 }
 func (this *ParserContext) Init_explict_cgo() error {
+	gopp.Assert(1 == 2, "waitdep")
 	bdpkgs, err := build.ImportDir(this.path, build.ImportComment)
 	gopp.ErrPrint(err)
 	this.bdpkgs = bdpkgs
@@ -291,6 +292,7 @@ func (this *ParserContext) Init_explict_cgo() error {
 
 // cgo preprocessor
 func (pc *ParserContext) walkpass_cgo_processor() {
+	gopp.Assert(1 == 2, "waitdep")
 	pc.wkdir = "_obj"
 	{
 		err := os.RemoveAll(pc.wkdir + "/")
@@ -477,6 +479,7 @@ func (this *ParserContext) findFileobj(fbname string) *ast.File {
 }
 
 func (pc *ParserContext) walkpass_resolve_ctypes_bycgo() {
+	gopp.Assert(1 == 2, "waitdep")
 	pkgs := pc.pkgs
 
 	ctypes := map[ast.Expr]types.Type{}

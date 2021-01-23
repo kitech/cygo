@@ -602,7 +602,7 @@ func (this *g2nc) genFuncDecl(scope *ast.Scope, fd *ast.FuncDecl) {
 	this.outnl()
 }
 func (c *g2nc) genMainFunc(scope *ast.Scope) {
-	c.out("int main(int argc, char**argv) {").outnl()
+	c.out("int main_cygo(int argc, char**argv) {").outnl()
 	c.out("cxrt_init_env(argc, argv)").outfh().outnl()
 	c.out("// TODO arguments populate").outnl()
 	c.out("// globvars populate").outnl()
@@ -615,6 +615,9 @@ func (c *g2nc) genMainFunc(scope *ast.Scope) {
 	c.outf("%spkginit()", c.pkgpfx()).outfh().outnl()
 	c.outf("main%smain()", pkgsep).outfh().outnl()
 	c.out("return 0").outfh().outnl()
+	c.out("}").outnl()
+	c.out("int main(int argc, char**argv) {").outnl()
+	c.out("  return main_cygo(argc, argv);").outnl()
 	c.out("}").outnl()
 }
 

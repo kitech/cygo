@@ -61,6 +61,9 @@ func replaceBytes(buf []byte, idx []int, piece []byte) []byte {
 var srcReferenceRx = regexp.MustCompile(`(?P<path>[^;]+);(?P<file>[^;]+);(?P<line>[^;]+);(?P<name>[^;]+);(?P<goname>[^;]+);`)
 
 func (t *Translator) IsTokenIgnored(p token.Pos) bool {
+	if true {
+		return false
+	}
 	if len(t.ignoredFiles) == 0 {
 		return false
 	}
