@@ -2073,7 +2073,9 @@ func (pc *ParserContext) walkpass_fnexcepts() {
 
 			case *ast.CallExpr:
 				fntyx := pc.info.TypeOf(te)
-				log.Println(curfd.Name, te.Fun, reftyof(te.Fun), fntyx, reftyof(fntyx))
+				if curfd == nil {
+					log.Println(curfd, te, exprpos(pc, te))
+				}
 				reterr := false
 				switch fnty := fntyx.(type) {
 				case *types.Named:

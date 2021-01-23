@@ -24,10 +24,15 @@ union Data {
 }
 */
 
+struct Data {
+	fd int
+	u32val uint32
+	u64val uint64
+}
 struct Event {
     events uint32
     // data Data
-	data uint64
+	data Data
 }
 
 /* TODO syntax */

@@ -11,24 +11,24 @@ __thread void* co_sched_grobj = 0;
 
 
 void temp_print_sched(int which) {
-switch (which) {
-case 0:
-printf("sched pregc init ...\n");
-break;
-case 1:
-printf("sched pregc init done\n");
-break;
-default:
-printf("sched wtt %d\n", which);
-break;
-}
-
+  switch (which) {
+  case 0:
+    printf("sched pregc init ...\n");
+    break;
+  case 1:
+    printf("sched pregc init done\n");
+    break;
+  default:
+    printf("sched wtt %d\n", which);
+    break;
+  }
 }
 */
 import "C"
 
 import (
 	"iohook"
+	"iopoller"
 	"rtcom"
 )
 
@@ -36,6 +36,7 @@ func Keepme() {
 	if false {
 		rtcom.Keepme()
 		iohook.Keepme()
+		iopoller.Keepme()
 	}
 }
 
@@ -68,7 +69,7 @@ func pre_main_init() {
 	println("sched premain init")
 	yielder := rtcom.yielder()
 	resumer := rtcom.resumer()
-	// iopoller.pre_main_init(resumer)
+	iopoller.pre_main_init(resumer)
 	// chan1.pre_main_init(yielder, resumer, voidptr(0))
 	println("y&r", yielder, resumer)
 }

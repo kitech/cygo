@@ -1601,7 +1601,7 @@ static int iohook_doInitHook()
         open64_f = (open_t)dlsym(RTLD_NEXT, "open64");
         creat_f = (creat_t)dlsym(RTLD_NEXT, "creat");
         fdopen_f = (fdopen_t)dlsym(RTLD_NEXT, "fdopen");
-        eventfd_f = (eventfd_t)dlsym(RTLD_NEXT, "eventfd");
+        eventfd_f = (eventfd_ft)dlsym(RTLD_NEXT, "eventfd");
         pmutex_lock_f = (pmutex_lock_t)dlsym(RTLD_NEXT, "pthread_mutex_lock");
         pmutex_trylock_f = (pmutex_trylock_t)dlsym(RTLD_NEXT, "pthread_mutex_trylock");
         pmutex_unlock_f = (pmutex_unlock_t)dlsym(RTLD_NEXT, "pthread_mutex_unlock");

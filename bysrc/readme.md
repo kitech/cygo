@@ -22,6 +22,7 @@
 * [ ] visibility of package symbols。现在好像不管是否public，都能调用
 * [ ] string literal
 * [ ] union类型
+* [ ] 自动添加this reciever
 
 ### C 符号类型自动推导
 * [x] xlab/c-for-go + modernc.org/cc 方案，测试已经完成. C99
@@ -96,6 +97,8 @@
 * [ ] C常量float类型支持
 * [ ] C常量string类型支持
 * [ ] 考虑把C常量值计算出来
+* [ ] constant array
+* [ ] 结构体成员变量是函数指针时,生成错误的函数调用代码
 
 ### Depends
 * go 1.12+
