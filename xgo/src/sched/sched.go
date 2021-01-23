@@ -2,6 +2,13 @@ package sched
 
 /*
 #include <stdio.h>
+#include <pthread.h>
+
+__thread int co_sched_mcid = -1;
+__thread int co_sched_grid = -1;
+__thread void* co_sched_mcobj = 0;
+__thread void* co_sched_grobj = 0;
+
 
 void temp_print_sched(int which) {
 switch (which) {
@@ -56,26 +63,42 @@ func pre_gc_init() {
 	C.temp_print_sched(1)
 }
 
+// gc inited
+func pre_main_init() {
+	println("sched premain init")
+	yielder := rtcom.yielder()
+	resumer := rtcom.resumer()
+	// iopoller.pre_main_init(resumer)
+	// chan1.pre_main_init(yielder, resumer, voidptr(0))
+	println("y&r", yielder, resumer)
+}
+func post_main_deinit() {
+	// TODO需要退出coroutine以及procer
+}
+
 //////////////////
 
 func incoro() int {
+	mcid := getmcid()
+	return mcid
+}
+func getcoro() voidptr {
+	return C.co_sched_grobj
+}
+
+func onyield(fdns i64, ytype int) int {
+
 	return 0
 }
 
-func getcoro() voidptr {
-	return nil
+func onyield_multi(ytype int, cnt int, fds *i64, ytypes *int) int {
+	return 0
 }
 
-func onyield() {
-
-}
-
-func onyield_multi() {
-
-}
-
-func onresume() {
+func onresume(grx voidptr, ytype int, grid int, mcid int) {
 
 }
 
 /////////////////////
+
+func getmcid() int { return C.co_sched_mcid }

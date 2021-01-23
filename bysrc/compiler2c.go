@@ -969,7 +969,7 @@ func (c *g2nc) genAssignStmt(scope *ast.Scope, s *ast.AssignStmt) {
 			}
 		} else {
 			if s.Tok == token.DEFINE {
-				log.Println(s.Rhs[i], rety, s.Lhs)
+				log.Println(s.Rhs[i], "type=", rety, s.Lhs)
 				c.out(c.exprTypeName(scope, s.Rhs[i])).outsp()
 			}
 			c.genExpr(scope, s.Lhs[i])
@@ -3294,6 +3294,9 @@ func (this *g2nc) exprTypeNameImpl2(scope *ast.Scope, ety types.Type, e ast.Expr
 	switch te := goty.(type) {
 	case *types.Basic:
 		if te.Kind() == types.Invalid {
+			if true {
+				//log.Panicln("ooooo")
+			}
 			return "typpp_" + strings.ReplaceAll(te.String(), " ", "_")
 		}
 		if isstrty(te.Name()) {

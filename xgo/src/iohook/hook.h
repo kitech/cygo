@@ -154,8 +154,8 @@ typedef int (*openat_t)(int dirfd, const char *pathname, int flags, mode_t mode)
 extern openat_t openat_f;
 typedef FILE *(*fdopen_t)(int fd, const char *mode);
 extern fdopen_t fdopen_f;
-typedef int (*eventfd_t)(unsigned int initval, int flags);
-extern eventfd_t eventfd_f;
+typedef int (*eventfd_ft)(unsigned int initval, int flags);
+extern eventfd_ft eventfd_f;
 
 typedef int (*pmutex_lock_t)(pthread_mutex_t *mutex);
 extern pmutex_lock_t pmutex_lock_f;

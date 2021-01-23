@@ -154,6 +154,8 @@ func (tf *TfTmpvars) apply(ctx *TransformContext) {
 						ctx.addline(te, as)
 					}
 				}
+			} else {
+				//log.Panicln("noimpl", len(te.Lhs), len(te.Rhs))
 			}
 		case *ast.CompositeLit:
 			// 检查每个元素是否是常量，IDENT
@@ -618,6 +620,7 @@ func GetCursorIndex(c *astutil.Cursor) int {
 }
 
 func newtmpassign(te ast.Expr) *ast.AssignStmt {
+
 	assign := &ast.AssignStmt{}
 	assign.TokPos = te.Pos()
 	assign.Tok = token.DEFINE
@@ -626,6 +629,7 @@ func newtmpassign(te ast.Expr) *ast.AssignStmt {
 	idt.NamePos = te.Pos()
 	assign.Lhs = append(assign.Lhs, idt)
 	assign.Rhs = append(assign.Rhs, te)
+	// log.Printf("var %#v = %#v\n", idt, te)
 	return assign
 }
 

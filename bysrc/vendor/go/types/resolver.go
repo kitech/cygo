@@ -340,6 +340,18 @@ func (check *Checker) collectObjects() {
 								if i < len(last.Values) {
 									init = last.Values[i]
 								}
+								//log.Println(i, name, last.Type, init, reflect.TypeOf(init))
+								// myhack
+								if init != nil && last.Type == nil {
+									if te, ok := init.(*ast.SelectorExpr); ok {
+										texidt := te.X.(*ast.Ident)
+										if texidt.Name == "C" {
+											// possible float???, but above MakeInt64???
+											last.Type = &ast.Ident{Name: "int64"}
+											//log.Println(i, name, last.Type, init)
+										}
+									}
+								}
 
 								d := &declInfo{file: fileScope, typ: last.Type, init: init}
 								check.declarePkgObj(name, obj, d)

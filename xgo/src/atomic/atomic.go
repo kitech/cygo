@@ -14,10 +14,12 @@ extern bool __atomic_compare_exchange_8(void* x, void* expected, int64_t y, bool
 extern unsigned long long __atomic_load_8(void* x, int mo);
 extern void __atomic_store_8(void* x, unsigned long long y, int mo);
 extern unsigned long long __atomic_fetch_add_8(void* x, unsigned long long y, int mo);
+extern unsigned long long __atomic_fetch_sub_8(void* x, unsigned long long y, int mo);
 
 extern unsigned int __atomic_load_4(void* x, int mo);
 extern void __atomic_store_4(void* x, unsigned int y, int mo);
 extern unsigned int __atomic_fetch_add_4(void* x, unsigned int y, int mo);
+extern unsigned int __atomic_fetch_sub_4(void* x, unsigned int y, int mo);
 
 */
 import "C"
@@ -49,6 +51,10 @@ func FetchAdd64(v *int64, delta int64) int64 {
 	rv := C.__atomic_fetch_add_8(v, delta, C.__ATOMIC_SEQ_CST)
 	return rv
 }
+func FetchSub64(v *int64, delta int64) int64 {
+	rv := C.__atomic_fetch_sub_8(v, delta, C.__ATOMIC_SEQ_CST)
+	return rv
+}
 
 func Load32(v *int) int {
 	return C.__atomic_load_4(v, C.__ATOMIC_SEQ_CST)
@@ -58,5 +64,9 @@ func Store32(v *int, newval int) {
 }
 func FetchAdd32(v *int, delta int) int {
 	rv := C.__atomic_fetch_add_4(v, delta, C.__ATOMIC_SEQ_CST)
+	return rv
+}
+func FetchSub32(v *int, delta int) int {
+	rv := C.__atomic_fetch_sub_4(v, delta, C.__ATOMIC_SEQ_CST)
 	return rv
 }

@@ -157,7 +157,7 @@ func (this *ParserContext) Init_no_cgocmd(semachk bool) error {
 	}
 	this.walkpass_check() // semantics check
 	if this.chkerrs != nil {
-		os.Exit(-1)
+		log.Fatalln("chkerrs", len(this.chkerrs))
 	}
 
 	// this.walkpass_dotransforms(true)
@@ -569,6 +569,30 @@ func (pc *ParserContext) walkpass_fill_fakecpkg() {
 			case *ast.GenDecl:
 				if te.Tok == token.CONST {
 					inconst = true
+					log.Printf("%#v\n", te)
+					for idx0, specx := range te.Specs {
+						log.Printf("%d %#v\n", idx0, specx)
+						spec := specx.(*ast.ValueSpec)
+						for idx1, name := range spec.Names {
+							var val ast.Expr
+							if len(spec.Values) > idx1 {
+								val = spec.Values[idx1]
+							}
+							log.Printf("%d:%d type=%#v, %#v=%#v\n", idx0, idx1, spec.Type, name, val)
+							if ve, ok := val.(*ast.SelectorExpr); ok {
+								if ve.X.(*ast.Ident).Name == "C" {
+									selidt := ve.Sel
+									_ = selidt
+									idtname := selidt.Name
+									ctystr, ctyobj, idtval := pc.cpr2.symtype(idtname)
+									log.Println(idtname, ctystr, ctyobj, idtval, reflect.TypeOf(idtval))
+								}
+							}
+							if name.Name == "AFLTVAL2" {
+								// log.Fatalln("ok")
+							}
+						}
+					}
 				} else {
 					inconst = false
 				}
@@ -640,7 +664,7 @@ func (pc *ParserContext) walkpass_fill_fakecpkg() {
 		idtname := idt.Name
 		log.Println(cnter, idtname, csi.String())
 		log.Println("gen fakectype", csi.idt)
-		ctystr, ctyobj := pc.cpr2.symtype(idtname)
+		ctystr, ctyobj, _ := pc.cpr2.symtype(idtname)
 		log.Println(cnter, csi.String(), ctystr, ctyobj)
 
 		if strings.HasPrefix(ctystr, "struct ") {
@@ -1361,6 +1385,14 @@ func (pc *ParserContext) walkpass_flat_cursors() {
 			tc := *c
 			cursors[c.Node()] = &tc
 			switch te := c.Node().(type) {
+			case *ast.AssignStmt:
+				if len(te.Rhs) > 0 {
+					tetyx := pc.info.TypeOf(te.Lhs[0])
+					tetyy := pc.info.TypeOf(te.Rhs[0])
+					if false && tetyx == nil {
+						log.Println(te.Lhs[0], tetyx, tetyy, exprpos(pc, te.Rhs[0]))
+					}
+				}
 			default:
 				gopp.G_USED(te)
 			}

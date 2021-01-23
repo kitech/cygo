@@ -19,9 +19,11 @@
 * [ ] improve compile speed
 * [ ] function like macro direct call
 * [ ] visibility of package symbols。现在好像不管是否public，都能调用
+* [ ] string literal
+* [ ] union类型
 
 ### C 符号类型自动推导
-* [ ] xlab/c-for-go + modernc.org/cc 方案，测试已经完成
+* [x] xlab/c-for-go + modernc.org/cc 方案，测试已经完成. C99
 * [x] 准备弃用。 使用 tcc + tree-sitter做自动C头文件解析，C符号类型推导，支持函数返回值，结构体（带字段）模拟，全局变量，#define的常量，enum常量。
 * [ ] 备用方案，go-clang。
 * [x] 已弃用。 对于调用C函数的返回值类型， 一种typeof()，一种是使用C++的decltype()，一种手动声明函数，只需要返回值类型，像V语言中的实现一样。另外，还要知道一个 C.symbol是一个函数，还是变量，还是常量，还是类型。
@@ -36,7 +38,8 @@
 * [x] varidict parameters
 * [ ] 全引用的方式，不要出现指针类型
 * [x] 需要定义几个常用的内置类型， unsafe.Pointer => voidptr, byteptr
-* [ ] usize/isize类型
+* [x] usize类型
+* [ ] isize类型
 * [x] len(), cap()的写法使用方法方式
 * [x] assert, sizeof, alignof, offsetof 内置
 * [ ] typeof
@@ -81,11 +84,20 @@
 * https://github.com/DQNEO/minigo
 
 ### BUGS
-* crash: Collecting from unknown thread
+* [ ] crash: Collecting from unknown thread
   curl thread based DNS resolve
+* [ ] 生成的C代码中,println2 传递cxstring3\*给char\*
+* [ ] 无法生成栈上的结构体实例, f := Foo{}
+* [ ] 类型转换, f := voidptr(nil),需要使用 (voidptr)(nil)
+* [ ] error: const unlocked = uint32(0)
+* [ ] C常量别名在别的包引用时报错: typpp\_invalid\_type gxtv1738 = epoll__IN;
+      无法编译时计算出来,应该重写为var,写为 var FOO = C.FOO也还是invalid type
+* [ ] C常量float类型支持
+* [ ] C常量string类型支持
+* [ ] 考虑把C常量值计算出来
 
 ### Depends
-* go
+* go 1.12+
 * gcc /clang编译最终结果
 * lab/c-for-go 和 modernc.org/cc
 * tcc C语言宏预处理 gcc -E

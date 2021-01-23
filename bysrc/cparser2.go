@@ -277,18 +277,21 @@ func cctype2gotypes(typ cc1.Type) types.Type {
 	case cc1.Int:
 		typ := types.Typ[types.Int]
 		return typ
+	case cc1.Double:
+		typ := types.Typ[types.Float64]
+		return typ
 	default:
 		log.Panicln("noimpl", typ)
 	}
 	return types.Typ[types.Int]
 }
 
-func (cp *cparser2) symtype(sym string) (string, types.Type) {
+func (cp *cparser2) symtype(sym string) (string, types.Type, interface{}) {
 	switch sym {
 	case "__FILE__", "__FUNCTION__":
-		return "string", types.Typ[types.Byteptr]
+		return "string", types.Typ[types.Byteptr], nil
 	case "__LINE__", "errno":
-		return "int", types.Typ[types.Int]
+		return "int", types.Typ[types.Int], nil
 	}
 
 	//log.Println(cp.cctr.Declares())
@@ -302,38 +305,41 @@ func (cp *cparser2) symtype(sym string) (string, types.Type) {
 			case *cc1t.CFunctionSpec:
 				if spec.Return == nil {
 					// void??? => int
-					return types.Voidty.String(), types.Voidty
+					return types.Voidty.String(), types.Voidty, nil
 					//return "int", types.Typ[types.Int]
 				}
 				trtyp := cp.cctr.TranslateSpec(spec.Return)
 				dsty := trtypespec2gotypes(trtyp)
 				log.Printf("%#v %v\n", spec, dsty)
-				return dsty.String(), dsty
+				return dsty.String(), dsty, nil
 			case *cc1t.CTypeSpec:
 				trtyp := cp.cctr.TranslateSpec(spec)
 				dsty := trtypespec2gotypes(trtyp)
 				log.Printf("%#v %v\n", spec, dsty)
-				return dsty.String(), dsty
+				return dsty.String(), dsty, nil
 			}
 			log.Panicln("got", sym)
 		}
 	}
-	log.Println(cp.cctr.Defines())
-	log.Println(cp.cctr.Typedefs())
+
+	// log.Println(cp.cctr.Defines())
+	// log.Println(cp.cctr.Typedefs())
 	// log.Println(cp.ctu1)
 	//log.Println(cp.cctr.TagMap())
+	// TODO 查找enum
+	// 查找macros
 	for id, macro := range cp.ctu1.Macros {
 		name := string(xc.Dict.S(macro.DefTok.Val))
 		if name == sym {
 			if macro.Type == nil {
 				log.Println(id, macro, "/", macro.Type)
-				return "int", types.Typ[types.Int]
+				return "int", types.Typ[types.Int], nil
 			}
-			log.Println(id, macro, "/", macro.DefTok.Val, string(xc.Dict.S(macro.DefTok.Val)),
+			log.Println(id, macro, "/", macro.Value, "/", string(xc.Dict.S(macro.DefTok.Val)),
 				macro.Type.Kind(), reflect.TypeOf(macro.Type))
 			dsty := cctype2gotypes(macro.Type)
 			log.Println(sym, dsty)
-			return dsty.String(), dsty
+			return dsty.String(), dsty, macro.Value
 			//break
 		}
 	}
@@ -352,7 +358,7 @@ func (cp *cparser2) symtype(sym string) (string, types.Type) {
 
 	log.Panicln("not found???", sym)
 	typ := types.Typ[types.String]
-	return "", typ
+	return "", typ, nil
 }
 
 // preprocessor

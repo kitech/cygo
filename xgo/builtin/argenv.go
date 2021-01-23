@@ -12,6 +12,7 @@ package builtin
 
 extern void crn_init_and_wait_done();
 extern void sched__pre_gc_init(); // TODO 前置声明，builtin需要反向依赖 sched包了
+extern void sched__pre_main_init(); // TODO 前置声明，builtin需要反向依赖 sched包了
 
 void println2(const char* filename, int lineno, const char* funcname, const char* fmt, ...) {
     static __thread char obuf[712] = {0};
@@ -70,6 +71,7 @@ func init_env(argc int, argv *byteptr) {
 
 	C.sched__pre_gc_init()
 	memory_init()
+	C.sched__pre_main_init()
 
 	// cxrt_init_gc_env();
 	C.crn_init_and_wait_done()
