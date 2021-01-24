@@ -26,7 +26,15 @@ void temp_print_sched(int which) {
     printf("sched wtt %d\n", which);
     break;
   }
-}
+  }
+
+  void sched_avoid_gxcallable_cofunc_call(void* fnptr, void* this, void* arg) {
+    if (this == NULL) {
+       ((void(*)())fnptr)(arg);
+    }else{
+       ((void(*)())fnptr)(this, arg);
+    }
+  }
 */
 import "C"
 
@@ -237,6 +245,7 @@ struct Schedule {
 func newSchedule() *Schedule {
 	this := &Schedule{}
 	this.amu = futex.newMutex()
+	this.gridno = 100
 	return this
 }
 
@@ -523,8 +532,8 @@ func (thisp *Schedule) init_machines() {
 
 func comainfp(argx voidptr) {
     co := (*Fiber)(argx)
-    co.cofn.call()
-    // co.state = .codone
+    // co.cofn.call()
+	C.sched_avoid_gxcallable_cofunc_call(co.cofn.fnptr, co.cofn.this, co.cofn.fnarg)
     co.set_state(codone)
 	//mlog.info(@FILE, @LINE, "cofn done", co.grid, co.mcid)
 	println("cofn done", co.grid, co.mcid)
@@ -778,13 +787,15 @@ func post3(this voidptr, f voidptr, arg voidptr, stksz int) {
     sch := schedobj
     //stksz2 := if stksz <= 0 { dftstksz } else { stksz }
 	stksz2 := ifelse(stksz <= 0, dftstksz, stksz)
-    //ff := &CoFunc{this, f, f, arg} // TODO gxcallable!!!
+    ff := &CoFunc{this, f, f, arg} // TODO gxcallable!!!
+	/*
     ff := &CoFunc{}
     clos := gxcallable_new(f, this)
     ff.this = this
     ff.fnptr2 = clos
     ff.fnptr = clos
     ff.fnarg = arg
+	*/
 
     gr := newFiber(ff)
     if !useshrstk {

@@ -75,12 +75,10 @@ func (arr *cxarray3) size() int { return arr.len }
 func (a0 *cxarray3) expand(n int) {
 	assert(n > 0)
 	sz := a0.len + n
-	if sz >= a0.cap {
+	if sz > a0.cap {
 		cap := a0.cap * 2
-		cap = ifelse(cap <= 0, n, cap)
-		cap = ifelse(cap <= sz, cap*2, cap)
-		ptr := malloc3(cap * a0.elemsz)
-		memcpy3(ptr, a0.ptr, a0.len*a0.elemsz)
+		cap = ifelse(cap < sz, sz, cap)
+		ptr := realloc3(a0.ptr, cap*a0.elemsz)
 		a0.ptr = ptr
 		a0.cap = cap
 	}
@@ -101,19 +99,37 @@ func (a0 *cxarray3) append(v voidptr) *cxarray3 {
 	return a0
 }
 
+// v only one elem
+
 //export cxarray3_appendn
 func (a0 *cxarray3) appendn(v voidptr, n int) *cxarray3 {
 	assert(a0 != nil)
-	assert(v != nil)
+	assert(n > 0)
 	a0.expand(n)
-	offset := a0.len * a0.elemsz
-	dstptr := voidptr(usize(a0.ptr) + usize(offset))
-	memcpy3(dstptr, v, n*a0.elemsz)
+	//memcpy3(dstptr, v, n*a0.elemsz)
+	for i := 0; i < n; i++ {
+		offset := (a0.len + i) * a0.elemsz
+		dstptr := voidptr(usize(a0.ptr) + usize(offset))
+		memcpy3(dstptr, v, a0.elemsz)
+	}
 	a0.len += n
 	return a0
 }
 
 func (arr *cxarray3) prepend(v voidptr) *cxarray3 {
+	return arr
+}
+
+func (arr *cxarray3) insert(i int, v voidptr) *cxarray3 {
+	assert(arr != nil)
+	assert(v != nil)
+	assert(i >= 0)
+	assert(i < arr.len)
+	arr.expand(1)
+
+	C.memmove(arr.get(i+1), arr.get(i), (arr.len - i))
+	arr.set(v, i, nil)
+
 	return arr
 }
 
@@ -210,7 +226,8 @@ func (a0 *cxarray3) set(v voidptr, idx int, out *voidptr) voidptr {
 		}
 	}
 	if v == nil {
-		memcpy3(voidptr(usize(a0.ptr)+usize(offset)), &v, a0.elemsz)
+		// memcpy3(voidptr(usize(a0.ptr)+usize(offset)), &v, a0.elemsz)
+		C.memset(voidptr(usize(a0.ptr)+usize(offset)), 0, a0.elemsz)
 	} else {
 		memcpy3(voidptr(usize(a0.ptr)+usize(offset)), v, a0.elemsz)
 	}

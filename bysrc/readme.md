@@ -15,7 +15,7 @@
 * [ ] test code transpile to C???
 * [ ] auto test
 * [ ] defer in loop
-* [ ] allocator
+* [ ] allocator。设计为在任意位置定义一个属性为allocator的struct，需有4个方法
 * [x] xbuiltin, use go syntax implement some functions
 * [ ] improve compile speed
 * [ ] function like macro direct call

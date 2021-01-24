@@ -18,7 +18,12 @@ package iopoller
 #include <sys/eventfd.h>
 #include <signal.h>
 
-extern int pipe2();
+   extern int pipe2();
+
+   void iopoller_avoid_cxcallable_resume(void* fnptr, void* gr, int ytype, int grid, int mcid) {
+       void(*fnobj)() = fnptr;
+       fnobj(gr, ytype, grid, mcid);
+   }
 */
 import "C"
 
@@ -134,7 +139,6 @@ func start() {
 	// var th C.pthread_t // TODO compiler
 	// th := &C.pthread_t{} // TODO compiler
 	var th uint64
-	println("12345")
 	C.pthread_create(&th, nil, poller_main, arg)
 }
 
@@ -153,12 +157,15 @@ func poller_main(arg voidptr) {
 
 // func (this *NetPoller) init() { // TODO compiler, init() name not work
 func (this *NetPoller) initccc() {
+	this.seqno = 10000
 	this.tmerlk = futex.newMutex()
 	this.mu = futex.newMutex()
 	this.timers = newPQueue()
 
     // this.evfds = []*Evdata2{len:999}
-	this.evfds = []*Evdata2{}
+	var zeroptr voidptr
+	this.evfds.appendn(&zeroptr, 999)
+
     fd := C.epoll_create1(C.EPOLL_CLOEXEC)
     this.epfd = fd
 
@@ -196,7 +203,7 @@ func (this *NetPoller) loop() {
     evt.data.fd = this.tmupevfd
 
     rv = C.epoll_ctl(this.epfd, epoll.CTL_ADD, this.tmupevfd, evt)
-	println(this.epfd, this.tmupevfd, rv)
+	//println(this.epfd, this.tmupevfd, rv)
     assert(rv == 0)
 
     for {
@@ -212,7 +219,7 @@ func (this *NetPoller) loop() {
         C.sigaddset(sigset, C.SIGXCPU)
         // mlog.info(@FILE, @LINE, "epoll_waiting ...", timeout)
 		println("epoll_waiting ...", timeout)
-        rv = epoll.wait(this.epfd, &revt, 1, timeout)
+        rv = epoll.wait(this.epfd, revt, 1, timeout)
         //rv = C.epoll_pwait(this.epfd, &revt, 1, timeout, &sigset)
         eno := C.errno
         //mlog.info(@FILE, @LINE, "waitret", rv, eno, this.timers.len())
@@ -246,7 +253,7 @@ func (this *NetPoller) loop() {
         d2 := this.evfds[evfd]
         if d2 != nil {
             //this.evfds[evfd] = nil // clear
-			var d2 *Evdata2 // TODO compiler
+			var d2 *Evdata2 = nil // TODO compiler
 			this.evfds[evfd] = d2
             // linfo("clear fd %d\n", evfd);
         }
@@ -312,7 +319,7 @@ func (thisp *NetPoller) dispatch_timers() int {
         if d.usec <= usec {
             // thisp.timers.pop()
             this.timers.items.delete(0)
-            // expires << d
+			expires.append(&d)
             // mlog.info(@FILE, @LINE, thisp.timers.len(), expires.len, d.data.mcid)
             //break
         }else {
@@ -324,10 +331,10 @@ func (thisp *NetPoller) dispatch_timers() int {
     cnt := expires.len
     if cnt == 0 { return cnt }
     len := thisp.timers.len()
-    // mlog.info(@FILE, @LINE, "dispatched timers $cnt, left $len")
+	// println("dispatched timers cnt, left", cnt, len)
     for i := 0; i < cnt; i++{
         d := expires[i]
-        // mlog.info(@FILE, @LINE, "iopop", d.data.grid, d.data.mcid, len, d.seqno)
+		// println("iopop", d.data.grid, d.data.mcid, len, d.seqno)
         thisp.resume(d)
     }
     for d in expires {} // logic bug?
@@ -345,7 +352,8 @@ func (thisp *NetPoller) resume(d *Evdata) {
     // evdata2_free(d2);
 
 	resume_one := resumer.resume_one
-    resume_one(dd, ytype, grid, mcid)
+	C.iopoller_avoid_cxcallable_resume(resume_one, dd, ytype, grid, mcid)
+    // resume_one(dd, ytype, grid, mcid)
 	// resumer.resume_one(dd, ytype, grid, mcid) // TODO compiler
 	// cgen: rtcom__Resumer_resume_one(dd, ytype, grid, mcid)
 }
@@ -424,6 +432,7 @@ func newEvdata(evt uint32, gr *FiberMin) *Evdata{
     this.data = gr
     this.grid = gr.grid
     this.mcid = gr.mcid
+	this.tv = &Timeval{}
     return this
 }
 func newEvdata2(evtype uint32) *Evdata2 {
@@ -437,11 +446,13 @@ func (this *PQueue) push(d *Evdata) {
     for i, item in this.items {
         if d.usec < item.usec {
             // this.items.insert(i, d) // TODO
+			this.items.insert(i, &d)
             found = true
             break
         }
     }
     // if !found { this.items << d }
+	if !found { this.items.append(&d) }
 }
 func (this *PQueue) pop() *Evdata {
     if this.items.len == 0 {
@@ -465,7 +476,7 @@ func (this *NetPoller) add_timer(ns int64, ytype int, gr *FiberMin) {
     d := newEvdata(CXEV_TIMER, gr)
     d.ytype = ytype
     d.fd = ns
-    C.gettimeofday(&d.tv, nil)
+    C.gettimeofday(d.tv, nil)
     usec := d.tv.tv_sec*USEC + d.tv.tv_usec + int64(ns/1000)
     d.usec = usec
     d.tv.tv_sec = usec / USEC
@@ -485,7 +496,6 @@ func (this *NetPoller) add_timer(ns int64, ytype int, gr *FiberMin) {
     np.tmerlk.munlock()
     // mlog.info(@FILE, @LINE, "iopush", d.data.grid, d.data.mcid, rv0, rv, ns, d.seqno)
     assert (rv == rv0+1)
-    // assert(rv == CC_OK);
     // pthread_mutex_unlock(&np->evmu);
     // crn_post_gclock_proc(__func__);
     tmval := uint64(1)
@@ -585,7 +595,7 @@ func (this *NetPoller) add_readfd(fd int64, ytype int, gr *FiberMin) {
             if d2.dw != nil { newev |= epoll.OUT }
             newev |= epoll.IN
             rv = C.epoll_ctl(np.epfd, epoll.CTL_DEL, fd, 0)
-            // assert(rv == 0);
+            assert(rv == 0)
             evt := &epoll.Event{}
             evt.events = newev
             evt.data.fd = int(fd)
@@ -623,7 +633,7 @@ func (this *NetPoller) add_readfd(fd int64, ytype int, gr *FiberMin) {
 }
 
 // when ytype is SLEEP/USLEEP/NANOSLEEP, fd is the nanoseconds
-func yieldfd(fd i64, ytype int, gr *FiberMin) {
+func yieldfd(fd int64, ytype int, gr *FiberMin) {
     assert(ytype > iohook.YIELD_TYPE_NONE)
     assert(ytype < iohook.YIELD_TYPE_MAX)
 
@@ -636,7 +646,7 @@ func yieldfd(fd i64, ytype int, gr *FiberMin) {
     /*     // event_base_loopbreak(gnpl__->loop); */
     /*     // event_base_loopexit(gnpl__->loop, &tv); */
     /* } */
-    // linfo("fd=%ld, ytype=%d\n", fd, ytype);
+	// println("fd", fd, "ytype", ytype, "gr", gr)
 
     ns := int64(0)
     if  ytype == iohook.YIELD_TYPE_SLEEP {

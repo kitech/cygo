@@ -40,6 +40,10 @@ struct Yielder {
 struct Resumer {
     resume_one func(grobj voidptr, ytype int, grid int, mcid int)
 }
+// fix gxcallable
+struct Resumer2 {
+    resume_one voidptr// func(grobj voidptr, ytype int, grid int, mcid int)
+}
 struct Allocator {
     mallocfn func(usize) voidptr
     callocfn func(usize, usize) voidptr
