@@ -42,3 +42,30 @@ func (ctx *Context) Destroy() {
 	C.libcoro_destroy(ctx)
 }
 
+/////////////////
+func newctx() voidptr {
+    cot := mallocgc(64)
+    return cot
+}
+
+func create(cot voidptr, fp voidptr, arg voidptr, sptr voidptr, ssze int) {
+    C.coro_create(cot, fp, arg, sptr, usize(ssze))
+}
+func create2(fp voidptr, arg voidptr, sptr voidptr, ssze int) voidptr {
+    cot := mallocgc(64)
+    C.coro_create(cot, fp, arg, sptr, usize(ssze))
+    return cot
+}
+
+// fn C.coro_transfer() int
+// [inline]
+
+func transfer(prev voidptr, next voidptr) {
+    // C.libcoro_transfer(prev, next)
+    C.coro_transfer(prev, next)
+}
+
+func destroy(cot voidptr) {
+    C.libcoro_destroy(cot)
+}
+

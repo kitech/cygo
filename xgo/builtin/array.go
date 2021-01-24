@@ -31,6 +31,13 @@ func cxarray3_new(cap int, elemsz int) *cxarray3 {
 	return arr
 }
 
+//export cxarray3_new2
+func cxarray3_new2(len int, cap int, elemsz int) *cxarray3 {
+	arr := cxarray3_new(cap, elemsz)
+	arr.len = len
+	return arr
+}
+
 //export cxarray3_new3
 func cxarray3_new3(cap int, ty *Metatype) *cxarray3 {
 	arr := cxarray3_new(cap, ty.Size)

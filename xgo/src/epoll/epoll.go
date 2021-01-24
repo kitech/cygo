@@ -14,6 +14,7 @@ package epoll
 */
 import "C"
 
+// TODO compiler union
 /*
 union Data {
     pub mut:
@@ -50,6 +51,7 @@ const (
     EXCLUSIVE = uint32(C.EPOLLEXCLUSIVE)
 )
 */
+
 
 const (
 	//_begin int = -1 // nolucky

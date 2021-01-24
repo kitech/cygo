@@ -2898,6 +2898,13 @@ func (this *g2nc) genExpr2(scope *ast.Scope, e ast.Expr) {
 			} else { // left value
 				this.genCxarrSet(scope, te.X, te.Index, vo.Data)
 			}
+		} else if isarrayty(varty.String()) {
+			// get or set?
+			if vo == nil { // right value
+				this.genCxarrGet(scope, te.X, te.Index, varty)
+			} else { // left value
+				this.genCxarrSet(scope, te.X, te.Index, vo.Data)
+			}
 		} else if isstrty(varty.String()) {
 			if vo == nil { // right value
 				this.out("((builtin__cxstring3*)")
@@ -3615,6 +3622,14 @@ func (this *g2nc) genTypeSpec(scope *ast.Scope, spec *ast.TypeSpec) {
 					elemty := fldty.(*types.Slice).Elem()
 					tystr := this.exprTypeNameImpl2(scope, elemty, nil)
 					this.outf("obj->%s = cxarray3_new(0, sizeof(%s))", fldname.Name, tystr).outfh().outnl()
+				} else if isarrayty2(fldty) {
+					tya := fldty.(*types.Array)
+					alen := tya.Len()
+					elemty := tya.Elem()
+					tystr := this.exprTypeNameImpl2(scope, elemty, nil)
+					this.outf(gopp.IfElseStr(alen == 0, "//", "")) // TODO array not slice
+					this.outf("obj->%s = cxarray3_new2(%d, %d, sizeof(%s))",
+						fldname.Name, alen, alen+1, tystr).outfh().outnl()
 				} else if ismapty2(fldty) {
 					tym := fldty.(*types.Map)
 					keykind := type2rtkind(tym.Key())
@@ -3634,6 +3649,8 @@ func (this *g2nc) genTypeSpec(scope *ast.Scope, spec *ast.TypeSpec) {
 					// 并且即使像python也不会自动初始化结构体成员的，默认是None
 					this.out("//").outsp()
 					this.outf("obj->%s = (voidptr) %s_new_zero()", fldname.Name, tystr).outfh().outnl()
+				} else {
+					//log.Println("noimpl", fldname.Name, fldty, reflect.TypeOf(fldty))
 				}
 			}
 		}

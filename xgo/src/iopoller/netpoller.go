@@ -122,13 +122,19 @@ struct NetPoller {
 struct PQueue {
     items []*Evdata
 }
+func newPQueue() *PQueue {
+	q := &PQueue{}
+	return q
+}
 //fn (this &PQueue) len() int { return this.items.len }
 
 func start() {
     // go poller_main()
 	var arg voidptr
 	// var th C.pthread_t // TODO compiler
+	// th := &C.pthread_t{} // TODO compiler
 	var th uint64
+	println("12345")
 	C.pthread_create(&th, nil, poller_main, arg)
 }
 
@@ -147,6 +153,9 @@ func poller_main(arg voidptr) {
 
 // func (this *NetPoller) init() { // TODO compiler, init() name not work
 func (this *NetPoller) initccc() {
+	this.tmerlk = futex.newMutex()
+	this.mu = futex.newMutex()
+	this.timers = newPQueue()
 
     // this.evfds = []*Evdata2{len:999}
 	this.evfds = []*Evdata2{}
@@ -156,6 +165,11 @@ func (this *NetPoller) initccc() {
     rv := 0
     rv = C.pipe2(this.tmupfd, C.O_NONBLOCK)
     assert (rv == 0)
+
+	// TODO compiler crash
+	//fd0 := this.tmupfd[0]
+	//fd1 := this.tmupfd[1]
+	//println(fd0, fd1)
 
     tmupevfd := C.eventfd(0, C.EFD_CLOEXEC|C.EFD_NONBLOCK)
     this.tmupevfd = tmupevfd
@@ -181,7 +195,8 @@ func (this *NetPoller) loop() {
     evt.events = epoll.IN
     evt.data.fd = this.tmupevfd
 
-    rv = C.epoll_ctl(this.epfd, epoll.CTL_ADD, this.tmupevfd, &evt)
+    rv = C.epoll_ctl(this.epfd, epoll.CTL_ADD, this.tmupevfd, evt)
+	println(this.epfd, this.tmupevfd, rv)
     assert(rv == 0)
 
     for {
@@ -189,17 +204,14 @@ func (this *NetPoller) loop() {
         timeout := this.next_timeout()
         //timeout = if timeout < 0 { MSEC *10} else {timeout}
         //timeout = if timeout <= 31 { 31 } else { timeout }
-		if timeout < 0 {
-			timeout = MSEC *10
-		}
-		if timeout <= 31 {
-			timeout = 31
-		}
+		timeout = ifelse(timeout<0, MSEC*10, timeout)
+		timeout = ifelse(timeout<=31, 31, timeout)
 
         sigset :=  &C.sigset_t{}
         C.sigaddset(sigset, C.SIGPWR)
         C.sigaddset(sigset, C.SIGXCPU)
         // mlog.info(@FILE, @LINE, "epoll_waiting ...", timeout)
+		println("epoll_waiting ...", timeout)
         rv = epoll.wait(this.epfd, &revt, 1, timeout)
         //rv = C.epoll_pwait(this.epfd, &revt, 1, timeout, &sigset)
         eno := C.errno

@@ -1047,7 +1047,8 @@ unsigned int sleep(unsigned int seconds)
 {
     // linfo("%d %p %p\n", seconds, sleep_f);
     if (!sleep_f) initHook();
-    if (!crn_in_procer()) return sleep_f(seconds);
+    // if (!crn_in_procer()) return sleep_f(seconds);
+    if (!crn_in_procer()) return iohook_ensure_sleep(seconds);
 
     unsigned int leftsec = seconds;
     time_t btime = time(0);

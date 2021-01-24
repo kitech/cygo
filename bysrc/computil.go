@@ -53,7 +53,8 @@ func isarrayty(tystr string) bool {
 			s += string(c)
 		}
 	}
-	return strings.HasPrefix(s, "[]") && !strings.HasPrefix(tystr, "[]")
+	return strings.HasPrefix(s, "[]") && !strings.HasPrefix(tystr, "[]") &&
+		len(tystr) > len(s) // constant array length
 }
 func isarrayty2(typ types.Type) bool { return isarrayty(typ.String()) }
 func iseface(tystr string) bool      { return strings.HasPrefix(tystr, "interface{}") }
