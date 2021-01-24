@@ -86,6 +86,8 @@ func post_main_deinit() {
 }
 
 func init() {
+	tm := C.time(nil)
+	C.srand(&tm)
 	iopoller.start()
 
 	// myself
@@ -326,7 +328,7 @@ struct StackSave {
 
 struct CoFunc {
     this voidptr
-    fnptr2 func(this voidptr, arg voidptr)
+    fnptr2 func(this voidptr, arg voidptr) // TODO compiler
     fnptr func(arg voidptr)
     fnarg voidptr
 }
@@ -336,17 +338,21 @@ func (this *CoFunc) call() {
 		fnptr := this.fnptr2
 		fnptr(this.this, this.fnarg)
     }else{
-        // this.fnptr(this.fnarg) // TODO compiler
+        //this.fnptr(this.fnarg) // TODO compiler
 		fnptr := this.fnptr
-		fnptr(this.this, this.fnarg)
+		fnptr(this.fnarg)
     }
 }
 
 /////////////////////////////////
 func newFiber(ff *CoFunc) *Fiber {
     id := schedobj.nextgrid()
+	this := &Fiber{}
+	this.grid = id
+	this.cofn = ff
+	this.stki = &vmm.StackInfo{}
     //nowt := time.now()
-    return &Fiber{grid:id, cofn: ff}
+	return this
 }
 func (thisp *Fiber) swapback(ytype int) {
     this := thisp
@@ -518,9 +524,10 @@ func (thisp *Schedule) init_machines() {
 func comainfp(argx voidptr) {
     co := (*Fiber)(argx)
     co.cofn.call()
-    //mlog.info(@FILE, @LINE, "cofn done", co.grid, co.mcid)
     // co.state = .codone
     co.set_state(codone)
+	//mlog.info(@FILE, @LINE, "cofn done", co.grid, co.mcid)
+	println("cofn done", co.grid, co.mcid)
     coro.transfer(co.coctx, co.coctx0)
 }
 
@@ -532,7 +539,8 @@ func (thisp *Machine) addnew(gr *Fiber) {
     gr2.mcid = this.mcid
     this.amu.mlock()
     //this.taskq << gr
-	assert(1==2)
+    //assert(1==2)
+    this.taskq.append(&gr)
     this.amu.munlock()
 }
 func (thisp *Machine) getnew() *Fiber {
@@ -560,7 +568,8 @@ func (thisp *Machine) append(gr *Fiber) {
     this := thisp
     this.amu.mlock()
     //this.workq << gr
-	assert(1==2)
+    //assert(1==2)
+    this.workq.append(&gr)
     this.amu.munlock()
 }
 func (thisp *Machine) popnext() *Fiber {
@@ -700,7 +709,7 @@ func (thisp *Schedule) pickmc() *Machine {
     cnter := -1
     var mcobj *Machine = nil
     mcid := 0
-    for _, obj in thisp.osths {
+    for key, obj in thisp.osths {
         cnter++
         if cnter == mcidx {
             mcobj = obj
@@ -729,6 +738,8 @@ func coctrl_proc(arg *Machine) {
         for {
             curgr := mymcobj.getnew()
             if curgr == nil { break }
+			println(curgr)
+			println(curgr.mcid)
 
             mcobj := scheder.pickmc()
             mcid := mcobj.mcid
@@ -762,11 +773,19 @@ func post(f voidptr, arg voidptr) {
 func post2(this voidptr, f voidptr, arg voidptr) {
     post3(this, f, arg, dftstksz)
 }
+
 func post3(this voidptr, f voidptr, arg voidptr, stksz int) {
     sch := schedobj
     //stksz2 := if stksz <= 0 { dftstksz } else { stksz }
 	stksz2 := ifelse(stksz <= 0, dftstksz, stksz)
-    ff := &CoFunc{this, f, f, arg}
+    //ff := &CoFunc{this, f, f, arg} // TODO gxcallable!!!
+    ff := &CoFunc{}
+    clos := gxcallable_new(f, this)
+    ff.this = this
+    ff.fnptr2 = clos
+    ff.fnptr = clos
+    ff.fnarg = arg
+
     gr := newFiber(ff)
     if !useshrstk {
         //gr.stk = vmm.mallocuc(stksz2)

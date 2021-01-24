@@ -65,8 +65,7 @@ func (this *Futex) wait() int {
         spinok := false
         for i in 0..30 {
             one := uint32(1)
-            //ok := C.atomic_compare_exchange_strong_u32(&this.futval, &one, 0)
-			ok := atomic.CmpXchg32(&this.futval, &one,0)
+            ok := atomic.CmpXchg32(&this.futval, one, 0)
             if ok {
                 spinok = true
                 break
@@ -97,8 +96,7 @@ func (this *Futex) park() int {
 func (this *Futex) wake() int {
     zero := (uint32)(0)
 
-    //ok := C.atomic_compare_exchange_strong_u32(&this.futval, &zero, 1)
-	ok := atomic.CmpXchg32(&this.futval, &zero, 1)
+    ok := atomic.CmpXchg32(&this.futval, zero, 1)
     if ok {
         rv := futeximpl(&this.futval, C.FUTEX_WAKE | C.FUTEX_PRIVATE_FLAG, 1, nil, nil, 0)
         if rv == -1 {

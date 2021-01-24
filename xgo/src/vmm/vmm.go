@@ -18,7 +18,7 @@ struct StackInfo {
 func get_my_stackbottom() *StackInfo {
     this := &StackInfo {}
     // alloc_lock() // hang!!!
-    this.handle = C.GC_get_my_stackbottom(&this)
+    this.handle = C.GC_get_my_stackbottom(this)
     // alloc_unlock()
     return this
 }

@@ -2319,6 +2319,14 @@ func (c *g2nc) genCallExprClosure2(scope *ast.Scope, te *ast.CallExpr /*fnlit *a
 		c.out(gopp.IfElseStr(idx == len(te.Args)-1, "", ", "))
 	}
 	c.out(")").outfh().outnl()
+
+	// direct call
+	c.outf("//%s(", fnidt.Name)
+	for idx, e1 := range te.Args {
+		c.genExpr(scope, e1)
+		c.out(gopp.IfElseStr(idx == len(te.Args)-1, "", ", "))
+	}
+	c.out(")").outfh().outnl()
 	// assign back in case modified
 }
 

@@ -31,11 +31,13 @@ func hhhe() {
 	//C.atomic_fetch_add()
 }
 
+// CmpXchg32 cas of int32
 func CmpXchg32(v *int, oldval int, newval int) bool {
 	rv := C.__atomic_compare_exchange_4(v, &oldval, newval, 0, C.__ATOMIC_SEQ_CST, C.__ATOMIC_SEQ_CST)
 	return rv
 }
 
+// CmpXchg64 cas of int64
 func CmpXchg64(v *int64, oldval int64, newval int64) bool {
 	rv := C.__atomic_compare_exchange_8(v, &oldval, newval, 0, C.__ATOMIC_SEQ_CST, C.__ATOMIC_SEQ_CST)
 	return rv
