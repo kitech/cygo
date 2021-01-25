@@ -46,6 +46,7 @@ import (
 	"atomic"
 	"coro"
 	"vmm"
+	"chan1"
 )
 
 func Keepme() {
@@ -86,7 +87,7 @@ func pre_main_init() {
 	yielder := rtcom.yielder()
 	resumer := rtcom.resumer()
 	iopoller.pre_main_init(resumer)
-	// chan1.pre_main_init(yielder, resumer, voidptr(0))
+	chan1.pre_main_init(yielder, resumer, nil)
 	println("y&r", yielder, resumer)
 }
 func post_main_deinit() {
