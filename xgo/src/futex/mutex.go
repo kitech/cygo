@@ -69,10 +69,10 @@ const (
 // oldval maybe modified
 // [inline]
 func cmpxchgu32(addr *uint32, oldval uint32, newval uint32) uint32 {
-    ep := &oldval
+    // ep := &oldval
     //C.atomic_compare_exchange_strong_u32(addr, ep, newval)
-	atomic.CmpXchg32(addr, ep, newval)
-    return *ep
+	ok := atomic.CmpXchg32(addr, oldval, newval)
+    return oldval
 }
 
 func (this *Mutex1) mlock() {

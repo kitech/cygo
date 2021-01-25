@@ -235,7 +235,7 @@ func (cp *cparser2) parsefile(filename string) error {
 	return err
 }
 
-func trtypespec2gotypes(trtyp cc1t.GoTypeSpec) types.Type {
+func trtypespec2gotypes_dep(trtyp cc1t.GoTypeSpec) types.Type {
 	log.Printf("%s %#v %v %v\n", trtyp.String(), trtyp, trtyp.Kind, "=>...")
 	switch trtyp.String() {
 	case "[]byte":
@@ -273,7 +273,7 @@ func trtypespec2gotypes(trtyp cc1t.GoTypeSpec) types.Type {
 			typ := types.Typ[types.Int]
 			return typ
 		default:
-			log.Panicln("noimpl", trtyp, trtyp.Base, trtyp.Raw)
+			log.Panicln("noimpl", "/", trtyp, "/", trtyp.Base, trtyp.Raw)
 		}
 	}
 	return types.Typ[types.Int]
@@ -293,12 +293,17 @@ func cctype2gotypes(typ cc1.Type) types.Type {
 	return types.Typ[types.Int]
 }
 
+const stulpfx = "struct_"
+
 func (cp *cparser2) symtype(sym string) (string, types.Type, interface{}) {
 	switch sym {
 	case "__FILE__", "__FUNCTION__":
 		return "string", types.Typ[types.Byteptr], nil
 	case "__LINE__", "errno":
 		return "int", types.Typ[types.Int], nil
+	}
+	if strings.HasPrefix(sym, stulpfx) { // CGO语法
+		sym = sym[len(stulpfx):]
 	}
 
 	//log.Println(cp.cctr.Declares())
@@ -315,15 +320,15 @@ func (cp *cparser2) symtype(sym string) (string, types.Type, interface{}) {
 					return types.Voidty.String(), types.Voidty, nil
 					//return "int", types.Typ[types.Int]
 				}
-				trtyp := cp.cctr.TranslateSpec(spec.Return)
-				dsty := trtypespec2gotypes(trtyp)
-				log.Printf("%#v %v\n", spec, dsty)
-				return dsty.String(), dsty, nil
+				log.Println(idx, v.Name, reflect.TypeOf(v.Spec), reflect.TypeOf(spec.Return))
+				tystr, tyobj := cp.ctype2gotype(spec.Return)
+				return tystr, tyobj, nil
 			case *cc1t.CTypeSpec:
-				trtyp := cp.cctr.TranslateSpec(spec)
-				dsty := trtypespec2gotypes(trtyp)
+				// trtyp := cp.cctr.TranslateSpec(spec)
+				// dsty := trtypespec2gotypes(trtyp)
+				tystr, dsty := cp.ctype2gotype(spec)
 				log.Printf("%#v %v\n", spec, dsty)
-				return dsty.String(), dsty, nil
+				return tystr, dsty, nil
 			}
 			log.Panicln("got", sym)
 		}
@@ -344,14 +349,16 @@ func (cp *cparser2) symtype(sym string) (string, types.Type, interface{}) {
 		switch spec := defo.Spec.(type) {
 		//case
 		case *cc1t.CStructSpec:
-			dsty := cp.tostructy(spec)
-			return "struct_" + sym, dsty, nil
+			tystr, dsty := cp.ctype2gotype(spec)
+			return tystr, dsty, nil
+			// return "struct_" + sym, dsty, nil
 		case *cc1t.CTypeSpec:
 			log.Printf("%#v %v\n", spec, spec.Base)
-			trtyp := cp.cctr.TranslateSpec(spec)
-			dsty := trtypespec2gotypes(trtyp)
+			// trtyp := cp.cctr.TranslateSpec(spec)
+			// dsty := trtypespec2gotypes(trtyp)
+			tystr, dsty := cp.ctype2gotype(spec)
 			log.Printf("%#v %v\n", spec, dsty)
-			return sym, dsty, nil
+			return tystr, dsty, nil
 		default:
 			log.Panicln("got", idx, sym, defo, reflect.TypeOf(defo.Spec))
 		}
@@ -378,8 +385,17 @@ func (cp *cparser2) symtype(sym string) (string, types.Type, interface{}) {
 			//break
 		}
 	}
-	if _, ok := cp.cctr.TagMap()[sym]; ok {
-		log.Println("symin TagMap")
+	if obj, ok := cp.cctr.TagMap()[sym]; ok {
+		log.Println("symin TagMap", obj, reflect.TypeOf(obj.Spec))
+		switch spec := obj.Spec.(type) {
+		case *cc1t.CStructSpec:
+			tystr, dsty := cp.ctype2gotype(spec)
+			return tystr, dsty, nil
+			// dsty := cp.tostructy(spec)
+			// return "struct_" + sym, dsty, nil
+		default:
+			log.Panicln("got", sym, obj, reflect.TypeOf(obj.Spec))
+		}
 	}
 	if _, ok := cp.cctr.ValueMap()[sym]; ok {
 		log.Println("symin ValueMap")
@@ -396,47 +412,90 @@ func (cp *cparser2) symtype(sym string) (string, types.Type, interface{}) {
 	return "", typ, nil
 }
 
-func (cp *cparser2) tostructy(csi *cc1t.CStructSpec) types.Type {
-	/*
-		tystr := csi.tyval
-		if tystr == "" {
-			tystr = csi.name
+func (cp *cparser2) ctype2gotype(cty cc1t.CType) (tystr string, tyobj types.Type) {
+	switch spec := cty.(type) {
+	case *cc1t.CTypeSpec:
+		log.Printf("%v %#v\n", spec, spec)
+		switch spec.String() {
+		case "int":
+			typ := types.Typ[types.Int]
+			return typ.String(), typ
+		case "uint", "unsigned int":
+			typ := types.Typ[types.Uint]
+			return typ.String(), typ
+		case "long int":
+			typ := types.Typ[types.Int64]
+			return typ.String(), typ
+		case "unsigned long int", "unsigned long long":
+			typ := types.Typ[types.Uint64]
+			return typ.String(), typ
+		case "double":
+			typ := types.Typ[types.Float64]
+			return typ.String(), typ
+		case "_Bool":
+			typ := types.Typ[types.Bool]
+			return typ.String(), typ
+		case "void*":
+			typ := types.Typ[types.Voidptr]
+			return typ.String(), typ
+		case "char*":
+			typ := types.Typ[types.Byteptr]
+			return typ.String(), typ
+		case "char**":
+			udtyp := types.Typ[types.Byteptr]
+			typ := types.NewPointer(udtyp)
+			//log.Println(trtyp, udtyp, typ)
+			return typ.String(), typ
+		//case "unsigned long int[16]":
+		default:
+			if spec.OuterArr != "" {
+				barecty := *spec
+				barecty.OuterArr = ""
+				baretystr, barety := cp.ctype2gotype(&barecty)
+				log.Println(baretystr, barety)
+				typ := types.NewPointer(barety)
+				return typ.String(), typ
+			} else {
+				log.Panicf("%v %#v\n", spec, spec)
+			}
 		}
-		tystr2 := tystr
-		tystr2 = strings.ReplaceAll(tystr, "struct ", "struct_")
-		// gopp.Assert(strings.HasPrefix(tystr2, "struct_"), "wtfff", tystr, tystr2)
-		stname := tystr2
-		csi2, found := cp1cache.getsym(tystr2)
-		log.Println(tystr2, csi.tyval, len(csi.struc), csi2, found)
-		if !found {
-			csi2 = csi
+	case *cc1t.CStructSpec:
+		// istypedef := spec.Typedef != ""
+		stname := gopp.IfElseStr(spec.Typedef != "", spec.Typedef, "struct_"+spec.Tag)
+		stname2 := gopp.IfElseStr(spec.Typedef != "", spec.Typedef, "struct "+spec.Tag)
+		csi := spec
+		log.Println(stname, len(csi.Members))
+		var fldvars []*types.Var
+		for idx, fldo := range csi.Members {
+			fldname := fldo.Name
+			log.Println(idx, csi.Typedef, fldname, fldo.Spec, reflect.TypeOf(fldo.Spec))
+			ftystr, fldty := cp.ctype2gotype(fldo.Spec)
+			log.Println(idx, fldname, fldty, ftystr)
+			fldvar := types.NewVar(token.NoPos, fcpkg, fldname, fldty)
+			fldvars = append(fldvars, fldvar)
 		}
-	*/
-	stname := csi.Typedef
-	log.Println(stname, len(csi.Members))
-	var fldvars []*types.Var
-	for idx, fldo := range csi.Members {
-		fldname := fldo.Name
-		log.Println(idx, csi.Typedef, fldname, fldo.Spec)
-		//var tyobj types.Type
-		// _, tyobj = cp.ctype2go(fldo.tystr, fldo.tystr)
-		// csi2, incache := cp1cache.getsym(fldo.tystr)
-		// if incache && tyobj == nil {
-		//	_, tyobj = cp.ctype2go2(fldo.tystr, csi2)
-		// }
-		// if tyobj == nil {
-		//	log.Println(stname, fldname, fldo.tystr, fldo.tyobj, incache)
-		//}
-
-		// fldvar := types.NewVar(token.NoPos, fcpkg, fldo.name, tyobj)
-		//fldvars = append(fldvars, fldvar)
+		gopp.Assert(len(fldvars) == len(csi.Members), "fields count not match")
+		sty1 := &types.Struct{}
+		sty1 = types.NewStruct(fldvars, nil)
+		// keep NewTypeName's type arg nil, so next step get a valid struct type
+		stobj := types.NewTypeName(token.NoPos, fcpkg, stname, nil)
+		stobj2 := types.NewNamed(stobj, sty1, nil)
+		tystr = stname2
+		log.Println(stobj2, reflect.TypeOf(stobj2), tystr)
+		if spec.Pointers == 0 {
+			tyobj = stobj2
+			return
+		} else if spec.Pointers == 1 {
+			tystr = "*" + tystr
+			tyobj = types.NewPointer(stobj2)
+			return
+		} else {
+			log.Panicln("noimpl", stname)
+		}
+	default:
+		log.Println("noimpl", cty, spec, reflect.TypeOf(cty), reflect.TypeOf(spec))
 	}
-	sty1 := &types.Struct{}
-	sty1 = types.NewStruct(fldvars, nil)
-	// keep NewTypeName's type arg nil, so next step get a valid struct type
-	stobj := types.NewTypeName(token.NoPos, fcpkg, stname, nil)
-	stobj2 := types.NewNamed(stobj, sty1, nil)
-	return stobj2
+	return
 }
 
 // preprocessor

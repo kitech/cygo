@@ -689,6 +689,7 @@ func (pc *ParserContext) walkpass_fill_fakecpkg() {
 		} else if strings.HasPrefix(idtname, "struct_") {
 			fcscope.Insert(ctyobj.(*types.Named).Obj())
 			struct_gomangles[idtname] = true
+			log.Println(idtname, ctystr, ctyobj)
 		} else if csi.istype {
 			switch te := ctyobj.(type) {
 			case *types.Named:

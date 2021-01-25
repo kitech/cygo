@@ -1,9 +1,11 @@
-package xtime
+package time
 
 /*
-#include <time.h>
-#include <sys/time.h>
-#include <unistd.h>
+   #include <stdio.h>
+   #include <time.h>
+   #include <sys/time.h>
+   #include <unistd.h>
+   #include <pthread.h>
 */
 import "C"
 
@@ -36,11 +38,12 @@ func Unix() int64 {
 	return int64(uts)
 }
 
+// nanoseconds?
 type Duration int64
 
 type Time struct {
-	unix int64 // usec, not the same with Go
-	zone int
+	unix_ int64 // usec, not the same with Go
+	zone  int
 }
 
 func Now() *Time {
@@ -50,8 +53,8 @@ func Now() *Time {
 	sec := tv.tv_sec
 	usec := tv.tv_usec
 	newts := sec*US + usec
-	t.unix = newts
-	t.unix = tv.tv_sec*US + tv.tv_usec
+	t.unix_ = newts
+	t.unix_ = tv.tv_sec*US + tv.tv_usec
 	if tmzone == -1 {
 		tmzone = zoneno()
 	}
@@ -67,26 +70,26 @@ func zoneno() int {
 }
 
 func (t *Time) Unix() int64 {
-	return t.unix
+	return t.unix_
 }
 
 func (t *Time) Iszero() bool {
-	// sure := ifelse(t != nil && t.unix > 0, false, true) // TODO compiler
-	if t != nil && t.unix > 0 {
+	// sure := ifelse(t != nil && t.unix_ > 0, false, true) // TODO compiler
+	if t != nil && t.unix_ > 0 {
 		return false
 	}
 	return true
 }
 
 func (t *Time) Since(t2 *Time) Duration {
-	duri := t.unix - t2.unix
+	duri := t.unix_ - t2.unix_
 	duro := Duration(duri)
 	return duro
 }
 
 func Since(t2 *Time) Duration {
 	t := Now()
-	duri := t.unix - t2.unix
+	duri := t.unix_ - t2.unix_
 	duro := Duration(duri)
 	return duro
 }
@@ -140,7 +143,7 @@ func (t *Time) Format1(withms bool) string {
 
 func (t *Time) Tostr1() string {
 	var ep usize
-	ep = t.unix / US
+	ep = t.unix_ / US
 
 	// var tmo *C.struct_tm // TODO compiler
 	tmo := C.localtime(&ep)
@@ -153,10 +156,10 @@ func (t *Time) Tostr1() string {
 // with msec
 func (t *Time) Tostr2() string {
 	var ep int64
-	ep = t.unix / US
-	msec := (t.unix % US) / MS
+	ep = t.unix_ / US
+	msec := (t.unix_ % US) / MS
 
-	// var tmo *C.struct_tm // TODO compiler
+	var tmo_dummy *C.struct_tm // let compiler alias struct_tm
 	tmo := C.localtime(&ep)
 	buf := malloc3(32)
 	C.sprintf(buf, "%04d-%02d-%02d %02d:%02d:%02d.%03d".ptr,
@@ -167,7 +170,7 @@ func (t *Time) Tostr2() string {
 
 func (t *Time) Toiso() string {
 	var ep usize
-	ep = t.unix / US
+	ep = t.unix_ / US
 
 	return ""
 }
