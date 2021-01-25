@@ -1,10 +1,15 @@
 package vmm
 
 /*
-#include <gc/gc.h>
+   #cgo CFLAGS: -lGC_THREADS
+   #cgo LDFLAGS: -lgc
+
+   #include <gc/gc.h>
+
 */
 import "C"
 
+// GC_StackBase
 struct StackInfo {
 	membase voidptr
     regbase voidptr
@@ -24,7 +29,7 @@ func get_my_stackbottom() *StackInfo {
 }
 func set_stackbottom(si *StackInfo) {
     alloc_lock()
-    C.GC_set_stackbottom(si.handle, &si)
+    C.GC_set_stackbottom(si.handle, si)
     alloc_unlock()
 }
 func set_stackbottom2(si *StackInfo) {

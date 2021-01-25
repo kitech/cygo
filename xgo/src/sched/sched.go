@@ -662,7 +662,7 @@ func coruner_proc(arg *Machine) {
                 gr.setstki(dftstksz)
             }
             coctx := mymcobj.corofy(gr)
-            gr.mcsi = &mysi
+            gr.mcsi = mysi
             mymcobj.append(gr)
         }
         if grobj == nil {

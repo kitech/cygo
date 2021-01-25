@@ -293,8 +293,6 @@ func cctype2gotypes(typ cc1.Type) types.Type {
 	return types.Typ[types.Int]
 }
 
-const stulpfx = "struct_"
-
 func (cp *cparser2) symtype(sym string) (string, types.Type, interface{}) {
 	switch sym {
 	case "__FILE__", "__FUNCTION__":
@@ -302,8 +300,8 @@ func (cp *cparser2) symtype(sym string) (string, types.Type, interface{}) {
 	case "__LINE__", "errno":
 		return "int", types.Typ[types.Int], nil
 	}
-	if strings.HasPrefix(sym, stulpfx) { // CGO语法
-		sym = sym[len(stulpfx):]
+	if strings.HasPrefix(sym, cstruct_) { // CGO语法
+		sym = sym[len(cstruct_):]
 	}
 
 	//log.Println(cp.cctr.Declares())

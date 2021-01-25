@@ -9,6 +9,8 @@ import (
 	"unsafe"
 )
 
+var cstruct_ = "struct_"
+
 // 与 types.Basic结构相同，强制转换为types.Basic使用
 type C2BasicType struct {
 	kind int // BasicKind

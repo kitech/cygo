@@ -103,12 +103,15 @@ func (c *g2nc) genpkg(name string, pkg *ast.Package) {
 			c.out("*/").outnl()
 		} else {
 			stname = strings.ReplaceAll(stname, "_", "_")
+			c.outf("#ifndef have_%s", stname).outnl()
+			c.outf("#define have_%s", stname).outnl()
 			c.outf("typedef struct %s %s /*ooo*/", stname[7:], stname).outfh().outnl()
 			c.outf("%s* %s_new_zero() {", stname, stname)
 			c.outf("  %s* cstobj = cxmalloc(sizeof(%s));", stname, stname)
 			c.outf("  memset(cstobj, 0, sizeof(%s));", stname)
 			c.outf("  return cstobj;")
-			c.outf("}").outnl().outnl()
+			c.outf("}").outnl()
+			c.outf("#endif // have_%s", stname).outnl().outnl()
 		}
 	}
 	c.genTupleTypes(pkg.Scope)

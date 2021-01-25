@@ -23,6 +23,8 @@
 * [ ] string literal
 * [ ] union类型
 * [ ] 自动添加this reciever
+* [ ] callstack 实现
+* [ ] 编译shared库支持
 
 ### C 符号类型自动推导
 * [x] xlab/c-for-go + modernc.org/cc 方案，测试已经完成. C99

@@ -41,7 +41,7 @@ func Unix() int64 {
 // nanoseconds?
 type Duration int64
 
-type Time struct {
+struct Time{
 	unix_ int64 // usec, not the same with Go
 	zone  int
 }
@@ -59,6 +59,16 @@ func Now() *Time {
 		tmzone = zoneno()
 	}
 	t.zone = tmzone
+	return t
+}
+
+func now2() *Time {
+	var tmspec = &C.struct_timespec{}
+	rv := C.clock_gettime(C.CLOCK_REALTIME, tmspec)
+
+	t := &Time{}
+	ns := tmspec.tv_sec*NS + tmspec.tv_nsec
+	t.unix_ = ns
 	return t
 }
 
@@ -159,7 +169,7 @@ func (t *Time) Tostr2() string {
 	ep = t.unix_ / US
 	msec := (t.unix_ % US) / MS
 
-	var tmo_dummy *C.struct_tm // let compiler alias struct_tm
+	var tmo_dummy *C.struct_tm = nil // let compiler alias struct_tm
 	tmo := C.localtime(&ep)
 	buf := malloc3(32)
 	C.sprintf(buf, "%04d-%02d-%02d %02d:%02d:%02d.%03d".ptr,
