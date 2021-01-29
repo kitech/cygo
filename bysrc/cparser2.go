@@ -287,6 +287,9 @@ func cctype2gotypes(typ cc1.Type) types.Type {
 	case cc1.Double:
 		typ := types.Typ[types.Float64]
 		return typ
+	case cc1.Long:
+		typ := types.Typ[types.Int64]
+		return typ
 	default:
 		log.Panicln("noimpl", typ, typ.Kind())
 	}
@@ -388,6 +391,9 @@ func (cp *cparser2) symtype(sym string) (string, types.Type, interface{}) {
 		switch spec := obj.Spec.(type) {
 		case *cc1t.CStructSpec:
 			tystr, dsty := cp.ctype2gotype(spec)
+			if sym == "_XDisplay" {
+				//log.Panicf("%v %v %v %#v\n", tystr, dsty, reflect.TypeOf(dsty), spec)
+			}
 			return tystr, dsty, nil
 			// dsty := cp.tostructy(spec)
 			// return "struct_" + sym, dsty, nil
@@ -421,12 +427,16 @@ func (cp *cparser2) ctype2gotype(cty cc1t.CType) (tystr string, tyobj types.Type
 		case "uint", "unsigned int":
 			typ := types.Typ[types.Uint]
 			return typ.String(), typ
-		case "long int":
+		case "long int", "long Long":
 			typ := types.Typ[types.Int64]
 			return typ.String(), typ
 		case "unsigned long int", "unsigned long long":
 			typ := types.Typ[types.Uint64]
 			return typ.String(), typ
+		case "unsigned long int*":
+			typ := types.Typ[types.Uint64]
+			typ2 := types.NewPointer(typ)
+			return typ2.String(), typ2
 		case "double":
 			typ := types.Typ[types.Float64]
 			return typ.String(), typ
@@ -459,8 +469,10 @@ func (cp *cparser2) ctype2gotype(cty cc1t.CType) (tystr string, tyobj types.Type
 		}
 	case *cc1t.CStructSpec:
 		// istypedef := spec.Typedef != ""
-		stname := gopp.IfElseStr(spec.Typedef != "", spec.Typedef, "struct_"+spec.Tag)
-		stname2 := gopp.IfElseStr(spec.Typedef != "", spec.Typedef, "struct "+spec.Tag)
+		stname := gopp.IfElseStr(spec.Typedef != "" && spec.Tag == "",
+			spec.Typedef, "struct_"+spec.Tag)
+		stname2 := gopp.IfElseStr(spec.Typedef != "" && spec.Tag == "",
+			spec.Typedef, "struct "+spec.Tag)
 		csi := spec
 		log.Println(stname, len(csi.Members))
 		var fldvars []*types.Var

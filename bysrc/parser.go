@@ -574,30 +574,6 @@ func (pc *ParserContext) walkpass_fill_fakecpkg() {
 			case *ast.GenDecl:
 				if te.Tok == token.CONST {
 					inconst = true
-					log.Printf("%#v\n", te)
-					for idx0, specx := range te.Specs {
-						log.Printf("%d %#v\n", idx0, specx)
-						spec := specx.(*ast.ValueSpec)
-						for idx1, name := range spec.Names {
-							var val ast.Expr
-							if len(spec.Values) > idx1 {
-								val = spec.Values[idx1]
-							}
-							log.Printf("%d:%d type=%#v, %#v=%#v\n", idx0, idx1, spec.Type, name, val)
-							if ve, ok := val.(*ast.SelectorExpr); ok {
-								if ve.X.(*ast.Ident).Name == "C" {
-									selidt := ve.Sel
-									_ = selidt
-									idtname := selidt.Name
-									ctystr, ctyobj, idtval := pc.cpr2.symtype(idtname)
-									log.Println(idtname, ctystr, ctyobj, idtval, reflect.TypeOf(idtval))
-								}
-							}
-							if name.Name == "AFLTVAL2" {
-								// log.Fatalln("ok")
-							}
-						}
-					}
 				} else {
 					inconst = false
 				}
@@ -614,9 +590,12 @@ func (pc *ParserContext) walkpass_fill_fakecpkg() {
 						}
 					} else if fe, ok := pn.(*ast.CompositeLit); ok {
 						atye = fe.Type
+					} else if fe, ok := pn.(*ast.StarExpr); ok {
+						// var x *C.Foo
+						_ = fe
 					}
 					istype := atye == te // 是否是在type的位置上
-					log.Println("got111", te.X, te.Sel, c.Index(), inconst, reftyof(pn), atye, reftyof(atye), atye == te, istype, exprpos(pc, te))
+					log.Println("got111", te.X, te.Sel, c.Index(), inconst, reftyof(pn), atye, reftyof(atye), reftyof(pn), atye == te, istype, exprpos(pc, te))
 					csi := newcsyminfo(te.Sel, nil)
 					csi.istype = istype
 					csi.isconst = inconst
@@ -648,6 +627,26 @@ func (pc *ParserContext) walkpass_fill_fakecpkg() {
 				}
 			case *ast.ValueSpec:
 				// in const
+				var sele *ast.SelectorExpr
+				if fe, ok := te.Type.(*ast.StarExpr); ok {
+					if se, ok := fe.X.(*ast.SelectorExpr); ok {
+						sele = se // var x *C.Foo
+					}
+				} else if fe, ok := te.Type.(*ast.SelectorExpr); ok {
+					sele = fe // var x C.Foo
+				}
+				if sele != nil {
+					if iscident(sele.X) {
+						csi := newcsyminfo(sele.Sel, nil)
+						csi.istype = true
+						csi.isconst = inconst
+						if ocsi := intmpidts2(sele.Sel); ocsi != nil {
+							ocsi.istype = ocsi.istype || true
+						} else {
+							tmpidts2[sele.Sel] = csi
+						}
+					}
+				}
 			}
 			return true
 		}, func(c *astutil.Cursor) bool {

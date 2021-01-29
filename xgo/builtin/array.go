@@ -45,6 +45,16 @@ func cxarray3_new3(cap int, ty *Metatype) *cxarray3 {
 	return arr
 }
 
+func (arr *cxarray3) clone() *cxarray3 {
+	arr2 := &cxarray3{}
+	memcpy3(arr2, arr, sizeof(cxarray3))
+	arr2.ptr = malloc3(arr.cap * arr.elemsz)
+	if arr.len > 0 {
+		memcpy3(arr2.ptr, arr.ptr, arr.len*arr.elemsz)
+	}
+	return arr2
+}
+
 func (arr *cxarray3) dummy() {
 
 }
