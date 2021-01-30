@@ -352,8 +352,8 @@ func (thisp *NetPoller) resume(d *Evdata) {
     // evdata2_free(d2);
 
 	resume_one := resumer.resume_one
-	C.iopoller_avoid_cxcallable_resume(resume_one, dd, ytype, grid, mcid)
-    // resume_one(dd, ytype, grid, mcid)
+	// C.iopoller_avoid_cxcallable_resume(resume_one, dd, ytype, grid, mcid)
+    resume_one(dd, ytype, grid, mcid)
 	// resumer.resume_one(dd, ytype, grid, mcid) // TODO compiler
 	// cgen: rtcom__Resumer_resume_one(dd, ytype, grid, mcid)
 }

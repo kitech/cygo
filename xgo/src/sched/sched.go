@@ -533,8 +533,8 @@ func (thisp *Schedule) init_machines() {
 
 func comainfp(argx voidptr) {
     co := (*Fiber)(argx)
-    // co.cofn.call()
-	C.sched_avoid_gxcallable_cofunc_call(co.cofn.fnptr, co.cofn.this, co.cofn.fnarg)
+    co.cofn.call()
+	//C.sched_avoid_gxcallable_cofunc_call(co.cofn.fnptr, co.cofn.this, co.cofn.fnarg)
     co.set_state(codone)
 	//mlog.info(@FILE, @LINE, "cofn done", co.grid, co.mcid)
 	println("cofn done", co.grid, co.mcid)
