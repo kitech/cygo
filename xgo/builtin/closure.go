@@ -29,6 +29,7 @@ struct gxcallable {
 	fnptr  voidptr
 }
 
+// ismth: 0=barefunc, 1=method, 2=anonfunc-with-capvars
 //export gxcallable_new
 func gxcallable_new(fnptr voidptr, ismth int, obj voidptr) voidptr {
 	var caobj *gxcallable = malloc3(sizeof(voidptr(0)) * 2)

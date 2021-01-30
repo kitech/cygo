@@ -966,7 +966,8 @@ func (c *g2nc) genAssignStmt(scope *ast.Scope, s *ast.AssignStmt) {
 					}
 					c.genExpr(scope, s.Lhs[i])
 					c.out("").outeq()
-					c.outf("gxcallable_new((voidptr)&%s%s_gxcallable, 0, nilptr)", c.pkgpfx(), idt.Name)
+					//c.outf("gxcallable_new((voidptr)&%s%s_gxcallable, 0, nilptr)", c.pkgpfx(), idt.Name)
+					c.outf("gxcallable_new((voidptr)&%s%s, 0, nilptr)", c.pkgpfx(), idt.Name)
 				} else {
 					if s.Tok == token.DEFINE {
 						c.out("__typeof__(")
@@ -2259,6 +2260,7 @@ func (c *g2nc) genCallExprClosure(scope *ast.Scope, te *ast.CallExpr, fnlit *ast
 	fnidt := te.Fun.(*ast.Ident)
 	c.outf("((%s%s)(%s->fnptr))(%s->obj",
 		c.pkgpfx(), closi.fntype, fnidt.Name, fnidt.Name)
+	c.outf("gxcallable_call_noret(%d, ", fnidt.Name)
 	c.out(gopp.IfElseStr(len(te.Args) > 0, ",", ""))
 	for idx, e1 := range te.Args {
 		c.genExpr(scope, e1)
@@ -2317,10 +2319,13 @@ func (c *g2nc) genCallExprClosure2(scope *ast.Scope, te *ast.CallExpr /*fnlit *a
 	tmpvname := tmpvarname()
 	c.outf("gxcallable* %s =(gxcallable*)%s", tmpvname, fnidt.Name).outfh().outnl()
 	if lefte != nil {
+		c.outf("gxcallable_call_anret(")
 		c.genExpr(scope, lefte)
-		c.outeq()
+		c.outf(", %s", tmpvname)
+	} else {
+		//c.outf("((%s%s)(%s->fnptr))(%s->obj", "void*", "(*)()", tmpvname, tmpvname)
+		c.outf("gxcallable_call_noret(%s", tmpvname)
 	}
-	c.outf("((%s%s)(%s->fnptr))(%s->obj", "void*", "(*)()", tmpvname, tmpvname)
 	c.out(gopp.IfElseStr(len(te.Args) > 0, ",", ""))
 	for idx, e1 := range te.Args {
 		c.genExpr(scope, e1)
@@ -4035,7 +4040,7 @@ struct wideptr { voidptr ptr; voidptr obj; };
 
 #define have_gxcallbale
 typedef struct gxcallable gxcallable;
-struct gxcallable {voidptr isclos; voidptr obj; usize ismth; voidptr fnptr; };
+struct gxcallable {voidptr isclos; voidptr fnobj; usize ismth; voidptr fnptr; };
 extern voidptr gxcallable_new(voidptr fnptr, int ismth, voidptr obj);
 #endif
 
@@ -4170,23 +4175,38 @@ struct gxcallable {
     voidptr fnptr;
 };
 extern void* gxcallable_new(void* fnptr, int ismth, void* obj);
+#endif // endof callbale once header
 
-#define gxcallable_call_noret(anyfn, args...)     \
-    {                                             \
+#define gxcallable_call_noret(anyfn, ...)     \
+    do {                                             \
         gxcallable* clos = anyfn;                                   \
-        void (*fnptr)() = clos->isclos == 0x1 ? clos->fnptr : clos; \
+        void (*fnptr)() = clos->isclos == (voidptr)0x1 ? clos->fnptr : clos; \
         if (clos->isclos==(voidptr)1) {                             \
             if (clos->ismth == 1) {                                 \
-                fnptr(clos->fnobj, args);                           \
+                fnptr(clos->fnobj, ##__VA_ARGS__);                           \
             }else{                                                  \
-                fnptr(args);                                        \
+                fnptr(__VA_ARGS__);                                        \
             }                                                       \
         }else{                                                      \
-            fnptr(args);                                            \
+            fnptr(__VA_ARGS__);                                            \
         }                                                           \
-    }
+    }while(0);
 
-#endif // endof callbale once header
+#define gxcallable_call_anret(retvar, anyfn, ...)     \
+    do {                                             \
+        gxcallable* clos = anyfn;                                   \
+        __typeof__(retvar) (*fnptr)() = clos->isclos == (voidptr)0x1 ? clos->fnptr : clos; \
+        if (clos->isclos==(voidptr)1) {                             \
+            if (clos->ismth == 1) {                                 \
+                retvar = fnptr(clos->fnobj, ##__VA_ARGS__);                           \
+            }else{                                                  \
+                retvar = fnptr(__VA_ARGS__);                                        \
+            }                                                       \
+        }else{                                                      \
+            retvar = fnptr(__VA_ARGS__);                                            \
+        }                                                           \
+    }while(0);
+
 `
 
 	return s
