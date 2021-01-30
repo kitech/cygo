@@ -190,7 +190,9 @@ func main() {
 		}
 	}
 
-	code = comps[0].genBuiltinTypesMetatype() + code + mainpkgcode
+	code = comps[0].genCallableHeaderOnce() + code + mainpkgcode
+	code = comps[0].genBuiltinTypesMetatype() + code
+
 	fname := "opkgs/foo." + extname
 	ioutil.WriteFile(fname, []byte(code), 0644)
 	linecnt := strings.Count(code, "\n")

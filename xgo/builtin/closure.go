@@ -22,15 +22,19 @@ func (ufn *Unifunc) Call() {
 	}
 }
 
-type gxcallable struct {
-	obj   voidptr
-	fnptr voidptr
+struct gxcallable {
+	isclos voidptr
+	fnobj  voidptr // properply this
+	ismth  usize
+	fnptr  voidptr
 }
 
 //export gxcallable_new
-func gxcallable_new(fnptr voidptr, obj voidptr) voidptr {
+func gxcallable_new(fnptr voidptr, ismth int, obj voidptr) voidptr {
 	var caobj *gxcallable = malloc3(sizeof(voidptr(0)) * 2)
-	caobj.obj = obj
+	caobj.isclos = voidptr(1)
+	caobj.fnobj = obj
+	caobj.ismth = ismth
 	caobj.fnptr = fnptr
 	return caobj
 }

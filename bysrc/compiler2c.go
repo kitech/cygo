@@ -923,7 +923,7 @@ func (c *g2nc) genAssignStmt(scope *ast.Scope, s *ast.AssignStmt) {
 				}
 				c.genExpr(scope, s.Lhs[i])
 				c.out("").outeq()
-				c.outf("gxcallable_new((voidptr)&%s%s, %s)", c.pkgpfx(), closi.fnname, tmpvname)
+				c.outf("gxcallable_new((voidptr)&%s%s, 1, %s)", c.pkgpfx(), closi.fnname, tmpvname)
 			case *ast.SelectorExpr: // in case method
 				ismth := true // how check
 				selxtyx := c.info.TypeOf(aty.X)
@@ -955,7 +955,7 @@ func (c *g2nc) genAssignStmt(scope *ast.Scope, s *ast.AssignStmt) {
 					c.out("").outeq()
 					tystr := c.exprTypeName(scope, aty.X)
 					tystr = strings.TrimRight(tystr, "*")
-					c.outf("gxcallable_new((voidptr)&%s%s%s,", tystr, mthsep, aty.Sel.Name)
+					c.outf("gxcallable_new((voidptr)&%s%s%s, 1, ", tystr, mthsep, aty.Sel.Name)
 					c.genExpr(scope, aty.X)
 					c.out(")")
 				}
@@ -966,7 +966,7 @@ func (c *g2nc) genAssignStmt(scope *ast.Scope, s *ast.AssignStmt) {
 					}
 					c.genExpr(scope, s.Lhs[i])
 					c.out("").outeq()
-					c.outf("gxcallable_new((voidptr)&%s%s_gxcallable, nilptr)", c.pkgpfx(), idt.Name)
+					c.outf("gxcallable_new((voidptr)&%s%s_gxcallable, 0, nilptr)", c.pkgpfx(), idt.Name)
 				} else {
 					if s.Tok == token.DEFINE {
 						c.out("__typeof__(")
@@ -4035,8 +4035,8 @@ struct wideptr { voidptr ptr; voidptr obj; };
 
 #define have_gxcallbale
 typedef struct gxcallable gxcallable;
-struct gxcallable {voidptr obj; voidptr fnptr; };
-extern voidptr gxcallable_new(voidptr fnptr, voidptr obj);
+struct gxcallable {voidptr isclos; voidptr obj; usize ismth; voidptr fnptr; };
+extern voidptr gxcallable_new(voidptr fnptr, int ismth, voidptr obj);
 #endif
 
 `
@@ -4146,6 +4146,51 @@ typedef struct cxiface {
 	return precgodefs
 }
 
+func (c *g2nc) genCallableHeaderOnce() string {
+	s := "// callbale once header\n"
+	s += `
+#include <stdint.h>
+
+#ifndef have_gxcallbale
+#define nilptr NULL
+#define iota 0
+
+typedef struct wideptr wideptr;
+struct wideptr {
+    voidptr ptr;
+    voidptr obj;
+};
+
+#define have_gxcallbale
+typedef struct gxcallable gxcallable;
+struct gxcallable {
+    voidptr isclos;
+    voidptr fnobj;
+    usize  ismth;
+    voidptr fnptr;
+};
+extern void* gxcallable_new(void* fnptr, int ismth, void* obj);
+
+#define gxcallable_call_noret(anyfn, args...)     \
+    {                                             \
+        gxcallable* clos = anyfn;                                   \
+        void (*fnptr)() = clos->isclos == 0x1 ? clos->fnptr : clos; \
+        if (clos->isclos==(voidptr)1) {                             \
+            if (clos->ismth == 1) {                                 \
+                fnptr(clos->fnobj, args);                           \
+            }else{                                                  \
+                fnptr(args);                                        \
+            }                                                       \
+        }else{                                                      \
+            fnptr(args);                                            \
+        }                                                           \
+    }
+
+#endif // endof callbale once header
+`
+
+	return s
+}
 func (c *g2nc) genBuiltinTypesMetatype() string {
 	s := "#include <stdalign.h>\n"
 	s += "#include <stdbool.h>\n"
