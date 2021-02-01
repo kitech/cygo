@@ -647,6 +647,20 @@ func (pc *ParserContext) walkpass_fill_fakecpkg() {
 						}
 					}
 				}
+			case *ast.TypeSpec:
+				log.Println(te.Name, te.Type)
+				if fe, ok := te.Type.(*ast.SelectorExpr); ok {
+					if iscident(fe.X) {
+						csi := newcsyminfo(fe.Sel, nil)
+						csi.istype = true
+						csi.isconst = inconst
+						if ocsi := intmpidts2(fe.Sel); ocsi != nil {
+							ocsi.istype = ocsi.istype || true
+						} else {
+							tmpidts2[fe.Sel] = csi
+						}
+					}
+				}
 			}
 			return true
 		}, func(c *astutil.Cursor) bool {
@@ -669,7 +683,7 @@ func (pc *ParserContext) walkpass_fill_fakecpkg() {
 		log.Println(cnter, idtname, csi.String())
 		log.Println("gen fakectype", csi.idt)
 		ctystr, ctyobj, _ := pc.cpr2.symtype(idtname)
-		log.Println(cnter, csi.String(), ctystr, ctyobj)
+		log.Println(cnter, "/", csi.String(), "/", ctystr, "/", ctyobj)
 
 		if strings.HasPrefix(ctystr, "struct ") {
 			// log.Println(idtname, ctyobj, ctystr)

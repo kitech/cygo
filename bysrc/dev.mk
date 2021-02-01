@@ -1,5 +1,5 @@
 # -DIOHOOK_XLIB
 # -lX11
 all:
-	gcc -g -O0 -fPIC -std=gnu99 -DCORO_ASM -D_GNU_SOURCE -DGC_THREADS -DNRDEBUG -DIOHOOK_XLIB -lX11 -lgc -ldl -latomic -lpthread opkgs/foo.c
+	gcc -g -O0 -fPIC -std=gnu99 -DCORO_ASM -D_GNU_SOURCE -DGC_THREADS -DNRDEBUG -DIOHOOK_XLIB -lavcodec -lavdevice -lavutil -lX11 -lgc -ldl -latomic -lpthread opkgs/foo.c
 	ls -lh a.out

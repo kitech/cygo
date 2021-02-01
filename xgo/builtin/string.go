@@ -47,6 +47,24 @@ func gostring_clone(ptr byteptr) string {
 	s.len = strlen3(ptr)
 	return s
 }
+func refcstr(ptr byteptr) string {
+	if ptr == nil {
+		return ""
+	}
+	s := &cxstring3{}
+	s.ptr = ptr
+	s.len = strlen3(ptr)
+	return s
+}
+func refcstrn(ptr byteptr, len int) string {
+	if ptr == nil {
+		return ""
+	}
+	s := &cxstring3{}
+	s.ptr = ptr
+	s.len = len
+	return s
+}
 func gostringn(ptr byteptr, n int) string {
 	if ptr == nil {
 		return ""

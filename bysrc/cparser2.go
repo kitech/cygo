@@ -446,7 +446,7 @@ func (cp *cparser2) ctype2gotype(cty cc1t.CType) (tystr string, tyobj types.Type
 		case "void*":
 			typ := types.Typ[types.Voidptr]
 			return typ.String(), typ
-		case "char*":
+		case "char*", "unsigned char*":
 			typ := types.Typ[types.Byteptr]
 			return typ.String(), typ
 		case "char**":
@@ -455,6 +455,9 @@ func (cp *cparser2) ctype2gotype(cty cc1t.CType) (tystr string, tyobj types.Type
 			//log.Println(trtyp, udtyp, typ)
 			return typ.String(), typ
 		//case "unsigned long int[16]":
+		case "char":
+			typ := types.Typ[types.Byte]
+			return typ.String(), typ
 		default:
 			if spec.OuterArr != "" {
 				barecty := *spec
@@ -498,6 +501,9 @@ func (cp *cparser2) ctype2gotype(cty cc1t.CType) (tystr string, tyobj types.Type
 		} else if spec.Pointers == 1 {
 			tystr = "*" + tystr
 			tyobj = types.NewPointer(stobj2)
+			return
+		} else if strings.HasPrefix(stname, cstruct_) {
+			tyobj = stobj2
 			return
 		} else {
 			log.Panicln("noimpl", stname)

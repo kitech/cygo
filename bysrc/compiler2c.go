@@ -3514,6 +3514,8 @@ func (c *g2nc) genPredefTypeDecl(scope *ast.Scope, d *ast.GenDecl) {
 				specname := trimCtype(tspec.Name.Name)
 				c.outf("typedef %v %s%v/*eee*/", tystr, c.pkgpfx(), specname).outfh().outnl()
 				// this.outf("typedef %v %s%v", spec.Type, this.pkgpfx(), spec.Name.Name).outfh().outnl()
+			default:
+				log.Println("TODO", reflect.TypeOf(spty), spty, exprpos(c.psctx, tspec))
 			}
 		}
 	}
@@ -3702,8 +3704,11 @@ func (this *g2nc) genTypeSpec(scope *ast.Scope, spec *ast.TypeSpec) {
 		this.outfh().outnl()
 	case *ast.SelectorExpr:
 		this.out("typedef").outsp()
-		this.genExpr(scope, te.X)
-		this.out("_")
+		if iscident(te.X) {
+		} else {
+			this.genExpr(scope, te.X)
+			this.out("_")
+		}
 		this.genExpr(scope, te.Sel)
 		this.outsp()
 		specname := trimCtype(spec.Name.Name)
