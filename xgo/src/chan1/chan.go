@@ -15,20 +15,6 @@ package chan1
           break;
       }
    }
-
-   void chan1_avoid_cxcallable_resume(void* fnptr, void* gr, int ytype, int grid, int mcid) {
-       void(*fnobj)() = fnptr;
-       fnobj(gr, ytype, grid, mcid);
-   }
-
-   void chan1_avoid_cxcallable_yield(void* fnptr, int64_t fdns, int ytype) {
-       void(*fnobj)() = fnptr;
-       fnobj(fdns, ytype);
-   }
-   void* chan1_avoid_cxcallable_getcoro(void* fnptr) {
-       void* (*fnobj)() = fnptr;
-       return fnobj();
-   }
 */
 import "C"
 import "rtcom"
@@ -40,8 +26,6 @@ import "atomic"
 // import vcp.rtcom
 // import vcp.futex
 // import vcp.iohook
-
-// const vnil = voidptr(0)
 
 func Keepme() {}
 
@@ -161,7 +145,6 @@ func (ch *Chan1) send0(ep voidptr, block bool) bool {
     // mysg = ylder.getcoro() // TODO compiler
 	getcoro := ylder.getcoro
 	mysg = getcoro()
-	//mysg = C.chan1_avoid_cxcallable_getcoro(ylder.getcoro)
 
     ci.mu.mlock()
     if ci.closed != 0 {
@@ -215,7 +198,6 @@ func (ch *Chan1) send0(ep voidptr, block bool) bool {
 	yield := ylder.yield
 	yield(0, iohook.YIELD_TYPE_CHAN_SEND)
     //ylder.yield(0, iohook.YIELD_TYPE_CHAN_SEND) // TODO compiler
-	//C.chan1_avoid_cxcallable_yield(ylder.yield, 0, iohook.YIELD_TYPE_CHAN_SEND)
 
     mysg.param = nil
     mysg.channel = nil
@@ -232,7 +214,6 @@ func (ch *Chan1) send_direct0(elemsize int, sgx *Fiber, mu *futex.Mutex, ep void
     }
     mu.munlock()
     sg.param = sg
-	//C.chan1_avoid_cxcallable_resume(rsmer.resume_one, sg, iohook.YIELD_TYPE_CHAN_RECV, sg.grid, sg.mcid)
 	resume_one := rsmer.resume_one
 	resume_one(sg, iohook.YIELD_TYPE_CHAN_RECV, sg.grid, sg.mcid)
     //rsmer.resume_one(sg, iohook.YIELD_TYPE_CHAN_RECV, sg.grid, sg.mcid) // TODO compiler
@@ -280,7 +261,6 @@ func (ch *Chan1) recv0(ep voidptr, block bool)  {
 		yield := ylder.yield
 		yield(0, iohook.YIELD_TYPE_CHAN_RECV_CLOSED)
         // ylder.yield(0, iohook.YIELD_TYPE_CHAN_RECV_CLOSED)
-		//C.chan1_avoid_cxcallable_yield(ylder.yield, 0, iohook.YIELD_TYPE_CHAN_RECV_CLOSED)
         panic("unreachable")
     }
 
@@ -339,7 +319,7 @@ func (ch *Chan1) recv0(ep voidptr, block bool)  {
     // mysg = ylder.getcoro()// TODO compiler
 	getcoro := ylder.getcoro
 	mysg = getcoro()
-	//mysg = C.chan1_avoid_cxcallable_getcoro(ylder.getcoro)
+
     mysg.elem = ep
     mysg.channel = ci
     //ci.recvq << mysg
@@ -350,7 +330,6 @@ func (ch *Chan1) recv0(ep voidptr, block bool)  {
 	yield := ylder.yield
 	yield(0, iohook.YIELD_TYPE_CHAN_RECV)
     //ylder.yield(0, iohook.YIELD_TYPE_CHAN_RECV) // TODO compiler
-	// C.chan1_avoid_cxcallable_yield(ylder.yield, 0, iohook.YIELD_TYPE_CHAN_RECV)
     // mlog.info(@FILE, @LINE, "recv park waked", mysg.grid, mysg.mcid)
 
     mysg.elem = nil
@@ -389,7 +368,6 @@ func (ch *Chan1) recv_direct0(sgx *Fiber, ep voidptr, mu *futex.Mutex, ) {
     sg.elem = nil
     mu.munlock()
     sg.param = sg
-	// C.chan1_avoid_cxcallable_resume(rsmer.resume_one, sg, iohook.YIELD_TYPE_CHAN_RECV, sg.grid, sg.mcid)
 	resume_one := rsmer.resume_one
 	resume_one(sg, iohook.YIELD_TYPE_CHAN_RECV, sg.grid, sg.mcid)
     // rsmer.resume_one(sg, iohook.YIELD_TYPE_CHAN_RECV, sg.grid, sg.mcid) // TODO compiler
