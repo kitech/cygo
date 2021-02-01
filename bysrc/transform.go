@@ -418,6 +418,7 @@ func (tf *TfTmpvars2) apply(ctx *TransformContext) {
 }
 
 /// add new0 method for struct to ast
+// 干啥用的？反射？
 type TfTmpvars3 struct {
 }
 
@@ -441,10 +442,9 @@ func (tf *TfTmpvars3) apply(ctx *TransformContext) {
 				newfn := &ast.FuncDecl{}
 				newfn.Name = newIdent("new0")
 				rcv := &ast.Field{}
-				rcv.Type = te.Name
+				rcv.Type = &ast.StarExpr{X: te.Name, Star: te.Pos()}
 
-				rete := &ast.StarExpr{}
-				rete.X = te.Name
+				rete := &ast.StarExpr{X: te.Name, Star: te.Pos()}
 				newfn.Recv = &ast.FieldList{}
 				newfn.Recv.List = append(newfn.Recv.List, rcv)
 				reto := &ast.Field{}

@@ -106,7 +106,7 @@ func (c *g2nc) genpkg(name string, pkg *ast.Package) {
 			c.outf("#ifndef have_%s", stname).outnl()
 			c.outf("#define have_%s", stname).outnl()
 			c.outf("typedef struct %s %s /*ooo*/", stname[7:], stname).outfh().outnl()
-			c.outf("%s* %s_new_zero() {", stname, stname)
+			c.outf("%s* %s_new_zerop() {", stname, stname)
 			c.outf("  %s* cstobj = cxmalloc(sizeof(%s));", stname, stname)
 			c.outf("  memset(cstobj, 0, sizeof(%s));", stname)
 			c.outf("  return cstobj;")
@@ -225,7 +225,7 @@ func (c *g2nc) genTupleTypes(scope *ast.Scope) {
 			c.outf("%s %s", tystr, tmpvarname2(i)).outfh().outnl()
 		}
 		c.outf("}").outfh().outnl()
-		c.outf("%s* %s_new_zero() {", tpi.tyname, tpi.tyname).outnl()
+		c.outf("%s* %s_new_zerop() {", tpi.tyname, tpi.tyname).outnl()
 		c.outf("%s* obj = (%s*)cxmalloc(sizeof(%s))",
 			tpi.tyname, tpi.tyname, tpi.tyname).outfh().outnl()
 		for cnter := 0; cnter < tpi.typ.Len(); cnter++ {
@@ -322,7 +322,7 @@ func (c *g2nc) genPreFuncDecl(scope *ast.Scope, d *ast.FuncDecl) {
 		c.out(")")
 		c.outfh().outnl()
 
-		c.outf("%s%s_closure_arg_%d* %s%s_closure_arg_%d_new_zero() {",
+		c.outf("%s%s_closure_arg_%d* %s%s_closure_arg_%d_new_zerop() {",
 			pkgpfx, d.Name.Name, cnter, pkgpfx, d.Name.Name, cnter)
 		c.outf("  return (%s%s_closure_arg_%d*)cxmalloc(sizeof(%s%s_closure_arg_%d))",
 			pkgpfx, d.Name.Name, cnter, pkgpfx, d.Name.Name, cnter).outfh().outnl()
@@ -423,7 +423,12 @@ func (c *g2nc) genFuncDeclExported(scope *ast.Scope, fd *ast.FuncDecl, ant *Anno
 	c.out("}").outnl().outnl()
 
 }
+
+// TODO depcreated
 func (c *g2nc) genFuncDeclCallable(scope *ast.Scope, fd *ast.FuncDecl, ant *Annotation) {
+	if true {
+		return
+	}
 	// multirets
 	ismret := fd.Type.Results.NumFields() >= 2
 	fdtyx := c.info.TypeOf(fd.Name)
@@ -580,7 +585,7 @@ func (this *g2nc) genFuncDecl(scope *ast.Scope, fd *ast.FuncDecl) {
 
 			this.outf("%s*", tpi.tyname).outsp().out(tvname)
 			this.outeq().outsp()
-			this.outf("%s_new_zero()", tpi.tyname).outfh().outnl()
+			this.outf("%s_new_zerop()", tpi.tyname).outfh().outnl()
 			cnter := 0
 			for _, fld := range fd.Type.Results.List {
 				for _, name := range fld.Names {
@@ -883,7 +888,7 @@ func (c *g2nc) genAssignStmt(scope *ast.Scope, s *ast.AssignStmt) {
 				c.outeq()
 				tystr := c.exprTypeName(scope, s.Lhs[i])
 				tystr = strings.Trim(tystr, "*")
-				c.outf("%s_new_zero()", tystr).outfh().outnl()
+				c.outf("%s_new_zerop()", tystr).outfh().outnl()
 				c.genExpr(scope, s.Lhs[i])
 				c.out("->thisptr /*ifaceas*/").outeq()
 				c.genExpr(scope, s.Rhs[i])
@@ -914,7 +919,7 @@ func (c *g2nc) genAssignStmt(scope *ast.Scope, s *ast.AssignStmt) {
 				closi := c.getclosinfo(aty)
 				tmpvname := tmpvarname()
 				c.outf("%s%s* %s", c.pkgpfx(), closi.argtyname, tmpvname).outeq()
-				c.outf("%s%s_new_zero()", c.pkgpfx(), closi.argtyname).outfh().outnl()
+				c.outf("%s%s_new_zerop()", c.pkgpfx(), closi.argtyname).outfh().outnl()
 				for _, idt := range closi.idents {
 					c.outf("%s->%s=%s", tmpvname, idt.Name, idt.Name).outfh().outnl()
 				}
@@ -2443,7 +2448,7 @@ func (c *g2nc) genReturnStmt(scope *ast.Scope, e *ast.ReturnStmt) {
 				tystr := c.exprTypeNameImpl2(scope, mytyx, nil)
 				tystr = strings.Trim(tystr, "*")
 				c.outf("%s* %s", tystr, tvname).outeq()
-				c.outf("%s_new_zero()", tystr).outfh().outnl()
+				c.outf("%s_new_zerop()", tystr).outfh().outnl()
 				c.outf("%s->thisptr /*ifaceas*/", tvname).outeq()
 				c.genExpr(scope, re)
 				if isiface2(retyx) {
@@ -2503,7 +2508,7 @@ func (c *g2nc) genReturnStmt(scope *ast.Scope, e *ast.ReturnStmt) {
 					c.out(tystr).outsp()
 					c.genExpr(scope, idt)
 					c.outeq()
-					c.outf("%s_new_zero()", strings.Trim(tystr, "*")).outfh().outnl()
+					c.outf("%s_new_zerop()", strings.Trim(tystr, "*")).outfh().outnl()
 					undty := ne.Underlying().(*types.Interface)
 					c.outf("%s->thisptr =", idt.Name)
 					c.genExpr(scope, ae)
@@ -2750,7 +2755,7 @@ func (this *g2nc) genExpr2(scope *ast.Scope, e ast.Expr) {
 			}
 
 			tystr := this.exprTypeName(scope, t2.Type)
-			this.outf("%s_new_zero()", tystr) //.outnl()
+			this.outf("%s_new_zerop()", tystr) //.outnl()
 			this.outfh().outnl()
 			keepop = false
 			varname := scope.Lookup("varname")
@@ -2816,7 +2821,7 @@ func (this *g2nc) genExpr2(scope *ast.Scope, e ast.Expr) {
 			}
 		case *ast.Ident: // TODO
 			var vo = scope.Lookup("varname")
-			this.outf("%v_new_zero()", this.exprTypeName(scope, be)).outfh().outnl()
+			this.outf("%v_new_zerop()", this.exprTypeName(scope, be)).outfh().outnl()
 			for _, ex := range te.Elts {
 				this.outf("%v->%v = %v", vo, "todoaaa", ex)
 				this.outfh().outnl()
@@ -3629,7 +3634,7 @@ func (this *g2nc) genTypeSpec(scope *ast.Scope, spec *ast.TypeSpec) {
 		this.out("}").outfh().outnl()
 		this.outnl()
 		// this.out("static").outsp()
-		this.outf("%s%s* %s%s_new_zero() {",
+		this.outf("%s%s* %s%s_new_zerop() {",
 			this.pkgpfx(), specname, this.pkgpfx(), specname).outnl()
 		this.outf("  %s%s* obj = (%s%s*)cxmalloc(sizeof(%s%s))",
 			this.pkgpfx(), specname, this.pkgpfx(), specname,
@@ -3665,11 +3670,11 @@ func (this *g2nc) genTypeSpec(scope *ast.Scope, spec *ast.TypeSpec) {
 					tystr := this.exprTypeNameImpl2(scope, fldty, nil)
 					tystr = strings.TrimRight(tystr, "*")
 					// TODO function semantic order
-					this.outf("extern %s* %s_new_zero()", tystr, tystr).outfh().outnl()
+					this.outf("extern %s* %s_new_zerop()", tystr, tystr).outfh().outnl()
 					// 像有些地方使用结构体字段是否nil做判断,
 					// 并且即使像python也不会自动初始化结构体成员的，默认是None
 					this.out("//").outsp()
-					this.outf("obj->%s = (voidptr) %s_new_zero()", fldname.Name, tystr).outfh().outnl()
+					this.outf("obj->%s = (voidptr) %s_new_zerop()", fldname.Name, tystr).outfh().outnl()
 				} else {
 					//log.Println("noimpl", fldname.Name, fldty, reflect.TypeOf(fldty))
 				}
@@ -3733,7 +3738,7 @@ func (this *g2nc) genTypeSpec(scope *ast.Scope, spec *ast.TypeSpec) {
 			}
 		}
 		this.out("}").outfh().outnl()
-		this.outf("%s%s* %s%s_new_zero() {", this.pkgpfx(), spec.Name.Name, this.pkgpfx(), spec.Name.Name)
+		this.outf("%s%s* %s%s_new_zerop() {", this.pkgpfx(), spec.Name.Name, this.pkgpfx(), spec.Name.Name)
 		this.outf("return").outsp()
 		this.outf("(%s%s*)cxmalloc(sizeof(%s%s))", this.pkgpfx(), spec.Name.Name, this.pkgpfx(), spec.Name.Name)
 		this.outfh().outnl()
@@ -3904,7 +3909,7 @@ func (c *g2nc) genValueSpec(scope *ast.Scope, spec *ast.ValueSpec, validx int) {
 				if ok := ispointer2(varty); ok {
 					tystr := c.exprTypeNameImpl2(scope, varty, varname)
 					tystr = strings.Trim(tystr, "*")
-					c.outf("%s_new_zero()", tystr)
+					c.outf("%s_new_zerop()", tystr)
 				} else {
 					c.out(stzero)
 				}
