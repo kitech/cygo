@@ -399,11 +399,11 @@ struct coro_context
   void **sp; /* must be at offset 0 */
 };
 
-#if __i386__ || __x86_64__
-void __attribute__ ((__noinline__, __regparm__(2)))
-#else
+//#if __i386__ || __x86_64__
+//void __attribute__ ((__noinline__, __regparm__(2)))
+//#else
 void __attribute__ ((__noinline__))
-#endif
+//#endif
 coro_transfer (coro_context *prev, coro_context *next);
 
 # define coro_destroy(ctx) (void *)(ctx)

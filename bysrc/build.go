@@ -74,15 +74,22 @@ func (this *cbuilder) cgoline(line string) {
 			}
 		}
 		this.ldflags = append(arr, this.ldflags...)
+		// TODO pkg-config
 	default:
 		log.Panicln("wtt", line)
 	}
 }
 
 func (this *cbuilder) build() {
-	os.Setenv("LC_ALL", "C")
-	exe := "gcc"
-	args := []string{"-g", "-O0", "-fPIC", "-std=gnu99"}
+	os.Setenv("LC_ALL", "C") // 全英文输出
+	// TODO tcc __thread support
+	exe := "clang" // "gcc"
+	// clang c99 -Wtypedef-redefinition
+	args := []string{"-g", "-O0", "-fPIC", "-std=gnu11"}
+	switch exe {
+	case "clang":
+		args = append(args, "-Wtypedef-redefinition")
+	}
 	args = append(args, this.cflags...)
 	args = append(args, this.ldflags...)
 	args = append(args, "./opkgs/foo.c")
@@ -94,9 +101,10 @@ func (this *cbuilder) build() {
 		output, err := cmdo.CombinedOutput()
 		gopp.ErrPrint(err, args, len(output))
 		log.Println(string(output))
+		linecnt := strings.Count(string(output), "\n")
 		if err == nil {
 			fmt.Println("<===", "success", args, time.Since(btime),
-				humanize.Bytes(uint64(gopp.FileSize("a.out"))))
+				humanize.Bytes(uint64(gopp.FileSize("a.out"))), ",lines", linecnt)
 		} else {
 			gopp.ErrPrint(err, args, len(output), time.Since(btime))
 		}

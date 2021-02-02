@@ -425,9 +425,17 @@ func (cp *cparser2) ctype2gotype(cty cc1t.CType) (tystr string, tyobj types.Type
 		case "int":
 			typ := types.Typ[types.Int]
 			return typ.String(), typ
+		case "int*":
+			typ := types.Typ[types.Int]
+			typ2 := types.NewPointer(typ)
+			return typ2.String(), typ2
 		case "uint", "unsigned int":
 			typ := types.Typ[types.Uint]
 			return typ.String(), typ
+		case "unsigned int*":
+			typ := types.Typ[types.Uint]
+			typ2 := types.NewPointer(typ)
+			return typ2.String(), typ2
 		case "long int", "long Long":
 			typ := types.Typ[types.Int64]
 			return typ.String(), typ
@@ -438,8 +446,18 @@ func (cp *cparser2) ctype2gotype(cty cc1t.CType) (tystr string, tyobj types.Type
 			typ := types.Typ[types.Uint64]
 			typ2 := types.NewPointer(typ)
 			return typ2.String(), typ2
+		case "unsigned short int*":
+			typ := types.Typ[types.Uint16]
+			typ2 := types.NewPointer(typ)
+			return typ2.String(), typ2
+		case "unsigned short int":
+			typ := types.Typ[types.Uint16]
+			return typ.String(), typ
 		case "double":
 			typ := types.Typ[types.Float64]
+			return typ.String(), typ
+		case "float":
+			typ := types.Typ[types.Float32]
 			return typ.String(), typ
 		case "_Bool":
 			typ := types.Typ[types.Bool]
@@ -447,16 +465,16 @@ func (cp *cparser2) ctype2gotype(cty cc1t.CType) (tystr string, tyobj types.Type
 		case "void*":
 			typ := types.Typ[types.Voidptr]
 			return typ.String(), typ
-		case "char*", "unsigned char*":
+		case "char*", "unsigned char*", "signed char*":
 			typ := types.Typ[types.Byteptr]
 			return typ.String(), typ
-		case "char**":
+		case "char**", "unsigned char**":
 			udtyp := types.Typ[types.Byteptr]
 			typ := types.NewPointer(udtyp)
 			//log.Println(trtyp, udtyp, typ)
 			return typ.String(), typ
 		//case "unsigned long int[16]":
-		case "char":
+		case "char", "unsigned char":
 			typ := types.Typ[types.Byte]
 			return typ.String(), typ
 		default:
