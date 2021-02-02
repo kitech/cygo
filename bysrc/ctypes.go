@@ -6,6 +6,8 @@ import (
 	"go/constant"
 	"go/token"
 	"go/types"
+	"log"
+	"reflect"
 	"unsafe"
 )
 
@@ -116,4 +118,29 @@ func fakectype(nameidt ast.Expr, fcpkg *types.Package, typ types.Type) *types.Na
 	nty1 := types.NewTypeName(token.NoPos, fcpkg, idt.Name, nil)
 	ty2 := types.NewNamed(nty1, st1, nil)
 	return ty2
+}
+
+// for *types.Struct
+func fakecGetStruct(typ types.Type) *types.Struct {
+	dsty2 := typ
+	switch e1 := typ.(type) {
+	case *types.Pointer:
+		dsty2 = e1.Elem()
+		dsty2 = dsty2.(*types.Named).Underlying()
+	case *types.Named:
+		dsty2 = e1.Underlying()
+	default:
+		log.Panicln(typ, reflect.TypeOf(typ))
+	}
+	log.Println(typ, dsty2, reflect.TypeOf(dsty2))
+	dsty3 := dsty2.(*types.Struct)
+	return dsty3
+}
+func fakecSetTypedef(typ types.Type, ok bool) {
+	dsty3 := fakecGetStruct(typ)
+	dsty3.Typedef = ok
+}
+func fakecSetLangc(typ types.Type, ok bool) {
+	dsty3 := fakecGetStruct(typ)
+	dsty3.Langc = ok
 }

@@ -22,13 +22,15 @@
 * [ ] visibility of package symbols。现在好像不管是否public，都能调用
 * [ ] string literal
 * [ ] union类型
+* [ ] 自动添加stringfy方法，像new0方法一样
 * [ ] 自动添加this reciever
 * [ ] callstack 实现
 * [ ] 编译shared库支持
+* [ ] 前置声明C结构体类型，无法sizeof和malloc的
 
 ### C 符号类型自动推导
 * [x] xlab/c-for-go + modernc.org/cc 方案，测试已经完成. C99
-* [x] 准备弃用。 使用 tcc + tree-sitter做自动C头文件解析，C符号类型推导，支持函数返回值，结构体（带字段）模拟，全局变量，#define的常量，enum常量。
+* [x] 弃用。 使用 tcc + tree-sitter做自动C头文件解析，C符号类型推导，支持函数返回值，结构体（带字段）模拟，全局变量，#define的常量，enum常量。
 * [ ] 备用方案，go-clang。
 * [x] 已弃用。 对于调用C函数的返回值类型， 一种typeof()，一种是使用C++的decltype()，一种手动声明函数，只需要返回值类型，像V语言中的实现一样。另外，还要知道一个 C.symbol是一个函数，还是变量，还是常量，还是类型。
 以及在基本类型的操作之后的类型，像 char** p; p[0] 的类型还推导不出来。

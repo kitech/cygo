@@ -1,7 +1,8 @@
 package iohook
 
 /*
-#cgo CFLAGS: -D_GNU_SOURCE
+   #cgo CFLAGS: -D_GNU_SOURCE
+   #cgo LDFLAGS: -ldl
 
 extern void iohook_initHook();
 extern void iohook_initHook2();

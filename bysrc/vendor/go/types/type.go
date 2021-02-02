@@ -121,8 +121,10 @@ func (s *Slice) Elem() Type { return s.elem }
 
 // A Struct represents a struct type.
 type Struct struct {
-	fields []*Var
-	tags   []string // field tags; nil if there are no tags
+	fields  []*Var
+	tags    []string // field tags; nil if there are no tags
+	Langc   bool     // for C
+	Typedef bool     // for C
 }
 
 // NewStruct returns a new struct with the given fields and corresponding field tags.

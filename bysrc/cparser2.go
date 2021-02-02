@@ -351,6 +351,7 @@ func (cp *cparser2) symtype(sym string) (string, types.Type, interface{}) {
 		//case
 		case *cc1t.CStructSpec:
 			tystr, dsty := cp.ctype2gotype(spec)
+			fakecSetTypedef(dsty, true)
 			return tystr, dsty, nil
 			// return "struct_" + sym, dsty, nil
 		case *cc1t.CTypeSpec:
@@ -471,13 +472,14 @@ func (cp *cparser2) ctype2gotype(cty cc1t.CType) (tystr string, tyobj types.Type
 			}
 		}
 	case *cc1t.CStructSpec:
+		// Tag == "" 表示匿名??
 		// istypedef := spec.Typedef != ""
 		stname := gopp.IfElseStr(spec.Typedef != "" && spec.Tag == "",
 			spec.Typedef, "struct_"+spec.Tag)
 		stname2 := gopp.IfElseStr(spec.Typedef != "" && spec.Tag == "",
 			spec.Typedef, "struct "+spec.Tag)
 		csi := spec
-		log.Println(stname, len(csi.Members))
+		log.Println(stname, stname2, len(csi.Members), spec.Typedef, spec.Tag)
 		var fldvars []*types.Var
 		for idx, fldo := range csi.Members {
 			fldname := fldo.Name
@@ -490,6 +492,7 @@ func (cp *cparser2) ctype2gotype(cty cc1t.CType) (tystr string, tyobj types.Type
 		gopp.Assert(len(fldvars) == len(csi.Members), "fields count not match")
 		sty1 := &types.Struct{}
 		sty1 = types.NewStruct(fldvars, nil)
+		sty1.Langc = true
 		// keep NewTypeName's type arg nil, so next step get a valid struct type
 		stobj := types.NewTypeName(token.NoPos, fcpkg, stname, nil)
 		stobj2 := types.NewNamed(stobj, sty1, nil)

@@ -24,9 +24,9 @@ func find_builtin_path(builtin_imppath string) string {
 	return builtin_pkgpath
 }
 
-func cltbuiltin_methods(builtin_pkgpath string) map[string][]*ast.FuncDecl {
+func cltbuiltin_methods(builtin_pkgpath string, cber *cbuilder) map[string][]*ast.FuncDecl {
 	mths := map[string][]*ast.FuncDecl{}
-	bipc := doparse(builtin_pkgpath, "")
+	bipc := doparse(builtin_pkgpath, "", cber)
 	for name, pkgo := range bipc.pkgs {
 		if false {
 			log.Println(name, pkgo.Name)

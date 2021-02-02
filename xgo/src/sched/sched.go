@@ -89,7 +89,7 @@ func post_main_deinit() {
 
 func init() {
 	tm := C.time(nil)
-	C.srand(&tm)
+	C.srand(tm)
 	iopoller.start()
 
 	// myself

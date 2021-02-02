@@ -40,8 +40,9 @@ func main() {
 	pkgrenames := map[string]string{} // path => rename
 	dedups := map[string]bool{}       // pkgpath =>
 
+	cber := newcbuilder()
 	// prefill builtin methods
-	bimths := cltbuiltin_methods(builtin_pkgpath)
+	bimths := cltbuiltin_methods(builtin_pkgpath, cber)
 	fill_builtin_methods(bimths)
 
 	var builtin_psctx *ParserContext
@@ -66,7 +67,7 @@ func main() {
 			continue
 		}
 
-		psctx, g2n := dogen(fname, pkgrename, builtin_psctx)
+		psctx, g2n := dogen(fname, pkgrename, builtin_psctx, cber)
 		psctxs = append(psctxs, psctx)
 		comps = append(comps, g2n)
 		if fname == builtin_pkgpath {
@@ -200,6 +201,7 @@ func main() {
 	btime := time.Now()
 	clangfmt(fname)
 	log.Println("gencode lines", linecnt, len(code), time.Since(btime))
+	cber.build()
 }
 func clangfmt(fname string) {
 	exepath, err := exec.LookPath("clang-format")
@@ -212,8 +214,9 @@ func clangfmt(fname string) {
 	gopp.ErrPrint(err, fname)
 }
 
-func doparse(fname string, pkgrename string) *ParserContext {
+func doparse(fname string, pkgrename string, cber *cbuilder) *ParserContext {
 	psctx := NewParserContext(fname, pkgrename, nil)
+	psctx.cber = cber
 	err := psctx.Init(false)
 	if err != nil && !strings.Contains(err.Error(), "declared but not used") {
 		gopp.ErrPrint(err)
@@ -225,8 +228,9 @@ func doparse(fname string, pkgrename string) *ParserContext {
 	return psctx
 }
 
-func dogen(fname string, pkgrename string, builtin_psctx *ParserContext) (*ParserContext, *g2nc) {
+func dogen(fname string, pkgrename string, builtin_psctx *ParserContext, cber *cbuilder) (*ParserContext, *g2nc) {
 	psctx := NewParserContext(fname, pkgrename, builtin_psctx)
+	psctx.cber = cber
 	err := psctx.Init(true)
 	if err != nil && !strings.Contains(err.Error(), "declared but not used") {
 		gopp.ErrPrint(err)

@@ -32,6 +32,7 @@ type ParserContext struct {
 	outdir        string // temporary C files, middle files dir, like ./opkgs/
 	pkgrename     string
 	builtin_psctx *ParserContext
+	cber          *cbuilder
 
 	fset   *token.FileSet
 	pkgs   map[string]*ast.Package
@@ -138,6 +139,7 @@ func (this *ParserContext) Init_no_cgocmd(semachk bool) error {
 	gopp.ErrFatal(err, ",", bdpkgs.Name)
 	this.cpr2 = cp2
 	// os.Exit(-1)
+	this.cber.embedccode(this.pickCCode2())
 
 	this.walkpass_valid_files()
 	if semachk { // improve speed
@@ -353,6 +355,7 @@ func (pc *ParserContext) saveastcode() {
 }
 
 func (pc *ParserContext) walkpass_check() {
+	pc.conf.IgnoreFuncBodies = false
 	pc.conf.DisableUnusedImportCheck = true
 	pc.conf.Error = pc.pkgimperror
 	pc.conf.FakeImportC = true

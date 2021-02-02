@@ -1,8 +1,8 @@
 package vmm
 
 /*
-   #cgo CFLAGS: -lGC_THREADS
-   #cgo LDFLAGS: -lgc
+   #cgo CFLAGS: -DGC_THREADS
+   #cgo LDFLAGS: -lgc -lpthread
 
    #include <gc/gc.h>
 

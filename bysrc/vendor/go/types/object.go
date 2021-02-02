@@ -85,6 +85,9 @@ type object struct {
 	order_    uint32
 	color_    color
 	scopePos_ token.Pos
+
+	// Langc bool // for C
+
 }
 
 // color encodes the color of an object (see Checker.objDecl for details).
