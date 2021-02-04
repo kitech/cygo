@@ -1,6 +1,8 @@
 package sched
 
 /*
+   #cgo CFLAGS: -DCYGO_ENABLE_SCHED
+
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>

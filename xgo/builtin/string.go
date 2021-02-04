@@ -71,7 +71,7 @@ func gostringn(ptr byteptr, n int) string {
 	}
 	// s := string(ptr)
 	s := &cxstring3{}
-	s.ptr = memdup3(ptr, n)
+	s.ptr = memdup3(ptr, n+1)
 	s.len = n
 	return s
 }

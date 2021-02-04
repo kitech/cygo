@@ -25,8 +25,9 @@
 * [ ] 自动添加stringfy方法，像new0方法一样
 * [ ] 自动添加this reciever
 * [ ] callstack 实现
-* [ ] 编译shared库支持
+* [ ] 编译shared库支持``````
 * [ ] 前置声明C结构体类型，无法sizeof和malloc的
+* [ ] 改进 C struct, 匿名的（必须不能带struct前缀的)，必须用 struct前缀的，前置声明的
 
 ### C 符号类型自动推导
 * [x] xlab/c-for-go + modernc.org/cc 方案，测试已经完成. C99

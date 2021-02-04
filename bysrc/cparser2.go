@@ -123,7 +123,7 @@ func (cp *cparser2) ccHostConfig() (
 	os.Unsetenv("LC_CTYPE")
 	//log.Fatalln(predefs, incpaths, sysincs)
 
-	predefs2 := " -D__ATOMIC_RELAXED=0 -D__ATOMIC_CONSUME=1 -D__ATOMIC_ACQUIRE=2 -D__ATOMIC_RELEASE=3 -D__ATOMIC_ACQ_REL=4 -D__ATOMIC_SEQ_CST=5 "
+	predefs2 := " -D__ATOMIC_RELAXED=0 -D__ATOMIC_CONSUME=1 -D__ATOMIC_ACQUIRE=2 -D__ATOMIC_RELEASE=3 -D__ATOMIC_ACQ_REL=4 -D__ATOMIC_SEQ_CST=5 -D_GNU_SOURCE"
 	predefs2 += " " + cp.predefs + " -DGC_THREADS -DCORO_ASM"
 	predefsm = cp2_split_predefs(predefs2)
 	//predefsm = map[string]interface{}{}
@@ -485,6 +485,18 @@ func (cp *cparser2) ctype2gotype(cty cc1t.CType) (tystr string, tyobj types.Type
 				log.Println(baretystr, barety)
 				typ := types.NewPointer(barety)
 				return typ.String(), typ
+			} else if spec.InnerArr != "" {
+				// double[2][399]
+				spec2 := &*spec
+				spec2.InnerArr = ""
+				spec2.Pointers = 0
+				log.Println(spec.String(), spec2.String())
+				_, typ := cp.ctype2gotype(spec2)
+				arrdim := strings.Count(spec.String(), "]")
+				for i := 0; i < arrdim; i++ {
+					typ = types.NewPointer(typ)
+				}
+				return typ.String(), typ
 			} else {
 				log.Panicf("%v %#v\n", spec, spec)
 			}
@@ -529,8 +541,14 @@ func (cp *cparser2) ctype2gotype(cty cc1t.CType) (tystr string, tyobj types.Type
 		} else {
 			log.Panicln("noimpl", stname)
 		}
+	case *cc1t.CFunctionSpec: // TODO exactly
+		typ := types.Typ[types.Voidptr]
+		return typ.String(), typ
+	case *cc1t.CEnumSpec:
+		typ := types.Typ[types.Int]
+		return typ.String(), typ
 	default:
-		log.Println("noimpl", cty, spec, reflect.TypeOf(cty), reflect.TypeOf(spec))
+		log.Panicln("noimpl", cty, spec, reflect.TypeOf(cty), reflect.TypeOf(spec))
 	}
 	return
 }

@@ -10,9 +10,16 @@ package builtin
 #include <stdbool.h>
 #include <stdint.h>
 
-extern void crn_init_and_wait_done();
-extern void sched__pre_gc_init(); // TODO 前置声明，builtin需要反向依赖 sched包了
-extern void sched__pre_main_init(); // TODO 前置声明，builtin需要反向依赖 sched包了
+   extern void crn_init_and_wait_done();
+   // 如果在其他地方import了 SCHED包，则自动开启
+#ifdef CYGO_ENABLE_SCHED
+   extern void sched__pre_gc_init(); // 前置声明，builtin需要反向依赖 sched包了
+   extern void sched__pre_main_init(); // 前置声明，builtin需要反向依赖 sched包了
+#else
+   // dummy one
+   static void sched__pre_gc_init(){}
+   static void sched__pre_main_init(){}
+#endif
 
 void println2(const char* filename, int lineno, const char* funcname, const char* fmt, ...) {
     static __thread char obuf[712] = {0};

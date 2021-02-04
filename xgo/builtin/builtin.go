@@ -305,3 +305,5 @@ func ifelse(cond bool, expr1 Type, expr2 Type) Type
 type error interface {
 	Error() string
 }
+
+func fnsig2ptr(fn voidptr) voidptr { return fn }
