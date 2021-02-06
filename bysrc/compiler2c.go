@@ -2653,6 +2653,13 @@ func (this *g2nc) genFieldList(scope *ast.Scope, flds *ast.FieldList,
 		if withname && len(fld.Names) > 0 {
 			this.genExpr(scope, fld.Names[0])
 			this.out(gopp.IfElseStr(iscbrackarr, "[]", ""))
+		} else if withname && len(fld.Names) == 0 {
+			fldtyx := this.info.TypeOf(fld.Type)
+			gopp.Assert(fldtyx != nil, "cannot nil")
+			barename := fldtyx.String()
+			paths := strings.Split(barename, ".")
+			barename = paths[len(paths)-1]
+			this.out(barename) // embed field
 		}
 		outskip := skiplast && (idx == len(flds.List)-1)
 		this.out(gopp.IfElseStr(outskip, "", linebrk))
@@ -4031,6 +4038,7 @@ typedef double f64;
 typedef uint64_t u64;
 typedef int64_t i64;
 typedef uintptr_t usize;
+typedef intptr_t isize;
 // typedef uint8_t u8;
 // typedef int8_t i8;
 

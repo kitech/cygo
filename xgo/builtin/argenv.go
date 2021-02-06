@@ -72,7 +72,7 @@ func init_env(argc int, argv *byteptr) {
 			C.__FILE__, C.__LINE__, C.__FUNCTION__, cxrt_inited)
 		return
 	}
-	cxrt_inited = C.time(0)
+	cxrt_inited = C.time(nil)
 	cxargc = argc
 	cxargv = argv
 

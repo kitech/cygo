@@ -7,7 +7,7 @@
 
     ./bysrc
 
-### TODO
+### TODO Features
 * [ ] type assertion
 * [ ] reflect
 * [ ] dynamic stack size
@@ -16,18 +16,23 @@
 * [ ] auto test
 * [ ] defer in loop
 * [ ] allocator。设计为在任意位置定义一个属性为allocator的struct，需有4个方法
-* [x] xbuiltin, use go syntax implement some functions
+* [x] builtin, use go syntax implement some functions
 * [ ] improve compile speed
 * [ ] function like macro direct call
 * [ ] visibility of package symbols。现在好像不管是否public，都能调用
 * [ ] string literal
 * [ ] union类型
-* [ ] 自动添加stringfy方法，像new0方法一样
+* [ ] 自动添加stringfy方法，像new0方法一样。str(), tos()?
 * [ ] 自动添加this reciever
 * [ ] callstack 实现
-* [ ] 编译shared库支持``````
+* [ ] 编译shared库支持
 * [ ] 前置声明C结构体类型，无法sizeof和malloc的
 * [ ] 改进 C struct, 匿名的（必须不能带struct前缀的)，必须用 struct前缀的，前置声明的
+* [ ] 可选的GC
+* [x] embed struct.
+* [ ] embed interface
+* [ ] 省略interface声明前的type?
+* [ ] 当C函数参数是const类型，则做个const类型转换，减少编译警告
 
 ### C 符号类型自动推导
 * [x] xlab/c-for-go + modernc.org/cc 方案，测试已经完成. C99

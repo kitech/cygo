@@ -88,7 +88,7 @@ func (this *cbuilder) build() {
 	args := []string{"-g", "-O0", "-fPIC", "-std=gnu11"}
 	switch exe {
 	case "clang":
-		args = append(args, "-Wtypedef-redefinition")
+		args = append(args, "-Wtypedef-redefinition", "-fcolor-diagnostics")
 	}
 	args = append(args, this.cflags...)
 	args = append(args, this.ldflags...)
@@ -96,9 +96,19 @@ func (this *cbuilder) build() {
 
 	fmt.Println("===>", exe, args)
 	cmdo := exec.Command(exe, args...)
+	var sysout = true
 	if true {
 		btime := time.Now()
-		output, err := cmdo.CombinedOutput()
+		var output []byte
+		var err error
+		if sysout {
+			cmdo.Stdout = os.Stdout
+			cmdo.Stderr = os.Stderr
+			output = []byte("")
+			err = cmdo.Run()
+		} else {
+			output, err = cmdo.CombinedOutput()
+		}
 		gopp.ErrPrint(err, args, len(output))
 		log.Println(string(output))
 		linecnt := strings.Count(string(output), "\n")

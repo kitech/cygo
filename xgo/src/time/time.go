@@ -34,7 +34,7 @@ func Sleepms(msec int) int {
 }
 
 func Unix() int64 {
-	uts := C.time(0)
+	uts := C.time(nil)
 	return int64(uts)
 }
 
@@ -48,7 +48,7 @@ struct Time{
 
 func Now() *Time {
 	var tv = &C.struct_timeval{}
-	rv := C.gettimeofday(tv, 0)
+	rv := C.gettimeofday(tv, nil)
 	t := &Time{}
 	sec := tv.tv_sec
 	usec := tv.tv_usec
@@ -215,7 +215,7 @@ func newtimeritem(timeout Duration, f voidptr) *timeritem {
 	item := &timeritem{}
 	item.timeout = timeout
 	item.f = f
-	item.btime = C.time(0)
+	item.btime = C.time(nil)
 	return item
 }
 
@@ -241,7 +241,7 @@ func timerman_dotask_proc() {
 func timerman_dotask_proc1() {
 	var readys []*timeritem
 	var lefts []*timeritem
-	nowts := C.time(0)
+	nowts := C.time(nil)
 	tmrman.lock()
 	for _, item := range tmrman.items {
 		if (item.btime + int64(item.timeout)) >= nowts {

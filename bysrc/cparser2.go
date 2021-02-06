@@ -258,8 +258,11 @@ func trtypespec2gotypes_dep(trtyp cc1t.GoTypeSpec) types.Type {
 	case "uint32":
 		typ := types.Typ[types.Uint]
 		return typ
-	case "time_t", "size_t", "__pid_t":
+	case "size_t":
 		typ := types.Typ[types.Usize]
+		return typ
+	case "time_t", "__pid_t":
+		typ := types.Typ[types.Isize]
 		return typ
 	case "bool":
 		typ := types.Typ[types.Bool]
@@ -450,7 +453,7 @@ func (cp *cparser2) ctype2gotype(cty cc1t.CType) (tystr string, tyobj types.Type
 			typ := types.Typ[types.Uint16]
 			typ2 := types.NewPointer(typ)
 			return typ2.String(), typ2
-		case "unsigned short int":
+		case "unsigned short int", "short":
 			typ := types.Typ[types.Uint16]
 			return typ.String(), typ
 		case "double":

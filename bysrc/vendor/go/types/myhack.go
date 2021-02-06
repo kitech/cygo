@@ -14,6 +14,7 @@ const (
 	// aliases
 
 	Usize = Uintptr
+	Isize = Int // 386=32bit, amd64=64bit
 	F32   = Float32
 	F64   = Float64
 	U64   = Uint64
@@ -49,6 +50,7 @@ func HackExtraBuiltin() {
 	// modify var aliases = [...] => []
 	healias := []*Basic{
 		{Usize, IsInteger | IsUnsigned | IsPointer, "usize"},
+		{Isize, IsInteger | IsPointer, "isize"},
 		{F32, IsFloat, "f32"},
 		{F64, IsFloat, "f64"},
 		{U64, IsInteger | IsUnsigned, "u64"},
