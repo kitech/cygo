@@ -306,8 +306,10 @@ func (cp *cparser2) symtype(sym string) (string, types.Type, interface{}) {
 	case "__LINE__", "errno":
 		return "int", types.Typ[types.Int], nil
 	}
+	istype := false
 	if strings.HasPrefix(sym, cstruct_) { // CGO语法
 		sym = sym[len(cstruct_):]
+		istype = true
 	}
 
 	//log.Println(cp.cctr.Declares())
@@ -319,6 +321,10 @@ func (cp *cparser2) symtype(sym string) (string, types.Type, interface{}) {
 			log.Println(idx, v.Name, reflect.TypeOf(v.Spec))
 			switch spec := v.Spec.(type) {
 			case *cc1t.CFunctionSpec:
+				if istype {
+					// such as struct stat and stat()
+					goto out1
+				}
 				if spec.Return == nil {
 					// void??? => int
 					return types.Voidty.String(), types.Voidty, nil
@@ -333,10 +339,12 @@ func (cp *cparser2) symtype(sym string) (string, types.Type, interface{}) {
 				tystr, dsty := cp.ctype2gotype(spec)
 				log.Printf("%#v %v\n", spec, dsty)
 				return tystr, dsty, nil
+			default:
+				log.Panicln("got", sym)
 			}
-			log.Panicln("got", sym)
 		}
 	}
+out1:
 	for idx, defo := range cp.cctr.Defines() {
 		if sym != defo.Name {
 			continue
@@ -401,18 +409,31 @@ func (cp *cparser2) symtype(sym string) (string, types.Type, interface{}) {
 			return tystr, dsty, nil
 			// dsty := cp.tostructy(spec)
 			// return "struct_" + sym, dsty, nil
+		case *cc1t.CTypeSpec:
+			tystr, dsty := cp.ctype2gotype(spec)
+			return tystr, dsty, nil
 		default:
 			log.Panicln("got", sym, obj, reflect.TypeOf(obj.Spec))
 		}
 	}
-	if _, ok := cp.cctr.ValueMap()[sym]; ok {
-		log.Println("symin ValueMap")
+	if val, ok := cp.cctr.ValueMap()[sym]; ok {
+		switch val.(type) {
+		case int32:
+			tystr := reflect.TypeOf(val).String()
+			dsty := types.Typ[types.Int32]
+			return tystr, dsty, nil
+		default:
+			log.Println("symin ValueMap", sym, reflect.TypeOf(val), val)
+		}
 	}
-	if _, ok := cp.cctr.ExpressionMap()[sym]; ok {
-		log.Println("symin ExpressionMap")
+	if expr, ok := cp.cctr.ExpressionMap()[sym]; ok {
+		log.Println("symin ExpressionMap", sym, expr)
 	}
 	for idx, v := range cp.cctr.Defines() {
-		log.Println(idx, v)
+		//d := v.(*cc1t.CDecl)
+		if v.Name == sym || false {
+			log.Println(idx, "|", v, "|", v.Name, "=", v.Expression, "|", v.IsDefine, "|", reflect.TypeOf(v))
+		}
 	}
 
 	log.Panicln("not found???", sym)
@@ -477,7 +498,7 @@ func (cp *cparser2) ctype2gotype(cty cc1t.CType) (tystr string, tyobj types.Type
 			//log.Println(trtyp, udtyp, typ)
 			return typ.String(), typ
 		//case "unsigned long int[16]":
-		case "char", "unsigned char":
+		case "char", "signed char", "unsigned char":
 			typ := types.Typ[types.Byte]
 			return typ.String(), typ
 		default:

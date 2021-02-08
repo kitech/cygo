@@ -1,4 +1,4 @@
-package xos
+package os
 
 /*
 #include <stdio.h>
@@ -64,7 +64,7 @@ func Environ() []string {
 	envp00 := envp[0][0]
 	b := C.O_RDWR
 	c := C.int(1)
-	d := C.double(1)
+	d := float64(1)
 	ch1 := C.char(1)
 	println(envp0)
 	println(envp00)
@@ -157,7 +157,8 @@ func RmdirAll(dir string) error {
 
 func Listdir(dir string) []string {
 	var res []string
-	var diro voidptr
+	//var diro voidptr // TODO compiler
+	var diro *C.struct_dirent = nil //voidptr
 	diro = C.opendir(dir.ptr)
 	defer C.closedir(diro)
 	for {
@@ -167,7 +168,7 @@ func Listdir(dir string) []string {
 		}
 		cdname := item.d_name
 		dname := gostring(cdname)
-		res.append(dname)
+		res.append(&dname)
 	}
 
 	return res
@@ -193,7 +194,9 @@ func Remove(filename string) error {
 // default safe, write to temp and then rename
 func WriteFile(filename string, data []byte) error {
 	mode := "w+"
-	fp := C.fopen(filename.ptr, mode.ptr)
+	var fp *C.FILE = nil
+	fp = C.fopen(filename.ptr, mode.ptr)
+	// fp := C.fopen(filename.ptr, mode.ptr) //TODO compiler
 	if fp != nil {
 		return newoserr1()
 	}
@@ -208,7 +211,8 @@ func WriteFile(filename string, data []byte) error {
 
 func ReadFile(filename string) ([]byte, error) {
 	mode := "r"
-	fp := C.fopen(filename.ptr, mode.ptr)
+	var fp *C.FILE = nil
+	fp = C.fopen(filename.ptr, mode.ptr)
 	if fp != nil {
 		return nil, newoserr1()
 	}
@@ -230,6 +234,12 @@ func ReadFile(filename string) ([]byte, error) {
 		}
 	}
 	return res, nil
+}
+
+func FileSize(filename string) int64 {
+	var st = &C.struct_stat{}
+	rv := C.stat(filename.ptr, st)
+	return st.st_size
 }
 
 func FileExist(filename string) bool {
@@ -288,6 +298,76 @@ func Tmpdir() string {
 	return s
 }
 
+///// file stream
+struct File {
+	fp *C.FILE
+	opened bool
+	readonly bool
+}
+
+// readonly
+func Open(filename string) *File {
+	mode := "r"
+	fo := OpenFile(filename, mode)
+	return fo
+}
+// mode="rwx..."
+func OpenFile(filename string, mode string) *File {
+	//mode := "r"
+	var fp *C.FILE = nil
+	fp = C.fopen(filename.ptr, mode.ptr)
+	if fp == nil {
+		return nil
+	}
+	fo := &File{}
+	fo.fp = fp
+	fo.opened = true
+	fo.readonly = mode == "r"
+	return fo
+}
+
+func (fo *File) Write(data byteptr, len int) int64 {
+	if fo.readonly {
+		return -1
+	}
+	n := C.fwrite(data, len, 1, fo.fp)
+	if n < 0 {
+		return n
+	}
+	return len
+}
+func (fo *File) WriteString(data string) int64 {
+	return fo.Write(data.ptr, data.len)
+}
+
+func (fo *File) Close() bool {
+	if !fo.opened{
+		return true
+	}
+	fo.opened = false
+	C.fclose(fo.fp)
+	return true
+}
+
+func (fo *File) Read(data byteptr, len int) int {
+	n := C.fread(data, len, 1, fo.fp)
+	if n < 0 {
+		return n
+	}
+	return len
+}
+
+func (fo *File) Seek(pos int) bool {
+	n := C.fseek(fo.fp, pos, C.SEEK_SET)
+	return n==0
+}
+func (fo *File) Seekend() bool {
+	n := C.fseek(fo.fp, 0, C.SEEK_END)
+	return n==0
+}
+
+
+/////////////
 type Utsname struct {
 	sysname    string
 	nodename   string
@@ -304,7 +384,7 @@ func (uto *Utsname) String() string {
 
 func Uname() string {
 	uts := &C.struct_utsname{}
-	rv := C.uname(&uts)
+	rv := C.uname(uts)
 	if rv != 0 {
 		println(Errmsg())
 		return ""

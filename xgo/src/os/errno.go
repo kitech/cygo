@@ -1,4 +1,4 @@
-package xos
+package os
 
 /*
 #include <errno.h>

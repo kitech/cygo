@@ -75,6 +75,16 @@ func gostringn(ptr byteptr, n int) string {
 	s.len = n
 	return s
 }
+func gostringn_clone(ptr byteptr, n int) string {
+	if ptr == nil {
+		return ""
+	}
+	ptr2 := strdup3(ptr)
+	s := &cxstring3{}
+	s.ptr = ptr2
+	s.len = strlen3(ptr)
+	return s
+}
 
 //export cxstring3_new
 func cxstring3_new() string {

@@ -705,6 +705,7 @@ func (pc *ParserContext) walkpass_fill_fakecpkg() {
 			cono := fakecconst2(newIdent(idtname), fcpkg, ctyobj)
 			fcscope.Insert(cono)
 		} else if strings.HasPrefix(idtname, cstruct_) {
+			log.Println(idtname, ctystr, ctyobj)
 			fcscope.Insert(ctyobj.(*types.Named).Obj())
 			struct_gomangles[idtname] = true
 			log.Println(idtname, ctystr, ctyobj)
