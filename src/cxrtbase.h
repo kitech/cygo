@@ -17,40 +17,7 @@
 #include <pthread.h>
 #include <gc.h> // must put after <pthread.h>
 
-// golang type map
-// typedef uint8_t bool;
-typedef uint8_t byte;
-typedef uint8_t uint8;
-typedef uint8_t uchar;
-typedef int8_t int8;
-typedef uint16_t uint16;
-typedef int16_t int16;
-typedef uint32_t uint32;
-typedef uint32_t rune;
-typedef int32_t int32;
-typedef uint64_t uint64;
-typedef int64_t int64;
-typedef float float32;
-typedef double float64;
-typedef unsigned int uint;
-typedef float f32;
-typedef double f64;
-typedef uint32_t u32;
-typedef int32_t i32;
-typedef uint16_t u16;
-typedef int16_t i16;
-typedef uint64_t u64;
-typedef int64_t i64;
-typedef uintptr_t usize;
-typedef uintptr_t uintptr;
-// typedef void* error;
-typedef void* voidptr;
-typedef char* byteptr;
-typedef char* charptr; // with tailing 0
-typedef void voidty;
-
-#define nilptr NULL
-#define iota 0
+#include "cxtypedefs.h"
 
 typedef uint8 metaflag;
 typedef int typealg;
@@ -185,4 +152,3 @@ int cxarray2_capacity(cxarray2* a0);
 int cxarray2_cap(cxarray2* a0);
 int cxarray2_elemsz(cxarray2* a0);
 #endif
-

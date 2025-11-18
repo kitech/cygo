@@ -119,7 +119,11 @@ void printlndep(const char* fmt, ...) {
     printf("\n");
 }
 void println2(const char* filename, int lineno, const char* funcname, const char* fmt, ...) {
-    static __thread char obuf[712] = {0};
+#ifdef __TINYC__
+    static char obuf[986] = {0};
+#else
+    static __thread char obuf[986] = {0};
+#endif
     const char* fbname = strrchr(filename, '/');
     if (fbname != nilptr) { fbname = fbname + 1; }
     else { fbname = filename; }
@@ -186,5 +190,3 @@ cxeface* cxrt_type2eface(voidptr _type, voidptr data) {
     efc->data = cxmemdup(data, mty->size);
     return efc;
 }
-
-
