@@ -21,16 +21,12 @@
 #define ctypenstr_intptr "intptr"
 
 /*
-P00_SPRINT_DEFINE(char, "%c");
 P00_SPRINT_DEFINE(schar, "%hhd");
 P00_SPRINT_DEFINE(uchar, "%hhu", "%#hhX", "%#hho");
 P00_SPRINT_DEFINE(short, "%hd");
 P00_SPRINT_DEFINE(ushort, "%hu", "%#hX", "%#ho");
-P00_SPRINT_DEFINE(int, "%d");
 P00_SPRINT_DEFINE(unsigned, "%u", "%#X", "%#o");
-P00_SPRINT_DEFINE(long, "%ld");
 P00_SPRINT_DEFINE(ulong, "%lu", "%#lX", "%#lo");
-P00_SPRINT_DEFINE(llong, "%lld");
 P00_SPRINT_DEFINE(ullong, "%llu", "%#llX", "%#llo");
 P00_SPRINT_DEFINE(float, "%g", "%a");
 P00_SPRINT_DEFINE(double, "%g", "%a");
@@ -38,48 +34,79 @@ P00_SPRINT_DEFINE(ldouble, "%Lg", "%La");
  */
 const char* ctypeid_toany_impl(int tyid, int tystr_or_fmtstr) {
     char* tystr = ctypenstr_other;
-    char *fmtstr = "%d"; 
+    char *fmtstr = "%d";
+
     #define caseid2str(ty) case ctypeid_##ty: return ctypenstr_##ty
     switch (tyid) {
      case ctypeid_other :
-        return ctypenstr_other;
-     case ctypeid_bool: 
-        return ctypenstr_bool;
-     case ctypeid_char: 
-        return ctypenstr_char;
-     case ctypeid_uchar: 
-        return ctypenstr_uchar;
-     case ctypeid_short: 
-        return ctypenstr_short;
-     case ctypeid_ushort: 
-        return ctypenstr_ushort;
-     case ctypeid_int: 
-        return ctypenstr_int;
-     case ctypeid_uint: 
-        return ctypenstr_uint;
-     case ctypeid_long: 
-        return ctypenstr_long;
-     case ctypeid_ulong: 
-        return ctypenstr_ulong;
-     case ctypeid_longlong: 
-        return ctypenstr_longlong;
-     case ctypeid_ulonglong: 
-        return ctypenstr_ulonglong;
-     case ctypeid_float: 
-        return ctypenstr_float;
-     case ctypeid_double: 
-        return ctypenstr_double;
-     case ctypeid_longdouble: 
-        return ctypenstr_longdouble;
-     case ctypeid_charptr: 
-        return ctypenstr_charptr;
-     case ctypeid_voidptr: 
-        return ctypenstr_voidptr;
-     case ctypeid_intptr: 
-        return ctypenstr_intptr;
+        tystr = ctypenstr_other;
+        break;
+     case ctypeid_bool:
+        tystr = ctypenstr_bool;
+        break;
+     case ctypeid_char:
+        tystr = ctypenstr_char;
+        fmtstr = "%c";
+        break;
+     case ctypeid_uchar:
+        tystr = ctypenstr_uchar;
+        break;
+     case ctypeid_short:
+        tystr = ctypenstr_short;
+        break;
+     case ctypeid_ushort:
+        tystr = ctypenstr_ushort;
+        break;
+     case ctypeid_int:
+        tystr = ctypenstr_int;
+        break;
+     case ctypeid_uint:
+        tystr = ctypenstr_uint;
+        break;
+     case ctypeid_long:
+        tystr = ctypenstr_long;
+        fmtstr = "%ld";
+        break;
+     case ctypeid_ulong:
+        tystr = ctypenstr_ulong;
+        fmtstr = "%lu";
+        break;
+     case ctypeid_longlong:
+        tystr = ctypenstr_longlong;
+        fmtstr = "%lld";
+        break;
+     case ctypeid_ulonglong:
+        tystr = ctypenstr_ulonglong;
+        fmtstr = "%llu";
+        break;
+     case ctypeid_float:
+        tystr = ctypenstr_float;
+        fmtstr = "%f";
+        break;
+     case ctypeid_double:
+        tystr = ctypenstr_double;
+        break;
+     case ctypeid_longdouble:
+        tystr = ctypenstr_longdouble;
+        break;
+     case ctypeid_charptr:
+        tystr = ctypenstr_charptr;
+        fmtstr = "%s";
+        break;
+     case ctypeid_voidptr:
+        tystr = ctypenstr_voidptr;
+        fmtstr = "%p";
+        break;
+     case ctypeid_intptr:
+        tystr = ctypenstr_intptr;
+        break;
+    case ctypeid_func_void:
+        tystr = "void(*)()";
+        fmtstr = "%p";
+        break;
     }
     #undef caseid2str
-    return tystr_or_fmtstr==1 ? fmtstr : ctypenstr_other ;
+    return tystr_or_fmtstr==1 ? fmtstr : tystr ;
 }
 
 const char* ctypeid_tostr(int tyid) {
@@ -89,11 +116,34 @@ const char* ctypeid_tofmt(int tyid) {
     return ctypeid_toany_impl(tyid, 1);
 }
 int ctypeid_is_anyint(int tyid) {
+    switch (tyid) {
+        case ctypeid_int: case ctypeid_uint:
+        case ctypeid_long: case ctypeid_ulong:
+        case ctypeid_short: case ctypeid_ushort:
+        return 1;
+    }
     return 0;
 }
 int ctypeid_is_anyreal(int tyid) {
-    return 0;
+    return tyid==ctypeid_float || tyid==ctypeid_double||tyid==ctypeid_longdouble;
 }
 int ctypeid_is_anyptr(int tyid) {
+    switch (tyid) {
+        case ctypeid_intptr: case ctypeid_charptr:
+        case ctypeid_charptrptr:
+        case ctypeid_voidptr:
+        return 1;
+    }
+    return 0;
+}
+int ctypeid_is_anyfun(int tyid) {
+    switch (tyid) {
+        case ctypeid_func_int: case ctypeid_func_int32:
+        case ctypeid_func_int64: case ctypeid_func_usize:
+        case ctypeid_func_charptr: case ctypeid_charptrptr:
+        case ctypeid_func_double: case ctypeid_func_float:
+        case ctypeid_func_void:
+        return 1;
+    }
     return 0;
 }

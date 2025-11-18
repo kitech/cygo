@@ -37,7 +37,7 @@ typedef intptr_t isize;
 // typedef void* error;
 typedef void* voidptr;
 typedef void* voidstar;
-typedef char* byteptr;
+typedef uint8* byteptr;
 typedef char* charptr; // with tailing 0
 typedef char** charptrptr;
 typedef void voidty;
