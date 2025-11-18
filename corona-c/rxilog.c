@@ -135,3 +135,112 @@ void log_log(int level, const char *file, int line, const char *fmt, ...) {
   unlock();
 }
 
+// more powerful, no fmt string needed
+#include "cxtypedefs.h"
+#include <stdarg.h>
+#include <stdio.h>
+
+// sepcnt, 0, 1 works fine
+static const char* log_log_file_trim(const char* file, int sepcnt) {
+    char sep = '/';
+    char* ptr = file+strlen(file);
+    int cnt = (sepcnt<0 || sepcnt > 99) ? 1 : sepcnt;
+    for (; ptr != file; ptr--) {
+        if (*ptr == sep) {
+            if (cnt == 0) {
+                ptr++; // after current sep
+                break;
+            }else{
+                cnt--;
+            }
+        }
+    }
+    
+    return ptr;
+}
+
+static int log_log_snprintf_arg(char* buf, int len, int idx, int tyid, void* argptr) {
+
+    return 0;
+}
+
+// todo more case tyid
+// tyids if ctypeid enum values
+// vallens used for cannot correct recognize literal char 'x'
+int log_log_nofmt(int level, const char *file, int line, int argc, int vallens[], int tyids[], ...) {
+    // printf("got in normal func, arc=%d\n", argc);
+    char buf[4096] = {0};
+    int pos = 0;
+
+    // time level file line
+    char* filemid = log_log_file_trim(file, 1);
+    // pos += snprintf(buf+pos, sizeof(buf)-pos-1, "%s:%d ", filemid, line);
+    
+    // args
+    va_list args;
+    va_start(args, tyids);
+    for (int idx=0; idx<argc; idx++) {
+        int tyid = tyids[idx];
+        // printf("arg%d tyid=%d\n", idx, tyid);
+                
+        // pos += snprintf(buf+pos, sizeof(buf)-pos-1, "%d: ", idx);
+        switch (tyid) {
+        case ctypeid_int: {
+            int val = va_arg(args, int);
+            pos += snprintf(buf+pos, sizeof(buf)-pos-1, "%d", val);
+            }
+            break;
+        case ctypeid_char: {
+            char val = va_arg(args, char);
+            pos += snprintf(buf+pos, sizeof(buf)-pos-1, "%c", val);
+            }
+            break;
+        case ctypeid_double: {
+            double val = va_arg(args, double);
+            pos += snprintf(buf+pos, sizeof(buf)-pos-1, "%f", val);
+            }
+            break;
+        case ctypeid_ulong: {
+            ulong val = va_arg(args, ulong);
+            pos += snprintf(buf+pos, sizeof(buf)-pos-1, "%lu", val);
+            }
+            break;
+        case ctypeid_long: {
+            long val = va_arg(args, long);
+            pos += snprintf(buf+pos, sizeof(buf)-pos-1, "%ld", val);
+            }
+            break;
+        case ctypeid_charptr: {
+            char* val = va_arg(args, char*);
+            // todo if first arg is fmt string forword to old log_log, or just omit it
+            if (idx==0 && strchr(val, '%') && !strstr(val, "%%")) {
+                // log_log(LOG_WARN, filemid, line, "maybe old usage %s", val);
+            }
+            pos += snprintf(buf+pos, sizeof(buf)-pos-1, "%s", val);
+            }
+            break;
+        case ctypeid_bool: {
+            _Bool val = va_arg(args, _Bool);
+            pos += snprintf(buf+pos, sizeof(buf)-pos-1, "%s", val?"true":"false");
+            }
+            break;
+        case ctypeid_voidptr: {
+            void* val = va_arg(args, void*);
+            pos += snprintf(buf+pos, sizeof(buf)-pos-1, "%p", val);
+            }
+            break;
+        default: // must all used for va_arg adder inner offset
+            { int val = va_arg(args, int); }
+            pos += snprintf(buf+pos, sizeof(buf)-pos-1, "???");
+            break;
+        }
+        // pos += snprintf(buf+pos, sizeof(buf)-pos-1, "(%s=%d)", ctypeid_tostr(tyid), tyid);
+        pos += snprintf(buf+pos, sizeof(buf)-pos-1, " ");
+    }
+    va_end(args);
+    // printf("logline lenth: %d\n", pos);
+    pos += snprintf(buf+pos, sizeof(buf)-pos-1, " len: %d, argc: %d", pos, argc);
+    // puts(buf); fflush(stderr);
+    log_log(level, filemid, line, "%s", buf);
+    return pos;
+}

@@ -13,14 +13,29 @@
 #define VAARG_AT_7(X, ...) VAARG_AT_6(__VA_ARGS__)
 #define VAARG_AT_8(X, ...) VAARG_AT_7(__VA_ARGS__)
 #define VAARG_AT_9(X, ...) VAARG_AT_8(__VA_ARGS__)
-#define VAARG_AT(idx, ...) VAARG_AT_##i(__VA_ARGS__)
+#define VAARG_AT_10(X, ...) VAARG_AT_9(__VA_ARGS__)
+#define VAARG_AT_11(X, ...) VAARG_AT_10(__VA_ARGS__)
+#define VAARG_AT_12(X, ...) VAARG_AT_11(__VA_ARGS__)
+#define VAARG_AT_13(X, ...) VAARG_AT_12(__VA_ARGS__)
+#define VAARG_AT_14(X, ...) VAARG_AT_13(__VA_ARGS__)
+#define VAARG_AT_15(X, ...) VAARG_AT_14(__VA_ARGS__)
+#define VAARG_AT_16(X, ...) VAARG_AT_15(__VA_ARGS__)
+#define VAARG_AT_17(X, ...) VAARG_AT_16(__VA_ARGS__)
+#define VAARG_AT_18(X, ...) VAARG_AT_17(__VA_ARGS__)
+#define VAARG_AT_19(X, ...) VAARG_AT_18(__VA_ARGS__)
+#define VAARG_AT_20(X, ...) VAARG_AT_19(__VA_ARGS__)
+#define VAARG_AT_21(X, ...) VAARG_AT_20(__VA_ARGS__)
+#define VAARG_AT_22(X, ...) VAARG_AT_21(__VA_ARGS__)
+#define VAARG_AT_23(X, ...) VAARG_AT_22(__VA_ARGS__)
+#define VAARG_AT_24(X, ...) VAARG_AT_23(__VA_ARGS__)
+#define VAARG_AT(idx, ...) VAARG_AT_##idx(__VA_ARGS__)
 
+// literal 'x' matched to int, just ((char)'x') works
 // only for basic c type
 // not supported
 // char arr[], error: unknown type size
 #define ctypeidof_priv(x) \
     _Generic((x),        /* Get the name of a type */             \
-                                                                                      \
             _Bool: ctypeid_bool,                  unsigned char: ctypeid_uchar,          \
              char: ctypeid_char,                    signed char: ctypeid_char,            \
         short int: ctypeid_short,            unsigned short int: ctypeid_ushort,     \
@@ -34,7 +49,7 @@
         int(*)(): ctypeid_func_int,                   void(*)(): ctypeid_func_void,          \
         char*(*)(): ctypeid_func_charptr,            void*(*)(): ctypeid_func_voidptr,          \
         float(*)(): ctypeid_func_float,             double(*)(): ctypeid_func_double,          \
-        int64(*)(): ctypeid_func_int64,              int64(*)(): ctypeid_func_int64,          \
+        uint64(*)(): ctypeid_func_int64,              int64(*)(): ctypeid_func_int64,          \
         usize(*)(): ctypeid_func_usize,              isize(*)(): ctypeid_func_isize,          \
          default: ctypeid_other)
 
