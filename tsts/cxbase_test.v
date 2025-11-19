@@ -30,3 +30,21 @@ fn test_2() {
 fn test_3() {
 
 }
+
+// cxtls
+c99 {
+	cxtls_def(long, foo);
+	void barrr() {
+	    long x = cxtls_get(foo);
+	    // log_info(x);
+		log_errorif(x!=0, "test failed");
+	    cxtls_set(foo, 12345);
+	    x = cxtls_get(foo);
+	    log_info(x);
+		log_errorif(x!=12345, "test failed");
+	    // assert(x == 12345);
+	}
+}
+fn test_4() {
+	c99 { barrr(); }
+}

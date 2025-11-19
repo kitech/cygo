@@ -125,15 +125,45 @@ enum ctypeid {
 #define	__noinline	__attribute__ ((__noinline__))
 #define	__always_inline	__attribute__((__always_inline__))
 
-// todo cxthread_local
+// cxthread_local, cxtls_def, cxtls_set, cxtls_get
 // check _Alignas, _Alignof, _Atomic, _Thread_local
-#ifndef _Thread_local
-#warning "not support _Thread_local, use pthread tls instead, but not portable"
-// #define	_Thread_local _Atomic
-#endif
 #define cxatomic _Atomic
 #define cxalignas _Alignas
 #define cxalignof _Alignof
+
+#if defined(_Thread_local)
+    #define cxthread_local _Thread_local
+#elif defined(__thread)
+    #define cxthread_local __thread
+#else
+    #warning "not support _Thread_local, use pthread tls instead, but not portable"
+// #define	_Thread_local _Atomic
+#endif
+#ifdef cxthread_local
+    #define cxtls_def(varty, var) cxthread_local varty var;
+    #define cxtls_get(var) (var)
+    #define cxtls_set(var, value) var = value
+#else
+    // noreturn, global scope
+    #define cxtls_def(varty, var) static usize var = 0; \
+            static int var##_inited = 0; \
+            static cxatomic varty var##_typed;
+    // return varty
+    #define cxtls_get(var) ({ \
+        if (!var##_inited) { var##_inited=1; int rc = pthread_key_create(&(var), NULL); assert(rc==0); } \
+        void* pv = pthread_getspecific((var)); \
+        (__typeof__(var##_typed))pv; \
+    })
+    // return int status
+    #define cxtls_set(var, value) ({ \
+        if (!var##_inited) { var##_inited=1; int rc = pthread_key_create(&(var), NULL); assert(rc==0); } \
+        __typeof__(var##_typed) tv = value; \
+        if (sizeof(tv)>sizeof(void*)) { cxpanic(-1, "value large than sizeof(void*)"); }  \
+        int rc = pthread_setspecific((var), (void*)tv); \
+        rc; \
+    })
+
+#endif
 
 // todo cxauto
 #ifndef __auto_type

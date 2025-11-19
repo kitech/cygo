@@ -38,11 +38,12 @@ int log_log_nofmt(int level, const char* file, int line, int argc, int vallens[]
 })
 // printf("argc=%d, %d\n", argc, 0);
 
-// test part
-// #define log_debug2(...) log_log_pack(LOG_DEBUG, __FILE__, __LINE__, __VA_ARGS__)
-// #define log_info2(...)  log_log_pack(LOG_INFO,  __FILE__, __LINE__, __VA_ARGS__)
-// #define log_warn2(...)  log_log_pack(LOG_WARN,  __FILE__, __LINE__, __VA_ARGS__)
-// #define log_error2(...) log_log_pack(LOG_ERROR, __FILE__, __LINE__, __VA_ARGS__)
+// test and log part
+#define log_debugif(cond, ...) if((cond)) log_log_pack(LOG_DEBUG, __FILE__, __LINE__, __VA_ARGS__)
+#define log_infoif(cond, ...) if((cond)) log_log_pack(LOG_INFO,  __FILE__, __LINE__, __VA_ARGS__)
+#define log_warnif(cond, ...) if((cond)) log_log_pack(LOG_WARN,  __FILE__, __LINE__, __VA_ARGS__)
+#define log_errorif(cond, ...) if((cond)) log_log_pack(LOG_ERROR, __FILE__, __LINE__, __VA_ARGS__)
+#define log_fatalif(cond, ...) if((cond)) log_log_pack(LOG_FATAL, __FILE__, __LINE__, __VA_ARGS__)
 
 ///////// replace/switch underly impl
 #define log_log_impl log_log_pack
