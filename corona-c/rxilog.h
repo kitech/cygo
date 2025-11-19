@@ -21,20 +21,20 @@ enum { LOG_TRACE, LOG_DEBUG, LOG_INFO, LOG_WARN, LOG_ERROR, LOG_FATAL };
 ///// more powerful not need fmt string, no malloc
 #include "va_args_iterators/pp_iter.h"
 
-int log_log_nofmt(int level, const char* file, int line, int argc, int vallens[], int tyids[], ...);
+int log_log_nofmt(int level, const char* file, int line, int vallens[], int tyids[], int argc, ...);
 
 #define cxlog_args_eachcb(arg,idx) \
-    tyid = ctypeidof(arg); tyids[idx]=tyid; vallens[idx]=sizeof(arg); // \
+    tyid_ = ctypeidof(arg); tyids_[idx]=tyid_; vallens[idx]=sizeof(arg); // \
     // printf("hehehhe %d, tyid=%d\n",idx,tyid);
 
 // not support 0 args
 // some times, args need ((usize)42)
 #define log_log_pack(level, file, line, ...) ({ \
-    int argc = PP_NARG(__VA_ARGS__); \
-    int tyids[argc+1]; void* argvals[argc+1];\
-    int vallens[argc+1]; int tyid = 0; \
+    int argc_ = PP_NARG(__VA_ARGS__); \
+    int tyids_[argc_+1]; void* argvals[argc_+1];\
+    int vallens[argc_+1]; int tyid_ = 0; \
     PP_EACH_IDX(cxlog_args_eachcb, __VA_ARGS__); \
-    log_log_nofmt(level, file, line, argc, vallens, tyids, __VA_ARGS__); \
+    log_log_nofmt(level, file, line, vallens, tyids_, argc_, __VA_ARGS__); \
 })
 // printf("argc=%d, %d\n", argc, 0);
 

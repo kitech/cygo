@@ -94,6 +94,10 @@ const char* ctypeid_toany_impl(int tyid, int tystr_or_fmtstr) {
         tystr = ctypenstr_charptr;
         fmtstr = "%s";
         break;
+    case ctypeid_charptrptr:
+           tystr = "charptrptr";
+           fmtstr = "%p";
+           break;
      case ctypeid_voidptr:
         tystr = ctypenstr_voidptr;
         fmtstr = "%p";
@@ -116,6 +120,7 @@ const char* ctypeid_tostr(int tyid) {
 const char* ctypeid_tofmt(int tyid) {
     return ctypeid_toany_impl(tyid, 1);
 }
+
 int ctypeid_is_anyint(int tyid) {
     switch (tyid) {
         case ctypeid_int: case ctypeid_uint:

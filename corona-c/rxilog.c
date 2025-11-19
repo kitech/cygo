@@ -167,7 +167,7 @@ static int log_log_snprintf_arg(char* buf, int len, int idx, int tyid, void* arg
 // todo more case tyid
 // tyids if ctypeid enum values
 // vallens used for cannot correct recognize literal char 'x'
-int log_log_nofmt(int level, const char *file, int line, int argc, int vallens[], int tyids[], ...) {
+int log_log_nofmt(int level, const char *file, int line, int vallens[], int tyids[], int argcx, ...) {
     // printf("got in normal func, arc=%d\n", argc);
     char buf[4096] = {0};
     int pos = 0;
@@ -178,9 +178,10 @@ int log_log_nofmt(int level, const char *file, int line, int argc, int vallens[]
 
     // args
     va_list args;
-    va_start(args, tyids);
-    for (int idx=0; idx<argc; idx++) {
+    va_start(args, argcx);
+    for (int idx=0; idx<argcx; idx++) {
         int tyid = tyids[idx];
+        char* tystr = ctypeid_tostr(tyid);
         // printf("arg%d tyid=%d\n", idx, tyid);
 
         // pos += snprintf(buf+pos, sizeof(buf)-pos-1, "%d: ", idx);
@@ -188,6 +189,7 @@ int log_log_nofmt(int level, const char *file, int line, int argc, int vallens[]
         case ctypeid_int: {
             int val = va_arg(args, int);
             pos += snprintf(buf+pos, sizeof(buf)-pos-1, "%d", val);
+            // if (val==4) cxpanic(0, "www");
             }
             break;
         case ctypeid_char: {
@@ -219,6 +221,11 @@ int log_log_nofmt(int level, const char *file, int line, int argc, int vallens[]
             pos += snprintf(buf+pos, sizeof(buf)-pos-1, "%s", val);
             }
             break;
+        case ctypeid_charptrptr: {
+            char** val = va_arg(args, char**);
+            pos += snprintf(buf+pos, sizeof(buf)-pos-1, "%p", val);
+            }
+            break;
         case ctypeid_bool: {
             _Bool val = va_arg(args, _Bool);
             pos += snprintf(buf+pos, sizeof(buf)-pos-1, "%s", val?"true":"false");
@@ -231,7 +238,7 @@ int log_log_nofmt(int level, const char *file, int line, int argc, int vallens[]
             break;
         default: // must all used for va_arg adder inner offset
             { int val = va_arg(args, int); }
-            pos += snprintf(buf+pos, sizeof(buf)-pos-1, "???");
+            pos += snprintf(buf+pos, sizeof(buf)-pos-1, "???(%d,%s)", tyid, tystr);
             break;
         }
         // pos += snprintf(buf+pos, sizeof(buf)-pos-1, "(%s=%d)", ctypeid_tostr(tyid), tyid);
@@ -239,7 +246,7 @@ int log_log_nofmt(int level, const char *file, int line, int argc, int vallens[]
     }
     va_end(args);
     // printf("logline lenth: %d\n", pos);
-    pos += snprintf(buf+pos, sizeof(buf)-pos-1, " len: %d, argc: %d", pos, argc);
+    pos += snprintf(buf+pos, sizeof(buf)-pos-1, " \x1b[0m \x1b[90mlen: %d, argc: %d\x1b[0m", pos, argcx);
     // puts(buf); fflush(stderr);
     log_log(level, filemid, line, "%s", buf);
     return pos;
