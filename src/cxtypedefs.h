@@ -96,6 +96,7 @@ enum ctypeid {
 #define ctypeidof(x) ctypeidof_priv(x)
 #define cxpanic(code, msg) cxpanic_priv(code, msg)
 #define cxunreach() cxunreach_priv()
+#define cxstreq(s1, s2) strcmp((s1), (s2))==0
 
 // compiler test demo
 #ifdef __TINYC__

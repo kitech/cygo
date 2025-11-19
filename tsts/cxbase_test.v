@@ -2,6 +2,7 @@ module tsts
 
 fn test_1() {}
 
+// some_macros
 fn test_2() {
 	c99 {
 		assert(strcmp(IDTSTR(123),"123")==0);
@@ -22,7 +23,16 @@ fn test_2() {
 		// printf("%d, %s\n", ctypeidof(tsts__test_2), ctypeid_tostr(ctypeidof(tsts__test_2)));
 		assert(strcmp(ctypeid_tostr(ctypeidof(tsts__test_2)), "void(*)()")==0);
 	}
-	c99 {		log_info(42, "foo"); }
+	c99 {
+		double it = 12.345;
+		autodef(v1, it);
+	}
+	c99 {
+		int IDTCONCAT(foo, bar) = 123;
+		char* t3 = IDTSTR(IDTCONCAT(foo, bar)); // wow, cannot expend inner macro
+		log_info(t3, foobar);
+		// assert(cxstreq("foobar", t3));
+	}
 	// s := C.IDTSTR(123)
 }
 
@@ -59,6 +69,15 @@ c99 {
 
 	}
 }
-fn test_4() {
+fn test_cxtls() {
 	c99 { barrr(); barrr2(); }
+}
+
+fn test_log() {
+	c99 { log_info(42, "foo"); }
+	c99 {
+		log_warn("heheh", 1.2, 333, ((char)'a'), ((usize)1));
+    	log_error("heheh", 1.2, 333);//
+    	log_info("heheh", ((_Bool)1));
+	}
 }
