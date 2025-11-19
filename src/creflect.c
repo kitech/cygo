@@ -50,6 +50,7 @@ const char* ctypeid_toany_impl(int tyid, int tystr_or_fmtstr) {
         break;
      case ctypeid_uchar:
         tystr = ctypenstr_uchar;
+        fmtstr = "%02x"; // hex mode, one byte
         break;
      case ctypeid_short:
         tystr = ctypenstr_short;

@@ -34,6 +34,7 @@ fn test_3() {
 // cxtls
 c99 {
 	cxtls_def(long, foo);
+	cxtls_def(double, foo2);
 	void barrr() {
 	    long x = cxtls_get(foo);
 	    // log_info(x);
@@ -41,10 +42,23 @@ c99 {
 	    cxtls_set(foo, 12345);
 	    x = cxtls_get(foo);
 	    log_info(x);
-		log_errorif(x!=12345, "test failed");
+		log_errorif(x!=12345, x, "test failed");
 	    // assert(x == 12345);
+	}
+
+	void barrr2() {
+	    double x = cxtls_get(foo2);
+	    // log_info(x);
+		log_errorif(x!=0, "test failed");
+	    cxtls_set(foo2, 123.456);
+	    x = cxtls_get(foo2);
+		printf("foo2=%g\n", x);
+	    log_info(x);
+		log_errorif(x!=123.456, x, "test failed");
+		print_binhex((void*)&x, sizeof(x)+27);
+
 	}
 }
 fn test_4() {
-	c99 { barrr(); }
+	c99 { barrr(); barrr2(); }
 }

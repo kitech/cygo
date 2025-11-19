@@ -152,14 +152,15 @@ enum ctypeid {
     #define cxtls_get(var) ({ \
         if (!var##_inited) { var##_inited=1; int rc = pthread_key_create(&(var), NULL); assert(rc==0); } \
         void* pv = pthread_getspecific((var)); \
-        (__typeof__(var##_typed))pv; \
+        __typeof__(var##_typed) tv; memcpy((void*)&tv, &pv, sizeof(tv)); \
+        tv; \
     })
     // return int status
     #define cxtls_set(var, value) ({ \
+        if (sizeof(var##_typed)>sizeof(void*)) { cxpanic(-1, "value large than sizeof(void*)"); }  \
         if (!var##_inited) { var##_inited=1; int rc = pthread_key_create(&(var), NULL); assert(rc==0); } \
-        __typeof__(var##_typed) tv = value; \
-        if (sizeof(tv)>sizeof(void*)) { cxpanic(-1, "value large than sizeof(void*)"); }  \
-        int rc = pthread_setspecific((var), (void*)tv); \
+        __typeof__(var##_typed) tv = value; void* voidval=NULL; memcpy(&voidval, (void*)&tv, sizeof(tv)); \
+        int rc = pthread_setspecific((var), voidval); \
         rc; \
     })
 

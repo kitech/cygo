@@ -155,7 +155,7 @@ static const char* log_log_file_trim(const char* file, int sepcnt) {
             }
         }
     }
-    
+
     return ptr;
 }
 
@@ -175,14 +175,14 @@ int log_log_nofmt(int level, const char *file, int line, int argc, int vallens[]
     // time level file line
     char* filemid = log_log_file_trim(file, 1);
     // pos += snprintf(buf+pos, sizeof(buf)-pos-1, "%s:%d ", filemid, line);
-    
+
     // args
     va_list args;
     va_start(args, tyids);
     for (int idx=0; idx<argc; idx++) {
         int tyid = tyids[idx];
         // printf("arg%d tyid=%d\n", idx, tyid);
-                
+
         // pos += snprintf(buf+pos, sizeof(buf)-pos-1, "%d: ", idx);
         switch (tyid) {
         case ctypeid_int: {
@@ -197,7 +197,7 @@ int log_log_nofmt(int level, const char *file, int line, int argc, int vallens[]
             break;
         case ctypeid_double: {
             double val = va_arg(args, double);
-            pos += snprintf(buf+pos, sizeof(buf)-pos-1, "%f", val);
+            pos += snprintf(buf+pos, sizeof(buf)-pos-1, "%g", val);
             }
             break;
         case ctypeid_ulong: {
