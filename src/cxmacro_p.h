@@ -50,6 +50,7 @@
         char*(*)(): ctypeid_func_charptr,            void*(*)(): ctypeid_func_voidptr,          \
         float(*)(): ctypeid_func_float,             double(*)(): ctypeid_func_double,          \
         uint64(*)(): ctypeid_func_int64,              int64(*)(): ctypeid_func_int64,          \
+        usize(*)(): ctypeid_func_int64,              isize(*)(): ctypeid_func_int64,          \
          default: ctypeid_other)
 
 #define ctypeidof_custom(x, ty, id) _Generic((x), ty: id, default: ctypeid_other)

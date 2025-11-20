@@ -33,7 +33,8 @@ typedef uint64_t u64;
 typedef int64_t i64;
 typedef uintptr_t usize;
 typedef uintptr_t uintptr;
-typedef intptr_t isize;
+// typedef intptr_t isize;
+typedef long isize;
 // typedef void* error;
 typedef void* voidptr;
 typedef void* voidstar;
@@ -176,8 +177,16 @@ extern char* ctypeid_tostr(int);
 #define autodef(var, right_expr) __typeof__(right_expr) var = right_expr
 #else
 #define autodef(var, right_expr) __auto_type var = right_expr
-// #define autotype __auto_type
+#define cxauto __auto_type
 #endif
 
+typedef struct Allocator_s {
+    void* (*malloc)(usize n);
+    void* (*calloc)(usize num, usize size);
+    void* (*realloc)(void* ptr, usize n);
+    void (*free)(void* ptr);
+} Allocator;
+// extern Allocator cxaltrc;
+// extern Allocator cxaltgc;
 
 #endif // _CXRT_TYPEDEFS_H_

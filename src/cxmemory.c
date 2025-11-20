@@ -1,10 +1,18 @@
 
+#include <stdlib.h>
+#include <string.h>
+#include <dlfcn.h>
+
 #include "cxrtbase.h"
+#include "cxtypedefs.h"
 
 extern void* crn_gc_malloc(size_t size);
 extern void* crn_gc_realloc(void* ptr, size_t size);
 extern void crn_gc_free(void* ptr);
 extern void crn_gc_free2(void* ptr);
+
+Allocator cxaltgc = {.malloc=crn_gc_malloc,.realloc=crn_gc_realloc,.free=crn_gc_free};
+Allocator cxaltrc = {.malloc=malloc,.calloc=calloc, .realloc=realloc, .free=free};
 
 void* cxmalloc(size_t size) {
     void* ptr = crn_gc_malloc(size);
@@ -37,4 +45,3 @@ void* cxmemdup(void* ptr, int sz) {
     memcpy(dp, ptr, sz);
     return dp;
 }
-

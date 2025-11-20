@@ -1,10 +1,10 @@
 #ifndef _CLTC_ALL_H_
 #define _CLTC_ALL_H_
 
-#include "common.h"
-#include "array.h"
-#include "deque.h"
-#include "queue.h"
-#include "hashtable.h"
+#include "collectc/common.h"
+#include "collectc/array.h"
+#include "collectc/deque.h"
+#include "collectc/queue.h"
+#include "collectc/hashtable.h"
 
 #endif // _CLTC_ALL_H_

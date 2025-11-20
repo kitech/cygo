@@ -83,6 +83,9 @@ char* cxstrdup(char* str);
 char* cxstrndup(char* str, int n);
 void* cxmemdup(void* ptr, int sz);
 
+extern Allocator cxaltrc;
+extern Allocator cxaltgc;
+
 #include <collectc/hashtable.h>
 #include <collectc/array.h>
 
