@@ -6,5 +6,6 @@
 #include "collectc/deque.h"
 #include "collectc/queue.h"
 #include "collectc/hashtable.h"
+#include "collectc/treetable.h"
 
 #endif // _CLTC_ALL_H_
