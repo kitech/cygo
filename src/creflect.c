@@ -1,3 +1,4 @@
+#include "cxrtbase.h"
 #include "cxtypedefs.h"
 
 
@@ -153,3 +154,13 @@ int ctypeid_is_anyfun(int tyid) {
     }
     return 0;
 }
+
+// return _metatype
+#define cxtypeof(var_or_type) ({ \
+    __typeof__(var_or_type) var_; \
+    _metatype mty_ = {0}; \
+    mty_.size = sizeof(var_); \
+    mty_.kind = ctypeidof(var_); \
+    mty_.tystr = ctypeid_tostr(mty_.kind); \
+    mty_; \
+})

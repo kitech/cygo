@@ -12,6 +12,7 @@ extern void GC_set_push_other_roots(void*);
 const char* crn_gc_event_name(GC_EventType evty);
 void crn_gc_set_nprocs(int n);
 
+
 void* crn_gc_malloc(size_t size);
 void* crn_gc_realloc(void* ptr, size_t size);
 void crn_gc_free(void* ptr);
@@ -23,6 +24,8 @@ void crn_call_with_alloc_lock(void*(*fnptr)(void* arg1), void* arg);
 
 #endif
 
+int crn_gc_ready();
+
 void* crn_raw_malloc(size_t size);
 /* void* crn_raw_realloc(void* ptr, size_t size); */
 void crn_raw_free(void* ptr);
@@ -32,4 +35,3 @@ void crn_raw_free(void* ptr);
 #define convto(/*typedesc*/ st, /*var*/ var) (st*)(var)
 
 #endif
-

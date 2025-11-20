@@ -1,4 +1,5 @@
 
+#include "cxtypedefs.h"
 #include <cxrtbase.h>
 #include <collectc/array.h>
 
@@ -19,6 +20,7 @@ typedef struct array_s hkarray;
 extern void* cxmalloc(size_t size);
 extern void* cxcalloc(size_t blocks, size_t size);
 extern void cxfree(void* ptr);
+extern Allocator cxaltgc;
 
 #define DEFAULT_CAPACITY 8
 #define DEFAULT_EXPANSION_FACTOR 2
@@ -152,4 +154,3 @@ void cxarray2_appendn(cxarray2* a0, void* v, int n) {
     memcpy(a0->ptr, v, tlen);
     a0->len += n;
 }
-

@@ -192,6 +192,11 @@ int log_log_nofmt(int level, const char *file, int line, int vallens[], int tyid
             // if (val==4) cxpanic(0, "www");
             }
             break;
+        case ctypeid_uchar: {
+            uchar val = va_arg(args, uchar);
+            pos += snprintf(buf+pos, sizeof(buf)-pos-1, "%u", val);
+            }
+            break;
         case ctypeid_char: {
             char val = va_arg(args, char);
             pos += snprintf(buf+pos, sizeof(buf)-pos-1, "%c", val);

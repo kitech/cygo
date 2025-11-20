@@ -18,10 +18,15 @@ void crn_raw_free(void* ptr) {
 /*     return calloc(n, size); */
 /* } */
 
-#ifdef USE_BDWGC
+static void crn_pre_gclock_void(const char* funcname) {}
+static void crn_post_gclock_void(const char* funcname) {}
 
-void (*crn_pre_gclock_fn)(const char* funcname) = 0;
-void (*crn_post_gclock_fn)(const char* funcname) = 0;
+void (*crn_pre_gclock_fn)(const char* funcname) = crn_pre_gclock_void;
+void (*crn_post_gclock_fn)(const char* funcname) = crn_post_gclock_void;
+
+int crn_gc_ready() { return crn_pre_gclock_fn != 0; }
+
+#ifdef USE_BDWGC
 
 static void crn_pre_gclock(const char* funcname) {
     // if (crn_pre_gclock_fn == 0) { return ; } // temporary test
@@ -143,4 +148,3 @@ const char* crn_gc_event_name(GC_EventType evty) {
     assert(1==2);
 }
 #endif
-

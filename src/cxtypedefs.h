@@ -97,8 +97,27 @@ enum ctypeid {
 #define ctypeidof(x) ctypeidof_priv(x)
 #define cxpanic(code, msg) cxpanic_priv(code, msg)
 #define cxunreach() cxunreach_priv()
+extern const char* ctypeid_tostr(int);
+
+#define cxmin(a0, a1) ((a0) < (a1)) ? (a0) : (a1))
+#define cxmax(a0, a1) ((a0) > (a1)) ? (a0) : (a1))
+#define cxswap(a, b) ({__typeof__(a) tmp_ = a; a=b; b=tmp_; })
+// readonly cxstr_xxx, for need malloc see cxmemory.c
 #define cxstreq(s1, s2) strcmp((s1), (s2))==0
-extern char* ctypeid_tostr(int);
+#define cxstrne(s1, s2) strcmp((s1), (s2))!=0
+#define cxstr_haspfx(s1, s2) (strlen(s1)>=strlen(s2) && 0 == memcmp((s1), (s2), strlen(s2)))
+#define cxstr_hassfx(s1, s2) (strlen(s1)>=strlen(s2) && 0 == memcmp((s1+(strlen(s1)-strlen(s2)), (s2), strlen(s2)))
+#define cxstr_hasstr(s1, s2) strstr(s1, s2) != NULL
+#define cxstr_index(s1, s2) ({char* tmp_ = strstr(s1, s2); (tmp_==0 ? -1: tmp_ - s1); })
+#define cxstr_index_ch(s1, ch) ({char* tmp_ = strchr(s1, ch); (tmp_==0 ? -1: tmp_ - s1); })
+#define cxstr_rindex(s1, s2) ({char* tmp_ = strrstr(s1, s2); (tmp_==0 ? -1: tmp_ - s1); })
+#define cxstr_rindex_ch(s1, ch) ({char* tmp_ = strrchr(s1, ch); (tmp_==0 ? -1: tmp_ - s1); })
+#define cxstr_count(s1, s2) ({int cnt_=0; for(char* tmp_=strstr(s1,s2); tmp_!=0; tmp_=strstr(tmp_,s2)) {cnt_++;} cnt_; })
+#define cxstrs_hasstr(arr, s2) ({int has_=0; for(char*tmp_=arr; tmp_!=0; tmp_++) {if(cxstreq(tmp_,s2)) { has_=1; break;} } has_; })
+#define cxstrs_index(arr, s2) ({int idx_=-1; int cnt_; for(char*tmp_=arr; tmp_!=0; tmp_++, cnt_++) {if(cxstreq(tmp_,s2)) { idx_=cnt_; break;} } idx_; })
+#define cxstrs_len(arr) ({int cnt_; for(char*tmp_=arr; tmp_!=0; tmp_++,cnt_++){} cnt_;})
+extern void cxstrs_sort(char** arr, int desc);
+// #define cxstrs_reverse(arr) ({})
 
 // compiler test demo
 #ifdef __TINYC__

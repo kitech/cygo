@@ -3,33 +3,6 @@
 
 #include <stdio.h>
 
-// index __VA_ARGS__, from [1-9]
-#define VAARG_AT_1(X, ...) X
-#define VAARG_AT_2(X, ...) VAARG_AT_1(__VA_ARGS__)
-#define VAARG_AT_3(X, ...) VAARG_AT_2(__VA_ARGS__)
-#define VAARG_AT_4(X, ...) VAARG_AT_3(__VA_ARGS__)
-#define VAARG_AT_5(X, ...) VAARG_AT_4(__VA_ARGS__)
-#define VAARG_AT_6(X, ...) VAARG_AT_5(__VA_ARGS__)
-#define VAARG_AT_7(X, ...) VAARG_AT_6(__VA_ARGS__)
-#define VAARG_AT_8(X, ...) VAARG_AT_7(__VA_ARGS__)
-#define VAARG_AT_9(X, ...) VAARG_AT_8(__VA_ARGS__)
-#define VAARG_AT_10(X, ...) VAARG_AT_9(__VA_ARGS__)
-#define VAARG_AT_11(X, ...) VAARG_AT_10(__VA_ARGS__)
-#define VAARG_AT_12(X, ...) VAARG_AT_11(__VA_ARGS__)
-#define VAARG_AT_13(X, ...) VAARG_AT_12(__VA_ARGS__)
-#define VAARG_AT_14(X, ...) VAARG_AT_13(__VA_ARGS__)
-#define VAARG_AT_15(X, ...) VAARG_AT_14(__VA_ARGS__)
-#define VAARG_AT_16(X, ...) VAARG_AT_15(__VA_ARGS__)
-#define VAARG_AT_17(X, ...) VAARG_AT_16(__VA_ARGS__)
-#define VAARG_AT_18(X, ...) VAARG_AT_17(__VA_ARGS__)
-#define VAARG_AT_19(X, ...) VAARG_AT_18(__VA_ARGS__)
-#define VAARG_AT_20(X, ...) VAARG_AT_19(__VA_ARGS__)
-#define VAARG_AT_21(X, ...) VAARG_AT_20(__VA_ARGS__)
-#define VAARG_AT_22(X, ...) VAARG_AT_21(__VA_ARGS__)
-#define VAARG_AT_23(X, ...) VAARG_AT_22(__VA_ARGS__)
-#define VAARG_AT_24(X, ...) VAARG_AT_23(__VA_ARGS__)
-#define VAARG_AT(idx, ...) VAARG_AT_##idx(__VA_ARGS__)
-
 // literal 'x' matched to int, just ((char)'x') works
 // only for basic c type
 // not supported
@@ -63,5 +36,42 @@
     write(2, buf, strlen(buf)); *(int*)(0)=1; \
 })
 #define cxunreach_priv() cxpanic_priv(0, "Unreachable")
+
+
+
+// skip need one by one
+#define VAARG_SKIP_1(a0, ...) __VA_ARGS__ // IFE(__VA_ARG__)(,) a0
+#define VAARG_SKIP_2(a0, ...) VAARG_SKIP_1(__VA_ARGS__)
+#define VAARG_SKIP_3(a0, ...) VAARG_SKIP_2(__VA_ARGS__)
+#define VAARG_SKIP_4(a0, ...) VAARG_SKIP_3(__VA_ARGS__)
+#define VAARG_SKIP_5(a0, ...) VAARG_SKIP_4(__VA_ARGS__)
+#define VAARG_SKIP(N, ...) VAARG_SKIP_##N(__VA_ARGS__)
+
+// index __VA_ARGS__, from [1-9]
+#define VAARG_AT_1(X, ...) X
+#define VAARG_AT_2(X, ...) VAARG_AT_1(__VA_ARGS__)
+#define VAARG_AT_3(X, ...) VAARG_AT_2(__VA_ARGS__)
+#define VAARG_AT_4(X, ...) VAARG_AT_3(__VA_ARGS__)
+#define VAARG_AT_5(X, ...) VAARG_AT_4(__VA_ARGS__)
+#define VAARG_AT_6(X, ...) VAARG_AT_5(__VA_ARGS__)
+#define VAARG_AT_7(X, ...) VAARG_AT_6(__VA_ARGS__)
+#define VAARG_AT_8(X, ...) VAARG_AT_7(__VA_ARGS__)
+#define VAARG_AT_9(X, ...) VAARG_AT_8(__VA_ARGS__)
+#define VAARG_AT_10(X, ...) VAARG_AT_9(__VA_ARGS__)
+#define VAARG_AT_11(X, ...) VAARG_AT_10(__VA_ARGS__)
+#define VAARG_AT_12(X, ...) VAARG_AT_11(__VA_ARGS__)
+#define VAARG_AT_13(X, ...) VAARG_AT_12(__VA_ARGS__)
+#define VAARG_AT_14(X, ...) VAARG_AT_13(__VA_ARGS__)
+#define VAARG_AT_15(X, ...) VAARG_AT_14(__VA_ARGS__)
+#define VAARG_AT_16(X, ...) VAARG_AT_15(__VA_ARGS__)
+#define VAARG_AT_17(X, ...) VAARG_AT_16(__VA_ARGS__)
+#define VAARG_AT_18(X, ...) VAARG_AT_17(__VA_ARGS__)
+#define VAARG_AT_19(X, ...) VAARG_AT_18(__VA_ARGS__)
+#define VAARG_AT_20(X, ...) VAARG_AT_19(__VA_ARGS__)
+#define VAARG_AT_21(X, ...) VAARG_AT_20(__VA_ARGS__)
+#define VAARG_AT_22(X, ...) VAARG_AT_21(__VA_ARGS__)
+#define VAARG_AT_23(X, ...) VAARG_AT_22(__VA_ARGS__)
+#define VAARG_AT_24(X, ...) VAARG_AT_23(__VA_ARGS__)
+#define VAARG_AT(idx, ...) VAARG_AT_##idx(__VA_ARGS__)
 
 #endif // _CXMACRO_P_H_

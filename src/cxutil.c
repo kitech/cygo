@@ -47,3 +47,34 @@ void print_binhex(void* adr, int len) {
 	posascii = poshex = 0;
 	printf("^totol len %d, linecnt %d >>>\n%s$total len %d, linecnt %d <<<\n", len, linecnt, buf, len, linecnt);
 }
+
+
+// Source - https://stackoverflow.com/a
+// Posted by Dúthomhas
+// Retrieved 2025-11-20, License - CC BY-SA 3.0
+
+// #include <stdio.h>
+// #include <string.h>
+// #include <stdlib.h>
+
+static int pstrcmp_asc( const void* a, const void* b )
+{
+  return strcmp( *(const char**)a, *(const char**)b );
+}
+static int pstrcmp_desc( const void* a, const void* b )
+{
+  return -strcmp( *(const char**)a, *(const char**)b );
+}
+
+void cxstrs_sort(char** arr, int desc) {
+    usize N = cxstrs_len(arr);
+    qsort(arr, N, sizeof(char*), desc ? pstrcmp_desc : pstrcmp_asc);
+}
+
+void cxstrs_reverse(char** arr) {
+
+}
+
+char* cxstrs_remove(char** arr, int idx) {
+    return 0;
+}
