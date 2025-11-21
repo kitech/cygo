@@ -47,71 +47,79 @@ void* cxcalloc(size_t blocks, size_t size) {
 
 /////
 
-char* cxstrdup(char* str) {
+char* cstrdup(char* str) {
     char* ds = cxmalloc(strlen(str)+1);
     strcpy(ds, str);
     return ds;
 }
 
-char* cxstrndup(char* str, int n) {
+char* cstrndup(char* str, int n) {
     char* ds = cxmalloc(n+1);
     strncpy(ds, str, n);
     return ds;
 }
 
-char* cxstr_replace_inplace(char* s1, const char*s2, int cnt) {
+char* cstr_replace_inplace(char* s1, const char*s2, int cnt) {
     return s1;
 }
-char* cxstr_replace_tobuf(const char* s1, const char*s2, char* buf, int len, int cnt) {
+char* cstr_replace_tobuf(const char* s1, const char*s2, char* buf, int len, int cnt) {
     return buf;
 }
-char* cxstr_replace_newstr(const char* s1, const char*s2, int cnt) {
+char* cstr_replace_newstr(const char* s1, const char*s2, int cnt) {
     return 0;
 }
-char* cxstr_replace(const char* s1, const char*s2, int cnt) {
-    return cxstr_replace_newstr(s1, s2, cnt);
+char* cstr_replace(const char* s1, const char*s2, int cnt) {
+    return cstr_replace_newstr(s1, s2, cnt);
 }
 
-char* cxstr_substr_inplace(char* s1, int start, int end) {
+char* cstr_substr_inplace(char* s1, int start, int end) {
     return 0;
 }
-char* cxstr_substr_tobuf(char* s1, int start, int end, char* buf, int len) {
+char* cstr_substr_tobuf(char* s1, int start, int end, char* buf, int len) {
     return buf;
 }
-char* cxstr_substr_newstr(char* s1, int start, int end) {
+char* cstr_substr_newstr(char* s1, int start, int end) {
     return 0;
 }
-char* cxstr_substr(char* s1, int start, int end) {
-    return cxstr_substr_newstr(s1, start, end);
-}
-
-char* cxstr_trim_left(char* s1, char* s2) {
-    return 0;
-}
-char* cxstr_trim_right(char* s1, char* s2) {
-    return 0;
-}
-char* cxstr_trim(char* s1, char* s2) {
-    return 0;
-}
-char* cxstr_trim_space(char* s1) {
-    return 0;
-}
-char* cxstr_trim_left_ch(char* s1, char c) {
-    return 0;
-}
-char* cxstr_trim_right_ch(char* s1, char c) {
-    return 0;
-}
-char* cxstr_trim_ch(char* s1, char c) {
-    return 0;
+char* cstr_substr(char* s1, int start, int end) {
+    return cstr_substr_newstr(s1, start, end);
 }
 
-char** cxstr_split_newstr(char* s1, const char* s2) {
+char* cstr_trim_left(char* s1, char* s2) {
     return 0;
 }
-char** cxstr_split(char* s1, const char* s2) {
+char* cstr_trim_right(char* s1, char* s2) {
     return 0;
+}
+char* cstr_trim(char* s1, char* s2) {
+    return 0;
+}
+char* cstr_trim_space(char* s1) {
+    return 0;
+}
+char* cstr_trim_left_ch(char* s1, char c) {
+    return 0;
+}
+char* cstr_trim_right_ch(char* s1, char c) {
+    return 0;
+}
+char* cstr_trim_ch(char* s1, char c) {
+    return 0;
+}
+
+char** cstr_split_newstr(char* s1, const char* s2) {
+    return 0;
+}
+char** cstr_split(char* s1, const char* s2) {
+    return 0;
+}
+
+char* cstrcat(char* s1, const char* s2) {
+    int size = strlen(s1)+strlen(s2)+1;
+    char* ptr = cxmalloc(size);
+    strcpy(ptr, s1);
+    strcpy(ptr+strlen(s1), s2);
+    return ptr;
 }
 
 void* cxmemdup(void* ptr, int sz) {

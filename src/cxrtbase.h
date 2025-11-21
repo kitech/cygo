@@ -79,8 +79,9 @@ void* cxmalloc(size_t size);
 void* cxrealloc(void*ptr, size_t size);
 void cxfree(void* ptr);
 void* cxcalloc(size_t nmemb, size_t size);
-char* cxstrdup(char* str);
-char* cxstrndup(char* str, int n);
+char* cstrdup(char* str);
+char* cstrndup(char* str, int n);
+char* cstrcat(char* s1, const char* s2);
 void* cxmemdup(void* ptr, int sz);
 
 extern Allocator cxaltrc;
@@ -129,6 +130,8 @@ cxstring* error_Error(error* err);
 
 // cxhashtable begin
 HashTable* cxhashtable_new(int keykind, int valkind);
+HashTable* cxhashtable_new_cstr();
+HashTable* cxhashtable_new_cxstr();
 size_t cxhashtable_hash_str(const char *key);
 size_t cxhashtable_hash_str2(const char *key, int len);
 int HashTable_len(HashTable* ht);

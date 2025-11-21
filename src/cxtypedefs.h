@@ -103,20 +103,20 @@ extern const char* ctypeid_tostr(int);
 #define cxmax(a0, a1) ((a0) > (a1)) ? (a0) : (a1))
 #define cxswap(a, b) ({__typeof__(a) tmp_ = a; a=b; b=tmp_; })
 // readonly cxstr_xxx, for need malloc see cxmemory.c
-#define cxstreq(s1, s2) strcmp((s1), (s2))==0
-#define cxstrne(s1, s2) strcmp((s1), (s2))!=0
-#define cxstr_haspfx(s1, s2) (strlen(s1)>=strlen(s2) && 0 == memcmp((s1), (s2), strlen(s2)))
-#define cxstr_hassfx(s1, s2) (strlen(s1)>=strlen(s2) && 0 == memcmp((s1+(strlen(s1)-strlen(s2)), (s2), strlen(s2)))
-#define cxstr_hasstr(s1, s2) strstr(s1, s2) != NULL
-#define cxstr_index(s1, s2) ({char* tmp_ = strstr(s1, s2); (tmp_==0 ? -1: tmp_ - s1); })
-#define cxstr_index_ch(s1, ch) ({char* tmp_ = strchr(s1, ch); (tmp_==0 ? -1: tmp_ - s1); })
-#define cxstr_rindex(s1, s2) ({char* tmp_ = strrstr(s1, s2); (tmp_==0 ? -1: tmp_ - s1); })
-#define cxstr_rindex_ch(s1, ch) ({char* tmp_ = strrchr(s1, ch); (tmp_==0 ? -1: tmp_ - s1); })
-#define cxstr_count(s1, s2) ({int cnt_=0; for(char* tmp_=strstr(s1,s2); tmp_!=0; tmp_=strstr(tmp_,s2)) {cnt_++;} cnt_; })
-#define cxstrs_hasstr(arr, s2) ({int has_=0; for(char*tmp_=arr; tmp_!=0; tmp_++) {if(cxstreq(tmp_,s2)) { has_=1; break;} } has_; })
-#define cxstrs_index(arr, s2) ({int idx_=-1; int cnt_; for(char*tmp_=arr; tmp_!=0; tmp_++, cnt_++) {if(cxstreq(tmp_,s2)) { idx_=cnt_; break;} } idx_; })
-#define cxstrs_len(arr) ({int cnt_; for(char*tmp_=arr; tmp_!=0; tmp_++,cnt_++){} cnt_;})
-extern void cxstrs_sort(char** arr, int desc);
+#define cstreq(s1, s2) strcmp((s1), (s2))==0
+#define cstrne(s1, s2) strcmp((s1), (s2))!=0
+#define cstr_haspfx(s1, s2) (strlen(s1)>=strlen(s2) && 0 == memcmp((s1), (s2), strlen(s2)))
+#define cstr_hassfx(s1, s2) (strlen(s1)>=strlen(s2) && 0 == memcmp(s1+(strlen(s1)-strlen(s2)), (s2), strlen(s2)))
+#define cstr_hasstr(s1, s2) strstr(s1, s2) != NULL
+#define cstr_index(s1, s2) ({char* tmp_ = strstr(s1, s2); (tmp_==0 ? -1: tmp_ - s1); })
+#define cstr_index_ch(s1, ch) ({char* tmp_ = strchr(s1, ch); (tmp_==0 ? -1: tmp_ - s1); })
+#define cstr_rindex(s1, s2) ({char* tmp_ = strrstr(s1, s2); (tmp_==0 ? -1: tmp_ - s1); })
+#define cstr_rindex_ch(s1, ch) ({char* tmp_ = strrchr(s1, ch); (tmp_==0 ? -1: tmp_ - s1); })
+#define cstr_count(s1, s2) ({int cnt_=0; for(char* tmp_=strstr(s1,s2); tmp_!=0; tmp_=strstr(tmp_,s2)) {cnt_++;} cnt_; })
+#define cstrs_hasstr(arr, s2) ({int has_=0; for(char*tmp_=arr; tmp_!=0; tmp_++) {if(cxstreq(tmp_,s2)) { has_=1; break;} } has_; })
+#define cstrs_index(arr, s2) ({int idx_=-1; int cnt_; for(char*tmp_=arr; tmp_!=0; tmp_++, cnt_++) {if(cxstreq(tmp_,s2)) { idx_=cnt_; break;} } idx_; })
+#define cstrs_len(arr) ({int cnt_; for(char*tmp_=arr; tmp_!=0; tmp_++,cnt_++){} cnt_;})
+extern void cstrs_sort(char** arr, int desc);
 // #define cxstrs_reverse(arr) ({})
 
 // compiler test demo
