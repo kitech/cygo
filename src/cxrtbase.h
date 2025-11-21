@@ -157,4 +157,11 @@ int cxarray2_len(cxarray2* a0);
 int cxarray2_capacity(cxarray2* a0);
 int cxarray2_cap(cxarray2* a0);
 int cxarray2_elemsz(cxarray2* a0);
+
+///// cstrxxx need malloc
+char* cstrcat_impl(char*s1, int count, ...);
+#define cstrcat(s1, ...) cstrcat_impl(s1, VAARG_PREADD_NARG(__VA_ARGS__))
+char* cstrjoin_impl(char*sep, int count, ...);
+#define cstrjoin(sep, ...) cstrjoin_impl(sep, VAARG_PREADD_NARG(__VA_ARGS__))
+
 #endif

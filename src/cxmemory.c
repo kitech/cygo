@@ -1,4 +1,6 @@
 
+// #include <cstdarg>
+#include <stdarg.h>
 #include <stdlib.h>
 #include <string.h>
 #include <dlfcn.h>
@@ -46,10 +48,16 @@ void* cxcalloc(size_t blocks, size_t size) {
 }
 
 /////
-
+// safe when null
+int cstrlen(char*str) { return str==0?0 : strlen(str); }
+char* cstrcpy(char* dst, char* src) {
+    if(dst==0||src==0) {return dst; }
+    return strcpy(dst, src);
+}
 char* cstrdup(char* str) {
-    char* ds = cxmalloc(strlen(str)+1);
-    strcpy(ds, str);
+    int len = cstrlen(str);
+    char* ds = cxmalloc(len+1);
+    cstrcpy(ds, str);
     return ds;
 }
 
@@ -114,12 +122,44 @@ char** cstr_split(char* s1, const char* s2) {
     return 0;
 }
 
-char* cstrcat(char* s1, const char* s2) {
-    int size = strlen(s1)+strlen(s2)+1;
+// api is a macro cstrcat(s1, ...)
+char* cstrcat_impl(char* s1, int count, ...) {
+    char* s = cstrdup(s1);
+    va_list args;
+    va_start(args, count);
+
+    int len = cstrlen(s);
+    for (int i=0; i<count; i++) {
+        char* s2 = va_arg(args, char*);
+        char* t = cxrealloc(s, len+1 + cstrlen(s2));
+        cstrcpy(t+len, s2);
+        s = t;
+        len += cstrlen(s2);
+    }
+    va_end(args);
+    return s;
+}
+char* cstrcat0(char* s1, const char* s2) {
+    int size = cstrlen(s1)+cstrlen(s2)+1;
     char* ptr = cxmalloc(size);
-    strcpy(ptr, s1);
-    strcpy(ptr+strlen(s1), s2);
+    cstrcpy(ptr, s1);
+    cstrcpy(ptr+cstrlen(s1), s2);
     return ptr;
+}
+
+// api is a macro cstrjoin(sep, ...)
+char* cstrjoin_impl(char* sep, int count, ...) {
+    char *s = 0;
+    va_list args;
+    va_start(args, count);
+
+    for(int i=0; i<count; i++) {
+        char* s2 = va_arg(args, char*);
+        s = cstrcat(s, s2);
+        if(i<count-1) s = cstrcat_impl(s, 1, sep);
+    }
+    va_end(args);
+    return s;
 }
 
 void* cxmemdup(void* ptr, int sz) {

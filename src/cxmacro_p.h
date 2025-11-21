@@ -37,7 +37,8 @@
 })
 #define cxunreach_priv() cxpanic_priv(0, "Unreachable")
 
-
+// preadd a count param before __VA_ARGS__
+#define VAARG_PREADD_NARG(...) PP_NARG(__VA_ARGS__) IFN(__VA_ARGS__)(,) __VA_ARGS__
 
 // skip need one by one
 #define VAARG_SKIP_1(a0, ...) __VA_ARGS__ // IFE(__VA_ARG__)(,) a0
