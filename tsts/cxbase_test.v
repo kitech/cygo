@@ -81,3 +81,10 @@ fn test_log() {
     	log_info("heheh", ((_Bool)1));
 	}
 }
+
+fn test_callable1() {
+	c99 {
+	extern int main_callable_demo();
+	main_callable_demo(0,0);
+	}
+}

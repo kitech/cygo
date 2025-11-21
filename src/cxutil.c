@@ -67,7 +67,7 @@ static int pstrcmp_desc( const void* a, const void* b )
 }
 
 void cxstrs_sort(char** arr, int desc) {
-    usize N = cxstrs_len(arr);
+    usize N = cstrs_len(arr);
     qsort(arr, N, sizeof(char*), desc ? pstrcmp_desc : pstrcmp_asc);
 }
 

@@ -1,9 +1,10 @@
 module tsts
 
-#flag -I @DIR/../src -I @DIR/../corona-c -I @DIR/../3rdparty
+#flag -I @DIR/../src -I @DIR/../corona-c -I @DIR/../3rdparty -I @DIR/../3rdparty/cltc/src -I @DIR/../3rdparty/simpinc
 
 #flag @DIR/../src/creflect.o
 #flag @DIR/../src/cxutil.o
+#flag @DIR/../src/callable.o
 #flag @DIR/../corona-c/rxilog.o
 
 #include "cxtypedefs.h"
