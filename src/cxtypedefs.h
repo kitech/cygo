@@ -201,6 +201,11 @@ enum ctypeid {
 
 // extend +++
 
+typedef struct mintype {
+    int ctypeid;
+    int size;
+} mintype;
+
 #include "../3rdparty/va_args_iterators/pp_iter.h"
 #include "../3rdparty/simpinc/VA_OPT.h"
 #include "cxmacro_p.h"

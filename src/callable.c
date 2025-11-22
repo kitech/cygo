@@ -1,8 +1,29 @@
 
 
+#include "cxtypedefs.h"
 #include <stdio.h>
 #include <stdlib.h>
 
+typedef struct cxvariant {
+    void* data;
+    mintype typ;
+} cxvariant;
+
+// can be a free func, or a method with this
+// captures some value in v2
+// depends ctypeidof, sizeof, memory gc, libffi
+// supported captures, hava valid ctypeid
+typedef struct {
+    void* isclos;
+    void* fnptr;
+    int  ismth;
+    void* fnobj; // can be null, but still use it
+
+    int caplen;
+    cxvariant capvals[16];
+} callablev2;
+
+////////////////////////
 
 // can be a free func, or a method with this
 // no any captures now

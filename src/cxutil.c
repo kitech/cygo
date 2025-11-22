@@ -78,3 +78,11 @@ void cxstrs_reverse(char** arr) {
 char* cxstrs_remove(char** arr, int idx) {
     return 0;
 }
+
+
+int cx_is_heap_ptr(void* ptr) {
+	// GC_is_heap_ptr
+	extern int GC_is_heap_ptr(void*);
+	return GC_is_heap_ptr(ptr);
+}
+
