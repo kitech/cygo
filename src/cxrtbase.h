@@ -81,7 +81,7 @@ void cxfree(void* ptr);
 void* cxcalloc(size_t nmemb, size_t size);
 char* cstrdup(char* str);
 char* cstrndup(char* str, int n);
-char* cstrcat(char* s1, const char* s2);
+char* cstrcat0(char* s1, const char* s2);
 void* cxmemdup(void* ptr, int sz);
 
 extern Allocator cxaltrc;
@@ -163,5 +163,6 @@ char* cstrcat_impl(char*s1, int count, ...);
 #define cstrcat(s1, ...) cstrcat_impl(s1, VAARG_PREADD_NARG(__VA_ARGS__))
 char* cstrjoin_impl(char*sep, int count, ...);
 #define cstrjoin(sep, ...) cstrjoin_impl(sep, VAARG_PREADD_NARG(__VA_ARGS__))
+char *cstr_replace(char*orig, char* rep, char* with);
 
 #endif

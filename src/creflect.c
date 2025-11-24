@@ -83,10 +83,11 @@ const char* ctypeid_toany_impl(int tyid, int tystr_or_fmtstr) {
         break;
      case ctypeid_float:
         tystr = ctypenstr_float;
-        fmtstr = "%f";
+        fmtstr = "%g";
         break;
      case ctypeid_double:
         tystr = ctypenstr_double;
+        fmtstr = "%g";
         break;
      case ctypeid_longdouble:
         tystr = ctypenstr_longdouble;

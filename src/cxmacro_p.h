@@ -40,6 +40,39 @@
 
 // preadd a count param before __VA_ARGS__
 #define VAARG_PREADD_NARG(...) PP_NARG(__VA_ARGS__) IFN(__VA_ARGS__)(,) __VA_ARGS__
+#define VAARG_FWD(...) IFN(__VA_ARGS__)(,) __VA_ARGS__
+
+///// VAARG_PACK ==========
+// return mintype*
+#define cxmintypeof(var_or_type) ({ \
+    __typeof__(var_or_type) var_; \
+    mintype mty_ = {0}; \
+    mty_.size = sizeof(var_); \
+    mty_.ctypeid = ctypeidof(var_); \
+    mty_.fmtstr = ctypeid_tofmt(mty_.ctypeid); \
+    mty_; \
+})
+
+#define get_mintypes_args_eachcb(arg,idx) \
+    tyid_ = cxmintypeof(arg); tyids_[idx]=tyid_; // \
+
+// tyids_ use outer scope's
+#define vaarg_get_mintypes(...) ({ \
+    mintype tyids_[16] = {0};  mintype tyid_ = {0}; \
+    PP_EACH_IDX(get_mintypes_args_eachcb, __VA_ARGS__); \
+    cxmemdup(tyids_, sizeof(tyids_)); \
+})
+
+// usage: foo(VAARG_PACK(42, 42.42))
+// expand => foo(argtys, argc, 42, 42.42)
+// void foo(mintype* argtys, int argc, ...)
+// void foo(mintype* argtys, int argc, int a0, float a1)
+#define VAARG_PACK(...) vaarg_get_mintypes(__VA_ARGS__), PP_NARG(__VA_ARGS__) IFN(__VA_ARGS__)(,) __VA_ARGS__
+
+// packed to (argtys *mintype[], narg, __VA_ARGS__)
+// need gc help, or need manual free(argtys)
+// NEED pp_iter.h for PP_xxx
+// #define VAARG_PACK(...)
 
 // skip need one by one
 #define VAARG_SKIP_1(a0, ...) __VA_ARGS__ // IFE(__VA_ARG__)(,) a0

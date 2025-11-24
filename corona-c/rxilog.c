@@ -20,6 +20,7 @@
  * IN THE SOFTWARE.
  */
 
+#include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdarg.h>
@@ -203,6 +204,11 @@ int log_log_nofmt(int level, const char *file, int line, int vallens[], int tyid
             }
             break;
         case ctypeid_double: {
+            double val = va_arg(args, double);
+            pos += snprintf(buf+pos, sizeof(buf)-pos-1, "%g", val);
+            }
+            break;
+        case ctypeid_float: {
             double val = va_arg(args, double);
             pos += snprintf(buf+pos, sizeof(buf)-pos-1, "%g", val);
             }

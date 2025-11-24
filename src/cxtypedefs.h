@@ -204,6 +204,9 @@ enum ctypeid {
 typedef struct mintype {
     int ctypeid;
     int size;
+    char* fmtstr;
+    int fmtstrid; // which one is better
+    char* (*tostr)(void* valp); // convert to string func
 } mintype;
 
 #include "../3rdparty/va_args_iterators/pp_iter.h"
@@ -214,6 +217,7 @@ typedef struct mintype {
 #define cxpanicif(cond, code, msg) if(cond) { cxpanic_priv(code, msg); }
 #define cxunreach() cxunreach_priv()
 extern const char* ctypeid_tostr(int);
+extern const char* ctypeid_tofmt(int);
 
 
 typedef struct Allocator_s {
