@@ -6,17 +6,18 @@ set(party3dir ${CMAKE_CURRENT_LIST_DIR}/3rdparty)
 #  ${mydir}/bdwgc/include
 include_directories(${mydir}/src ${mydir}/include)
 add_library(cxrt STATIC  ${mydir}/src/cxrtbase.c
-  ${mydir}/src/cxmemory.c ${mydir}/src/cxstring.c
-  ${mydir}/src/cxhashtable.c ${mydir}/src/cxarray.c
-  ${mydir}/src/cxqueue.c
-  ${mydir}/src/cxiface.c
+		${mydir}/src/cxmemory.c ${mydir}/src/cxstring.c
+		${mydir}/src/cxhashtable.c ${mydir}/src/cxarray.c
+		${mydir}/src/cxqueue.c
+		${mydir}/src/cxiface.c
 #  ${mydir}/src/cppminrt.cpp
-  )
+		)
 
 set(cltcdir ${party3dir}/cltc/src) # need ln cltc/src/include cltc/src/collectc
-include_directories(${mydir}/corona-c ${cltcdir}/include ${cltcdir})
+set(vaitdir ${party3dir}/)
+include_directories(${mydir}/corona-c ${cltcdir}/include ${cltcdir} ${vaitdir})
 set(corona_c_srcs
-  ${mydir}/corona-c/coro.c
+		${mydir}/corona-c/coro.c
 	${mydir}/corona-c/corowp.c
 	${mydir}/corona-c/hook.c
 	${mydir}/corona-c/hookcb.c
@@ -32,13 +33,13 @@ set(corona_c_srcs
 	${mydir}/corona-c/hchan.c
 	${mydir}/corona-c/hselect.c
 #	${mydir}/corona-c/netpoller_ev.c
-  # ${mydir}/corona-c/netpoller_event.c
-  ${mydir}/corona-c/netpoller_epoll.c
+		# ${mydir}/corona-c/netpoller_event.c
+		${mydir}/corona-c/netpoller_epoll.c
 	${mydir}/corona-c/coronagc.c
 	${mydir}/corona-c/corona.c
 	${mydir}/corona-c/functrace.c
-  ${party3dir}/picoev/picoev_epoll.c
-  )
+		${party3dir}/picoev/picoev_epoll.c
+		)
 
 # include_directories(${party3dir}/plthook)
 # set(plthook_c_srcs
@@ -46,17 +47,17 @@ set(corona_c_srcs
 #    )
 
 set(cltc_c_srcs
-  ${cltcdir}/array.c ${cltcdir}/hashtable.c
-  ${cltcdir}/array.c ${cltcdir}/treetable.c
-  ${cltcdir}/queue.c ${cltcdir}/deque.c
-  ${cltcdir}/queue.c ${cltcdir}/pqueue.c
-  ${cltcdir}/common.c
+		${cltcdir}/array.c ${cltcdir}/hashtable.c
+		${cltcdir}/array.c ${cltcdir}/treetable.c
+		${cltcdir}/queue.c ${cltcdir}/deque.c
+		${cltcdir}/queue.c ${cltcdir}/pqueue.c
+		${cltcdir}/common.c
 )
 
 add_library(crn STATIC ${corona_c_srcs}
-  ${cltc_c_srcs}
-  # ${plthook_c_srcs}
-  )
+		${cltc_c_srcs}
+		# ${plthook_c_srcs}
+		)
 
 #add_executable(corona ${corona_c_srcs} corona-c/main.c)
 set(CMAKE_C_FLAGS "-g -O0 -fPIC -std=c11 -D_GNU_SOURCE ")
@@ -79,5 +80,3 @@ set(gclib "-lgc")
 set(libevents_ldflags "-levent -levent_pthreads")
 set(cxrt_ldflags "${gclib} -lpthread -ldl -lc")
 # note: all libraries which maybe create threads, must put before -lgc
-
-

@@ -127,7 +127,7 @@ voidptr* cxarray2_get_at(cxarray2* a0, int idx) {
 
     int offset = idx * a0->elemsz;
     voidptr* out = 0;
-    out = a0->ptr+offset;
+    out = (void**)a0->ptr+offset;
     return out;
 }
 uint8* cxarray2_replace_at(cxarray2* a0, void* v, int idx, void*out) {

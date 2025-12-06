@@ -188,7 +188,7 @@ int connect(int fd, const struct sockaddr *addr, socklen_t addrlen)
     time_t btime = time(0);
     for (int i = 0;; i++) {
         char buf[200] = {0};
-        struct sockaddr_in* sa = addr;
+        struct sockaddr_in* sa = (struct sockaddr_in*) addr;
         // linfo("what addr %s\n", inet_ntop(AF_INET, &sa->sin_addr.s_addr, buf, 200));
         // linfo("blocking?? fd=%d %d\n", fd, fd_is_nonblocking(fd));
         if (!fd_is_nonblocking(fd)) {
@@ -1417,4 +1417,3 @@ void main() {
     printf("a=%d\n", a);
 }
 #endif
-

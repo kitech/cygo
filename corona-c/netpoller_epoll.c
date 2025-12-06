@@ -137,6 +137,7 @@ static int netpoller_resume_one(evdata* d) {
     int ytype = d->ytype;
     int grid = d->grid;
     int mcid = d->mcid;
+    extern void evdata_free(evdata*);
     evdata_free(d);
     // evdata2_free(d2);
 

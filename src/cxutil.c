@@ -1,4 +1,5 @@
 #include "cxtypedefs.h"
+#include <stdio.h>
 
 // todo WIP
 // v1, simple version one line ascii, one line hex
@@ -75,14 +76,38 @@ void cxstrs_reverse(char** arr) {
 
 }
 
+// arr should null terminated
 char* cxstrs_remove(char** arr, int idx) {
     return 0;
 }
 
 
-int cx_is_heap_ptr(void* ptr) {
+int cxis_heap_ptr(void* ptr) {
 	// GC_is_heap_ptr
 	extern int GC_is_heap_ptr(void*);
 	return GC_is_heap_ptr(ptr);
 }
 
+// and value
+enum CXPtrState {
+    CXPS_NULL = 1,
+    CXPS_HEAP = 2,
+    CXPS_ZEORED = 4,
+};
+
+int cxis_mem_zeroed(void* ptr, int len)  {
+    for(char*p=(char*)ptr; p-(char*)ptr < len; p++) {
+        if (*p != 0) return 0;
+    }
+    return 1;
+}
+
+int cxget_ptr_state(void* ptr, int len) {
+    int res = 0;
+    if (ptr == NULL) {
+        res |= CXPS_NULL; return res;
+    }
+    if (cxis_heap_ptr(ptr)) res |= CXPS_HEAP;
+    if (cxis_mem_zeroed(ptr, len)) res |= CXPS_ZEORED;
+    return res;
+}

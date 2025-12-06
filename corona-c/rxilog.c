@@ -258,7 +258,9 @@ int log_log_nofmt(int level, const char *file, int line, int vallens[], int tyid
     va_end(args);
     // printf("logline lenth: %d\n", pos);
     pos += snprintf(buf+pos, sizeof(buf)-pos-1, " \x1b[0m \x1b[90mlen: %d, argc: %d\x1b[0m", pos, argcx);
+    // printf("wttt %d, %d %s\n", pos, strlen(buf), buf);
     // puts(buf); fflush(stderr);
     log_log(level, filemid, line, "%s", buf);
+
     return pos;
 }

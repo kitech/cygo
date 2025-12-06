@@ -82,7 +82,7 @@
 // #error "__auto_type not support"
 #warning "not support __auto_type"
 // not support func var
-#define autodef(var, right_expr) __typeof__(right_expr) var = right_expr
+#define autodef(var, right_expr) __typeof__((right_expr)) var = (right_expr)
 #else
 #define autodef(var, right_expr) __auto_type var = right_expr
 #define cxauto __auto_type
@@ -104,6 +104,7 @@
 #define cstr_rindex(s1, s2) ({char* tmp_ = strrstr(s1, s2); (tmp_==0 ? -1: tmp_ - s1); })
 #define cstr_rindex_ch(s1, ch) ({char* tmp_ = strrchr(s1, ch); (tmp_==0 ? -1: tmp_ - s1); })
 #define cstr_count(s1, s2) ({int cnt_=0; for(char* tmp_=strstr(s1,s2); tmp_!=0; tmp_=strstr(tmp_,s2)) {cnt_++;} cnt_; })
+#define cstr_tolower(s) for(char*p=s;*p!=0;p++){if(*p>='A'&&*p<='Z') *p += ('z'-'a'); }
 #define cstrs_hasstr(arr, s2) ({int has_=0; for(char*tmp_=arr; tmp_!=0; tmp_++) {if(cxstreq(tmp_,s2)) { has_=1; break;} } has_; })
 #define cstrs_index(arr, s2) ({int idx_=-1; int cnt_; for(char*tmp_=arr; tmp_!=0; tmp_++, cnt_++) {if(cxstreq(tmp_,s2)) { idx_=cnt_; break;} } idx_; })
 #define cstrs_len(arr) ({int cnt_; for(char*tmp_=arr; tmp_!=0; tmp_++,cnt_++){} cnt_;})
@@ -157,12 +158,13 @@ typedef void unit;
 #define iota 0
 
 // IDTSTR(int) => "int"
-#define IDTSTR(idt) #idt
-#define IDTLEN(idt) sizeof(#idt)
+#define IDTSTR(idt) ""#idt
+#define IDTLEN(idt) sizeof(""#idt)
 #define IDTCONCAT(idt1, idt2) idt1##idt2
 // #define ESCHASH(hashch, ...) hashch __VA_ARGS__
 // #define COMPTIME_ERROR(msg) ESCHASH(#, error msg) // not works
 
+#define ctypeid_all 1
 enum ctypeid {
     ctypeid_none = iota      ,
     ctypeid_other = iota + 10,
