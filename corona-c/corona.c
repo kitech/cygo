@@ -3,6 +3,7 @@
 #include <unistd.h>
 #include <stdio.h>
 #include <assert.h>
+#include <string.h>
 
 // #include <private/pthread_support.h>
 #include <coro.h>
@@ -599,7 +600,7 @@ int crn_post(coro_func fn, void*arg) {
 static
 void crn_procer_setname(int id) {
     char buf[32] = {0};
-    snprintf(buf, sizeof(buf), "crn_procer_%d", id);
+    snprintf(buf, sizeof(buf)-1, "crn_procer_%d", id);
     #ifdef __APPLE__
     pthread_setname_np(buf);
     #else
@@ -637,7 +638,8 @@ static void* crn_procer1(void*arg) {
     // linfo("%d %d\n", mc->id, gettid());
     crn_procer_setname(mc->id);
     crn_set_inited(gnr__, true);
-    pmutex_lock(&gnr__->initmu);
+    int rv = pmutex_lock(&gnr__->initmu);
+    assert(rv==0);
     pcond_signal(&gnr__->initcd);
     pmutex_unlock(&gnr__->initmu);
 
@@ -882,7 +884,8 @@ static void* crn_procerx(void*arg) {
 
             int rv = atomic_casbool(&mc->parking, false, true);
             assert(rv == true);
-            pmutex_lock(&mc->pkmu);
+            rv = pmutex_lock(&mc->pkmu);
+            assert(rv==0);
             rv = pcond_wait(&mc->pkcd, &mc->pkmu);
             assert(rv==0);
             rv = atomic_casbool(&mc->parking, true, false);
@@ -1420,6 +1423,8 @@ corona* crn_new() {
     crn_init_intern();
 
     corona* nr = (corona*)crn_gc_malloc(sizeof(corona));
+    pmutex_init(&nr->initmu, nilptr);
+    pcond_init(&nr->initcd, nilptr);
     nr->mths = crnmap_new_uintptr();
     nr->mchs = crnmap_new_uintptr();
 

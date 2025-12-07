@@ -17,6 +17,6 @@ target_link_libraries(corona -L. crn cxrt -L./bdwgc/.libs -L./cltc/lib gc event 
 # for mac, on linux just /usr/include
 set(vcpkg_dir "/opt/vcpkg/root/installed/x64-osx-dynamic")
 include_directories(${vcpkg_dir}/include)
-TARGET_LINK_LIBRARIES(corona -L${vcpg_dir}/lib -Wl,-rpath,${vcpg_dir}/lib)
+TARGET_LINK_LIBRARIES(corona -L${vcpkg_dir}/lib -Wl,-rpath,${vcpkg_dir}/lib)
 
 # target_compile_options(corona PRIVATE )

@@ -54,4 +54,3 @@ int crn_cond_destroy(crn_cond *cond);
 
 
 #endif
-

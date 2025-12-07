@@ -4,6 +4,7 @@
 #include <collectc/queue.h>
 
 #include "coronapriv.h"
+#include "futex.h"
 
 // thread safe data struct
 
@@ -61,6 +62,7 @@ HashTable* crnhashtable_new_uintptr() {
 
 crnmap* crnmap_new_uintptr() {
     crnmap* mp = (crnmap*)crn_gc_malloc(sizeof(crnmap));
+    pmutex_init(&mp->mu, nilptr);
     mp->ht = crnhashtable_new_uintptr();
     return mp;
 }
@@ -192,6 +194,7 @@ static Queue* crnqueue_new_conf(QueueConf *qconf) {
 }
 crnqueue* crnqueue_new() {
     crnqueue* q = crn_gc_malloc(sizeof(crnqueue));
+    pmutex_init(&q->mu, nilptr);
 
     QueueConf qconf = {0};
     queue_conf_init(&qconf);
@@ -237,6 +240,7 @@ size_t crnqueue_size(crnqueue* q){
 /////
 crnunique* crnunique_new() {
     crnunique* q = (crnunique*)crn_gc_malloc(sizeof(crnunique));
+    pmutex_init(&q->mu, nilptr);
     q->ht = crnhashtable_new_uintptr();
     QueueConf qconf = {0};
     queue_conf_init(&qconf);
@@ -292,4 +296,3 @@ size_t crnunique_size(crnunique* q){
     assert(rv == rv2);
     return rv;
 }
-

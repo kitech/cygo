@@ -3,17 +3,26 @@
 #include <stdarg.h>
 #include <string.h>
 #include <assert.h>
+#include <stdint.h>
 
 #include <unistd.h>
 #include <sys/syscall.h>
 // #include <threads.h>
-
+#include <pthread.h>
 #include <yieldtypes.h>
 #include <corona_util.h>
 
 #include "futex.h"
 
 pid_t gettid() {
+    #ifdef __APPLE__
+        uint64_t tid, tid2;
+        pthread_threadid_np(NULL, &tid);
+        tid2 = syscall(SYS_thread_selfid);
+        assert(tid==tid2);
+        return tid;
+    }
+    #else
 #ifdef SYS_gettid
     pid_t tid = syscall(SYS_gettid);
     return tid;
@@ -21,6 +30,7 @@ pid_t gettid() {
 #error "SYS_gettid unavailable on this system"
     return 0;
 #endif
+    #endif
 }
 
 int (array_randcmp) (const void*a, const void*b) {

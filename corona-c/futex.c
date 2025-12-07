@@ -16,6 +16,7 @@ int pmutex_lock(pmutex_t *mutex)
     crn_pre_gclock_proc(__func__);
     int rv = pmutex_lock_f(mutex);
     crn_post_gclock_proc(__func__);
+    assert(rv==0);
     return rv;
 }
 int pmutex_trylock(pmutex_t *mutex)
@@ -49,7 +50,9 @@ int pcond_timedwait(pcond_t * cond, pmutex_t * mutex,
 }
 int pcond_wait(pcond_t * cond, pmutex_t * mutex)
 {
-    return pcond_wait_f(cond, mutex);
+    int rv = pcond_wait_f(cond, mutex);
+    assert(rv==0);
+    return rv;
 }
 int pcond_broadcast(pcond_t *cond)
 {

@@ -1,3 +1,4 @@
+#include <pthread.h>
 #include <stdlib.h>
 
 #include "coro.h"
@@ -19,7 +20,7 @@ coro_context* corowp_context_new() {
 
 // 加锁逻辑是错的，这个函数就像开始调用一个函数一样，可以多线程并发调用的。
 // 如果真的需要同步调用，那么也还是要考虑在上层视逻辑需要决定是否加锁。
-static pmutex_t coroccmu;
+static pmutex_t coroccmu = PTHREAD_MUTEX_INITIALIZER;
 void corowp_create(coro_context *ctx, coro_func coro, void *arg, void *sptr,  size_t ssze) {
     pmutex_lock(&coroccmu);
     coro_create(ctx, coro, arg, sptr, ssze);

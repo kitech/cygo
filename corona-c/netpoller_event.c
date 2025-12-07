@@ -4,6 +4,7 @@
 #include <event2/dns.h>
 
 #include "coronapriv.h"
+#include "futex.h"
 
 // 由于 hook中没有hook epoll_wait, epoll_create,
 // 所以在这是可以使用libev/libuv。
@@ -37,6 +38,7 @@ void netpoller_use_threads() {
 netpoller* netpoller_new() {
     assert(gnpl__ == 0);
     netpoller* np = (netpoller*)crn_gc_malloc(sizeof(netpoller));
+    pmutex_init(&np->evmu, nilptr);
     np->loop = event_base_new();
     assert(np->loop != 0);
     np->dnsbase = evdns_base_new(np->loop, 1);

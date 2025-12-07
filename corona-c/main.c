@@ -36,30 +36,31 @@ int crn_epoll_wait(int epfd, struct epoll_event *events,
 
 void hello(void*arg) {
     int tid = gettid();
-    linfo("called %p %d, %ld\n", arg, tid, time(0));
+    linfo("called %d %d, %ld\n", arg, tid, time(0));
     // assert(1==2);
     for (int i = 0; i < 9; i++) {
         crn_gc_malloc(15550);
     }
     for (int i = 0; i < 1; i ++) {
-        linfo("hello(%p) step. %d %d\n", arg, i, tid);
+        linfo("hello(%d) step. %d %d\n", arg, i, tid);
         sleep(1);
         crn_gc_malloc(25550);
     }
     sleep(2);
-    linfo("hello(%p) end %d %ld\n", arg, tid, time(0)); // this tid not begin tid???
+    linfo("hello(%d) end %d %ld\n", arg, tid, time(0)); // this tid not begin tid???
     assert(gettid() == tid);
 }
 
-static corona* nr;
+static corona* nr = nilptr;
 int main() {
+    extern void initHook(); initHook();
     nr = crn_new();
     crn_init(nr);
     crn_wait_init_done(nr);
     linfo("corona init done %d, %d\n", 12345, gettid());
     sleep(1);
     for (int i = 0; i < 3; i ++) {
-        crn_post(hello, (void*)(uintptr_t)i);
+        crn_post(hello, (void*)(uintptr_t)(i+1));
     }
     // seems there is race condition when strart up, and malloc big size object below.
     // so collectc once with lucky
@@ -69,8 +70,10 @@ int main() {
             crn_gc_malloc(35679);
         }
         crn_post(hello, (void*)(uintptr_t)j);
-        socket(PF_INET, SOCK_STREAM, 0);
+        int fd = socket(PF_INET, SOCK_STREAM, 0);
+        assert(fd>0);
         sleep(1);
+        close(fd);
     }
     sleep(5);
     return 0;

@@ -1,4 +1,5 @@
 
+#include <pthread.h>
 #include <stdio.h>
 #include <stdbool.h>
 #include <assert.h>
@@ -134,7 +135,7 @@ hookcb* hookcb_new() {
 }
 
 extern bool gcinited;
-static pmutex_t hkcbgetmu;
+static pmutex_t hkcbgetmu = PTHREAD_MUTEX_INITIALIZER;
 hookcb* hookcb_get() {
     assert(gcinited == true);
     if (ghkcb__ == 0) {
