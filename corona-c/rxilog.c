@@ -87,60 +87,6 @@ void log_set_quiet(int enable) {
   L.quiet = enable ? 1 : 0;
 }
 
-
-void log_log(int level, const char *file, int line, const char *fmt, ...) {
-  if (level < L.level) {
-    return;
-  }
-
-  /* Acquire lock */
-  lock();
-
-  /* Get current time */
-  time_t t = time(NULL);
-  struct tm *lt = localtime(&t);
-
-  /* Log to stderr */
-  if (!L.quiet) {
-    va_list args;
-    char buf[16];
-    buf[strftime(buf, sizeof(buf), "%H:%M:%S", lt)] = '\0';
-#ifdef LOG_USE_COLOR
-    fprintf(
-      stderr, "%s %s%-5s\x1b[0m \x1b[90m%s:%d:\x1b[0m ",
-      buf, level_colors[level], level_names[level], file, line);
-#else
-    fprintf(stderr, "%s %-5s %s:%d: ", buf, level_names[level], file, line);
-#endif
-    va_start(args, fmt);
-    vfprintf(stderr, fmt, args);
-    va_end(args);
-    fprintf(stderr, "\n");
-    fflush(stderr);
-  }
-
-  /* Log to file */
-  if (L.fp) {
-    va_list args;
-    char buf[32];
-    buf[strftime(buf, sizeof(buf), "%Y-%m-%d %H:%M:%S", lt)] = '\0';
-    fprintf(L.fp, "%s %-5s %s:%d: ", buf, level_names[level], file, line);
-    va_start(args, fmt);
-    vfprintf(L.fp, fmt, args);
-    va_end(args);
-    fprintf(L.fp, "\n");
-    fflush(L.fp);
-  }
-
-  /* Release lock */
-  unlock();
-}
-
-// more powerful, no fmt string needed
-#include "cxtypedefs.h"
-#include <stdarg.h>
-#include <stdio.h>
-
 // sepcnt, 0, 1 works fine
 static const char* log_log_file_trim(const char* file, int sepcnt) {
     char sep = '/';
@@ -159,6 +105,64 @@ static const char* log_log_file_trim(const char* file, int sepcnt) {
 
     return ptr;
 }
+
+void log_log(int level, const char *file, int line, const char *fmt, ...) {
+  if (level < L.level) {
+    return;
+  }
+
+  char* filemid = log_log_file_trim(file, 1);
+  int fmtlen = strlen(fmt);
+  int fmthas_newline = fmt[fmtlen-1] == '\n';
+
+  /* Acquire lock */
+  lock();
+
+  /* Get current time */
+  time_t t = time(NULL);
+  struct tm *lt = localtime(&t);
+
+  /* Log to stderr */
+  if (!L.quiet) {
+    va_list args;
+    char buf[16];
+    buf[strftime(buf, sizeof(buf), "%H:%M:%S", lt)] = '\0';
+#ifdef LOG_USE_COLOR
+    fprintf(
+      stderr, "%s %s%-5s\x1b[0m \x1b[90m%s:%d:\x1b[0m ",
+      buf, level_colors[level], level_names[level], filemid, line);
+#else
+    fprintf(stderr, "%s %-5s %s:%d: ", buf, level_names[level], filemid, line);
+#endif
+    va_start(args, fmt);
+    vfprintf(stderr, fmt, args);
+    va_end(args);
+    if (!fmthas_newline) fprintf(stderr, "\n");
+    fflush(stderr);
+  }
+
+  /* Log to file */
+  if (L.fp) {
+    va_list args;
+    char buf[32];
+    buf[strftime(buf, sizeof(buf), "%Y-%m-%d %H:%M:%S", lt)] = '\0';
+    fprintf(L.fp, "%s %-5s %s:%d: ", buf, level_names[level], filemid, line);
+    va_start(args, fmt);
+    vfprintf(L.fp, fmt, args);
+    va_end(args);
+    if (!fmthas_newline) fprintf(L.fp, "\n");
+    fflush(L.fp);
+  }
+
+  /* Release lock */
+  unlock();
+}
+
+// more powerful, no fmt string needed
+#include "cxtypedefs.h"
+#include <stdarg.h>
+#include <stdio.h>
+
 
 static int log_log_snprintf_arg(char* buf, int len, int idx, int tyid, void* argptr) {
 

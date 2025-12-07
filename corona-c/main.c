@@ -9,6 +9,7 @@
 #include <collectc/array.h>
 #include "corona.h"
 #include "coronagc.h"
+#include "rxilog.h"
 #include "corona_util.h"
 
 
@@ -36,12 +37,12 @@ void hello(void*arg) {
         crn_gc_malloc(15550);
     }
     for (int i = 0; i < 1; i ++) {
-        linfo("hello step. %d %d\n", i, tid);
+        linfo("hello(%p) step. %d %d\n", arg, i, tid);
         sleep(1);
         crn_gc_malloc(25550);
     }
     sleep(2);
-    linfo("hello end %d %ld\n", tid, time(0)); // this tid not begin tid???
+    linfo("hello(%p) end %d %ld\n", arg, tid, time(0)); // this tid not begin tid???
     assert(gettid() == tid);
 }
 
@@ -58,11 +59,11 @@ int main() {
     // seems there is race condition when strart up, and malloc big size object below.
     // so collectc once with lucky
     GC_gcollect();
-    for (;;) {
+    for (int j=100;;j++) {
         for (int i = 0; i < 9; i ++) {
             crn_gc_malloc(35679);
         }
-        crn_post(hello, (void*)(uintptr_t)5);
+        crn_post(hello, (void*)(uintptr_t)j);
         socket(PF_INET, SOCK_STREAM, 0);
         sleep(1);
     }

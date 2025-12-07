@@ -77,6 +77,10 @@
 #  include <unistd.h>
 # endif
 
+#ifdef __APPLE__
+void swapcontext(coro_context *, coro_context *);
+#endif
+
 static coro_func coro_init_func;
 static void *coro_init_arg;
 static coro_context *new_coro, *create_coro;
@@ -797,4 +801,3 @@ coro_stack_free (struct coro_stack *stack)
 }
 
 #endif
-

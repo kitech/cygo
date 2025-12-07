@@ -2,6 +2,7 @@
 #include <ev.h>
 
 #include "coronapriv.h"
+#include "rxilog.h"
 
 // 由于 hook中没有hook epoll_wait, epoll_create,
 // 所以在这是可以使用libev/libuv。
@@ -33,6 +34,7 @@ netpoller* netpoller_new() {
     hashtable_new(&np->watchers);
 
     gnpl__ = np;
+    log_info("using backend libev");
     return np;
 }
 
@@ -100,7 +102,7 @@ void netpoller_evwatcher_cb(struct ev_loop* loop, ev_watcher* evw, int revents) 
 
     crn_procer_resume_some(d->data);
     evdata_free(d);
-    crn_free(evw);
+    crn_gc_free(evw);
 }
 
 static
@@ -139,7 +141,7 @@ void netpoller_timer(long ns, void* gr) {
 }
 
 // when ytype is SLEEP/USLEEP/NANOSLEEP, fd is the nanoseconds
-void netpoller_yieldfd(int fd, int ytype, void* gr) {
+void netpoller_yieldfd(long fd, int ytype, fiber* gr) {
     assert(ytype > YIELD_TYPE_NONE);
     assert(ytype < YIELD_TYPE_MAX);
 

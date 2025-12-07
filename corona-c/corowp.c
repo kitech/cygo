@@ -8,6 +8,10 @@
 
 extern void* crn_gc_malloc(size_t size);
 
+#ifdef __APPLE__
+void swapcontext(coro_context *, coro_context *);
+#endif
+
 coro_context* corowp_context_new() {
     coro_context* ctx = (coro_context*)crn_gc_malloc(sizeof(coro_context));
     return ctx;

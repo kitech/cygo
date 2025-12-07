@@ -42,10 +42,11 @@ void crn_simlog2(int level, const char *filename, int line, const char* funcname
 #define SHOWLOG 0
 #endif
 
-
-#define linfo(fmt, ...)                                                 \
-    if (SHOWLOG) { crn_simlog(LOGLVL_INFO, __FILE__, __LINE__, __func__, fmt, __VA_ARGS__); }
-#define linfo2(fmt, ...)                                                \
+#define linfo(fmt, ...) if (SHOWLOG) log_log(LOG_INFO, __FILE__, __LINE__, fmt, __VA_ARGS__)
+#define linfo2(fmt, ...) if (SHOWLOG) log_log(LOG_INFO, __FILE__, __LINE__, fmt, __VA_ARGS__)
+// #define linfo(fmt, ...)                                                 \
+    // if (SHOWLOG) { crn_simlog(LOGLVL_INFO, __FILE__, __LINE__, __func__, fmt, __VA_ARGS__); }
+// #define linfo2(fmt, ...)                                                \
     if (SHOWLOG) { crn_simlog2(LOGLVL_INFO, __FILE__, __LINE__, __func__, fmt, __VA_ARGS__); }
 #define lfatal(fmt, ...)                                                \
     if (SHOWLOG) { crn_simlog(LOGLVL_FATAL, __FILE__, __LINE__, __func__, fmt, __VA_ARGS__); }
@@ -75,4 +76,3 @@ void crn_logunlock();
     }
 
 #endif
-

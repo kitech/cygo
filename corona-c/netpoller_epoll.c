@@ -15,6 +15,7 @@
 #include <sys/eventfd.h>
 
 #include "coronapriv.h"
+#include "rxilog.h"
 
 // 由于 hook中没有hook epoll_wait, epoll_create,
 // 所以在这是可以使用libev/libuv/picoev。
@@ -103,6 +104,7 @@ netpoller* netpoller_new() {
     // hashtable_new(&np->watchers);
 
     gnpl__ = np;
+    log_info("using backend epoll");
     return np;
 }
 

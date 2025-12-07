@@ -33,11 +33,13 @@
 
 // project
 #include "datstu.h"
+#include "cxtypedefs.h"
 #include "rxilog.h"
 #include "yieldtypes.h"
 #include "hookcb.h"
 #include "futex.h"
 #include "atomic.h"
+// #include "rxilog.h"
 #include "corona_util.h"
 #include "szqueue.h"
 #include "chan.h"
@@ -53,6 +55,7 @@ netpoller* netpoller_new();
 void netpoller_loop();
 void netpoller_yieldfd(long fd, int ytype, fiber* gr);
 void netpoller_use_threads();
+// const char* netpoller_name();
 
 // for fiber
 typedef struct coro_stack coro_stack;
@@ -112,4 +115,3 @@ enum {
 };
 
 #endif
-

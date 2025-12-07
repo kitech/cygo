@@ -931,7 +931,7 @@ int crn_procer_yield(long fd, int ytype) {
 int crn_procer_yield_multi(int ytype, int nfds, long fds[], int ytypes[]) {
     // check是否是procer线程
     if (gcurmcid__ == 0) {
-        linfo("maybe not procer thread %d %d\n", nfds, ytype)
+        linfo("maybe not procer thread %d %d\n", nfds, ytype);
             // 应该不是 procer线程
             return -1;
     }
@@ -1074,6 +1074,7 @@ static void crn_gc_push_other_roots2() {
     linfo2("tid=%d mcid=%d\n", gettid(), gcurmcid__);
 }
 
+// check is all parking
 static bool crn_machine_all_parking(int nochkid) {
     bool allpark = true;
     for (int i = 3; i <= 5; i++ ) {

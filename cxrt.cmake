@@ -10,6 +10,7 @@ add_library(cxrt STATIC  ${mydir}/src/cxrtbase.c
 		${mydir}/src/cxhashtable.c ${mydir}/src/cxarray.c
 		${mydir}/src/cxqueue.c
 		${mydir}/src/cxiface.c
+		${mydir}/src/creflect.c
 #  ${mydir}/src/cppminrt.cpp
 		)
 
@@ -32,9 +33,9 @@ set(corona_c_srcs
 	${mydir}/corona-c/chan.c
 	${mydir}/corona-c/hchan.c
 	${mydir}/corona-c/hselect.c
-#	${mydir}/corona-c/netpoller_ev.c
-		# ${mydir}/corona-c/netpoller_event.c
-		${mydir}/corona-c/netpoller_epoll.c
+	# ${mydir}/corona-c/netpoller_ev.c
+		${mydir}/corona-c/netpoller_event.c
+		# ${mydir}/corona-c/netpoller_epoll.c
 	${mydir}/corona-c/coronagc.c
 	${mydir}/corona-c/corona.c
 	${mydir}/corona-c/functrace.c
@@ -67,7 +68,7 @@ set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -ggdb3 -fno-omit-frame-pointer") # stack cor
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -fstack-protector -fstack-protector-all")
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -DGC_THREADS")
 #set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -DGC_DEBUG")
-set(corona_c_flags "-DNRDEBUG -DCORO_STACKALLOC -DCORO_UCONTEXT -DHAVE_UCONTEXT_H -DHAVE_SETJMP_H -DHAVE_SIGALTSTACK -fstack-usage")
+set(corona_c_flags "-DNRDEBUG -DCORO_STACKALLOC -DCORO_UCONTEXT -DHAVE_UCONTEXT_H -DHAVE_SETJMP_H -DHAVE_SIGALTSTACK -DLOG_USE_COLOR -fstack-usage")
 #set(CMAKE_CXX_FLAGS "-nostdlib -fno-rtti -fno-exceptions")
 set(CMAKE_CXX_FLAGS "-fno-rtti -fno-exceptions")
 #set(CMAKE_CXX_COMPILER "cc")

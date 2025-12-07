@@ -44,6 +44,7 @@ netpoller* netpoller_new() {
     // hashtable_new(&np->watchers);
 
     gnpl__ = np;
+    log_info("using backend libevent");
     return np;
 }
 
