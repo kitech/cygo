@@ -9,15 +9,19 @@
 #include <collectc/array.h>
 #include "corona.h"
 #include "coronagc.h"
+#include "coronapriv.h"
+#include "futex.h"
 #include "rxilog.h"
 #include "corona_util.h"
 
-
-#include <sys/epoll.h>
 #include "hook.h"
 extern fcntl_t fcntl_f;
 extern getsockopt_t getsockopt_f;
 extern setsockopt_t setsockopt_f;
+
+#ifdef __APPLE__
+#else
+#include <sys/epoll.h>
 extern epoll_wait_t epoll_wait_f;
 
 int crn_epoll_create() {
@@ -28,6 +32,7 @@ int crn_epoll_wait(int epfd, struct epoll_event *events,
                      int maxevents, int timeout) {
     return epoll_wait_f(epfd, events, maxevents, timeout);
 }
+#endif
 
 void hello(void*arg) {
     int tid = gettid();

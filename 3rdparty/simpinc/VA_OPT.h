@@ -78,17 +78,17 @@
 
 #if VA_OPT_SUPPORT(?)
 
-#  define IS_EMPTY(...) VA_EMPTY(__VA_ARGS__)
-#  define IFN(...) VA_EAT __VA_OPT__(()VA_IDENT)
-#  define IFE(...) VA_IDENT __VA_OPT__(()VA_EAT)
-#  define IFNE(...) VA_ARGTAIL __VA_OPT__((,)VA_ARG0)
+#  define VO_IS_EMPTY(...) VA_EMPTY(__VA_ARGS__)
+#  define VO_IFN(...) VA_EAT __VA_OPT__(()VA_IDENT)
+#  define VO_IFE(...) VA_IDENT __VA_OPT__(()VA_EAT)
+#  define VO_IFNE(...) VA_ARGTAIL __VA_OPT__((,)VA_ARG0)
 
 #else
 
-#  define IS_EMPTY(...) IFP(IBP(__VA_ARGS__))(IE_GEN_0,IE_IBP)(__VA_ARGS__)
-#  define IFN(...) IFP(IBP(__VA_ARGS__))(GEN_IDENT,EAT_OR_IDENT)(__VA_ARGS__)
-#  define IFE(...) IFP(IBP(__VA_ARGS__))(GEN_EAT,IDENT_OR_EAT)(__VA_ARGS__)
-#  define IFNE(...) IFP(IBP(__VA_ARGS__))(GEN_ARGTAIL,ARG0_OR_TAIL)(__VA_ARGS__)
+#  define VO_IS_EMPTY(...) IFP(IBP(__VA_ARGS__))(IE_GEN_0,IE_IBP)(__VA_ARGS__)
+#  define VO_IFN(...) IFP(IBP(__VA_ARGS__))(GEN_IDENT,EAT_OR_IDENT)(__VA_ARGS__)
+#  define VO_IFE(...) IFP(IBP(__VA_ARGS__))(GEN_EAT,IDENT_OR_EAT)(__VA_ARGS__)
+#  define VO_IFNE(...) IFP(IBP(__VA_ARGS__))(GEN_ARGTAIL,ARG0_OR_TAIL)(__VA_ARGS__)
 
 #endif
 

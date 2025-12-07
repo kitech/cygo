@@ -34,7 +34,9 @@
 #define	__hidden	__attribute__((__visibility__("hidden")))
 #define	__exported	__attribute__((__visibility__("default")))
 #define	__noinline	__attribute__ ((__noinline__))
+#ifndef __always_inline
 #define	__always_inline	__attribute__((__always_inline__))
+#endif
 
 // cxthread_local, cxtls_def, cxtls_set, cxtls_get
 // check _Alignas, _Alignof, _Atomic, _Thread_local

@@ -1,3 +1,4 @@
+#include "futex.h"
 #include <sys/mman.h>
 #include <unistd.h>
 #include <stdio.h>
@@ -374,6 +375,8 @@ machine* crn_machine_new(int id) {
     machine* mc = (machine*)crn_gc_malloc(sizeof(machine));
     crn_set_finalizer(mc,machine_finalizer);
     mc->id = id;
+    pmutex_init(&mc->pkmu, nilptr);
+    pcond_init(&mc->pkcd, nilptr);
     mc->grs = crnmap_new_uintptr();
     mc->ngrs = crnqueue_new();
     crn_set_finalizer(mc->ngrs, queue_finalizer);
@@ -597,7 +600,11 @@ static
 void crn_procer_setname(int id) {
     char buf[32] = {0};
     snprintf(buf, sizeof(buf), "crn_procer_%d", id);
+    #ifdef __APPLE__
+    pthread_setname_np(buf);
+    #else
     pthread_setname_np(pthread_self(), buf);
+    #endif
 }
 static
 void* crn_procer_netpoller(void*arg) {
@@ -876,7 +883,8 @@ static void* crn_procerx(void*arg) {
             int rv = atomic_casbool(&mc->parking, false, true);
             assert(rv == true);
             pmutex_lock(&mc->pkmu);
-            pcond_wait(&mc->pkcd, &mc->pkmu);
+            rv = pcond_wait(&mc->pkcd, &mc->pkmu);
+            assert(rv==0);
             rv = atomic_casbool(&mc->parking, true, false);
             assert(rv == true);
             pmutex_unlock(&mc->pkmu);

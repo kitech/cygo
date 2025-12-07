@@ -12,6 +12,7 @@ extern void crn_post_gclock_proc(const char* funcname);
 // for some internal use, cannot let thread yield
 int pmutex_lock(pmutex_t *mutex)
 {
+    assert(pmutex_lock_f != nilptr);
     crn_pre_gclock_proc(__func__);
     int rv = pmutex_lock_f(mutex);
     crn_post_gclock_proc(__func__);
@@ -26,6 +27,7 @@ int pmutex_trylock(pmutex_t *mutex)
 }
 int pmutex_unlock(pmutex_t *mutex)
 {
+    assert(pmutex_unlock_f != nilptr);
     crn_pre_gclock_proc(__func__);
     int rv = pmutex_unlock_f(mutex);
     crn_post_gclock_proc(__func__);

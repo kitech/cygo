@@ -482,6 +482,11 @@ coro_create (coro_context *ctx, coro_func coro, void *arg, void *sptr, size_t ss
 
 # elif CORO_UCONTEXT
 
+    #ifdef __APPLE__
+    extern int getcontext();
+    extern void makecontext();
+    #endif
+
   getcontext (&(ctx->uc));
 
   ctx->uc.uc_link           =  0;

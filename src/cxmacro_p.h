@@ -39,8 +39,8 @@
 #define cxunreach_priv() cxpanic_priv(0, "Unreachable")
 
 // preadd a count param before __VA_ARGS__
-#define VAARG_PREADD_NARG(...) PP_NARG(__VA_ARGS__) IFN(__VA_ARGS__)(,) __VA_ARGS__
-#define VAARG_FWD(...) IFN(__VA_ARGS__)(,) __VA_ARGS__
+#define VAARG_PREADD_NARG(...) PP_NARG(__VA_ARGS__) VO_IFN(__VA_ARGS__)(,) __VA_ARGS__
+#define VAARG_FWD(...) VO_IFN(__VA_ARGS__)(,) __VA_ARGS__
 
 ///// VAARG_PACK ==========
 // return mintype*
