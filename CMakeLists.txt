@@ -5,6 +5,8 @@ cmake_minimum_required(VERSION 3.5)
 if("${CMAKE_VERBOSE_MAKEFILE}" STREQUAL "FALSE")
 	set(CMAKE_VERBOSE_MAKEFILE on)
 endif()
+# set(CMAKE_C_COMPILER "clang")
+# set(CMAKE_CXX_COMPILER "/path/to/clang++")
 
 include(cxrt.cmake)
 

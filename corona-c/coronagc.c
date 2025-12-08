@@ -5,6 +5,7 @@
 #include <string.h>
 
 #include "coronagc.h"
+#include "coronapriv.h"
 
 void* crn_raw_malloc(size_t size) {
      return calloc(1, size);
@@ -106,6 +107,7 @@ static void crn_finalizer_fwd(void* ptr, void* fnptr) {
     ((void (*)(void*))fnptr)(ptr);
 }
 void crn_set_finalizer(void* ptr, void(*ufin)(void* ptr)) {
+    assert(ptr!=nilptr);
     crn_pre_gclock(__func__);
     if (ufin == NULL) {
         GC_REGISTER_FINALIZER(ptr, NULL, NULL, NULL, NULL);

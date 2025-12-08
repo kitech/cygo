@@ -118,6 +118,7 @@ static int hashtable_cmp_int(const void *key1, const void *key2) {
 
 static void hookcb_finalizer(void* ptr) {
     linfo("hkcb dtor %p\n", ptr);
+    assert(1==2);
 }
 static void hookcbht_finalizer(void* ptr) {
     linfo("hkcbht dtor %p\n", ptr);
@@ -126,7 +127,7 @@ static void hookcbht_finalizer(void* ptr) {
 hookcb* hookcb_new() {
     // so, this is live forever, not use GC_malloc
     hookcb* hkcb = (hookcb*)crn_gc_malloc(sizeof(hookcb));
-    crn_set_finalizer(hkcb->fdctxs, hookcb_finalizer);
+    crn_set_finalizer(hkcb, hookcb_finalizer);
 
     hkcb->fdctxs = crnmap_new_uintptr();
     crn_set_finalizer(hkcb->fdctxs, hookcbht_finalizer);

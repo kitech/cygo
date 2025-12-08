@@ -28,7 +28,9 @@
 #include "collectc/treetable.h"
 #include "collectc/pqueue.h"
 
+#ifndef nilptr
 #define nilptr ((void*)NULL)
+#endif
 #define invlidptr ((void*)1234567)
 
 // project

@@ -38,15 +38,27 @@
 #define	__always_inline	__attribute__((__always_inline__))
 #endif
 
+#if __GNUC__
+    #define HAVE_AUTO_TYPE
+    #define HAVE_THREAD_LOCAL
+    #define HAVE___THREAD
+    // #define HAVE_VA_OPT
+#elif __CLANG__
+    #define HAVE_AUTO_TYPE
+    #define HAVE_THREAD_LOCAL
+    #define HAVE___THREAD
+#else
+#endif
+
 // cxthread_local, cxtls_def, cxtls_set, cxtls_get
 // check _Alignas, _Alignof, _Atomic, _Thread_local
 #define cxatomic _Atomic
 #define cxalignas _Alignas
 #define cxalignof _Alignof
 
-#if defined(_Thread_local)
+#ifdef HAVE_THREAD_LOCAL
     #define cxthread_local _Thread_local
-#elif defined(__thread)
+#elif defined(HAVE___THREAD)
     #define cxthread_local __thread
 #else
     #warning "not support _Thread_local, use pthread tls instead, but not portable"
@@ -80,7 +92,7 @@
 #endif
 
 // todo cxauto
-#ifndef __auto_type
+#ifndef HAVE_AUTO_TYPE
 // #error "__auto_type not support"
 #warning "not support __auto_type"
 // not support func var
@@ -156,7 +168,9 @@ typedef char** charptrptr;
 typedef void voidty;
 typedef void unit;
 
+#ifndef nilptr
 #define nilptr NULL
+#endif
 #define cnull NULL
 #define null NULL
 #define nil NULL

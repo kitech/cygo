@@ -260,6 +260,7 @@ void crn_fiber_run_first(fiber* gr) {
 
     crn_fiber_setstate(gr,executing);
     machine* mc = crn_machine_get(gr->mcid);
+    assert(mc!=nilptr);
     fiber* curgr = mc->curgr;
     mc->curgr = gr;
     coro_context* curcoctx = curgr == 0? gr->coctx0 : &curgr->coctx; // 暂时无用
@@ -369,8 +370,13 @@ static void machine_finalizer(void* vdmc) {
     linfo("machine dtor %p %d\n", mc, mc->id);
     assert(1==2); // long live object
 }
-static void queue_finalizer(void* mc) {
-    linfo("machine dtor %p\n", mc);
+static void queue_finalizer(void* q) {
+    linfo("queue dtor %p\n", q);
+    assert(1==2);
+}
+static void unique_finalizer(void* q) {
+    linfo("unique dtor %p\n", q);
+    assert(1==2);
 }
 machine* crn_machine_new(int id) {
     machine* mc = (machine*)crn_gc_malloc(sizeof(machine));
@@ -382,6 +388,7 @@ machine* crn_machine_new(int id) {
     mc->ngrs = crnqueue_new();
     crn_set_finalizer(mc->ngrs, queue_finalizer);
     mc->runq = crnunique_new();
+    crn_set_finalizer(mc->runq, unique_finalizer);
     corowp_create(&mc->coctx0, 0, 0, 0, 0);
     return mc;
 }
@@ -428,7 +435,7 @@ crn_machine_get(int id) {
     assert(rv == CC_OK || rv == CC_ERR_KEY_NOT_FOUND);
     // linfo("get mc %d=%p\n", id, mc);
     if (mc == 0 && id != 1) {
-        linfo("cannot get mc %d %d\n", id, crnmap_size(gnr__->mchs));
+        linfo("mc not found %d %d\n", id, crnmap_size(gnr__->mchs));
         // dumphtkeys(gnr__->mchs);
         checkhtkeys(gnr__->mchs);
         // assert(mc != 0);
@@ -599,7 +606,7 @@ int crn_post(coro_func fn, void*arg) {
 
 static
 void crn_procer_setname(int id) {
-    char buf[32] = {0};
+    char buf[16] = {0};
     snprintf(buf, sizeof(buf)-1, "crn_procer_%d", id);
     #ifdef __APPLE__
     pthread_setname_np(buf);
@@ -742,19 +749,22 @@ static bool crn_fiber_runnable_filter(void* tmp) {
 static
 fiber* crn_sched_get_ready_one(machine*mc) {
     while(1) { // make effort to get one
+    void* grid_ = 0;
     int grid = 0;
-    int rv = crnunique_poll(mc->runq, (void**)&grid);
+    int rv = crnunique_poll(mc->runq, (void**)&grid_);
+    grid = (int)(uintptr_t)grid_;
+    // linfo("rv=%d, mcid=%d gric=%d\n", rv, mc->id, grid);
     if (rv == CC_ERR_OUT_OF_RANGE) return nilptr;
     if (rv == CC_OK && grid != 0) {
         fiber* gr = crn_machine_grget(mc, grid);
         if (gr == nilptr) {
-            lverb("why grid not exist? %d\n", grid);
+            linfo("why grid not exist? %d\n", grid);
             continue; // return nilptr;
         }
         if (gr->id == grid && gr->mcid == mc->id) {
             grstate state = crn_fiber_getstate(gr);
             if (state != runnable) {
-                ltrace("why not runnable grid=%d %d %s\n", grid, state, grstate2str(state));
+                linfo("why not runnable grid=%d %d %s\n", grid, state, grstate2str(state));
                 continue; // return nilptr;
             }
             // assert(state == runnable);
@@ -858,7 +868,7 @@ static void* crn_procerx(void*arg) {
         if (!stopworld) {
             fiber* rungr = nilptr;
             rungr = crn_sched_get_ready_one(mc);
-            if (rungr != 0) {
+            if (rungr != nilptr) {
                 crn_sched_run_one(mc, rungr);
                 crn_procer_yield_commit(mc, rungr);
                 continue;

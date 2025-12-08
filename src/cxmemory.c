@@ -49,8 +49,8 @@ void* cxcalloc(size_t blocks, size_t size) {
 
 /////
 // safe when null
-int cstrlen(char*str) { return str==0?0 : strlen(str); }
-char* cstrcpy(char* dst, char* src) {
+int cstrlen(const char* str) { return str==0?0 : strlen(str); }
+char* cstrcpy(char* dst, const char* src) {
     if(dst==0||src==0) {return dst; }
     return strcpy(dst, src);
 }

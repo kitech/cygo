@@ -90,7 +90,7 @@ epoll_wait_t epoll_wait_f = NULL;
 int pipe(int pipefd[2])
 {
     if (!socket_f) initHook();
-    linfo("%d\n", pipefd[0]);
+    linfo("%d %p\n", pipefd[0], pipefd);
 
     int rv = pipe_f(pipefd);
     if (rv == 0) {

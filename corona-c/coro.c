@@ -483,8 +483,8 @@ coro_create (coro_context *ctx, coro_func coro, void *arg, void *sptr, size_t ss
 # elif CORO_UCONTEXT
 
     #ifdef __APPLE__
-    extern int getcontext();
-    extern void makecontext();
+    extern int getcontext(void*);
+    extern void makecontext(void*, void*, void*);
     #endif
 
   getcontext (&(ctx->uc));

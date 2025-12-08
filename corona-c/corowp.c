@@ -1,7 +1,9 @@
+#include <assert.h>
 #include <pthread.h>
 #include <stdlib.h>
 
 #include "coro.h"
+#include "coronapriv.h"
 #include "futex.h"
 
 // core functions 有些是宏，所以就再包一下
@@ -22,6 +24,9 @@ coro_context* corowp_context_new() {
 // 如果真的需要同步调用，那么也还是要考虑在上层视逻辑需要决定是否加锁。
 static pmutex_t coroccmu = PTHREAD_MUTEX_INITIALIZER;
 void corowp_create(coro_context *ctx, coro_func coro, void *arg, void *sptr,  size_t ssze) {
+    printf("corowp_create %p %p %p %p %lu\n", ctx, coro, arg, sptr, ssze);
+    assert(ctx != nilptr);
+    if (coro==0) assert(arg == nilptr && sptr==0 && ssze==0 );
     pmutex_lock(&coroccmu);
     coro_create(ctx, coro, arg, sptr, ssze);
     pmutex_unlock(&coroccmu);

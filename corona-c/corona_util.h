@@ -44,15 +44,17 @@ void crn_simlog2(int level, const char *filename, int line, const char* funcname
 
 #define linfo(fmt, ...) if (SHOWLOG) log_log(LOG_INFO, __FILE__, __LINE__, fmt, __VA_ARGS__)
 #define linfo2(fmt, ...) if (SHOWLOG) log_log(LOG_INFO, __FILE__, __LINE__, fmt, __VA_ARGS__)
+#define lwarn(fmt, ...) if (SHOWLOG) log_log(LOG_WARN, __FILE__, __LINE__, fmt, __VA_ARGS__)
+#define lerror(fmt, ...) if (SHOWLOG) log_log(LOG_ERROR, __FILE__, __LINE__, fmt, __VA_ARGS__)
 // #define linfo(fmt, ...)                                                 \
     // if (SHOWLOG) { crn_simlog(LOGLVL_INFO, __FILE__, __LINE__, __func__, fmt, __VA_ARGS__); }
 // #define linfo2(fmt, ...)                                                \
     if (SHOWLOG) { crn_simlog2(LOGLVL_INFO, __FILE__, __LINE__, __func__, fmt, __VA_ARGS__); }
 #define lfatal(fmt, ...)                                                \
     if (SHOWLOG) { crn_simlog(LOGLVL_FATAL, __FILE__, __LINE__, __func__, fmt, __VA_ARGS__); }
-#define lerror(fmt, ...)                                                \
+// #define lerror(fmt, ...)                                                \
     if (SHOWLOG) { crn_simlog(LOGLVL_ERROR, __FILE__, __LINE__, __func__, fmt, __VA_ARGS__); }
-#define lwarn(fmt, ...)                                                 \
+// #define lwarn(fmt, ...)                                                 \
     if (SHOWLOG) { crn_simlog(LOGLVL_WARN, __FILE__, __LINE__, __func__, fmt, __VA_ARGS__); }
 #define ldebug(fmt, ...)                                                 \
     if (SHOWLOG) { crn_simlog(LOGLVL_DEBUG, __FILE__, __LINE__, __func__, fmt, __VA_ARGS__); }
@@ -74,5 +76,8 @@ void crn_logunlock();
         fprintf(stderr, fmt, __VA_ARGS__);                              \
         fflush(stderr); logunlock();                                    \
     }
+
+#define assertf(condexpr, fmtstr, ...) \
+    if (!(condexpr)) { lerror(fmtstr __VA_OPT__(,) __VA_ARGS__); }; assert(condexpr)
 
 #endif
