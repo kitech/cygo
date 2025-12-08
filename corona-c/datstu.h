@@ -1,6 +1,10 @@
 #ifndef DATSTU_H
 #define DATSTU_H
 
+#include <stdint.h>
+#include <stdbool.h>
+#include <stddef.h>
+
 typedef struct crnmap crnmap;
 typedef struct crnarray crnarray;
 typedef struct crnqueue crnqueue;

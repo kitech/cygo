@@ -21,7 +21,6 @@ pid_t gettid() {
         tid2 = syscall(SYS_thread_selfid);
         assert(tid==tid2);
         return tid;
-    }
     #else
 #ifdef SYS_gettid
     pid_t tid = syscall(SYS_gettid);

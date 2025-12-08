@@ -1,5 +1,9 @@
+
+#include "coronagc.h"
 #include "futex.h"
+#include <stdint.h>
 #include <sys/mman.h>
+#include <sys/ucontext.h>
 #include <unistd.h>
 #include <stdio.h>
 #include <assert.h>
@@ -9,6 +13,7 @@
 #include <coro.h>
 #include <collectc/hashtable.h>
 #include <collectc/array.h>
+#include "datstu.h"
 
 #include <corona.h>
 #include <coronapriv.h>
@@ -64,6 +69,7 @@ typedef struct corona {
 
 
 ///
+extern void corowp_set_main_ctx(coro_context* ctx);
 extern void corowp_create(coro_context *ctx, coro_func coro, void *arg, void *sptr,  size_t ssze);
 extern void corowp_transfer(coro_context *prev, coro_context *next);
 extern void corowp_destroy (coro_context *ctx);
@@ -267,6 +273,7 @@ void crn_fiber_run_first(fiber* gr) {
 
     crn_call_with_alloc_lock(crn_gc_setbottom1, gr);
     // 对-DCORO_UCONTEXT/-DCORO_ASM等来说，这句是真正开始执行
+    ((ucontext_t*)(&gr->coctx))->uc_link = (ucontext_t*)gr->coctx0;
     corowp_transfer(gr->coctx0, &gr->coctx);
     // corowp_transfer(&gr->coctx, gr->coctx0); // 这句要写在函数fnproc退出之前？
 }
@@ -282,6 +289,7 @@ void crn_fiber_resume(fiber* gr) {
     if (gr->myfrm != nilptr) crn_set_frame(gr->myfrm); // 恢复fiber的frame
     crn_call_with_alloc_lock(crn_gc_setbottom1, gr);
     // 对-DCORO_UCONTEXT/-DCORO_ASM等来说，这句是真正开始执行
+    ((ucontext_t*)(&gr->coctx))->uc_link = (ucontext_t*)gr->coctx0;
     corowp_transfer(gr->coctx0, &gr->coctx);
 }
 
@@ -389,11 +397,11 @@ machine* crn_machine_new(int id) {
     crn_set_finalizer(mc->ngrs, queue_finalizer);
     mc->runq = crnunique_new();
     crn_set_finalizer(mc->runq, unique_finalizer);
-    corowp_create(&mc->coctx0, 0, 0, 0, 0);
+    // corowp_create(&mc->coctx0, 0, 0, 0, 0);
     return mc;
 }
 void crn_machine_init_crctx(machine* mc) {
-    corowp_create(&mc->coctx0, 0, 0, 0, 0);
+    // corowp_create(&mc->coctx0, 0, 0, 0, 0);
 }
 static void dumphtkeys(HashTable* ht) {
     Array* arr = nilptr;
@@ -517,6 +525,7 @@ void crn_machine_signal(machine* mc) {
 static __thread int gcurmcid__ = 0; // thread local
 static __thread int gcurgrid__ = 0; // thread local
 static __thread machine* gcurmcobj = 0; // thread local
+
 int __attribute__((no_instrument_function))
 crn_goid() { return gcurgrid__; }
 fiber* __attribute__((no_instrument_function))
@@ -635,6 +644,21 @@ void* crn_procer_netpoller(void*arg) {
     return nilptr;
 }
 
+static char* crn_array_tostr_int(Array* arr2) {
+    char buf[99] = {0};
+    int blen = 0;
+    int arr2sz = array_size(arr2);
+    for (int n=0; n < arr2sz; n++) {
+        void* key = 0;
+        int rv = array_get_at(arr2, n, &key);
+        // linfo("n=%d, key=%p\n", n, key);
+        blen += snprintf(buf+blen, sizeof(buf)-blen-1, "%lu ", (uintptr_t)key);
+    }
+    char* mem = crn_gc_malloc(99);
+    memcpy(mem, buf, blen);
+    return mem;
+}
+
 static void* crn_procer1(void*arg) {
     machine* mc = (machine*)arg;
     gcurmcobj = mc;
@@ -687,22 +711,31 @@ static void* crn_procer1(void*arg) {
         for (;arr2 != nilptr;) {
             fiber* gr = crn_machine_grtake(mc);
             if (gr == nilptr) {
-                linfo("why nil %d %d\n", crnmap_size(mc->grs), arr2sz);
+                linfo("why nil %d %d mcid=%d\n", crnmap_size(mc->grs), arr2sz, mc->id);
                 break;
             }
 
             machine* mct = 0;
-
+            linfo("arr2=%p sz=%d, keys=[%s]\n", arr2, array_size(arr2), crn_array_tostr_int(arr2));
             for (int j = 0; j < arr2sz; j++) {
                 int rdidx = abs(rand()) % arr2sz;
                 void* key = nilptr;
                 int rv = array_get_at(arr2, rdidx, &key);
-                if (rv != CC_OK) linfo("rv=%d %d\n", rv, arr2sz);
+                if (rv != CC_OK) {
+                    linfo("rv=%d keycnt %d, rdidx %d, mcid=%d\n", rv, arr2sz, rdidx, mc->id);
+                    for (int n=0; n < arr2sz;n++) {
+                        rv = array_get_at(arr2, n, &key);
+                        linfo("n=%d, key=%p\n", n, key);
+                        key = 0;
+                    }
+                }
                 assert(rv == CC_OK);
                 if ((uintptr_t)key <= 2) continue;
+                assert((uintptr_t)key < 999);
 
                 // linfo("checking machine %d/%d %d\n", j, array_size(arr2), key);
                 mct = crn_machine_get((int)(uintptr_t)key);
+                assert (mct != nilptr);
                 if (mct->parking) {
                     // linfo("got a packing machine %d <- gr %d\n", mct->id, gr->id);
                     break;
@@ -860,6 +893,7 @@ static void* crn_procerx(void*arg) {
     // linfo("%d %d\n", mc->id, gettid());
     crn_procer_setname(mc->id);
     gcurmcid__ = mc->id;
+    corowp_set_main_ctx(&mc->coctx0);
 
     mc->savefrm = crn_get_frame();
     for (;;) {
@@ -1507,6 +1541,18 @@ void crn_init(corona* nr) {
         }
         pthread_detach(*t);
     }
+    Array *keys = 0;
+    int rv = crnmap_get_keys(nr->mchs, &keys);
+    linfo("init.. mch cnt %p, %d\n", keys, array_size(keys));
+    void* key0 = 0;
+    for (int i = 0; i < array_size(keys);i++) {
+        void* key = 0;
+        rv = array_get_at(keys, i, &key);
+        linfo("a%d key=%p\n", i, key);
+        assert (key != key0);
+        key = 0;
+    }
+    array_destroy(keys);
     // GC_enable();
 }
 void crn_destroy(corona* lnr) {

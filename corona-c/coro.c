@@ -40,6 +40,8 @@
 
 #include "coro.h"
 
+#include <stdio.h>
+#include <assert.h>
 #include <stddef.h>
 #include <string.h>
 
@@ -78,12 +80,13 @@
 # endif
 
 #ifdef __APPLE__
-void swapcontext(coro_context *, coro_context *);
+int swapcontext(ucontex_t *, const ucontext_t *);
 #endif
 
-static coro_func coro_init_func;
-static void *coro_init_arg;
-static coro_context *new_coro, *create_coro;
+static __thread coro_func coro_init_func = 0;
+static __thread void *coro_init_arg = 0;
+static __thread coro_context *new_coro = 0;
+static __thread coro_context *create_coro = 0;
 
 static void
 coro_init (void)
@@ -94,14 +97,15 @@ coro_init (void)
   coro_transfer (new_coro, create_coro);
 
 #if __GCC_HAVE_DWARF2_CFI_ASM && __amd64
-  /*asm (".cfi_startproc");*/
-  /*asm (".cfi_undefined rip");*/
+  // asm (".cfi_startproc");
+  // asm (".cfi_undefined rip");
 #endif
 
-  func ((void *)arg);
+    assert(func!=0);
+    func ((void *)arg);
 
 #if __GCC_HAVE_DWARF2_CFI_ASM && __amd64
-  /*asm (".cfi_endproc");*/
+  // asm (".cfi_endproc");
 #endif
 
   /* the new coro returned. bad. just abort() for now */
@@ -334,15 +338,17 @@ trampoline (int sig)
 void
 coro_create (coro_context *ctx, coro_func coro, void *arg, void *sptr, size_t ssize)
 {
-  coro_context nctx;
+  coro_context nctx = {0};
 # if CORO_SJLJ
   stack_t ostk, nstk;
   struct sigaction osa, nsa;
   sigset_t nsig, osig;
 # endif
 
-  if (!coro)
-    return;
+  if (!coro) {
+      printf("no coro func %p arg=%p, ssize=%d\n", coro, arg, ssize);
+      return;
+  }
 
   coro_init_func = coro;
   coro_init_arg  = arg;
@@ -484,7 +490,7 @@ coro_create (coro_context *ctx, coro_func coro, void *arg, void *sptr, size_t ss
 
     #ifdef __APPLE__
     extern int getcontext(void*);
-    extern void makecontext(void*, void*, void*);
+    extern void makecontext(void*, void*, int, ...);
     #endif
 
   getcontext (&(ctx->uc));
