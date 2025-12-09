@@ -939,10 +939,13 @@ static void* crn_procerx(void*arg) {
     // linfo("%d %d\n", mc->id, gettid());
     crn_procer_setname(mc->id);
     gcurmcid__ = mc->id;
+    machine *mcold = mc;
     corowp_set_main_ctx(&mc->coctx0);
 
     mc->savefrm = crn_get_frame();
-    for (;;) {
+    for (int tfcnter=9;;tfcnter++) {
+        mc = crn_machine_get(gcurmcid__);
+        assert (mc->id == gcurmcid__);
         // check global queue
         bool stopworld = atomic_getint(&gnr__->stopworld);
         if (!stopworld) {
@@ -1506,12 +1509,13 @@ void crn_init_intern() {
 }
 
 corona* crn_new() {
-    log_set_mutex();
+
     if (gnr__) {
         linfo("wtf...%d\n",1);
         return gnr__;
     }
     crn_init_intern();
+           log_set_mutex();
     // GC_disable();
 
     corona* nr = (corona*)crn_gc_malloc(sizeof(corona));
