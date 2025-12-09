@@ -12,7 +12,9 @@
 #include <yieldtypes.h>
 #include <corona_util.h>
 
+// #include "coronapriv.h"
 #include "futex.h"
+#include "rxilog.h"
 
 pid_t gettid() {
     #ifdef __APPLE__
@@ -121,6 +123,20 @@ void __attribute__((no_instrument_function))
 crn_logunlock() {
     // pmutex_unlock(&loglk);
     // pmutex_trylock(&loglk);
+}
+void __attribute__((no_instrument_function))
+crn_loglock_rxilog(void* d, int islock) {
+    // pmutex_lock(&loglk);
+    if (islock) {
+        pmutex_lock(&crn_loglk);
+    }else{
+        pmutex_unlock(&crn_loglk);
+    }
+}
+
+void log_set_mutex() {
+    pmutex_init(&crn_loglk, NULL);
+    log_set_lock(crn_loglock_rxilog);
 }
 
 void __attribute__((no_instrument_function))

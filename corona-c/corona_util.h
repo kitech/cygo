@@ -42,6 +42,8 @@ void crn_simlog2(int level, const char *filename, int line, const char* funcname
 #define SHOWLOG 0
 #endif
 
+void log_set_mutex();
+
 #define linfo(fmt, ...) if (SHOWLOG) log_log(LOG_INFO, __FILE__, __LINE__, fmt, __VA_ARGS__)
 #define linfo2(fmt, ...) if (SHOWLOG) log_log(LOG_INFO, __FILE__, __LINE__, fmt, __VA_ARGS__)
 #define lwarn(fmt, ...) if (SHOWLOG) log_log(LOG_WARN, __FILE__, __LINE__, fmt, __VA_ARGS__)

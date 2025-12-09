@@ -80,7 +80,7 @@
 # endif
 
 #ifdef __APPLE__
-int swapcontext(ucontex_t *, const ucontext_t *);
+int swapcontext(ucontext_t *, const ucontext_t *);
 #endif
 
 static __thread coro_func coro_init_func = 0;

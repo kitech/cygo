@@ -76,7 +76,7 @@ struct fiber {
     coro_context coctx;
     coro_context *coctx0; // ref to machine.coctx0
     grstate state;
-    bool isresume;
+    int isresume;
     pmutex_t* hclock; // hchan.lock
     int pkreason;
     struct timeval pktime;

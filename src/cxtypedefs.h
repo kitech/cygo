@@ -38,15 +38,11 @@
 #define	__always_inline	__attribute__((__always_inline__))
 #endif
 
-#if __GNUC__
+#if defined(__clang__) || defined (__GNUC__)
     #define HAVE_AUTO_TYPE
     #define HAVE_THREAD_LOCAL
     #define HAVE___THREAD
     // #define HAVE_VA_OPT
-#elif __CLANG__
-    #define HAVE_AUTO_TYPE
-    #define HAVE_THREAD_LOCAL
-    #define HAVE___THREAD
 #else
 #endif
 
