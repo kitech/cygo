@@ -118,6 +118,7 @@ fiber* crn_fiber_new(int id, coro_func fn, void* arg) {
     gr->id = id;
     gr->fnproc = fn;
     gr->arg = arg;
+    // linfo("arg %p, fid %d \n", arg, id);
     extern HashTable* crnhashtable_new_uintptr();
     gr->specifics = crnhashtable_new_uintptr();
     return gr;
@@ -155,6 +156,8 @@ void crn_fiber_new2(fiber*gr, size_t stksz) {
     // GC_add_roots(gr->stack.sptr, gr->stack.sptr+(gr->stack.ssze));
     // 这一句会让fnproc直接执行，但是可能需要的是创建与执行分开。原来是针对-DCORO_PTHREAD
     // corowp_create(&gr->coctx, gr->fnproc, gr->arg, gr->stack.sptr, dftstksz);
+
+    linfo("arg %p, fid %d \n", gr->arg, gr->id);
 }
 static int memchanged(void* ptr, int c, size_t n) {
     char* p = (char*)ptr;
@@ -309,6 +312,8 @@ static bool crn_check_mchs(crnmap* ht) {
 void crn_fiber_forward(void* arg) {
     fiber* gr = (fiber*)arg;
     // crn_call_with_alloc_lock(crn_gc_setbottom1, gr);
+    assert(gr->id>0);
+    assert(gr->fnproc!=0);
 
     gr->fnproc(gr->arg);
     crn_fiber_setstate(gr,finished);
@@ -322,6 +327,13 @@ void crn_fiber_forward(void* arg) {
     corowp_transfer(&gr->coctx, gr->coctx0); // 这句要写在函数fnproc退出之前？
 }
 
+typedef struct libco_context2 {
+    void* usrthr;
+    void* usrarg;
+    int hasarg;
+    void* cothr;
+}libco_context2;
+
 // TODO 有时候它不一定是从ctx0跳转，或者是跳转到ctx0。这几个函数都是 crn_fiber_run/resume,suspend
 // 一定是从ctx0跳过来的，因为所有的fibers是由调度器发起 run/resume/suspend，而不是其中某一个fiber发起
 void crn_fiber_run_first(fiber* gr) {
@@ -329,7 +341,11 @@ void crn_fiber_run_first(fiber* gr) {
     assert(atomic_getint(&gr->isresume) == false);
     atomic_setint(&gr->isresume, true);
     // 对-DCORO_PTHREAD来说，这句是真正开始执行
+    // linfo("arg %p, fid %d \n", gr->arg, gr->id);
     corowp_create(&gr->coctx, crn_fiber_forward, gr, gr->stack.sptr, gr->stack.ssze);
+    // libco_context2* ctx = (libco_context2*)&gr->coctx;
+    // linfo("arg %p, fid %d \n", gr->arg, gr->id);
+    // linfo("arg %p, fn %p \n", ctx->usrarg, ctx->usrthr);
 
     crn_fiber_setstate(gr,executing);
     machine* mc = crn_machine_get(gr->mcid);
@@ -338,10 +354,10 @@ void crn_fiber_run_first(fiber* gr) {
     mc->curgr = gr;
     coro_context* curcoctx = curgr == 0? gr->coctx0 : &curgr->coctx; // 暂时无用
 
-    crn_call_with_alloc_lock(crn_gc_setbottom1, gr);
-    // 对-DCORO_UCONTEXT/-DCORO_ASM等来说，这句是真正开始执行
     ((ucontext_t*)(&gr->coctx))->uc_link = (ucontext_t*)gr->coctx0;
     linfo("coctx before swapto workco fid %d mcid %d\n", gr->id, gr->mcid);
+    crn_call_with_alloc_lock(crn_gc_setbottom1, gr);
+    // 对-DCORO_UCONTEXT/-DCORO_ASM等来说，这句是真正开始执行
     corowp_transfer(gr->coctx0, &gr->coctx);
     // corowp_transfer(&gr->coctx, gr->coctx0); // 这句要写在函数fnproc退出之前？
     linfo("coctx returned to mainco fid %d mcid %d\n", gr->id, gr->mcid);
