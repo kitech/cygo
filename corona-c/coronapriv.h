@@ -74,6 +74,7 @@ struct fiber {
     void* stkmid;
     struct GC_stack_base mystksb; // mine for GC
     coro_context coctx;
+    char overflowed[999]; // for upper coctx
     coro_context *coctx0; // ref to machine.coctx0
     grstate state;
     int isresume;

@@ -49,6 +49,7 @@ typedef struct machine {
     void* savefrm;
     pthread_t thr;
     coro_context coctx0;
+    char reserved[999]; // seems upper coctx0 overflowed heere
 } machine;
 
 typedef struct corona {

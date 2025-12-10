@@ -97,6 +97,11 @@
 #ifndef CORO_H
 #define CORO_H
 
+// "config.h.in"
+// #cmakedefine HAVE_UCONTEXT_H
+// #cmakedefine HAVE_SETJMP_H
+// #cmakedefine HAVE_SIGALTSTACK
+
 #if __cplusplus
 extern "C" {
 #endif
@@ -332,11 +337,9 @@ error unknown or unsupported architecture
 #if CORO_UCONTEXT
 
 #ifdef __APPLE__
-// TODO for macos, avoid "ucontext routines are deprecated"
-# include <sys/ucontext.h>
-#else
-# include <ucontext.h>
+#define _XOPEN_SOURCE
 #endif
+# include <ucontext.h>
 
 struct coro_context
 {

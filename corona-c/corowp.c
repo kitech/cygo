@@ -1,11 +1,20 @@
 #include <assert.h>
+#include <stdarg.h>
 #include <pthread.h>
-#include <stdlib.h>
 #include <string.h>
-#include <sys/ucontext.h>
+#include <stdio.h>
+// #include <ucontext.h>
 
+// !!!!!
+// on macos, coro.h conflict with stdlib.h
+// cause sizeof(ucontext_t) much small(56) than correct value(768)
+#ifdef __APPLE__
+// so fork
+#else
+#include <stdlib.h>
+#endif
 #include "coro.h"
-#include "libco/libco.h"
+
 #include "corona_util.h"
 #include "coronapriv.h"
 #include "futex.h"
@@ -16,11 +25,11 @@
 extern void* crn_gc_malloc(size_t size);
 
 #ifdef __APPLE__
-#define _XOPEN_SOURCE
-#include <ucontext.h>
-int swapcontext(ucontext_t *, const ucontext_t *);
+// #define _XOPEN_SOURCE
+// #include <ucontext.h>
+// int swapcontext(ucontext_t *, const ucontext_t *);
 #endif
-#include <ucontext.h>
+// #include <ucontext.h>
 
 coro_context* corowp_context_new() {
     coro_context* ctx = (coro_context*)crn_gc_malloc(sizeof(coro_context));
@@ -34,6 +43,7 @@ void corowp_set_main_ctx(coro_context* ctx) {
 
 // #define CORO_BACKEND_LIBCO
 #define CORO_BACKEND_UCONEXT
+// https://github.com/semistrict/libcoro
 // #define CORO_BACKEND_LIBCORO
 
 // 加锁逻辑是错的，这个函数就像开始调用一个函数一样，可以多线程并发调用的。
@@ -41,6 +51,8 @@ void corowp_set_main_ctx(coro_context* ctx) {
 static pmutex_t coroccmu = PTHREAD_MUTEX_INITIALIZER;
 
 #if defined (CORO_BACKEND_LIBCO)
+
+#include "libco/libco.h"
 
 typedef struct libco_context {
     coro_func usrthr;
@@ -108,8 +120,43 @@ void corowp_destroy (coro_context *ctx) {
 
 #elif defined (CORO_BACKEND_UCONEXT)
 
+// makecontext need this proto type
+static void corowp_ucontext_corofwd(int arg0, ...) {
+    assert(arg0==42);
+    int argc = 2;
+    assert(argc==2); // arg0=fn, arg1=arg
+    void* (*f)(void*) = 0;
+    void* arg = 0;
+
+    va_list list;
+    va_start(list, arg0);
+    unsigned int ptrhigh0 = va_arg(list, unsigned int);
+    unsigned int ptrlow0 = va_arg(list, unsigned int);
+    unsigned int ptrhigh1 = va_arg(list, unsigned int);
+    unsigned int ptrlow1 = va_arg(list, unsigned int);
+    va_end(list);
+
+    uintptr_t fptr = (uintptr_t)ptrhigh0;
+    fptr = fptr << 32;
+    fptr = fptr | (uintptr_t)ptrlow0;
+    f = (void*)fptr;
+
+    uintptr_t argptr = (uintptr_t)ptrhigh1;
+    argptr = argptr << 32;
+    argptr = argptr | (uintptr_t)ptrlow1;
+    arg = (void*)argptr;
+
+    printf("arg0 %d, f %p, arg %p\n", arg0, f, arg);
+    assert(f!=0);
+    f(arg);
+}
+
 void corowp_create(coro_context *ctx, coro_func coro, void *arg, void *sptr,  size_t ssze) {
+    // ucontext_t should 700+, why so small???
     assert(sizeof(coro_context)>=sizeof(ucontext_t));
+    printf("sizeof(coro_context)=%lu, sizeof(ucontext_t)=%lu\n", sizeof(coro_context), sizeof(ucontext_t));
+    assert(sizeof(ucontext_t)>700); // linux 900+, mac 700+
+
     printf("corowp_create %p %p %p %p %lu\n", ctx, coro, arg, sptr, ssze);
     assert(ctx != nilptr);
     if (coro==0) assert(arg == nilptr && sptr==0 && ssze==0 );
@@ -125,7 +172,13 @@ void corowp_create(coro_context *ctx, coro_func coro, void *arg, void *sptr,  si
     rctx->uc_link = 0; // (ucontext_t*)crn_main_coro_ctx; // ???
     assert (crn_main_coro_ctx != 0);
 
-    makecontext(rctx, (void*) coro, 1, arg);
+   	unsigned int ptrhigh0 = ((uintptr_t)coro) >> 32;
+	unsigned int ptrlow0 = (uintptr_t)coro;
+	unsigned int ptrhigh1 = ((uintptr_t)arg) >> 32;
+	unsigned int ptrlow1 = (uintptr_t)arg;
+    makecontext(rctx, (void*) corowp_ucontext_corofwd, 5, 42, ptrhigh0, ptrlow0, ptrhigh1, ptrlow1);
+
+    // makecontext(rctx, (void*) coro, 1, arg);
     pmutex_unlock(&coroccmu);
 }
 
