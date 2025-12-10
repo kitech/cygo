@@ -122,29 +122,16 @@ void corowp_destroy (coro_context *ctx) {
 
 // makecontext need this proto type
 static void corowp_ucontext_corofwd(int arg0, ...) {
-    assert(arg0==42);
-    int argc = 2;
-    assert(argc==2); // arg0=fn, arg1=arg
+    int argc = arg0;
+    assert(argc==2); // arg0=2, arg1=fn, arg2=arg
     void* (*f)(void*) = 0;
     void* arg = 0;
 
     va_list list;
     va_start(list, arg0);
-    unsigned int ptrhigh0 = va_arg(list, unsigned int);
-    unsigned int ptrlow0 = va_arg(list, unsigned int);
-    unsigned int ptrhigh1 = va_arg(list, unsigned int);
-    unsigned int ptrlow1 = va_arg(list, unsigned int);
+    f = va_arg(list, void*);
+    arg = va_arg(list, void*);
     va_end(list);
-
-    uintptr_t fptr = (uintptr_t)ptrhigh0;
-    fptr = fptr << 32;
-    fptr = fptr | (uintptr_t)ptrlow0;
-    f = (void*)fptr;
-
-    uintptr_t argptr = (uintptr_t)ptrhigh1;
-    argptr = argptr << 32;
-    argptr = argptr | (uintptr_t)ptrlow1;
-    arg = (void*)argptr;
 
     printf("arg0 %d, f %p, arg %p\n", arg0, f, arg);
     assert(f!=0);
@@ -172,12 +159,7 @@ void corowp_create(coro_context *ctx, coro_func coro, void *arg, void *sptr,  si
     rctx->uc_link = 0; // (ucontext_t*)crn_main_coro_ctx; // ???
     assert (crn_main_coro_ctx != 0);
 
-   	unsigned int ptrhigh0 = ((uintptr_t)coro) >> 32;
-	unsigned int ptrlow0 = (uintptr_t)coro;
-	unsigned int ptrhigh1 = ((uintptr_t)arg) >> 32;
-	unsigned int ptrlow1 = (uintptr_t)arg;
-    makecontext(rctx, (void*) corowp_ucontext_corofwd, 5, 42, ptrhigh0, ptrlow0, ptrhigh1, ptrlow1);
-
+    makecontext(rctx, (void*) corowp_ucontext_corofwd, 3, 2, (void*)coro, arg);
     // makecontext(rctx, (void*) coro, 1, arg);
     pmutex_unlock(&coroccmu);
 }
