@@ -19,6 +19,7 @@
 pid_t gettid() {
     #ifdef __APPLE__
         uint64_t tid, tid2;
+        extern void pthread_threadid_np(void*, uint64_t*);
         pthread_threadid_np(NULL, &tid);
         tid2 = syscall(SYS_thread_selfid);
         assert(tid==tid2);

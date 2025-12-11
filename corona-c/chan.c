@@ -4,7 +4,7 @@
 #undef __STRICT_ANSI__
 
 #ifdef __APPLE__
-#define _XOPEN_SOURCE
+// #define _XOPEN_SOURCE // must -D_XOPEN_SOURCE globally
 #endif
 
 #include <errno.h>
@@ -54,7 +54,7 @@ static int chan_can_send(chan_t* chan);
 static int chan_is_buffered(chan_t* chan);
 
 void current_utc_time(struct timespec *ts) {
-#ifdef __MACH__ 
+#ifdef __MACH__
     clock_serv_t cclock;
     mach_timespec_t mts;
     host_get_clock_service(mach_host_self(), CALENDAR_CLOCK, &cclock);
@@ -434,7 +434,7 @@ int chan_select(chan_t* recv_chans[], int recv_count, void** recv_out,
             candidates[count++] = op;
         }
     }
-    
+
     if (count == 0)
     {
         return -1;

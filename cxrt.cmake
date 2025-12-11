@@ -68,14 +68,19 @@ set(CMAKE_C_FLAGS "-g -O0 -fPIC -std=c11 -D_GNU_SOURCE ")
 # set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -fsanitize-recover=address -fno-common") # stack corrupt
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -ggdb3 -fno-omit-frame-pointer") # stack corrupt
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -fstack-protector -fstack-protector-all")
+set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -fstack-protector-strong")
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -DGC_THREADS")
+# set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -fstack-usage") # no macos
+#set(CMAKE_CXX_FLAGS "${CMAKE_C_FLAGS} -fstack-usage")
+#set(CMAKE_CXX_FLAGS "${CMAKE_C_FLAGS} -nostdlib -fno-rtti -fno-exceptions")
+# set(CMAKE_CXX_FLAGS "${CMAKE_C_FLAGS} -fno-rtti -fno-exceptions")
 #set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -DGC_DEBUG")
-set(corona_c_flags "-DNRDEBUG -DCORO_STACKALLOC -DCORO_UCONTEXT -DHAVE_UCONTEXT_H -DHAVE_SETJMP_H -DHAVE_SIGALTSTACK")
-# set(corona_c_flags "${corona_c_flags} -fstack-usage")
-set(corona_c_flags "${corona_c_flags}  -DLOG_USE_COLOR")
-#set(CMAKE_CXX_FLAGS "-nostdlib -fno-rtti -fno-exceptions")
-set(CMAKE_CXX_FLAGS "-fno-rtti -fno-exceptions")
 #set(CMAKE_CXX_COMPILER "cc")
+
+set(corona_c_flags "-DNRDEBUG -DCORO_STACKALLOC -DCORO_UCONTEXT -DHAVE_UCONTEXT_H -DHAVE_SETJMP_H -DHAVE_SIGALTSTACK")
+set(corona_c_flags "${corona_c_flags}  -D_XOPEN_SOURCE") # only macos, fix the sizeof(ucontext_t) too small
+set(corona_c_flags "${corona_c_flags}  -DLOG_USE_COLOR")
+# set(corona_c_flags "${corona_c_flags} -fstack-usage")
 
 set_target_properties(crn PROPERTIES COMPILE_FLAGS ${corona_c_flags})
 #set_target_properties(corona PROPERTIES COMPILE_FLAGS ${corona_c_flags})

@@ -695,6 +695,7 @@ void crn_procer_setname(int id) {
     char buf[16] = {0};
     snprintf(buf, sizeof(buf)-1, "crn_procer_%d", id);
     #ifdef __APPLE__
+    extern void pthread_setname_np(char*);
     pthread_setname_np(buf);
     #else
     pthread_setname_np(pthread_self(), buf);

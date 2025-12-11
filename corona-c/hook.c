@@ -567,7 +567,7 @@ int __poll(struct pollfd fds[], nfds_t nfds, int timeout)
         if (fds[i].events & POLLIN) { nevts += 1; }
         if (fds[i].events & POLLOUT) { nevts += 1; }
         if (fds[i].events & POLLERR) {  }
-        if (POLLIN | POLLOUT == fds[i].events ||
+        if ((POLLIN | POLLOUT) == fds[i].events ||
             POLLIN == fds[i].events || POLLOUT == fds[i].events) {
         }else{
             linfo("not supported poll event set %d %d\n", POLLIN | POLLOUT, fds[i].events);
@@ -1042,7 +1042,7 @@ int open(const char *pathname, int flags, ...) {
     va_list ap;
     mode_t mode;
     va_start(ap, flags);
-    mode = va_arg(ap, mode_t);
+    mode = va_arg(ap, int);
     va_end(ap);
 
     int fd = open_f(pathname, flags, mode);
@@ -1064,7 +1064,7 @@ int open64 (const char *filename, int flags, ...) {
     va_list ap;
     mode_t mode;
     va_start(ap, flags);
-    mode = va_arg(ap, mode_t);
+    mode = va_arg(ap, int);
     va_end(ap);
 
     int fd = open64_f(filename, flags, mode);
