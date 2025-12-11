@@ -6,6 +6,7 @@
 #include <pthread.h>
 
 #ifdef __APPLE__
+extern int pthread_setname_np(const char*);
 #define thread_setname0(name) pthread_setname_np(name)
 #define thread_setname(th, name) pthread_setname_np(name)
 #else

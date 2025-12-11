@@ -100,8 +100,8 @@
 
 ////// utils
 
-#define cxmin(a0, a1) ((a0) < (a1)) ? (a0) : (a1))
-#define cxmax(a0, a1) ((a0) > (a1)) ? (a0) : (a1))
+#define cxmin(a0, a1) ((a0) < (a1)) ? (a0) : (a1)
+#define cxmax(a0, a1) ((a0) > (a1)) ? (a0) : (a1)
 #define cxswap(a, b) ({__typeof__(a) tmp_ = a; a=b; b=tmp_; })
 // readonly cxstr_xxx, for need malloc see cxmemory.c
 #define cstreq(s1, s2) strcmp((s1), (s2))==0
