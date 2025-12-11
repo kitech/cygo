@@ -1,4 +1,5 @@
 
+#include "corona_util.h"
 #include "coronagc.h"
 #include "futex.h"
 #include <stdint.h>
@@ -356,12 +357,12 @@ void crn_fiber_run_first(fiber* gr) {
     coro_context* curcoctx = curgr == 0? gr->coctx0 : &curgr->coctx; // 暂时无用
 
     ((ucontext_t*)(&gr->coctx))->uc_link = (ucontext_t*)gr->coctx0;
-    linfo("coctx before swapto workco fid %d mcid %d\n", gr->id, gr->mcid);
+    lverb("coctx before swapto workco fid %d mcid %d\n", gr->id, gr->mcid);
     crn_call_with_alloc_lock(crn_gc_setbottom1, gr);
     // 对-DCORO_UCONTEXT/-DCORO_ASM等来说，这句是真正开始执行
     corowp_transfer(gr->coctx0, &gr->coctx);
     // corowp_transfer(&gr->coctx, gr->coctx0); // 这句要写在函数fnproc退出之前？
-    linfo("coctx returned to mainco fid %d mcid %d\n", gr->id, gr->mcid);
+    lverb("coctx returned to mainco fid %d mcid %d\n", gr->id, gr->mcid);
     crn_check_mchs(gnr__->mchs);
 }
 
@@ -377,9 +378,9 @@ void crn_fiber_resume(fiber* gr) {
     crn_call_with_alloc_lock(crn_gc_setbottom1, gr);
     // 对-DCORO_UCONTEXT/-DCORO_ASM等来说，这句是真正开始执行
     ((ucontext_t*)(&gr->coctx))->uc_link = (ucontext_t*)gr->coctx0;
-    linfo("coctx before swapto workco fid %d mcid %d\n", gr->id, gr->mcid);
+    lverb("coctx before swapto workco fid %d mcid %d\n", gr->id, gr->mcid);
     corowp_transfer(gr->coctx0, &gr->coctx);
-    linfo("coctx returned to mainco fid %d mcid %d\n", gr->id, gr->mcid);
+    lverb("coctx returned to mainco fid %d mcid %d\n", gr->id, gr->mcid);
     crn_check_mchs(gnr__->mchs);
 }
 
@@ -458,11 +459,11 @@ void crn_fiber_suspend(fiber* gr) {
     crn_set_frame(gr->savefrm);
     gettimeofday(&gr->pktime, nilptr);
     crn_fiber_setstate(gr,waiting);
-    linfo("coctx before swapto mainco fid %d mcid %d\n", gr->id, gr->mcid);
+    lverb("coctx before swapto mainco fid %d mcid %d\n", gr->id, gr->mcid);
     crn_check_mchs(gnr__->mchs); // before
     crn_call_with_alloc_lock(crn_gc_setbottom0, gr); // must before transfer, closely
     corowp_transfer(&gr->coctx, gr->coctx0);
-    linfo("coctx returned to workco fid %d mcid %d\n", gr->id, gr->mcid);
+    lverb("coctx returned to workco fid %d mcid %d\n", gr->id, gr->mcid);
     crn_check_mchs(gnr__->mchs);
 }
 
@@ -694,6 +695,7 @@ static
 void crn_procer_setname(int id) {
     char buf[16] = {0};
     snprintf(buf, sizeof(buf)-1, "crn_procer_%d", id);
+    thread_setname0(buf);
     #ifdef __APPLE__
     extern void pthread_setname_np(char*);
     pthread_setname_np(buf);

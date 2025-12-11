@@ -140,6 +140,10 @@ void log_set_mutex() {
     log_set_lock(crn_loglock_rxilog);
 }
 
+int crn_log_set_level(int lvl) {
+    return log_set_level(lvl);
+}
+
 void __attribute__((no_instrument_function))
 crn_simlog(int level, const char *filename, int line, const char* funcname, const char *fmt, ...) {
     if (level > loglvl) return;

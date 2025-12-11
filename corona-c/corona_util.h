@@ -3,6 +3,15 @@
 
 #include <sys/time.h>
 #include <unistd.h>
+#include <pthread.h>
+
+#ifdef __APPLE__
+#define thread_setname0(name) pthread_setname_np(name)
+#define thread_setname(th, name) pthread_setname_np(name)
+#else
+#define thread_setname0(name) pthread_setname_np(pthread_self(), name)
+#define thread_setname(th, name) pthread_setname_np(th, name)
+#endif
 
 pid_t gettid();
 
@@ -43,11 +52,15 @@ void crn_simlog2(int level, const char *filename, int line, const char* funcname
 #endif
 
 void log_set_mutex();
+int crn_log_set_level(int);
 
 #define linfo(fmt, ...) if (SHOWLOG) log_log(LOG_INFO, __FILE__, __LINE__, fmt, __VA_ARGS__)
 #define linfo2(fmt, ...) if (SHOWLOG) log_log(LOG_INFO, __FILE__, __LINE__, fmt, __VA_ARGS__)
 #define lwarn(fmt, ...) if (SHOWLOG) log_log(LOG_WARN, __FILE__, __LINE__, fmt, __VA_ARGS__)
 #define lerror(fmt, ...) if (SHOWLOG) log_log(LOG_ERROR, __FILE__, __LINE__, fmt, __VA_ARGS__)
+#define ldebug(fmt, ...) if (SHOWLOG) log_log(LOG_DEBUG, __FILE__, __LINE__, fmt, __VA_ARGS__)
+#define lverb(fmt, ...) if (SHOWLOG) log_log(LOG_TRACE, __FILE__, __LINE__, fmt, __VA_ARGS__)
+#define ltrace(fmt, ...) if (SHOWLOG) log_log(LOG_TRACE, __FILE__, __LINE__, fmt, __VA_ARGS__)
 // #define linfo(fmt, ...)                                                 \
     // if (SHOWLOG) { crn_simlog(LOGLVL_INFO, __FILE__, __LINE__, __func__, fmt, __VA_ARGS__); }
 // #define linfo2(fmt, ...)                                                \
@@ -58,12 +71,12 @@ void log_set_mutex();
     if (SHOWLOG) { crn_simlog(LOGLVL_ERROR, __FILE__, __LINE__, __func__, fmt, __VA_ARGS__); }
 // #define lwarn(fmt, ...)                                                 \
     if (SHOWLOG) { crn_simlog(LOGLVL_WARN, __FILE__, __LINE__, __func__, fmt, __VA_ARGS__); }
-#define ldebug(fmt, ...)                                                 \
-    if (SHOWLOG) { crn_simlog(LOGLVL_DEBUG, __FILE__, __LINE__, __func__, fmt, __VA_ARGS__); }
-#define lverb(fmt, ...)                                                 \
-    if (SHOWLOG) { crn_simlog(LOGLVL_VERBOSE, __FILE__, __LINE__, __func__, fmt, __VA_ARGS__); }
-#define ltrace(fmt, ...)                                                 \
-    if (SHOWLOG) { crn_simlog(LOGLVL_TRACE, __FILE__, __LINE__, __func__, fmt, __VA_ARGS__); }
+// #define ldebug(fmt, ...)                                                 \
+//     if (SHOWLOG) { crn_simlog(LOGLVL_DEBUG, __FILE__, __LINE__, __func__, fmt, __VA_ARGS__); }
+// #define lverb(fmt, ...)                                                 \
+//     if (SHOWLOG) { crn_simlog(LOGLVL_VERBOSE, __FILE__, __LINE__, __func__, fmt, __VA_ARGS__); }
+// #define ltrace(fmt, ...)                                                 \
+//     if (SHOWLOG) { crn_simlog(LOGLVL_TRACE, __FILE__, __LINE__, __func__, fmt, __VA_ARGS__); }
 
 // depcreated
 void crn_loglock();
