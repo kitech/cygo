@@ -1345,7 +1345,8 @@ static void crn_gc_stop_proc() {
 static
 void crn_gc_on_collection_event2(GC_EventType evty) {
     if (atomic_getint(&crn_gc_states.stopworld)==1 ) {
-    printf("onclctev2: %d=%s, oldev=%d=%s, mcid=%d\n", evty, crn_gc_event_name(evty), crn_gc_states.eventno, crn_gc_event_name(crn_gc_states.eventno), gcurmcid__);
+        // cannot use linfo or deadlock often
+    // printf("onclctev2: %d=%s, oldev=%d=%s, mcid=%d\n", evty, crn_gc_event_name(evty), crn_gc_states.eventno, crn_gc_event_name(crn_gc_states.eventno), gcurmcid__);
     }else{
     ldebug("%d=%s mcid=%d\n", evty, crn_gc_event_name(evty), gcurmcid__);
     }

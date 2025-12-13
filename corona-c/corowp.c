@@ -133,7 +133,7 @@ static void corowp_ucontext_corofwd(int arg0, ...) {
     arg = va_arg(list, void*);
     va_end(list);
 
-    printf("arg0 %d, f %p, arg %p\n", arg0, f, arg);
+    ldebug("arg0 %d, f %p, arg %p\n", arg0, f, arg);
     assert(f!=0);
     f(arg);
 }
@@ -141,10 +141,10 @@ static void corowp_ucontext_corofwd(int arg0, ...) {
 void corowp_create(coro_context *ctx, coro_func coro, void *arg, void *sptr,  size_t ssze) {
     // ucontext_t should 700+, why so small???
     assert(sizeof(coro_context)>=sizeof(ucontext_t));
-    printf("sizeof(coro_context)=%lu, sizeof(ucontext_t)=%lu\n", sizeof(coro_context), sizeof(ucontext_t));
+    ldebug("sizeof(coro_context)=%lu, sizeof(ucontext_t)=%lu\n", sizeof(coro_context), sizeof(ucontext_t));
     assert(sizeof(ucontext_t)>700); // linux 900+, mac 700+
 
-    printf("corowp_create %p %p %p %p %lu\n", ctx, coro, arg, sptr, ssze);
+    ldebug("corowp_create %p %p %p %p %lu\n", ctx, coro, arg, sptr, ssze);
     assert(ctx != nilptr);
     if (coro==0) assert(arg == nilptr && sptr==0 && ssze==0 );
     pmutex_lock(&coroccmu);

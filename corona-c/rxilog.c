@@ -26,6 +26,8 @@
 #include <stdarg.h>
 #include <string.h>
 #include <time.h>
+#include <assert.h>
+#include <unistd.h>
 
 #include "rxilog.h"
 
@@ -92,7 +94,7 @@ void log_set_quiet(int enable) {
 // sepcnt, 0, 1 works fine
 static const char* log_log_file_trim(const char* file, int sepcnt) {
     char sep = '/';
-    char* ptr = file+strlen(file);
+    char* ptr = (char*)(file+strlen(file));
     int cnt = (sepcnt<0 || sepcnt > 99) ? 1 : sepcnt;
     for (; ptr != file; ptr--) {
         if (*ptr == sep) {
@@ -113,16 +115,23 @@ void log_log(int level, const char *file, int line, const char *fmt, ...) {
     return;
   }
 
-  char* filemid = log_log_file_trim(file, 1);
+  const char* filemid = log_log_file_trim(file, 1);
   int fmtlen = strlen(fmt);
-  int fmthas_newline = fmt[fmtlen-1] == '\n';
+  int fmt_has_newline = fmt[fmtlen-1] == '\n';
+  char tbuf[4096] = {0};
+  int bpos = 0;
+
+  // todo __lll_lock_wait_private deadlock
+  /* Get current time */
+  int zone = 8;
+  time_t t = time(NULL);
+  struct tm lt0 = {0};
+  // struct tm *lt = localtime_r(&t, &lt0);
+  struct tm *lt = gmtime_r(&t, &lt0);
+  lt->tm_hour = (lt->tm_hour+zone)%24;
 
   /* Acquire lock */
   lock();
-
-  /* Get current time */
-  time_t t = time(NULL);
-  struct tm *lt = localtime(&t);
 
   /* Log to stderr */
   if (!L.quiet) {
@@ -130,17 +139,27 @@ void log_log(int level, const char *file, int line, const char *fmt, ...) {
     char buf[16];
     buf[strftime(buf, sizeof(buf), "%H:%M:%S", lt)] = '\0';
 #ifdef LOG_USE_COLOR
-    fprintf(
-      stderr, "%s %s%-5s\x1b[0m \x1b[90m%s:%d:\x1b[0m ",
+    // fprintf(
+    //   stderr, "%s %s%-5s\x1b[0m \x1b[90m%s:%d:\x1b[0m ",
+    //   buf, level_colors[level], level_names[level], filemid, line);
+    bpos += snprintf(tbuf+bpos, sizeof(tbuf)-bpos,
+      "%s %s%-5s\x1b[0m \x1b[90m%s:%d:\x1b[0m ",
       buf, level_colors[level], level_names[level], filemid, line);
 #else
-    fprintf(stderr, "%s %-5s %s:%d: ", buf, level_names[level], filemid, line);
+    // fprintf(stderr, "%s %-5s %s:%d: ", buf, level_names[level], filemid, line);
+    bpos += snprintf(tbuf+bpos, sizeof(tbuf)-bpos, "%s %-5s %s:%d: ", buf, level_names[level], filemid, line);
 #endif
     va_start(args, fmt);
-    vfprintf(stderr, fmt, args);
+    // vfprintf(stderr, fmt, args);
+    bpos += vsnprintf(tbuf+bpos, sizeof(tbuf)-bpos, fmt, args);
     va_end(args);
-    if (!fmthas_newline) fprintf(stderr, "\n");
-    fflush(stderr);
+    if (!fmt_has_newline) bpos+= snprintf(tbuf+bpos, sizeof(tbuf)-bpos, "\n");
+    assert (bpos<sizeof(tbuf));
+    // extern int (*write_f)();
+    // write_f(STDERR_FILENO, tbuf, bpos);
+    write(STDERR_FILENO, tbuf, bpos);
+    // fprintf(stderr, "%s", tbuf);
+    // fflush(stderr);
   }
 
   /* Log to file */
@@ -152,7 +171,7 @@ void log_log(int level, const char *file, int line, const char *fmt, ...) {
     va_start(args, fmt);
     vfprintf(L.fp, fmt, args);
     va_end(args);
-    if (!fmthas_newline) fprintf(L.fp, "\n");
+    if (!fmt_has_newline) fprintf(L.fp, "\n");
     fflush(L.fp);
   }
 
@@ -180,7 +199,7 @@ int log_log_nofmt(int level, const char *file, int line, int vallens[], int tyid
     int pos = 0;
 
     // time level file line
-    char* filemid = log_log_file_trim(file, 1);
+    const char* filemid = log_log_file_trim(file, 1);
     // pos += snprintf(buf+pos, sizeof(buf)-pos-1, "%s:%d ", filemid, line);
 
     // args
@@ -188,7 +207,7 @@ int log_log_nofmt(int level, const char *file, int line, int vallens[], int tyid
     va_start(args, argcx);
     for (int idx=0; idx<argcx; idx++) {
         int tyid = tyids[idx];
-        char* tystr = ctypeid_tostr(tyid);
+        const char* tystr = ctypeid_tostr(tyid);
         // printf("arg%d tyid=%d\n", idx, tyid);
 
         // pos += snprintf(buf+pos, sizeof(buf)-pos-1, "%d: ", idx);
@@ -200,7 +219,7 @@ int log_log_nofmt(int level, const char *file, int line, int vallens[], int tyid
             }
             break;
         case ctypeid_uchar: {
-            uchar val = va_arg(args, uchar);
+            uchar val = va_arg(args, unsigned char);
             pos += snprintf(buf+pos, sizeof(buf)-pos-1, "%u", val);
             }
             break;
