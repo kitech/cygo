@@ -5,6 +5,7 @@
 #include <assert.h>
 #include <stdint.h>
 
+#include <sys/param.h>
 #include <unistd.h>
 #include <sys/syscall.h>
 // #include <threads.h>
@@ -14,6 +15,7 @@
 
 // #include "coronapriv.h"
 #include "futex.h"
+#include "hook.h"
 #include "rxilog.h"
 #include "atomic.h"
 
@@ -116,6 +118,7 @@ void crn_loglvl_forenv() {
     rtsets->gcpercent = 100;
 }
 
+static uintptr_t crn_loglk_tid = 0;
 static int crn_loglk_inited = 0;
 static pmutex_t crn_loglk;
 void __attribute__((no_instrument_function))
@@ -130,11 +133,14 @@ crn_logunlock() {
 void __attribute__((no_instrument_function))
 crn_loglock_rxilog(void* d, int islock) {
     assert(atomic_getint(&crn_loglk_inited));
-    // pmutex_lock(&loglk);
+    // maybe deadlock for other thread suspended
+    uintptr_t tid = gettid();
     if (islock) {
+        atomic_setuptr(&crn_loglk_tid, tid);
         pmutex_lock(&crn_loglk);
     }else{
         pmutex_unlock(&crn_loglk);
+        atomic_setuptr(&crn_loglk_tid, 0);
     }
 }
 

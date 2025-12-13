@@ -20,6 +20,10 @@ void crn_raw_free(void* ptr) {
 /*     return calloc(n, size); */
 /* } */
 
+///////
+
+gcstates crn_gc_states = {0};
+
 static void crn_pre_gclock_void(const char* funcname) {}
 static void crn_post_gclock_void(const char* funcname) {}
 
@@ -31,11 +35,15 @@ int crn_gc_ready() { return crn_pre_gclock_fn != 0; }
 #ifdef USE_BDWGC
 
 static void crn_pre_gclock(const char* funcname) {
+    int rv = atomic_addint(&crn_gc_states.ingclock, 1);
+    assert(rv >= 0);
     // if (crn_pre_gclock_fn == 0) { return ; } // temporary test
     assert(crn_pre_gclock_fn != 0);
     crn_pre_gclock_fn(funcname);
 }
 static void crn_post_gclock(const char* funcname) {
+    int rv = atomic_addint(&crn_gc_states.ingclock, -1);
+    assert(rv>0);
     // if (crn_post_gclock_fn == 0) { return ; }
     assert(crn_post_gclock_fn != 0);
     crn_post_gclock_fn(funcname);
@@ -44,6 +52,7 @@ static void crn_gc_finalizer(void*ptr, void*clientdata) {
     printf("ptr dtor %p\n", ptr);
 }
 void* crn_gc_malloc(size_t size) {
+    assert(atomic_getint(&crn_gc_states.stopworld2)==0); // or deadlock
     crn_pre_gclock(__func__);
     void* ptr = GC_MALLOC(size);
     crn_post_gclock(__func__);
@@ -52,6 +61,7 @@ void* crn_gc_malloc(size_t size) {
     return ptr;
 }
 void* crn_gc_realloc(void* ptr, size_t size) {
+    assert(atomic_getint(&crn_gc_states.stopworld2)==0); // or deadlock
     crn_pre_gclock(__func__);
     void* newptr = GC_REALLOC(ptr, size);
     crn_post_gclock(__func__);
@@ -81,6 +91,7 @@ void crn_gc_free_uncollectable(void* ptr) {
     crn_post_gclock(__func__);
 }
 void* crn_gc_calloc(size_t n, size_t size) {
+    // assert(atomic_getint(&crn_gc_states.incollect)==0); // or deadlock
     crn_pre_gclock(__func__);
     void* ptr = GC_MALLOC(n*size);
     crn_post_gclock(__func__);
@@ -88,6 +99,7 @@ void* crn_gc_calloc(size_t n, size_t size) {
     return ptr;
 }
 void* crn_gc_malloc_uncollectable(size_t size) {
+    // assert(atomic_getint(&crn_gc_states.incollect)==0); // or deadlock
     crn_pre_gclock(__func__);
     void* ptr = GC_MALLOC_UNCOLLECTABLE(size);
     crn_post_gclock(__func__);

@@ -6,6 +6,19 @@
 #ifdef USE_BDWGC
 
 #include <gc.h>
+
+// gc's states not belongs to struct corona
+typedef struct gcstates {
+    int eventno;
+    int ingclock;
+    int incollect;
+    int stopworld;
+    int stopworld2; // more smaller time scope
+    int inmark;
+    int inclaim;
+} gcstates;
+extern gcstates crn_gc_states;
+
 extern void GC_push_all_eager(void*, void*);
 extern void GC_set_push_other_roots(void*);
 

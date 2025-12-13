@@ -1,7 +1,9 @@
 
+#include "atomic.h"
 #include "corona_util.h"
 #include "coronagc.h"
 #include "futex.h"
+#include <gc/gc.h>
 #include <stdint.h>
 #include <sys/mman.h>
 #include <sys/ucontext.h>
@@ -43,7 +45,7 @@ typedef struct machine {
     pmutex_t pkmu; // pack lock
     pcond_t pkcd;
     int parking;
-    int wantgclock;
+    int wantgclock; // deprecated, should global value, not machine scope
     yieldinfo yinfo;
     struct GC_stack_base stksb;
     void* gchandle;
@@ -61,7 +63,7 @@ typedef struct corona {
     bool inited;
     pmutex_t initmu;
     pcond_t initcd;
-    int stopworld;
+    int stopworld; // deprecated
     coro_context coctx0;
     coro_context maincoctx;
 
@@ -1217,14 +1219,10 @@ static bool crn_machine_all_parking(int nochkid) {
     }
     return allpark;
 }
-static void crn_gc_start_proc() {
-    // linfo2("gc start %d\n", gettid());
+
+static void crn_machine_check_allpark() {
     corona* nr = crn_get();
     if (nr == nilptr || (nr != nilptr && nr->inited == false)) return;
-    int rv = atomic_casint(&nr->stopworld,0,1);
-    if (rv == false) {
-    }
-    assert(rv == true);
     int nochkid = gcurmcid__;
     if (nochkid != 0) {
         // linfo2("wow machine thread gc %d\n", nochkid);
@@ -1242,6 +1240,7 @@ static void crn_gc_start_proc() {
         }
     }
 
+    // why need care allpark, it should works both
     int first_log_wait_too_long = 0;
     time_t btime = time(0);
     for(int i = 0;; i++) {
@@ -1291,6 +1290,21 @@ static void crn_gc_start_proc() {
     }
     // GC_alloc_lock();
 }
+static void crn_gc_start_proc() {
+    // linfo2("gc start %d\n", gettid());
+    corona* nr = crn_get();
+    if (nr == nilptr || (nr != nilptr && nr->inited == false)) return;
+    int rv = atomic_casint(&nr->stopworld,0,1);
+    if (rv == false) {
+    }
+    assert(rv == true);
+    int nochkid = gcurmcid__;
+    if (nochkid != 0) {
+        // linfo2("wow machine thread gc %d\n", nochkid);
+    }
+
+    crn_machine_check_allpark();
+}
 static void crn_gc_stop_proc() {
     // linfo2("gc finished %d\n", gettid());
     corona* nr = crn_get();
@@ -1330,15 +1344,18 @@ static void crn_gc_stop_proc() {
 // handler func split out, compared to v1
 static
 void crn_gc_on_collection_event2(GC_EventType evty) {
-    // lwarn("%d=%s mcid=%d\n", evty, crn_gc_event_name(evty), gcurmcid__);
-    // printf("onclctev2: %d=%s mcid=%d\n", evty, crn_gc_event_name(evty), gcurmcid__);
-    corona* nr = crn_get();
-    if (nr == nilptr || (nr != nilptr && nr->inited == false)) {
-        return;
+    if (atomic_getint(&crn_gc_states.stopworld)==1 ) {
+    printf("onclctev2: %d=%s, oldev=%d=%s, mcid=%d\n", evty, crn_gc_event_name(evty), crn_gc_states.eventno, crn_gc_event_name(crn_gc_states.eventno), gcurmcid__);
+    }else{
+    ldebug("%d=%s mcid=%d\n", evty, crn_gc_event_name(evty), gcurmcid__);
     }
 
+    int rv = 0;
+    bool bv = false;
+    crn_gc_states.eventno = evty;
     switch (evty) {
     case GC_EVENT_START: /* COLLECTION */
+    bv = atomic_casint(&crn_gc_states.incollect, 0, 1); assert(bv);
     crn_gc_start_proc();
     break;
     case GC_EVENT_MARK_START:
@@ -1350,15 +1367,20 @@ void crn_gc_on_collection_event2(GC_EventType evty) {
     case GC_EVENT_RECLAIM_END:
     break;
     case GC_EVENT_END: /* COLLECTION */
+    bv = atomic_casint(&crn_gc_states.incollect, 1, 0); assert(bv);
     crn_gc_stop_proc();
     break;
     case GC_EVENT_PRE_STOP_WORLD: /* STOPWORLD_BEGIN */
+    bv = atomic_casint(&crn_gc_states.stopworld, 0, 1); assert(bv);
     break;
     case GC_EVENT_POST_STOP_WORLD: /* STOPWORLD_END */
+    bv = atomic_casint(&crn_gc_states.stopworld2, 0, 1); assert(bv);
     break;
     case GC_EVENT_PRE_START_WORLD: /* STARTWORLD_BEGIN */
+    bv = atomic_casint(&crn_gc_states.stopworld2, 1, 0); assert(bv);
     break;
     case GC_EVENT_POST_START_WORLD: /* STARTWORLD_END */
+    bv = atomic_casint(&crn_gc_states.stopworld, 1, 0); assert(bv);
     break;
     case GC_EVENT_THREAD_SUSPENDED:
     break;
