@@ -1326,21 +1326,53 @@ static void crn_gc_stop_proc() {
         }
     }
 }
+
+// handler func split out, compared to v1
 static
 void crn_gc_on_collection_event2(GC_EventType evty) {
-    // linfo2("%d=%s mcid=%d\n", evty, crn_gc_event_name(evty), gcurmcid__);
+    // lwarn("%d=%s mcid=%d\n", evty, crn_gc_event_name(evty), gcurmcid__);
+    // printf("onclctev2: %d=%s mcid=%d\n", evty, crn_gc_event_name(evty), gcurmcid__);
     corona* nr = crn_get();
-    if (nr == nilptr || (nr != nilptr && nr->inited == false)) return;
+    if (nr == nilptr || (nr != nilptr && nr->inited == false)) {
+        return;
+    }
 
     switch (evty) {
-    case GC_EVENT_END:
-        crn_gc_stop_proc();
-        break;
+    case GC_EVENT_START: /* COLLECTION */
+    crn_gc_start_proc();
+    break;
+    case GC_EVENT_MARK_START:
+    break;
+    case GC_EVENT_MARK_END:
+    break;
+    case GC_EVENT_RECLAIM_START:
+    break;
+    case GC_EVENT_RECLAIM_END:
+    break;
+    case GC_EVENT_END: /* COLLECTION */
+    crn_gc_stop_proc();
+    break;
+    case GC_EVENT_PRE_STOP_WORLD: /* STOPWORLD_BEGIN */
+    break;
+    case GC_EVENT_POST_STOP_WORLD: /* STOPWORLD_END */
+    break;
+    case GC_EVENT_PRE_START_WORLD: /* STARTWORLD_BEGIN */
+    break;
+    case GC_EVENT_POST_START_WORLD: /* STARTWORLD_END */
+    break;
+    case GC_EVENT_THREAD_SUSPENDED:
+    break;
+    case GC_EVENT_THREAD_UNSUSPENDED:
+    break;
+    default: assert(0); // should no others
     }
 }
 
+// GC_collection_in_progress() check but not exported
+
 static
 void crn_gc_on_collection_event(GC_EventType evty) {
+    assert(0);
     // linfo2("%d=%s mcid=%d\n", evty, crn_gc_event_name(evty), gcurmcid__);
     corona* nr = crn_get();
     if (nr == nilptr || (nr != nilptr && nr->inited == false)) return;
@@ -1402,6 +1434,7 @@ void crn_gc_on_collection_event(GC_EventType evty) {
                 break;
             }
         }
+    } else if (evty == GC_EVENT_POST_START_WORLD) {
     } else if (evty == GC_EVENT_END) {
         linfo2("gc finished %d\n", 0);
     }
@@ -1481,6 +1514,8 @@ static void crn_ignore_signal(int signo) {
     linfo2("catched signal and ignored %d\n", signo);
 }
 
+#include "gcsp_corrector.c"
+
 bool gcinited = false;
 static
 void crn_init_intern() {
@@ -1494,6 +1529,8 @@ void crn_init_intern() {
     crn_pre_gclock_fn = crn_pre_gclock_proc;
     crn_post_gclock_fn = crn_post_gclock_proc;
 
+    GC_set_sp_corrector(crn_sp_corrector);
+    assert(GC_get_sp_corrector()!=0);
     crn_gc_set_nprocs(1); // GC_NPROCS=1
     // GC_set_find_leak(1);
     GC_set_finalize_on_demand(0);
@@ -1506,7 +1543,8 @@ void crn_init_intern() {
     // TODO
     // GC_set_push_other_roots(crn_gc_push_other_roots1); // run in which threads?
     extern void GC_set_start_callback(void(*fn)());
-    GC_set_start_callback(crn_gc_start_proc);
+    // GC_set_start_callback(crn_gc_start_proc);
+    // GC_set_stop_func(crn_gc_stop_proc);
     GC_set_on_collection_event(crn_gc_on_collection_event2);
     // GC_set_on_thread_event(crn_gc_on_thread_event);
     GC_allow_register_threads();

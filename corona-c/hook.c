@@ -1121,10 +1121,6 @@ FILE *fdopen(int fd, const char *mode) {
     return rv;
 }
 
-int pthread_create111(pthread_t *thread, const pthread_attr_t *attr,
-                   void *(*start_routine) (void *), void *arg) {
-    linfo("ooo %d\n", 123);
-}
 int eventfd(unsigned int initval, int flags) {
     if (!eventfd_f) initHook();
     // if (!crn_in_procer()) return open_f(fds, nfds, timeout);
@@ -1147,6 +1143,16 @@ int eventfd(unsigned int initval, int flags) {
     return rv;
 }
 
+#define CRN_HOOK_PTHREAD
+#ifdef CRN_HOOK_PTHREAD
+int pthread_create111(pthread_t *thread, const pthread_attr_t *attr,
+                   void *(*start_routine) (void *), void *arg) {
+    linfo("ooo %d\n", 123);
+}
+#endif
+
+#define CRN_HOOK_MUTEX
+#ifdef CRN_HOOK_MUTEX
 int pthread_mutex_lock_wip(pthread_mutex_t *mutex)
 {
     if (!pmutex_lock_f) initHook();
@@ -1192,8 +1198,10 @@ int pthread_cond_signal_wip(pthread_cond_t *cond)
     ldebug("mtx=%p\n", cond);
     assert(1==2);
 }
+#endif
 
-
+#define CRN_HOOK_EPOLL
+#ifdef CRN_HOOK_EPOLL
 #if defined(LIBGO_SYS_Linux)
 // TODO conflict with libevent epoll_wait
 int epoll_wait_wip(int epfd, struct epoll_event *events, int maxevents, int timeout)
@@ -1206,7 +1214,7 @@ int epoll_wait_wip(int epfd, struct epoll_event *events, int maxevents, int time
     }
     // return libgo_epoll_wait(epfd, events, maxevents, timeout);
 }
-
+#endif
 #elif defined(LIBGO_SYS_FreeBSD)
 #endif
 

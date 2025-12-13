@@ -15,6 +15,7 @@
 // #include "coronapriv.h"
 #include "futex.h"
 #include "rxilog.h"
+#include "atomic.h"
 
 pid_t gettid() {
     #ifdef __APPLE__
@@ -115,6 +116,7 @@ void crn_loglvl_forenv() {
     rtsets->gcpercent = 100;
 }
 
+static int crn_loglk_inited = 0;
 static pmutex_t crn_loglk;
 void __attribute__((no_instrument_function))
 crn_loglock() {
@@ -127,6 +129,7 @@ crn_logunlock() {
 }
 void __attribute__((no_instrument_function))
 crn_loglock_rxilog(void* d, int islock) {
+    assert(atomic_getint(&crn_loglk_inited));
     // pmutex_lock(&loglk);
     if (islock) {
         pmutex_lock(&crn_loglk);
@@ -136,7 +139,9 @@ crn_loglock_rxilog(void* d, int islock) {
 }
 
 void log_set_mutex() {
-    pmutex_init(&crn_loglk, NULL);
+    if (atomic_casint(&crn_loglk_inited, 0, 1)) {
+        pmutex_init(&crn_loglk, NULL);
+    }
     log_set_lock(crn_loglock_rxilog);
 }
 

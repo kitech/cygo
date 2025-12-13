@@ -99,7 +99,7 @@ void crn_call_with_alloc_lock(void*(*fnptr)(void* arg1), void* arg) {
     crn_pre_gclock(__func__);
     // GC_call_with_alloc_lock(fnptr, arg);
     // GC_do_blocking(fnptr, arg);
-    GC_call_with_gc_active(fnptr, arg);
+    // GC_call_with_gc_active(fnptr, arg);
     crn_post_gclock(__func__);
 }
 
@@ -127,29 +127,29 @@ void crn_gc_set_nprocs(int n) {
 const char* crn_gc_event_name(GC_EventType evty) {
     switch (evty) {
     case GC_EVENT_START: /* COLLECTION */
-        return "clctstart";
+        return "clct-start";
     case GC_EVENT_MARK_START:
-        return "markstart";
+        return "mark-start";
     case GC_EVENT_MARK_END:
-        return "markend";
+        return "mark-end";
     case GC_EVENT_RECLAIM_START:
-        return "reclaimstart";
+        return "reclaim-start";
     case GC_EVENT_RECLAIM_END:
-        return "reclaimend";
+        return "reclaim-end";
     case GC_EVENT_END: /* COLLECTION */
-        return "clctend";
+        return "clct-end";
     case GC_EVENT_PRE_STOP_WORLD: /* STOPWORLD_BEGIN */
-        return "prestopworld";
+        return "pre-stopworld";
     case GC_EVENT_POST_STOP_WORLD: /* STOPWORLD_END */
-        return "poststopworld";
+        return "post-stopworld";
     case GC_EVENT_PRE_START_WORLD: /* STARTWORLD_BEGIN */
-        return "prestartworld";
+        return "pre-startworld";
     case GC_EVENT_POST_START_WORLD: /* STARTWORLD_END */
-        return "poststartworld";
+        return "post-startworld";
     case GC_EVENT_THREAD_SUSPENDED:
-        return "threadsuspend";
+        return "thread-suspend";
     case GC_EVENT_THREAD_UNSUSPENDED:
-        return "threadunsuspend";
+        return "thread-unsuspend";
     }
     assert(1==2);
 }
