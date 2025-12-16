@@ -17,6 +17,7 @@
 #include <collectc/hashtable.h>
 #include <collectc/array.h>
 #include "datstu.h"
+#include "yieldtypes.h"
 
 #include <corona.h>
 #include <coronapriv.h>
@@ -1034,6 +1035,20 @@ int crn_procer_yield(long fd, int ytype) {
         }
         return -1;
     }
+    // linux only deadlock
+    if (ytype == YIELD_TYPE_USLEEP) {
+        // for GC_collect_a_little -> usleep()
+        extern int crn_gc_deadlock_detect1();
+        if (atomic_getint(&crn_gc_states.stopworld)==1) {
+            lwarn("stopworld little danger %d\n", fd);
+            // assert(sizeof(useconds_t)==sizeof(long));
+            extern int (*usleep_f)(useconds_t);
+            usleep_f(fd);
+            lwarn("stopworld little danger avoided %d\n", fd);
+            return 0; // our sleep instead real caller
+        }
+    }
+
     // linfo("yield fd=%ld, ytype=%s(%d), mcid=%d, grid=%d\n", fd, yield_type_name(ytype), ytype, gcurmcid__, gcurgrid__);
     machine* mc = crn_machine_get(gcurmcid__);
     assert(mc != nilptr);
@@ -1552,8 +1567,11 @@ void crn_init_intern() {
     crn_pre_gclock_fn = crn_pre_gclock_proc;
     crn_post_gclock_fn = crn_post_gclock_proc;
 
+    #ifdef __APPLE__
+    #else
     GC_set_sp_corrector(crn_sp_corrector);
     assert(GC_get_sp_corrector()!=0);
+    #endif
     crn_gc_set_nprocs(1); // GC_NPROCS=1
     // GC_set_find_leak(1);
     GC_set_finalize_on_demand(0);

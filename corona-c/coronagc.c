@@ -1,8 +1,10 @@
 #include <assert.h>
+#include <dlfcn.h>
 #include <stdlib.h>
 #include <stdio.h>
 #include <stdbool.h>
 #include <string.h>
+#include <unistd.h>
 
 #include "coronagc.h"
 #include "coronapriv.h"
@@ -51,8 +53,31 @@ static void crn_post_gclock(const char* funcname) {
 static void crn_gc_finalizer(void*ptr, void*clientdata) {
     printf("ptr dtor %p\n", ptr);
 }
+
+int crn_gc_deadlock_detect1() {
+    if (atomic_getint(&crn_gc_states.stopworld)==1) {
+        lwarn("stopworld little danger %d\n", 0);
+        int waitcnt = 0;
+        int (*usleep_f)(long) = dlsym(RTLD_NEXT, "usleep");
+        assert(usleep_f != NULL);
+        // extern void (*usleep_f)(int);
+        while(atomic_getint(&crn_gc_states.stopworld)==1) {
+            usleep_f(1234); // 1ms
+            waitcnt++;
+        }
+        lwarn("stopworld little danger avoided %d\n", waitcnt);
+    }
+    return 0;
+}
+
 void* crn_gc_malloc(size_t size) {
     assert(atomic_getint(&crn_gc_states.stopworld2)==0); // or deadlock
+    // linux only deadlock
+#ifdef __APPLE__
+#else
+    crn_gc_deadlock_detect1();
+#endif
+
     crn_pre_gclock(__func__);
     void* ptr = GC_MALLOC(size);
     crn_post_gclock(__func__);
@@ -109,9 +134,12 @@ void* crn_gc_malloc_uncollectable(size_t size) {
 
 void crn_call_with_alloc_lock(void*(*fnptr)(void* arg1), void* arg) {
     crn_pre_gclock(__func__);
+    #ifdef __APPLE__
     // GC_call_with_alloc_lock(fnptr, arg);
     // GC_do_blocking(fnptr, arg);
-    // GC_call_with_gc_active(fnptr, arg);
+    GC_call_with_gc_active(fnptr, arg);
+    #else
+    #endif
     crn_post_gclock(__func__);
 }
 
