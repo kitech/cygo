@@ -41,7 +41,7 @@ void corowp_set_main_ctx(coro_context* ctx) {
     crn_main_coro_ctx = ctx;
 }
 
-// #define CORO_BACKEND_LIBCO
+// #define CORO_BACKEND_FCONTEXT
 #define CORO_BACKEND_UCONEXT
 // https://github.com/semistrict/libcoro
 // #define CORO_BACKEND_LIBCORO
@@ -50,26 +50,25 @@ void corowp_set_main_ctx(coro_context* ctx) {
 // 如果真的需要同步调用，那么也还是要考虑在上层视逻辑需要决定是否加锁。
 static pmutex_t coroccmu = PTHREAD_MUTEX_INITIALIZER;
 
-#if defined (CORO_BACKEND_LIBCO)
+#if defined (CORO_BACKEND_FCONTEX)
 
-#include "libco/libco.h"
-
-typedef struct libco_context {
+typedef void* fcontext_t;
+typedef struct ftransfer_t {
+    fcontext_t fctx;
+    void* data;
+} ftransfer_t;
+typedef struct ftransfer_data_t {
+    ftransfer_t ftran;
     coro_func usrthr;
     void* usrarg;
     int hasarg;
-    cothread_t cothr;
-}libco_context;
+} ftransfer_data_t;
 
-static __thread void* libco_arg = 0;
-void co_switch_with_arg(cothread_t thread, void* arg) {
-    libco_arg = arg;
-    co_switch(thread);
-}
+fcontext_t (make_fcontext_f)(void* sp, size_t size, void(*f)(ftransfer_t)) = 0;
+ftransfer_t (jump_fcontext_f)(fcontext_t fctx, void* data) = 0;
 
-void libco_entry_point() {
-    libco_context* ctx = libco_arg;
-    libco_arg = 0;
+void fcontext_entry_point(ftransfer_t ftran) {
+    ftransfer_data_t* ctx = ftran.data;
     coro_func usrthr = ctx->usrthr;
     void* usrarg = ctx->usrarg;
     linfo("run usrthr %p, usrarg %p, thr %p\n", ctx->usrthr, ctx->usrarg, ctx->cothr);
@@ -78,37 +77,33 @@ void libco_entry_point() {
 }
 
 void corowp_create(coro_context *ctx, coro_func coro, void *arg, void *sptr,  size_t ssze) {
-    assert(sizeof(coro_context)>=sizeof(libco_context));
+    assert(sizeof(coro_context)>=sizeof(ftransfer_data_t));
     printf("corowp_create %p %p %p %p %lu\n", ctx, coro, arg, sptr, ssze);
     assert(ctx != nilptr);
     if (coro==0) assert(arg == nilptr && sptr==0 && ssze==0 );
-    pmutex_lock(&coroccmu);
-    libco_context rctx = {0};
-    rctx.hasarg = 42;
-    rctx.usrthr = coro;
-    rctx.usrarg = arg;
-    rctx.cothr = co_create(ssze, libco_entry_point);
-    linfo("create coro with fn %p, arg %p thr %p\n", rctx.usrthr, rctx.usrarg, rctx.cothr);
-    memcpy(ctx, &rctx, sizeof(libco_context));
-    pmutex_unlock(&coroccmu);
+
+    fcontext_t fctx = make_fcontext_f(sptr, ssze, fcontext_entry_point);
+    ftransfer_data_t *rctx = ctx;
+    rctx->ftran.fctx = fctx;
+    rctx->ftran.data = ctx; // reverse pointer to parent struct
+    rctx->hasarg = 42;
+    rctx->usrthr = coro;
+    rctx->usrarg = arg;
+    rctx->cothr = fctx;
+    linfo("created fcontext with fn %p, arg %p thr %p\n", rctx.usrthr, rctx.usrarg, rctx.cothr);
+
 }
 
 void corowp_transfer(coro_context *prev, coro_context *next) {
-    libco_context* rctx0 = (libco_context*)prev;
-    libco_context* rctx1 = (libco_context*)next;
+    ftransfer_data_t* rctx0 = (ftransfer_data_t*)prev;
+    ftransfer_data_t* rctx1 = (ftransfer_data_t*)next;
     if (rctx0->cothr==0) {
         // mainco => workco
-        if (rctx1->hasarg == 42) {
-            linfo("first pass arg %d, fn %p, arg %p, thr %p\n", rctx1->hasarg, rctx1->usrthr, rctx1->usrarg, rctx1->cothr);
-            rctx1->hasarg = 43;
-            co_switch_with_arg(rctx1->cothr, rctx1);
-        }else{
-             co_switch_with_arg(rctx1->cothr, rctx1);
-            // co_switch(rctx1->cothr);
-        }
+        linfo("first pass arg %d, fn %p, arg %p, thr %p\n", rctx1->hasarg, rctx1->usrthr, rctx1->usrarg, rctx1->cothr);        ftransfer_t ftran = jump_fcontext_f(rctx1->ftran);
+        rctx0->ftran = jump_fcontext_f(rctx1->ftran);
     } else if (rctx1->cothr==0) {
         // workco => mainco
-        co_switch(co_active());
+        ftransfer_t ftran = jump_fcontext_f(rctx1->ftran);
     } else {
         assert(0);
     }
