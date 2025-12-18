@@ -52,12 +52,9 @@ void hello(void*arg) {
 }
 
 static corona* nr = nilptr;
-int main() {
-    extern void initHook(); initHook();
-    nr = crn_new();
-    crn_init(nr);
-    crn_wait_init_done(nr);
-    linfo("corona init done %d, %d\n", 12345, gettid());
+
+// will block no return for ever
+static void test_norm_run() {
     sleep(1);
     for (int i = 0; i < 3; i ++) {
         crn_post(hello, (void*)(uintptr_t)(i+1));
@@ -75,6 +72,29 @@ int main() {
         sleep(1);
         close(fd);
     }
+}
+
+static void test_sigsegv_mp() {
+
+}
+
+static void test_stack_overflow() {
+
+}
+
+static void test_stack_growth() {
+
+}
+
+int main() {
+    extern void initHook(); initHook();
+    nr = crn_new();
+    crn_init(nr);
+    crn_wait_init_done(nr);
+    linfo("corona init done %d, %d\n", 12345, gettid());
+
+    test_norm_run();
+
     sleep(5);
     return 0;
 }

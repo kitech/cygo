@@ -8,6 +8,11 @@ endif()
 # set(CMAKE_C_COMPILER "clang")
 # set(CMAKE_CXX_COMPILER "/path/to/clang++")
 
+option(USE_LIBEVENT "Build with libevent" OFF)
+option(USE_LIBEV "Build with libev" OFF)
+option(USE_LIBUV "Build with libuv" OFF)
+option(USE_FCONTEXT "Build with boost fcontext" OFF)
+option(USE_LIBSIGSEGV "Build with libsigsegv" OFF)
 include(cxrt.cmake)
 
 add_executable(simlnk tests/simlink.c)
