@@ -11,6 +11,8 @@
 #include <stdio.h>
 #include <assert.h>
 #include <string.h>
+#include <signal.h>
+#include <sigsegv.h>
 
 // #include <private/pthread_support.h>
 #include <coro.h>
@@ -52,6 +54,7 @@ typedef struct machine {
     void* gchandle;
     void* savefrm;
     pthread_t thr;
+    char sigso_altstk[SIGSTKSZ]; // 16-64k, stack overflow altstk
     coro_context coctx0;
     char reserved[999]; // seems upper coctx0 overflowed heere
 } machine;
@@ -68,6 +71,7 @@ typedef struct corona {
     coro_context coctx0;
     coro_context maincoctx;
 
+    sigsegv_dispatcher sigdpt;
     netpoller* np;
     rtsettings* rtsets;
 } corona;
@@ -111,6 +115,28 @@ static int crn_nxtid(corona* nr) {
     assert(1==2);
 }
 
+static int crn_global_fault_handler(void* fault_address, int serious) {
+    lerror("glob sigsegv handler, addr %p, serious %d\n", fault_address, serious);
+    corona* nr = gnr__;
+    int rv = sigsegv_dispatch(&nr->sigdpt, fault_address);
+    linfo("sigdpt rv=%d\n", rv);
+    // where to go ???
+    rv = sigsegv_leave_handler(0, 0, 0, 0);
+    // int rv = sigsegv_leave_handler(void (*continuation)(void *, void *, void *), void *cont_arg1, void *cont_arg2, void *cont_arg3);
+    return rv;
+}
+
+static int crn_fiber_fault_handler(void* fault_address, void* user_arg) {
+    lerror("addr %p, arg %p\n", fault_address, user_arg);
+    corona* nr = gnr__;
+    // sigsegv_dispatch(&nr->sigdpt, fault_address);
+}
+static void crn_fiber_fault_setup(fiber* gr) {
+    corona* nr = gnr__;
+    void* ticket = sigsegv_register(&nr->sigdpt, gr->stkptr, gr->stksz, crn_fiber_fault_handler, 0);
+    gr->sig_regi_ticket = ticket;
+}
+
 // fiber internal API
 static void fiber_finalizer(void* gr) {
     fiber* f = (fiber*)gr;
@@ -147,6 +173,7 @@ void crn_fiber_new2(fiber*gr, size_t stksz) {
     stkptr = crn_gc_malloc_uncollectable(stksz);
     // gr->stack.sptr = calloc(1, stksz);
     gr->stkptr = stkptr;
+    gr->stksz = stksz;
     gr->stack.sptr = (void*)((uintptr_t)stkptr + 4096);
     gr->stack.ssze = stksz - 4096;
     memset(stkptr, 123, 4096);
@@ -157,6 +184,8 @@ void crn_fiber_new2(fiber*gr, size_t stksz) {
     for (int i = 4000; i < 10000; i++) {
     }
     gr->mystksb.mem_base = (void*)((uintptr_t)gr->stack.sptr + stksz);
+
+    crn_fiber_fault_setup(gr);
     crn_fiber_setstate(gr, runnable);
     // GC_add_roots(gr->stack.sptr, gr->stack.sptr+(gr->stack.ssze));
     // 这一句会让fnproc直接执行，但是可能需要的是创建与执行分开。原来是针对-DCORO_PTHREAD
@@ -332,13 +361,6 @@ void crn_fiber_forward(void* arg) {
     corowp_transfer(&gr->coctx, gr->coctx0); // 这句要写在函数fnproc退出之前？
 }
 
-typedef struct libco_context2 {
-    void* usrthr;
-    void* usrarg;
-    int hasarg;
-    void* cothr;
-}libco_context2;
-
 // TODO 有时候它不一定是从ctx0跳转，或者是跳转到ctx0。这几个函数都是 crn_fiber_run/resume,suspend
 // 一定是从ctx0跳过来的，因为所有的fibers是由调度器发起 run/resume/suspend，而不是其中某一个fiber发起
 void crn_fiber_run_first(fiber* gr) {
@@ -468,6 +490,15 @@ void crn_fiber_suspend(fiber* gr) {
     corowp_transfer(&gr->coctx, gr->coctx0);
     lverb("coctx returned to workco fid %d mcid %d\n", gr->id, gr->mcid);
     crn_check_mchs(gnr__->mchs);
+}
+
+
+static void crn_machine_fault_handler() {
+
+}
+static void crn_machine_fault_setup() {
+    corona* nr = gnr__;
+    // void* rv = sigsegv_register(&nr->sigdpt, 0, 0, crn_machine_fault_handler, 0);
 }
 
 // machine internal API
@@ -1619,6 +1650,9 @@ corona* crn_new() {
     corona* nr = (corona*)crn_gc_malloc(sizeof(corona));
     pmutex_init(&nr->initmu, nilptr);
     pcond_init(&nr->initcd, nilptr);
+    sigsegv_init(&nr->sigdpt);
+    int rv = sigsegv_install_handler(crn_global_fault_handler);
+    assert(rv==0);
     nr->mths = crnmap_new_uintptr();
     nr->mchs = crnmap_new_uintptr();
 

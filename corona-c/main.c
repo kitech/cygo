@@ -1,3 +1,4 @@
+#include <stdlib.h>
 #include <unistd.h>
 #include <stdio.h>
 #include <assert.h>
@@ -51,7 +52,6 @@ void hello(void*arg) {
     assert(gettid() == tid);
 }
 
-static corona* nr = nilptr;
 
 // will block no return for ever
 static void test_norm_run() {
@@ -74,17 +74,23 @@ static void test_norm_run() {
     }
 }
 
-static void test_sigsegv_mp() {
+static void test_glob_sigsegv_handle(void*arg) {
+    memcpy((void*)0x3, (void*)0x4, 5);
+}
+
+static void test_sigsegv_mp(void*arg) {
 
 }
 
-static void test_stack_overflow() {
+static void test_stack_overflow(void*arg) {
 
 }
 
-static void test_stack_growth() {
+static void test_stack_growth(void*arg) {
 
 }
+
+static corona* nr = nilptr;
 
 int main() {
     extern void initHook(); initHook();
@@ -93,6 +99,8 @@ int main() {
     crn_wait_init_done(nr);
     linfo("corona init done %d, %d\n", 12345, gettid());
 
+    // test_glob_sigsegv_handle();
+    // crn_post(test_glob_sigsegv_handle, (void*)42);
     test_norm_run();
 
     sleep(5);

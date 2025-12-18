@@ -71,8 +71,10 @@ struct fiber {
     void* arg;
     coro_stack stack;
     void* stkptr;
+    size_t stksz;
     void* stkmid;
     struct GC_stack_base mystksb; // mine for GC
+    void* sig_regi_ticket; // sigsegv_register
     coro_context coctx;
     char overflowed[999]; // for upper coctx
     coro_context *coctx0; // ref to machine.coctx0
