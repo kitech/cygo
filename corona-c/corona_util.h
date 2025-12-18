@@ -8,8 +8,11 @@
 
 #ifdef __APPLE__
 extern int pthread_setname_np(const char*);
+extern pthread_getname_np(pthread_t, char *, size_t);
 #define thread_setname0(name) pthread_setname_np(name)
 #define thread_setname(th, name) pthread_setname_np(name)
+extern size_t pthread_get_stacksize_np(pthread_t);
+extern char* pthread_get_stackaddr_np(pthread_t);
 static int thread_getstack(pthread_t pth, void** stk, size_t* size) {
     size_t size2 = pthread_get_stacksize_np(pth);
     void* stk2 = pthread_get_stackaddr_np(pth); // stacktop https://git.tu-berlin.de/leon.a.albrecht/serenity-mirror/-/blob/057abb9023a30ea226a7b979a9f53f4f9dbe3c93/AK/StackInfo.cpp#L59

@@ -25,5 +25,7 @@ target_link_libraries(corona -L. crn cxrt -L./bdwgc/.libs -L./cltc/lib gc event 
 set(vcpkg_dir "/opt/vcpkg/root/installed/x64-osx-dynamic")
 include_directories(${vcpkg_dir}/include)
 TARGET_LINK_LIBRARIES(corona -L${vcpkg_dir}/lib -Wl,-rpath,${vcpkg_dir}/lib)
+include_directories(/opt/devsys/include)
+TARGET_LINK_LIBRARIES(corona -L/opt/devsys/lib -Wl,-rpath,/opt/devsys/lib)
 
 # target_compile_options(corona PRIVATE )
