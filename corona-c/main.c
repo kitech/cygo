@@ -1,3 +1,4 @@
+#include <pthread.h>
 #include <stdlib.h>
 #include <unistd.h>
 #include <stdio.h>
@@ -83,7 +84,10 @@ static void test_sigsegv_mprot(void*arg) {
 }
 
 static void test_stack_overflow(void*arg) {
-
+    char buf[8] = {0};
+    for (int i = 0; i < 160; i++) {
+        buf[i] = 42;
+    }
 }
 
 static void test_stack_growth(void*arg) {
@@ -97,10 +101,13 @@ int main() {
     nr = crn_new();
     crn_init(nr);
     crn_wait_init_done(nr);
-    linfo("corona init done %d, %d\n", 12345, gettid());
+    linfo("corona init done %d, %d, pth %p\n", 12345, gettid(), pthread_self());
 
     // test_glob_sigsegv_handle();
     // crn_post(test_glob_sigsegv_handle, (void*)42);
+
+    // test_stack_overflow(0); // main thread catch ok
+    // crn_post(test_stack_overflow, (void*)42); // other thread catch ok
 
     // test_norm_run(); // set dftstksz=5,6,7k, then can trap sigsegv
     test_norm_run();

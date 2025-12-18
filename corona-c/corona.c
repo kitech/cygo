@@ -122,21 +122,54 @@ static void crn_global_so_handler(int emergency, stackoverflow_context_t scp) {
     return;
 }
 
+static int is__stack_chk_fail = 0;
+// -fstack-protector __stack_chk_fail first catched
+// -fno-stack-protector
+// default output
+// *** stack smashing detected ***: terminated
+// do nothing, then SIGSEGV
+void __stack_chk_fail() {
+    is__stack_chk_fail = 1;
+    lerror("stack so: __stack_chk_fail %p\n", pthread_self());
+    void* stklo = 0; size_t stksz = 0;
+    thread_getstack(pthread_self(), &stklo, &stksz);
+    ucontext_t ctx = {0};
+    ctx.uc_stack.ss_size = stksz;
+    ctx.uc_stack.ss_sp = stklo;
+    sigaddset(&ctx.uc_sigmask, SIGABRT);
+    // crn_global_so_handler(0, &ctx);
+}
+
 static int crn_global_fault_handler(void* fault_address, int serious) {
-    lerror("glob fault: addr %p, serious %d\n", fault_address, serious);
+    lerror("glob fault: addr %p, serious %d, is__stack_chk_fail %d, thr %p\n", fault_address, serious, is__stack_chk_fail, pthread_self());
     corona* nr = gnr__;
+
+    if (is__stack_chk_fail && fault_address==NULL) {
+        void* stklo = 0; size_t stksz = 0;
+        thread_getstack(pthread_self(), &stklo, &stksz);
+        fault_address = stklo+stksz/3;
+        // linfo("thstk %p %lu\n", stklo, stksz);
+    }
+
     int rv = sigsegv_dispatch(&nr->sigdpt, fault_address);
     linfo("glob sig dispatch: rv=%d\n", rv);
+
     // where to go ???
+    if (is__stack_chk_fail) is__stack_chk_fail=0;
     rv = sigsegv_leave_handler(0, 0, 0, 0);
     // int rv = sigsegv_leave_handler(void (*continuation)(void *, void *, void *), void *cont_arg1, void *cont_arg2, void *cont_arg3);
     return rv;
 }
 
+// Go Stack Design Proposal
+// * The current implementation supports stack shrinking (when less than 1/4 of the stack is used). I guess we can shrink stack with MADV_DONTNEED. * Stack
+
+// user_arg should be Fiber*
 static int crn_fiber_fault_handler(void* fault_address, void* user_arg) {
     lerror("fiber fault: addr %p, arg %p\n", fault_address, user_arg);
     corona* nr = gnr__;
-    // sigsegv_dispatch(&nr->sigdpt, fault_address);
+
+    return 0;// todo return non zero for handler job done
 }
 
 static void crn_fiber_fault_setup(fiber* gr) {
@@ -515,7 +548,9 @@ void crn_fiber_suspend(fiber* gr) {
 }
 
 static int crn_machine_fault_handler(void* fault_address, void* user_arg) {
-    lerror("mch fault: addr %p, arg %p\n", fault_address, user_arg);
+    char thname[32] = {0}; size_t strsz = sizeof(thname)-1;
+    pthread_getname_np(pthread_self(), thname, strsz);
+    lerror("mch fault: addr %p, arg %p, thname %s\n", fault_address, user_arg, thname);
     return 0;
 }
 static void crn_machine_fault_setup(machine* mc) {
