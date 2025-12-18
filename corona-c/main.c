@@ -75,7 +75,7 @@ static void test_norm_run() {
 }
 
 static void test_glob_sigsegv_handle(void*arg) {
-    memcpy((void*)0x3, (void*)0x4, 5);
+    memcpy((void*)0x3, (void*)0x4, ((size_t)arg)%5); // no warn
 }
 
 static void test_sigsegv_mprot(void*arg) {

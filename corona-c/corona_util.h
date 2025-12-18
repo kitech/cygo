@@ -1,6 +1,7 @@
 #ifndef _NORO_UTIL_H_
 #define _NORO_UTIL_H_
 
+#include <assert.h>
 #include <sys/time.h>
 #include <unistd.h>
 #include <pthread.h>
@@ -9,10 +10,30 @@
 extern int pthread_setname_np(const char*);
 #define thread_setname0(name) pthread_setname_np(name)
 #define thread_setname(th, name) pthread_setname_np(name)
+static int thread_getstack(pthread_t pth, void** stk, size_t* size) {
+    size_t size2 = pthread_get_stacksize_np(pth);
+    void* stk2 = pthread_get_stackaddr_np(pth); // stacktop https://git.tu-berlin.de/leon.a.albrecht/serenity-mirror/-/blob/057abb9023a30ea226a7b979a9f53f4f9dbe3c93/AK/StackInfo.cpp#L59
+    *size = size2; *stk = stk2-size2;
+    return stk2==NULL ? -1 : 0;
+}
 #else
 #define thread_setname0(name) pthread_setname_np(pthread_self(), name)
 #define thread_setname(th, name) pthread_setname_np(th, name)
+static int thread_getstack(pthread_t pth, void** stk, size_t* size) {
+    int ret = 0; pthread_attr_t attr;
+    ret = pthread_getattr_np(pth, &attr); assert(ret == 0);
+    ret = pthread_attr_getstack(&attr, stk, size); assert (ret==0);
+    return ret;
+}
 #endif
+
+
+// return wroted/modified
+int crn_stack_fill_check(void* ptr, size_t len);
+int crn_stack_fill_chunk(void* ptr, size_t len);
+int crn_is_ptr_onstack(void* ptr, void* stkbtm, size_t stksz, int out);
+
+/////////////////
 
 pid_t gettid();
 

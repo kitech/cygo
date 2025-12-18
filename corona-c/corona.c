@@ -56,7 +56,7 @@ typedef struct machine {
     void* gchandle;
     void* savefrm;
     pthread_t thr;
-    char sigso_altstk[SIGSTKSZ]; // 16-64k, stack overflow altstk
+    void* sig_regi_ticket;
     coro_context coctx0;
     char reserved[999]; // seems upper coctx0 overflowed heere
 } machine;
@@ -506,16 +506,12 @@ void crn_fiber_suspend(fiber* gr) {
     gettimeofday(&gr->pktime, nilptr);
     crn_fiber_setstate(gr,waiting);
     lverb("coctx before swapto mainco fid %d mcid %d\n", gr->id, gr->mcid);
+
     crn_check_mchs(gnr__->mchs); // before
     crn_call_with_alloc_lock(crn_gc_setbottom0, gr); // must before transfer, closely
     corowp_transfer(&gr->coctx, gr->coctx0);
     lverb("coctx returned to workco fid %d mcid %d\n", gr->id, gr->mcid);
     crn_check_mchs(gnr__->mchs);
-}
-
-static void crn_machine_so_handler(int emergency, stackoverflow_context_t scp) {
-    lerror("mch so: emergency %d, scp %p\n", emergency, scp);
-    return;
 }
 
 static int crn_machine_fault_handler(void* fault_address, void* user_arg) {
@@ -524,20 +520,13 @@ static int crn_machine_fault_handler(void* fault_address, void* user_arg) {
 }
 static void crn_machine_fault_setup(machine* mc) {
     corona* nr = gnr__;
-    // void* rv = sigsegv_register(&nr->sigdpt, 0, 0, crn_machine_fault_handler, 0);
 
-    pthread_attr_t attr;
-    int rv = pthread_getattr_np(pthread_self(), &attr);
-    assert(rv==0);
     void* stackaddr = 0; size_t stacksize = 0;
-    pthread_attr_getstack(&attr, &stackaddr, &stacksize);
+    int rv = thread_getstack(pthread_self(), &stackaddr, &stacksize); assert(rv==0);
     ldebug("mc %d stk, gchi1 %p, top1 %lu, top2 %p, size=%lu\n", mc->id, mc->stksb.mem_base, mc->stksb.mem_base-stackaddr, stackaddr, stacksize);
     void* ticket = sigsegv_register(&gnr__->sigdpt, stackaddr, stacksize, crn_machine_fault_handler, mc);
     assert(ticket!=0);
-
-    // overflow
-    rv = stackoverflow_install_handler(crn_machine_so_handler, mc->sigso_altstk, sizeof(mc->sigso_altstk));
-    assert(rv==0);
+    mc->sig_regi_ticket = ticket;
 }
 
 // machine internal API
@@ -769,11 +758,6 @@ void crn_procer_setname(int id) {
     char buf[16] = {0};
     snprintf(buf, sizeof(buf)-1, "crn_procer_%d", id);
     thread_setname0(buf);
-    #ifdef __APPLE__
-    pthread_setname_np(buf);
-    #else
-    pthread_setname_np(pthread_self(), buf);
-    #endif
 }
 static
 void* crn_procer_netpoller(void*arg) {
@@ -1677,6 +1661,7 @@ void crn_init_intern() {
     netpoller_use_threads();
 }
 
+// 16-64k, stack overflow altstk
 static __thread char crn_sigso_altstack[SIGSTKSZ];
 
 corona* crn_new() {

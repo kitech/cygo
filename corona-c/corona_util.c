@@ -19,6 +19,51 @@
 #include "rxilog.h"
 #include "atomic.h"
 
+/////////// stack utils
+#define NUM_DEADBEEF 0xDEADBEEF
+
+// return wroted/modified
+int crn_stack_fill_check(void* ptr, size_t len) {
+    int wroted = 0;
+
+    assert(ptr!=0); assert(len!=0);
+    assert(len%4==0);
+
+    for (void *p = ptr; p < (ptr+len); p+=sizeof(uint32_t)) {
+        uint32_t val = *(uint32_t*)(p);
+        if ( val != NUM_DEADBEEF) {
+            wroted++;
+            // printf("%p\n", (void*)(size_t)val);
+        }
+    }
+
+    return wroted * sizeof(uint32_t);
+}
+
+int crn_stack_fill_chunk(void* ptr, size_t len) {
+    assert(ptr!=0); assert(len!=0);
+    assert(len%4==0);
+
+    for (void *p = ptr; p < (ptr+len); p+=sizeof(uint32_t)) {
+        *(uint32_t*)(p) = NUM_DEADBEEF;
+    }
+
+    int rv = crn_stack_fill_check(ptr, len);
+    assert(rv==0);
+    return 0;
+}
+
+int crn_is_ptr_onstack(void* ptr, void* stkbtm, size_t stksz, int out) {
+    int rv = 0;
+    if (stkbtm <= ptr && ptr <= (stkbtm+stksz)) {
+        rv = 1;
+    }
+    if(out) printf("ptr onstk %d: btm %p, ptr %p, top %p, stksz %lu\n", rv, stkbtm, ptr, stkbtm+stksz, stksz);
+    return rv;
+}
+
+//////////////
+
 pid_t gettid() {
     #ifdef __APPLE__
         uint64_t tid, tid2;
