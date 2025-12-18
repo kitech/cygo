@@ -78,7 +78,7 @@ static void test_glob_sigsegv_handle(void*arg) {
     memcpy((void*)0x3, (void*)0x4, 5);
 }
 
-static void test_sigsegv_mp(void*arg) {
+static void test_sigsegv_mprot(void*arg) {
 
 }
 
@@ -101,6 +101,8 @@ int main() {
 
     // test_glob_sigsegv_handle();
     // crn_post(test_glob_sigsegv_handle, (void*)42);
+
+    // test_norm_run(); // set dftstksz=5,6,7k, then can trap sigsegv
     test_norm_run();
 
     sleep(5);

@@ -3,7 +3,9 @@
 #include "corona_util.h"
 #include "coronagc.h"
 #include "futex.h"
+
 #include <gc/gc.h>
+#include <pthread.h>
 #include <stdint.h>
 #include <sys/mman.h>
 #include <sys/ucontext.h>
@@ -115,11 +117,16 @@ static int crn_nxtid(corona* nr) {
     assert(1==2);
 }
 
+static void crn_global_so_handler(int emergency, stackoverflow_context_t scp) {
+    lerror("glob so: emergency %d, scp %p\n", emergency, scp);
+    return;
+}
+
 static int crn_global_fault_handler(void* fault_address, int serious) {
-    lerror("glob sigsegv handler, addr %p, serious %d\n", fault_address, serious);
+    lerror("glob fault: addr %p, serious %d\n", fault_address, serious);
     corona* nr = gnr__;
     int rv = sigsegv_dispatch(&nr->sigdpt, fault_address);
-    linfo("sigdpt rv=%d\n", rv);
+    linfo("glob sig dispatch: rv=%d\n", rv);
     // where to go ???
     rv = sigsegv_leave_handler(0, 0, 0, 0);
     // int rv = sigsegv_leave_handler(void (*continuation)(void *, void *, void *), void *cont_arg1, void *cont_arg2, void *cont_arg3);
@@ -127,14 +134,20 @@ static int crn_global_fault_handler(void* fault_address, int serious) {
 }
 
 static int crn_fiber_fault_handler(void* fault_address, void* user_arg) {
-    lerror("addr %p, arg %p\n", fault_address, user_arg);
+    lerror("fiber fault: addr %p, arg %p\n", fault_address, user_arg);
     corona* nr = gnr__;
     // sigsegv_dispatch(&nr->sigdpt, fault_address);
 }
+
 static void crn_fiber_fault_setup(fiber* gr) {
     corona* nr = gnr__;
-    void* ticket = sigsegv_register(&nr->sigdpt, gr->stkptr, gr->stksz, crn_fiber_fault_handler, 0);
+    // when setup, gr->mcid still not exist
+    // machine* mc = crn_machine_get(gr->mcid);
+    // assert(mc!=0);
+
+    void* ticket = sigsegv_register(&nr->sigdpt, gr->stkptr, gr->stksz, crn_fiber_fault_handler, gr);
     gr->sig_regi_ticket = ticket;
+    assert(ticket!=0);
 }
 
 // fiber internal API
@@ -180,12 +193,14 @@ void crn_fiber_new2(fiber*gr, size_t stksz) {
     gr->stkmid = (void*)((uintptr_t)stkptr + stksz/2 - 2048);
     memset(gr->stkmid, 123, 4096);
     int rv = mprotect(stkptr, 4096, PROT_READ);
+    if(rv != 0) { lerror("rv=%d, errno=%d, errstr=%s\n", rv, errno, strerror(errno)); }
     assert(rv == 0);
     for (int i = 4000; i < 10000; i++) {
     }
     gr->mystksb.mem_base = (void*)((uintptr_t)gr->stack.sptr + stksz);
 
     crn_fiber_fault_setup(gr);
+    // *(char*)(stkptr+123) = 99; // trigger PROT_READ SIGSEGV
     crn_fiber_setstate(gr, runnable);
     // GC_add_roots(gr->stack.sptr, gr->stack.sptr+(gr->stack.ssze));
     // 这一句会让fnproc直接执行，但是可能需要的是创建与执行分开。原来是针对-DCORO_PTHREAD
@@ -242,6 +257,12 @@ void crn_fiber_destroy(fiber* gr) {
     if (gr->stack.sptr != 0) {
         int rv = mprotect(gr->stkptr, 4096, PROT_READ|PROT_WRITE);
         assert(rv == 0);
+
+        // todo
+        corona* nr = gnr__;
+        assert(gr->sig_regi_ticket!=0);
+        // sigsegv_unregister(&nr->sigdpt, gr->sig_regi_ticket);
+
         crn_gc_free_uncollectable(gr->stkptr);
         // free(gr->stack.sptr);
     }
@@ -492,13 +513,31 @@ void crn_fiber_suspend(fiber* gr) {
     crn_check_mchs(gnr__->mchs);
 }
 
-
-static void crn_machine_fault_handler() {
-
+static void crn_machine_so_handler(int emergency, stackoverflow_context_t scp) {
+    lerror("mch so: emergency %d, scp %p\n", emergency, scp);
+    return;
 }
-static void crn_machine_fault_setup() {
+
+static int crn_machine_fault_handler(void* fault_address, void* user_arg) {
+    lerror("mch fault: addr %p, arg %p\n", fault_address, user_arg);
+    return 0;
+}
+static void crn_machine_fault_setup(machine* mc) {
     corona* nr = gnr__;
     // void* rv = sigsegv_register(&nr->sigdpt, 0, 0, crn_machine_fault_handler, 0);
+
+    pthread_attr_t attr;
+    int rv = pthread_getattr_np(pthread_self(), &attr);
+    assert(rv==0);
+    void* stackaddr = 0; size_t stacksize = 0;
+    pthread_attr_getstack(&attr, &stackaddr, &stacksize);
+    ldebug("mc %d stk, gchi1 %p, top1 %lu, top2 %p, size=%lu\n", mc->id, mc->stksb.mem_base, mc->stksb.mem_base-stackaddr, stackaddr, stacksize);
+    void* ticket = sigsegv_register(&gnr__->sigdpt, stackaddr, stacksize, crn_machine_fault_handler, mc);
+    assert(ticket!=0);
+
+    // overflow
+    rv = stackoverflow_install_handler(crn_machine_so_handler, mc->sigso_altstk, sizeof(mc->sigso_altstk));
+    assert(rv==0);
 }
 
 // machine internal API
@@ -988,6 +1027,7 @@ static void* crn_procerx(void*arg) {
     if (crn_thread_createcb != 0) {
         crn_thread_createcb((void*)(uintptr_t)mc->id);
     }
+    crn_machine_fault_setup(mc);
 
     // linfo("%d %d\n", mc->id, gettid());
     crn_procer_setname(mc->id);
@@ -1637,6 +1677,8 @@ void crn_init_intern() {
     netpoller_use_threads();
 }
 
+static __thread char crn_sigso_altstack[SIGSTKSZ];
+
 corona* crn_new() {
 
     if (gnr__) {
@@ -1650,15 +1692,18 @@ corona* crn_new() {
     corona* nr = (corona*)crn_gc_malloc(sizeof(corona));
     pmutex_init(&nr->initmu, nilptr);
     pcond_init(&nr->initcd, nilptr);
-    sigsegv_init(&nr->sigdpt);
-    int rv = sigsegv_install_handler(crn_global_fault_handler);
-    assert(rv==0);
     nr->mths = crnmap_new_uintptr();
     nr->mchs = crnmap_new_uintptr();
 
     nr->gridno = 1;
     nr->inuseids = crnmap_new_uintptr();
     nr->np = netpoller_new();
+
+    sigsegv_init(&nr->sigdpt);
+    int rv = sigsegv_install_handler(crn_global_fault_handler);
+    assert(rv==0);
+    rv = stackoverflow_install_handler(crn_global_so_handler, crn_sigso_altstack, SIGSTKSZ);
+    assert(rv==0);
 
     assert(gnr__ == nilptr);
     gnr__ = nr;
