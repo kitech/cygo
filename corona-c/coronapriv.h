@@ -69,6 +69,7 @@ struct fiber {
     int id;
     int  mcid;
     int usemmap;
+    int libcmalloc;
     size_t guardsize;
     coro_func fnproc;
     void* arg;

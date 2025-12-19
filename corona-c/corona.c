@@ -253,17 +253,29 @@ static grstate crn_fiber_getstate(fiber* gr) {
 // alloc stack and context
 void crn_fiber_new2(fiber*gr, size_t stksz) {
     int usemmap = 0;
+    int libcmalloc = 0;
     size_t guardsize = 4096;
     void *stkptr = nilptr;
 
     gr->guardsize = guardsize;
-    if (usemmap) {
+
+    if (libcmalloc) {
+        int rv = 0;
+        gr->libcmalloc = 1;
+        // stkptr = malloc(stksz);
+        rv = posix_memalign(&stkptr, guardsize, stksz);
+        assert(rv==0); assert(stkptr!=0);
+        rv = madvise(stkptr, guardsize, MADV_DONTNEED);
+        assert(rv==0);
+    } else if (usemmap) {
         gr->usemmap = 1;
         stkptr = mmap(NULL, stksz, PROT_WRITE|PROT_EXEC, MAP_PRIVATE|MAP_ANONYMOUS, -1, 0);
         assert(stkptr!=MAP_FAILED);
     }else{
         // corowp_stack_alloc(&gr->stack, stksz);
         stkptr = crn_gc_malloc_uncollectable(stksz);
+        // int rv = GC_posix_memalign(&stkptr, guardsize, stksz);
+        // assert(rv==0);
         // gr->stack.sptr = calloc(1, stksz);
     }
     gr->stkptr = stkptr;
@@ -344,11 +356,12 @@ void crn_fiber_destroy(fiber* gr) {
         assert(gr->sig_regi_ticket!=0);
         // sigsegv_unregister(&nr->sigdpt, gr->sig_regi_ticket);
 
-        crn_gc_free_uncollectable(gr->stkptr);
+        if (gr->libcmalloc) { free(gr->stkptr); }
+        else if (gr->usemmap) {int rv = munmap(gr->stkptr, gr->stksz); assert(rv==0); }
+        else { crn_gc_free_uncollectable(gr->stkptr); }
         // free(gr->stack.sptr);
     }
     void* optr = gr;
-    if (gr->usemmap) {int rv = munmap(gr->stkptr, gr->stksz); assert(rv==0); }
     crn_gc_free(gr); // malloc/calloc分配的不能用GC_FREE()释放
     ldebug("fiber freed %d-%d %p\n", grid, mcid, optr);
 }
@@ -1431,6 +1444,7 @@ static void crn_machine_check_allpark() {
             }
             extern int (*usleep_f)(useconds_t usec);
             usleep_f(1000*10); // 10ms
+            // usleep_f(1000*1000); // 10ms
             continue;
         }
 
