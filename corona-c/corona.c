@@ -4,9 +4,11 @@
 #include "coronagc.h"
 #include "futex.h"
 
+#include <stddef.h>
 #include <gc/gc.h>
 #include <pthread.h>
 #include <stdint.h>
+#include <stdlib.h>
 #include <sys/mman.h>
 #include <sys/ucontext.h>
 #include <unistd.h>
@@ -26,7 +28,7 @@
 #include <corona.h>
 #include <coronapriv.h>
 
-#define dftstksz (128*1024)
+#define dftstksz (64*1024)
 // const int dftstksz = 128*1024;
 const int dftstkusz = dftstksz/8; // unit size by sizeof(void*)
 // 16-64k, stack overflow altstk
@@ -173,7 +175,37 @@ static int crn_fiber_fault_handler(void* fault_address, void* user_arg) {
     fiber* gr = user_arg;
 
     crn_is_ptr_onstack(fault_address, gr->stkptr, gr->stksz, 1);
-    crn_is_ptr_onstack(fault_address, gr->stkptr, 4096, 1);
+    int inprot = crn_is_ptr_onstack(fault_address, gr->stkptr, 4096, 1);
+    int rv = 0;
+
+    if (0 && inprot) {
+        void* savestk = malloc(gr->stksz);
+        memcpy(savestk, gr->stkptr, gr->stksz);
+
+        size_t stksz = gr->stksz*2;
+        void* stkptr = gr->stkptr-gr->stksz;
+        assert((size_t)stkptr % 4096 == 0);
+        void* ptr = mmap(stkptr, stksz, PROT_WRITE|PROT_EXEC, MAP_PRIVATE|MAP_ANONYMOUS|MAP_FIXED, -1, 0);
+        if(ptr==MAP_FAILED) lerror("mmap failed %d %s\n", errno, strerror(errno));
+        assert(ptr!=MAP_FAILED);
+        lwarn("stack growthed %p=?%p to %lu\n", ptr, stkptr, stksz);
+
+        rv = mprotect(gr->stkptr, 4096, PROT_WRITE);
+        assert(rv==0);
+        ((char*)(gr->stkptr))[1000] = 99;
+        // rv = munmap(gr->stkptr, gr->stksz);
+        assert(rv==0);
+
+        memset(ptr, 123, stksz/2);
+        memcpy(ptr+gr->stksz, savestk, gr->stksz);
+        free(savestk);
+        rv = mprotect(ptr, 4096, PROT_READ);
+        assert(rv==0);
+
+        gr->stkptr = stkptr;
+        gr->stksz = stksz;
+        return 1;
+    }
 
     return 0;// todo return non zero for handler job done
 }
@@ -220,10 +252,20 @@ static grstate crn_fiber_getstate(fiber* gr) {
 }
 // alloc stack and context
 void crn_fiber_new2(fiber*gr, size_t stksz) {
+    int usemmap = 0;
+    size_t guardsize = 4096;
     void *stkptr = nilptr;
-    // corowp_stack_alloc(&gr->stack, stksz);
-    stkptr = crn_gc_malloc_uncollectable(stksz);
-    // gr->stack.sptr = calloc(1, stksz);
+
+    gr->guardsize = guardsize;
+    if (usemmap) {
+        gr->usemmap = 1;
+        stkptr = mmap(NULL, stksz, PROT_WRITE|PROT_EXEC, MAP_PRIVATE|MAP_ANONYMOUS, -1, 0);
+        assert(stkptr!=MAP_FAILED);
+    }else{
+        // corowp_stack_alloc(&gr->stack, stksz);
+        stkptr = crn_gc_malloc_uncollectable(stksz);
+        // gr->stack.sptr = calloc(1, stksz);
+    }
     gr->stkptr = stkptr;
     gr->stksz = stksz;
     gr->stack.sptr = (void*)((uintptr_t)stkptr + 4096);
@@ -306,6 +348,7 @@ void crn_fiber_destroy(fiber* gr) {
         // free(gr->stack.sptr);
     }
     void* optr = gr;
+    if (gr->usemmap) {int rv = munmap(gr->stkptr, gr->stksz); assert(rv==0); }
     crn_gc_free(gr); // malloc/calloc分配的不能用GC_FREE()释放
     ldebug("fiber freed %d-%d %p\n", grid, mcid, optr);
 }
