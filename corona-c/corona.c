@@ -28,7 +28,7 @@
 #include <corona.h>
 #include <coronapriv.h>
 
-#define dftstksz (64*1024)
+#define dftstksz (128*1024)
 // const int dftstksz = 128*1024;
 const int dftstkusz = dftstksz/8; // unit size by sizeof(void*)
 // 16-64k, stack overflow altstk
@@ -188,7 +188,7 @@ static int crn_fiber_fault_handler(void* fault_address, void* user_arg) {
         void* ptr = mmap(stkptr, stksz, PROT_WRITE|PROT_EXEC, MAP_PRIVATE|MAP_ANONYMOUS|MAP_FIXED, -1, 0);
         if(ptr==MAP_FAILED) lerror("mmap failed %d %s\n", errno, strerror(errno));
         assert(ptr!=MAP_FAILED);
-        lwarn("stack growthed %p=?%p to %lu\n", ptr, stkptr, stksz);
+        lwarn("gr %d stack growthed %p=?%p to %lu\n", gr->id, ptr, stkptr, stksz);
 
         rv = mprotect(gr->stkptr, 4096, PROT_WRITE);
         assert(rv==0);
@@ -196,7 +196,7 @@ static int crn_fiber_fault_handler(void* fault_address, void* user_arg) {
         // rv = munmap(gr->stkptr, gr->stksz);
         assert(rv==0);
 
-        memset(ptr, 123, stksz/2);
+        memset(ptr, 123, stksz);
         memcpy(ptr+gr->stksz, savestk, gr->stksz);
         free(savestk);
         rv = mprotect(ptr, 4096, PROT_READ);
@@ -256,21 +256,23 @@ void crn_fiber_new2(fiber*gr, size_t stksz) {
     int libcmalloc = 0;
     size_t guardsize = 4096;
     void *stkptr = nilptr;
+    int rv = 0;
 
     gr->guardsize = guardsize;
-
+    gr->libcmalloc = libcmalloc;
+    gr->usemmap = usemmap;
     if (libcmalloc) {
-        int rv = 0;
-        gr->libcmalloc = 1;
         // stkptr = malloc(stksz);
         rv = posix_memalign(&stkptr, guardsize, stksz);
         assert(rv==0); assert(stkptr!=0);
-        rv = madvise(stkptr, guardsize, MADV_DONTNEED);
-        assert(rv==0);
+        // rv = madvise(stkptr, guardsize, MADV_DONTNEED); assert(rv==0);
     } else if (usemmap) {
-        gr->usemmap = 1;
-        stkptr = mmap(NULL, stksz, PROT_WRITE|PROT_EXEC, MAP_PRIVATE|MAP_ANONYMOUS, -1, 0);
+        // size_t virtsize = 4*1024*1024;
+        size_t virtsize = 0;
+        stkptr = mmap(NULL, virtsize + stksz, PROT_WRITE|PROT_EXEC, MAP_PRIVATE|MAP_ANONYMOUS, -1, 0);
         assert(stkptr!=MAP_FAILED);
+        stksz += virtsize;
+        // rv = madvise(stkptr, guardsize, MADV_DONTNEED); assert(rv==0);
     }else{
         // corowp_stack_alloc(&gr->stack, stksz);
         stkptr = crn_gc_malloc_uncollectable(stksz);
@@ -282,14 +284,14 @@ void crn_fiber_new2(fiber*gr, size_t stksz) {
     gr->stksz = stksz;
     gr->stack.sptr = (void*)((uintptr_t)stkptr + 4096);
     gr->stack.ssze = stksz - 4096;
+
     memset(stkptr, 123, 4096);
     gr->stkmid = (void*)((uintptr_t)stkptr + stksz/2 - 2048);
     memset(gr->stkmid, 123, 4096);
-    int rv = mprotect(stkptr, 4096, PROT_READ);
+
+    rv = mprotect(stkptr, 4096, PROT_READ);
     if(rv != 0) { lerror("rv=%d, errno=%d, errstr=%s\n", rv, errno, strerror(errno)); }
     assert(rv == 0);
-    for (int i = 4000; i < 10000; i++) {
-    }
     gr->mystksb.mem_base = (void*)((uintptr_t)gr->stack.sptr + stksz);
 
     crn_fiber_fault_setup(gr);
