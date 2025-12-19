@@ -58,7 +58,9 @@ int crn_is_ptr_onstack(void* ptr, void* stkbtm, size_t stksz, int out) {
     if (stkbtm <= ptr && ptr <= (stkbtm+stksz)) {
         rv = 1;
     }
-    if(out) printf("ptr onstk %d: btm %p, ptr %p, top %p, stksz %lu\n", rv, stkbtm, ptr, stkbtm+stksz, stksz);
+    size_t offset1 = (char*)ptr - (char*)stkbtm;
+    size_t offset2 = (char*)stkbtm + stksz - (char*)ptr;
+    if(out) printf("ptr onstk %d: btm %p, %lu, ptr %p, %lu, top %p, stksz %lu\n", rv, stkbtm, offset1, ptr, offset2, stkbtm+stksz, stksz);
     return rv;
 }
 

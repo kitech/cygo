@@ -2,6 +2,7 @@
 #define _NORO_PRIV_H_
 
 // std
+#include <stddef.h>
 #include <assert.h>
 #include <stdlib.h>
 #include <stdio.h>
@@ -67,6 +68,8 @@ extern const char* grstate2str(grstate s);
 struct fiber {
     int id;
     int  mcid;
+    int usemmap;
+    size_t guardsize;
     coro_func fnproc;
     void* arg;
     coro_stack stack;

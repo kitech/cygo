@@ -29,6 +29,8 @@
 #define dftstksz (128*1024)
 // const int dftstksz = 128*1024;
 const int dftstkusz = dftstksz/8; // unit size by sizeof(void*)
+// 16-64k, stack overflow altstk
+static __thread char crn_sigso_altstack[SIGSTKSZ];
 
 typedef struct yieldinfo {
     bool seted;
@@ -168,6 +170,10 @@ static int crn_global_fault_handler(void* fault_address, int serious) {
 static int crn_fiber_fault_handler(void* fault_address, void* user_arg) {
     lerror("fiber fault: addr %p, arg %p\n", fault_address, user_arg);
     corona* nr = gnr__;
+    fiber* gr = user_arg;
+
+    crn_is_ptr_onstack(fault_address, gr->stkptr, gr->stksz, 1);
+    crn_is_ptr_onstack(fault_address, gr->stkptr, 4096, 1);
 
     return 0;// todo return non zero for handler job done
 }
@@ -562,6 +568,9 @@ static void crn_machine_fault_setup(machine* mc) {
     void* ticket = sigsegv_register(&gnr__->sigdpt, stackaddr, stacksize, crn_machine_fault_handler, mc);
     assert(ticket!=0);
     mc->sig_regi_ticket = ticket;
+
+    // must or some non-main thread cannot catch
+    stackoverflow_install_handler(crn_global_so_handler, crn_sigso_altstack, sizeof(crn_sigso_altstack));
 }
 
 // machine internal API
@@ -1695,9 +1704,6 @@ void crn_init_intern() {
     // signal(SIGPWR, crn_ignore_signal);
     netpoller_use_threads();
 }
-
-// 16-64k, stack overflow altstk
-static __thread char crn_sigso_altstack[SIGSTKSZ];
 
 corona* crn_new() {
 
