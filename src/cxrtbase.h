@@ -112,7 +112,7 @@ cxstring* GoString(char* s);
 cxstring* GoStringN(char* s, int n);
 cxstring* cxstring_dup(cxstring* s);
 int cxstring_cmp(cxstring* s0, cxstring* s1);
-void panic(cxeface* v);
+// void panic(cxeface* v); // conflict with macos
 void panicln(cxstring*s);
 extern cxstring* cxstring_replace(cxstring* s0, cxstring* old, cxstring* new, int count);
 

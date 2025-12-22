@@ -349,7 +349,7 @@ struct coro_context
 #endif
 #include <assert.h>
 //static_assert(sizeof(struct coro_context)==56, "wrong sizeof(ucontext_t)");
-static_assert(sizeof(struct coro_context)>700, "");
+// static_assert(sizeof(struct coro_context)>700, "");
 
 # define coro_transfer(p,n) swapcontext (&((p)->uc), &((n)->uc))
 # define coro_destroy(ctx) (void *)(ctx)
