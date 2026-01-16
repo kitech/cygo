@@ -768,6 +768,7 @@ int select(int nfds, fd_set *readfds, fd_set *writefds,
            fd_set *exceptfds, struct timeval *timeout)
 {
     if (!select_f) initHook();
+    if (!crn_in_procer()) return select_f(nfds, readfds, writefds, exceptfds, timeout);
     linfo("%d\n", nfds);
     assert(1==2);
 }
@@ -805,13 +806,14 @@ int usleep(useconds_t usec)
 
 int nanosleep(const struct timespec *req, struct timespec *rem)
 {
-    if (!crn_in_procer()) return nanosleep_f(req, rem);
     if (!nanosleep_f) initHook();
+    if (!crn_in_procer()) return nanosleep_f(req, rem);
+
     // linfo("%d, %d\n", req->tv_sec, req->tv_nsec);
     {
         long ns = req->tv_sec * 1000000000 + req->tv_nsec;
         int rv = crn_procer_yield(ns, YIELD_TYPE_NANOSLEEP);
-        return 0;
+        return rv;
     }
 }
 
@@ -995,6 +997,8 @@ int dup(int oldfd)
 int dup2(int oldfd, int newfd)
 {
     if (!dup2_f) initHook();
+    if (!crn_in_procer()) return dup2_f(oldfd, newfd);
+
     linfo("%d\n", newfd);
     assert(1==2);
 }
@@ -1002,6 +1006,8 @@ int dup2(int oldfd, int newfd)
 int dup3(int oldfd, int newfd, int flags)
 {
     if (!dup3_f) initHook();
+    if (!crn_in_procer()) return dup3_f(oldfd, newfd, flags);
+
     linfo("%d\n", flags);
     assert(1==2);
 }
@@ -1009,6 +1015,8 @@ int dup3(int oldfd, int newfd, int flags)
 int fclose(FILE* fp)
 {
     if (!fclose_f) initHook();
+    // if (!crn_in_procer()) return fclose_f(fp);
+
     int fd = fileno(fp);
     // linfo("%p, %d\n", fp, fd);
     return fclose_f(fp);
@@ -1108,6 +1116,7 @@ int openat(int dirfd, const char *pathname, int flags, ...) {
 }
 FILE *fdopen(int fd, const char *mode) {
     if (!fdopen_f) initHook();
+    if (!crn_in_procer()) return fdopen_f(fd, mode);
     // if (!crn_in_procer()) return open_f(fds, nfds, timeout);
     linfo("%d %s\n", fd, mode);
     assert(1==2);

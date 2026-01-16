@@ -2,8 +2,10 @@
 #ifndef _CORONA_H_
 #define _CORONA_H_
 
+#include <stddef.h>
 
 typedef struct corona corona;
+// typedef struct fiber fiber;
 
 corona* crn_get();
 corona* crn_new();
@@ -15,7 +17,11 @@ corona* crn_init_and_wait_done();
 void* crn_set_thread_createcb(void(*fn)(void*arg), void* arg);
 
 int crn_post(void(*fn)(void*arg), void*arg);
+int crn_post_sized(void(*fn)(void*arg), void*arg, size_t stksz);
 void crn_sched();
 int crn_num_fibers();
+int crn_goid();
+// fiber* crn_fiber_getcur();
+int crn_fiber_stackaddr_cur(void** addr, size_t *size);
 
 #endif

@@ -31,6 +31,7 @@
 #define dftstksz (128*1024)
 // const int dftstksz = 128*1024;
 const int dftstkusz = dftstksz/8; // unit size by sizeof(void*)
+const int vastkusz = 2*1024*1024; // mmap/VirtualAlloc stack size
 // 16-64k, stack overflow altstk
 static __thread char crn_sigso_altstack[SIGSTKSZ];
 
@@ -252,7 +253,7 @@ static grstate crn_fiber_getstate(fiber* gr) {
 }
 // alloc stack and context
 void crn_fiber_new2(fiber*gr, size_t stksz) {
-    int usemmap = 0;
+    int usemmap = 1; // when usemmap, virtual alloc, stksz is will be modified
     int libcmalloc = 0;
     size_t guardsize = 4096;
     void *stkptr = nilptr;
@@ -261,6 +262,9 @@ void crn_fiber_new2(fiber*gr, size_t stksz) {
     gr->guardsize = guardsize;
     gr->libcmalloc = libcmalloc;
     gr->usemmap = usemmap;
+    // use a virt big memory, so no stack growth needed
+    if (usemmap) { stksz = vastkusz>stksz ? vastkusz : stksz ; }
+
     if (libcmalloc) {
         // stkptr = malloc(stksz);
         rv = posix_memalign(&stkptr, guardsize, stksz);
@@ -356,7 +360,7 @@ void crn_fiber_destroy(fiber* gr) {
         // todo
         corona* nr = gnr__;
         assert(gr->sig_regi_ticket!=0);
-        // sigsegv_unregister(&nr->sigdpt, gr->sig_regi_ticket);
+        sigsegv_unregister(&nr->sigdpt, gr->sig_regi_ticket);
 
         if (gr->libcmalloc) { free(gr->stkptr); }
         else if (gr->usemmap) {int rv = munmap(gr->stkptr, gr->stksz); assert(rv==0); }
@@ -774,8 +778,9 @@ fiber* __attribute__((no_instrument_function))
 crn_fiber_getcur() {
     int grid = gcurgrid__;
     int mcid = gcurmcid__;
-    if (mcid == 0) {
-        // linfo("Not fiber, main/poller thread %d?\n", mcid);
+    if (mcid == 0) { // when not run on fiber, netpoller/sched
+        // lwarn("Not fiber, main/poller thread %d/%d?\n", mcid, grid);
+        // assert(mcid!=0);
         return 0;
     }
     machine* mcx = crn_machine_get(mcid);
@@ -788,6 +793,17 @@ crn_fiber_getcur() {
     // assert(gr != nilptr);
     return gr;
 }
+// pthread_attr_stackaddr_np
+int __attribute__((no_instrument_function))
+crn_fiber_stackaddr_cur(void** addr, size_t *size) {
+    fiber* gr = crn_fiber_getcur();
+    assert(gr!=0);
+    if (gr==0) { return -1; }
+    *size = gr->stksz;
+    *addr = gr->stkptr;
+    return 0;
+}
+
 void* crn_fiber_getspec(void* spec) {
     fiber* gr = crn_fiber_getcur();
     if (gr == 0) {
@@ -823,7 +839,6 @@ void crn_lock_osthread() {
 
 // int crn_num_fibers() { return atomic_getint(gnr__); }
 // procer internal API
-static
 int crn_post_sized(coro_func fn, void*arg, size_t stksz) {
     linfo("fn=%p, arg=%p %d\n", fn, arg, gnr__->gridno+1);
     machine* mc = crn_machine_get(1);
@@ -1780,7 +1795,7 @@ corona* crn_new() {
     nr->mths = crnmap_new_uintptr();
     nr->mchs = crnmap_new_uintptr();
 
-    nr->gridno = 1;
+    nr->gridno = 12;
     nr->inuseids = crnmap_new_uintptr();
     nr->np = netpoller_new();
 
