@@ -53,6 +53,9 @@ typedef struct rtsettings {
     int dbghook;
     int dbgpoller;
     int dbgthread;
+    int usemmap_stack;
+    int usebdwgc_stack;
+    int uselibc_stack;
 } rtsettings;
 extern rtsettings* rtsets;
 void crn_loglvl_forenv();

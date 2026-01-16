@@ -286,8 +286,8 @@ void crn_fiber_new2(fiber*gr, size_t stksz) {
     }
     gr->stkptr = stkptr;
     gr->stksz = stksz;
-    gr->stack.sptr = (void*)((uintptr_t)stkptr + 4096);
-    gr->stack.ssze = stksz - 4096;
+    gr->stack.sptr = (void*)stkptr; // no need jump guard page
+    gr->stack.ssze = stksz;
 
     memset(stkptr, 123, 4096);
     gr->stkmid = (void*)((uintptr_t)stkptr + stksz/2 - 2048);
