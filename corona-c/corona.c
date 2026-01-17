@@ -296,7 +296,9 @@ void crn_fiber_new2(fiber*gr, size_t stksz) {
     rv = mprotect(stkptr, 4096, PROT_READ);
     if(rv != 0) { lerror("rv=%d, errno=%d, errstr=%s\n", rv, errno, strerror(errno)); }
     assert(rv == 0);
-    gr->mystksb.mem_base = (void*)((uintptr_t)gr->stack.sptr + stksz);
+    gr->mystksb.mem_base = (void*)((uintptr_t)gr->stack.sptr);
+    // gr->mystksb.mem_base = (void*)((uintptr_t)gr->stack.sptr + stksz);
+    GC_add_roots(stkptr, stkptr+stksz);
 
     crn_fiber_fault_setup(gr);
     // *(char*)(stkptr+123) = 99; // trigger PROT_READ SIGSEGV
@@ -334,6 +336,7 @@ void crn_fiber_destroy(fiber* gr) {
     int grid = gr->id;
     int mcid = gr->mcid;
     size_t ssze = gr->stack.ssze; // save temp value
+    GC_remove_roots(gr->stkptr, gr->stkptr+ssze);
 
     crn_fiber_setstate(gr,nostack);
     Array* specs = nilptr;
