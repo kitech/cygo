@@ -1494,7 +1494,7 @@ static void crn_gc_start_proc() {
         // linfo2("wow machine thread gc %d\n", nochkid);
     }
 
-    crn_machine_check_allpark();
+    // crn_machine_check_allpark();
 }
 static void crn_gc_stop_proc() {
     // linfo2("gc finished %d\n", gettid());
@@ -1766,7 +1766,8 @@ void crn_init_intern() {
     // GC_set_on_thread_event(crn_gc_on_thread_event);
     GC_allow_register_threads();
     // GC_use_threads_discovery(); // depcreated
-    GC_INIT();
+    if (!GC_is_init_called()) { GC_INIT(); }
+    assert(GC_is_init_called()>0);
     // linfo("main thread registered: %d\n", GC_thread_is_registered()); // yes
     // linfo("gcfreq=%d\n", GC_get_full_freq()); // 19
     // GC_set_full_freq(5);

@@ -238,24 +238,66 @@ int accept(int sockfd, struct sockaddr *addr, socklen_t *addrlen)
     assert(1==2); // unreachable
 }
 
+static int crn_fd_would_blocking(int fd, int iswr) {
+
+    fd_set read_fds;
+    struct timeval timeout = {.tv_sec=0, .tv_usec=0};
+    int fd_stdin = fd;//fileno(stdin); // Get file descriptor for stdin
+    int activity;
+
+    // Clear the file descriptor set
+    FD_ZERO(&read_fds);
+    // Add stdin to the set
+    FD_SET(fd_stdin, &read_fds);
+
+    // Wait for activity on the file descriptor
+    if (iswr) {
+        activity = select_f(fd_stdin + 1, NULL, &read_fds, NULL, &timeout);
+    }else{
+        activity = select_f(fd_stdin + 1, &read_fds, NULL, NULL, &timeout);
+    }
+    // printf("activity=%d, %s\n", activity, strerror(activity));
+    if (activity < 0) {
+        perror("select error");
+        return activity;
+    } else if (activity == 0) {
+        printf("Timeout occurred (5 seconds). Still waiting...\n");
+    } else {
+        return 0; // nonblocking
+    }
+    return 1;
+}
+
 ssize_t read(int fd, void *buf, size_t count)
 {
     if (!read_f) initHook();
     if (!crn_in_procer()) return read_f(fd, buf, count);
 
-    // linfo("%d fdnb=%d bufsz=%d\n", fd, fd_is_nonblocking(fd), count);
-    fdcontext* ctx = hookcb_get_fdcontext(fd);
-    if (ctx == nilptr) {
-        linfo("wtf, why not found fd %d\n", fd);
-        assert(1==2);
-    }
-    bool isfile = fdcontext_is_file(ctx);
-    if (fd_is_nonblocking(fd) == 0 && !isfile) {
-        linfo("%d fdnb=%d bufsz=%d\n", fd, fd_is_nonblocking(fd), count);
-        assert(fd_is_nonblocking(fd) == 1);
-    }
+    // // linfo("%d fdnb=%d bufsz=%d\n", fd, fd_is_nonblocking(fd), count);
+    // fdcontext* ctx = hookcb_get_fdcontext(fd);
+    // if (ctx == nilptr) {
+    //     lwarn("wtf, why not found fd %d\n", fd);
+    //     assert(0);
+    // }
+    // bool isfile = fdcontext_is_file(ctx);
+    // if (fd_is_nonblocking(fd) == 0 && !isfile) {
+    //     linfo("%d fdnb=%d bufsz=%d\n", fd, fd_is_nonblocking(fd), count);
+    //     assert(fd_is_nonblocking(fd) == 1);
+    // }
     //
     while (1){
+        int beblk = crn_fd_would_blocking(fd, 0);
+        if (beblk) {
+            bool inpoll = hookcb_getin_poll(fd, true);
+            // linfo("read yeild %d n %d nb %d inpoll %d\n", fd, count, fd_is_nonblocking(fd), inpoll);
+            if (inpoll) { // dont yeild inpoll fd read
+                // hookcb_setin_poll(fd, false, true); // cannot clear flag, or unexpected yeild/suspend
+                // return rv;
+            }
+            crn_procer_yield(fd, YIELD_TYPE_READ);
+            continue;
+        }
+
         ssize_t rv = read_f(fd, buf, count);
         int eno = rv < 0 ? errno : 0;
         if (rv >= 0) {
