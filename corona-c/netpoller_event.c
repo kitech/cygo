@@ -2,6 +2,7 @@
 #include <event2/event.h>
 #include <event2/thread.h>
 #include <event2/dns.h>
+#include <stdio.h>
 
 #include "coronapriv.h"
 #include "futex.h"
@@ -54,12 +55,19 @@ void netpoller_loop() {
     netpoller* np = gnpl__;
     assert(np != 0);
 
+    struct timeval tv = {0};
+    tv.tv_sec =  0;
+    tv.tv_usec = 586000;
+
     for (;;) {
         // int rv = event_base_dispatch(np->loop);
         int flags = EVLOOP_NO_EXIT_ON_EMPTY;
         // flags = 0;
-        int rv = event_base_loop(np->loop, flags);
+        // int rv = event_base_loop(np->loop, flags);
+        int rv = event_base_loopexit(np->loop, &tv);
+        event_base_dispatch(np->loop);
         linfo("ohno, rv=%d\n", rv);
+        // event_base_dump_events(np->loop, stdout);
     }
     assert(1==2);
 }
@@ -115,11 +123,11 @@ void netpoller_evwatcher_cb(evutil_socket_t fd, short events, void* arg) {
 
     switch (d->evtyp) {
     case EV_TIMER:
-        // evtimer_del(d->evt);
+        evtimer_del(d->evt);
         // linfo("evwoke ev=%d fd=%d(%d) ytype=%d=%s %p grid=%d, mcid=%d d=%p\n", events, fd, fd, ytype, yield_type_name(ytype), dd, gr->id, gr->mcid, d);
         break;
     case EV_IO:
-        // event_del(d->evt);
+        event_del(d->evt);
         break;
     default:
         linfo("wtf fd=%d %d %d\n", fd, d->evtyp, d->ytype);
