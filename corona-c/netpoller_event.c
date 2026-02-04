@@ -4,6 +4,7 @@
 #include <event2/dns.h>
 #include <stdio.h>
 
+#include "coronagc.h"
 #include "coronapriv.h"
 #include "futex.h"
 
@@ -97,6 +98,7 @@ evdata* evdata_new(int evtyp, void* data) {
     assert(evtyp >= 0);
 
     netpoller* np = gnpl__;
+    // evdata* d = crn_raw_malloc(sizeof(evdata));
     evdata* d = crn_gc_malloc(sizeof(evdata));
     d->evtyp = evtyp;
     d->data = data;
@@ -104,6 +106,7 @@ evdata* evdata_new(int evtyp, void* data) {
     return d;
 }
 void evdata_free(evdata* d) {
+    // crn_raw_free(d);
     crn_gc_free(d);
 }
 
@@ -159,11 +162,13 @@ void netpoller_readfd(int fd, int ytype, fiber* gr) {
     d->mcid = gr->mcid;
     d->ytype = ytype;
     d->fd = fd;
+    d->tv.tv_sec = 3;
+    d->tv.tv_usec = 456000;
 
     struct event* evt = event_new(np->loop, fd, EV_READ|EV_CLOSED, netpoller_evwatcher_cb, d);
     d->evt = evt;
     crn_pre_gclock_proc(__func__);
-    int rv = event_add(evt, 0);
+    int rv = event_add(evt, &d->tv);
     crn_post_gclock_proc(__func__);
     if (rv != 0) {
         // [warn] Epoll ADD(8193) on fd 18 failed. Old events were 0; read change was 1 (add); write change was 0 (none); close change was 1 (add): Bad file descriptor
@@ -175,7 +180,7 @@ void netpoller_readfd(int fd, int ytype, fiber* gr) {
     }
 
     if (d != nilptr) {
-        // linfo("event_add d=%p fd=%d ytype=%d rv=%d\n", d, fd, ytype, rv);
+        linfo("event_add d=%p fd=%d ytype=%d rv=%d\n", d, fd, ytype, rv);
     }
 }
 
@@ -189,11 +194,13 @@ void netpoller_writefd(int fd, int ytype, fiber* gr) {
     d->mcid = gr->mcid;
     d->ytype = ytype;
     d->fd = fd;
+    d->tv.tv_sec = 3;
+    d->tv.tv_usec = 456000;
 
     struct event* evt = event_new(np->loop, fd, EV_WRITE|EV_CLOSED, netpoller_evwatcher_cb, d);
     d->evt = evt;
     crn_pre_gclock_proc(__func__);
-    int rv = event_add(evt, 0);
+    int rv = event_add(evt, &d->tv);
     crn_post_gclock_proc(__func__);
     if (rv != 0) {
         lwarn("add error %d %d %d\n", rv, fd, gr->id);

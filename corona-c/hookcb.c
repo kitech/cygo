@@ -154,6 +154,7 @@ hookcb* hookcb_get() {
 
 
 void hookcb_oncreate(int fd, int fdty, bool isNonBlocking, int domain, int sockty, int protocol) {
+    if (1) return;
     // if (!crn_in_procer()) return; // create 只记录，所以不需要检测是否在fiber内
     if (!gcinited) return;
     if (GC_thread_is_registered() == 0) {
@@ -199,6 +200,7 @@ void hookcb_oncreate(int fd, int fdty, bool isNonBlocking, int domain, int sockt
 }
 
 void hookcb_onclose(int fd) {
+    if (1) return;
     // if (!crn_in_procer()) return;
     if (!gcinited) return;
     hookcb* hkcb = hookcb_get();
@@ -216,6 +218,8 @@ void hookcb_onclose(int fd) {
 }
 
 void hookcb_ondup(int from, int to) {
+    if (1) return;
+
     hookcb* hkcb = hookcb_get();
     if (hkcb == 0) return ;
 
@@ -233,6 +237,8 @@ void hookcb_ondup(int from, int to) {
 
 //
 void hookcb_setin_poll(int fd, bool set, bool isread) {
+    if (1) return;
+
     hookcb* hkcb = hookcb_get();
     if (hkcb == 0) return ;
 
@@ -253,6 +259,8 @@ void hookcb_setin_poll(int fd, bool set, bool isread) {
     }
 }
 bool hookcb_getin_poll(int fd, bool isread) {
+    if (1) return false;
+
     hookcb* hkcb = hookcb_get();
     if (hkcb == 0) return false;
 

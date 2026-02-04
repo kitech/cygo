@@ -239,6 +239,30 @@ int accept(int sockfd, struct sockaddr *addr, socklen_t *addrlen)
     assert(1==2); // unreachable
 }
 
+// ioctl read/write queue
+static int crn_getiocq(int fd, int isout)  {
+    // fix macos
+#ifndef TIOCINQ
+#ifdef FIONREAD
+#define TIOCINQ FIONREAD
+#else
+#define TIOCINQ 0x541B
+#endif
+#endif
+
+    int val = 0;
+    int rv = ioctl_f(fd, isout>0 ? TIOCOUTQ : TIOCINQ, &val);
+    if (rv == -1) {
+        //         vpp.prtcerr('getiocinq $fd')
+    }
+    if (rv == -1) {
+        // return 0
+    }
+    // assert rv != -1
+    return val;
+}
+
+// iswr > 0, it length would send
 static int crn_fd_would_blocking(int fd, int iswr) {
 
     fd_set read_fds;
@@ -246,17 +270,25 @@ static int crn_fd_would_blocking(int fd, int iswr) {
     int fd_stdin = fd;//fileno(stdin); // Get file descriptor for stdin
     int activity;
 
+    if (fd_is_nonblocking(fd)) {
+        return 0;
+    }
+
     // Clear the file descriptor set
     FD_ZERO(&read_fds);
     // Add stdin to the set
     FD_SET(fd_stdin, &read_fds);
+    int bytes = 0;
 
     // Wait for activity on the file descriptor
     if (iswr) {
         activity = select_f(fd_stdin + 1, NULL, &read_fds, NULL, &timeout);
+        bytes = crn_getiocq(fd, iswr);
+        if (bytes>0) lwarn("sendbuf used %d %d\n", fd, bytes);
     }else{
         activity = select_f(fd_stdin + 1, &read_fds, NULL, NULL, &timeout);
     }
+
     // printf("activity=%d, %s\n", activity, strerror(activity));
     if (activity < 0) {
         perror("select error");
@@ -278,12 +310,6 @@ ssize_t read(int fd, void *buf, size_t count)
         int beblk = crn_fd_would_blocking(fd, 0);
         if (beblk<0) { return beblk; }
         if (beblk) {
-            bool inpoll = hookcb_getin_poll(fd, true);
-            // linfo("read yeild %d n %d nb %d inpoll %d\n", fd, count, fd_is_nonblocking(fd), inpoll);
-            if (inpoll) { // dont yeild inpoll fd read
-                // hookcb_setin_poll(fd, false, true); // cannot clear flag, or unexpected yeild/suspend
-                // return rv;
-            }
             crn_procer_yield(fd, YIELD_TYPE_READ);
             continue;
         }
@@ -330,12 +356,6 @@ ssize_t recv(int sockfd, void *buf, size_t len, int flags)
         int beblk = crn_fd_would_blocking(sockfd, 0);
         if (beblk<0) { return beblk; }
         if (beblk) {
-            bool inpoll = hookcb_getin_poll(sockfd, true);
-            // linfo("read yeild %d n %d nb %d inpoll %d\n", fd, count, fd_is_nonblocking(fd), inpoll);
-            if (inpoll) { // dont yeild inpoll fd read
-                // hookcb_setin_poll(fd, false, true); // cannot clear flag, or unexpected yeild/suspend
-                // return rv;
-            }
             crn_procer_yield(sockfd, YIELD_TYPE_RECV);
             continue;
         }
@@ -376,12 +396,6 @@ ssize_t recvfrom(int sockfd, void *buf, size_t len, int flags,
         int beblk = crn_fd_would_blocking(sockfd, 0);
         if (beblk<0) { return beblk; }
         if (beblk) {
-            bool inpoll = hookcb_getin_poll(sockfd, true);
-            // linfo("read yeild %d n %d nb %d inpoll %d\n", fd, count, fd_is_nonblocking(fd), inpoll);
-            if (inpoll) { // dont yeild inpoll fd read
-                // hookcb_setin_poll(fd, false, true); // cannot clear flag, or unexpected yeild/suspend
-                // return rv;
-            }
             crn_procer_yield(sockfd, YIELD_TYPE_RECVFROM);
             continue;
         }
@@ -414,12 +428,6 @@ ssize_t recvmsg(int sockfd, struct msghdr *msg, int flags)
         int beblk = crn_fd_would_blocking(sockfd, 0);
         if (beblk<0) { return beblk; }
         if (beblk) {
-            bool inpoll = hookcb_getin_poll(sockfd, true);
-            // linfo("read yeild %d n %d nb %d inpoll %d\n", fd, count, fd_is_nonblocking(fd), inpoll);
-            if (inpoll) { // dont yeild inpoll fd read
-                // hookcb_setin_poll(fd, false, true); // cannot clear flag, or unexpected yeild/suspend
-                // return rv;
-            }
             crn_procer_yield(sockfd, YIELD_TYPE_RECVMSG);
             continue;
         }
@@ -478,18 +486,12 @@ ssize_t write(int fd, const void *buf, size_t count)
     if (!write_f) initHook();
     if (!crn_in_procer()) return write_f(fd, buf, count);
     if (fd == 1 || fd == 2) return write_f(fd, buf, count);
-    // linfo("%d %d\n", fd, count);
+    linfo("%d %d\n", fd, count);
 
     while(1){
-        int beblk = crn_fd_would_blocking(fd, 1);
+        int beblk = crn_fd_would_blocking(fd, count);
         if (beblk<0) { return beblk; }
         if (beblk) {
-            bool inpoll = hookcb_getin_poll(fd, true);
-            // linfo("read yeild %d n %d nb %d inpoll %d\n", fd, count, fd_is_nonblocking(fd), inpoll);
-            if (inpoll) { // dont yeild inpoll fd read
-                // hookcb_setin_poll(fd, false, true); // cannot clear flag, or unexpected yeild/suspend
-                // return rv;
-            }
             crn_procer_yield(fd, YIELD_TYPE_WRITE);
             continue;
         }
@@ -519,19 +521,13 @@ ssize_t writev(int fd, const struct iovec *iov, int iovcnt)
 
     int totlen = 0;
     for (int i = 0; i < iovcnt; i++) { totlen += iov[i].iov_len; }
-    // linfo("%d %d %d\n", fd, iovcnt, totlen);
+    linfo("%d %d %d\n", fd, iovcnt, totlen);
 
-    assert(fd_is_nonblocking(fd) == 1);
+    // assert(fd_is_nonblocking(fd) == 1);
     while (true) {
         int beblk = crn_fd_would_blocking(fd, 1);
         if (beblk<0) { return beblk; }
         if (beblk) {
-            bool inpoll = hookcb_getin_poll(fd, true);
-            // linfo("read yeild %d n %d nb %d inpoll %d\n", fd, count, fd_is_nonblocking(fd), inpoll);
-            if (inpoll) { // dont yeild inpoll fd read
-                // hookcb_setin_poll(fd, false, true); // cannot clear flag, or unexpected yeild/suspend
-                // return rv;
-            }
             crn_procer_yield(fd, YIELD_TYPE_WRITE);
             continue;
         }
@@ -556,7 +552,7 @@ ssize_t send(int sockfd, const void *buf, size_t len, int flags)
 {
     if (!send_f) initHook();
     if (!crn_in_procer()) return send_f(sockfd, buf, len, flags);
-    // linfo("%d %d %d fdnb=%d\n", sockfd, len, flags, fd_is_nonblocking(sockfd));
+    linfo("%d %d %d fdnb=%d\n", sockfd, len, flags, fd_is_nonblocking(sockfd));
 
     int msgnosig = 0;
 #ifdef __APPLE__
@@ -567,15 +563,9 @@ ssize_t send(int sockfd, const void *buf, size_t len, int flags)
 
     flags |= msgnosig; // fix SIGPIPE and exit with errro code 141
     while (true) {
-        int beblk = crn_fd_would_blocking(sockfd, 1);
+        int beblk = crn_fd_would_blocking(sockfd, len);
         if (beblk<0) { return beblk; }
         if (beblk) {
-            bool inpoll = hookcb_getin_poll(sockfd, true);
-            // linfo("read yeild %d n %d nb %d inpoll %d\n", fd, count, fd_is_nonblocking(fd), inpoll);
-            if (inpoll) { // dont yeild inpoll fd read
-                // hookcb_setin_poll(fd, false, true); // cannot clear flag, or unexpected yeild/suspend
-                // return rv;
-            }
             crn_procer_yield(sockfd, YIELD_TYPE_SEND);
             continue;
         }
@@ -601,18 +591,12 @@ ssize_t sendto(int sockfd, const void *buf, size_t len, int flags,
 {
     if (!sendto_f) initHook();
     if (!crn_in_procer()) return sendto_f(sockfd, buf, len, flags, dest_addr, addrlen);
-    // linfo("%d %p\n", sockfd, crn_fiber_getcur());
+    linfo("%d %p\n", sockfd, crn_fiber_getcur());
 
     while(1) {
-        int beblk = crn_fd_would_blocking(sockfd, 1);
+        int beblk = crn_fd_would_blocking(sockfd, len);
         if (beblk<0) { return beblk; }
         if (beblk) {
-            bool inpoll = hookcb_getin_poll(sockfd, true);
-            // linfo("read yeild %d n %d nb %d inpoll %d\n", fd, count, fd_is_nonblocking(fd), inpoll);
-            if (inpoll) { // dont yeild inpoll fd read
-                // hookcb_setin_poll(fd, false, true); // cannot clear flag, or unexpected yeild/suspend
-                // return rv;
-            }
             crn_procer_yield(sockfd, YIELD_TYPE_SEND);
             continue;
         }
@@ -633,18 +617,12 @@ ssize_t sendmsg(int sockfd, const struct msghdr *msg, int flags)
 {
     if (!sendmsg_f) initHook();
     if (!crn_in_procer()) return sendmsg_f(sockfd, msg, flags);
+    linfo("%d fdnb=%d\n", sockfd, fd_is_nonblocking(sockfd));
 
-    // linfo("%d fdnb=%d\n", sockfd, fd_is_nonblocking(sockfd));
     while (1){
         int beblk = crn_fd_would_blocking(sockfd, 1);
         if (beblk<0) { return beblk; }
         if (beblk) {
-            bool inpoll = hookcb_getin_poll(sockfd, true);
-            // linfo("read yeild %d n %d nb %d inpoll %d\n", fd, count, fd_is_nonblocking(fd), inpoll);
-            if (inpoll) { // dont yeild inpoll fd read
-                // hookcb_setin_poll(fd, false, true); // cannot clear flag, or unexpected yeild/suspend
-                // return rv;
-            }
             crn_procer_yield(sockfd, YIELD_TYPE_SENDMSG);
             continue;
         }
@@ -661,29 +639,6 @@ ssize_t sendmsg(int sockfd, const struct msghdr *msg, int flags)
         crn_procer_yield(sockfd, YIELD_TYPE_SENDMSG);
     }
     assert(1==2); // unreachable
-}
-
-
-static int getiocinq(int fd)  {
-    // fix macos
-#ifndef TIOCINQ
-#ifdef FIONREAD
-#define TIOCINQ FIONREAD
-#else
-#define TIOCINQ 0x541B
-#endif
-#endif
-
-    int val = 0;
-    int rv = ioctl_f(fd, TIOCINQ, &val);
-    if (rv == -1) {
-        //         vpp.prtcerr('getiocinq $fd')
-    }
-    if (rv == -1) {
-        // return 0
-    }
-    // assert rv != -1
-    return val;
 }
 
 
@@ -748,7 +703,7 @@ int __poll(struct pollfd fds[], nfds_t nfds, int timeout)
         }
         int rv = poll_f(fds, nfds, 0);
         int eno = rv < 0 ? errno : 0;
-        int qval = getiocinq(fds[0].fd);
+        int qval = crn_getiocq(fds[0].fd, 0);
         // linfo("i=%d %d fd0=%d timeo=%d rv=%d qval=%d\n", i, nfds, fds[0].fd, timeout, rv, qval);
         if (rv > 0) {
             // when clear
