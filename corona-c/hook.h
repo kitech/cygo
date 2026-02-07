@@ -93,6 +93,10 @@ typedef int(*select_t)(int nfds, fd_set *readfds, fd_set *writefds,
         fd_set *exceptfds, struct timeval *timeout);
 extern select_t select_f;
 
+typedef int(*pselect_t)(int nfds, fd_set *readfds, fd_set *writefds,
+        fd_set *exceptfds, const struct timespec *timeout, const sigset_t *sigmask);
+extern pselect_t pselect_f;
+
 typedef int(*accept_t)(int sockfd, struct sockaddr *addr, socklen_t *addrlen);
 extern accept_t accept_f;
 

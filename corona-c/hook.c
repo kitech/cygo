@@ -1,5 +1,6 @@
 #include "hook.h"
 #include "yieldtypes.h"
+#include <time.h>
 #include <stdlib.h>
 #include <dlfcn.h>
 #include <fcntl.h>
@@ -44,6 +45,7 @@ sendmsg_t sendmsg_f = NULL;
 poll_t poll_f = NULL;
 ppoll_t ppoll_f = NULL;
 select_t select_f = NULL;
+pselect_t pselect_f = NULL;
 accept_t accept_f = NULL;
 sleep_t sleep_f = NULL;
 usleep_t usleep_f = NULL;
@@ -355,6 +357,10 @@ ssize_t recv(int sockfd, void *buf, size_t len, int flags)
     while (1) {
         int beblk = crn_fd_would_blocking(sockfd, 0);
         if (beblk<0) { return beblk; }
+        if (beblk && (flags & MSG_DONTWAIT)) {
+            errno = EWOULDBLOCK;
+            return -1;
+        }
         if (beblk) {
             crn_procer_yield(sockfd, YIELD_TYPE_RECV);
             continue;
@@ -395,6 +401,10 @@ ssize_t recvfrom(int sockfd, void *buf, size_t len, int flags,
     while (1){
         int beblk = crn_fd_would_blocking(sockfd, 0);
         if (beblk<0) { return beblk; }
+        if (beblk && (flags & MSG_DONTWAIT)) {
+            errno = EWOULDBLOCK;
+            return -1;
+        }
         if (beblk) {
             crn_procer_yield(sockfd, YIELD_TYPE_RECVFROM);
             continue;
@@ -427,6 +437,10 @@ ssize_t recvmsg(int sockfd, struct msghdr *msg, int flags)
     for (int i = 0; ; i ++){
         int beblk = crn_fd_would_blocking(sockfd, 0);
         if (beblk<0) { return beblk; }
+        if (beblk && (flags & MSG_DONTWAIT)) {
+            errno = EWOULDBLOCK;
+            return -1;
+        }
         if (beblk) {
             crn_procer_yield(sockfd, YIELD_TYPE_RECVMSG);
             continue;
@@ -862,8 +876,86 @@ int select(int nfds, fd_set *readfds, fd_set *writefds,
 {
     if (!select_f) initHook();
     if (!crn_in_procer()) return select_f(nfds, readfds, writefds, exceptfds, timeout);
-    linfo("%d\n", nfds);
-    assert(1==2);
+    linfo("%d %p %d.%d\n", nfds, timeout, timeout? timeout->tv_sec : -1, timeout? timeout->tv_usec : -1);
+
+    if (timeout != 0) {
+        struct timespec ts = {0};
+        ts.tv_sec = timeout->tv_sec;
+        ts.tv_nsec = timeout->tv_usec * 1000;
+
+        return pselect(nfds, readfds, writefds, exceptfds, &ts, 0);
+    } else {
+        return pselect(nfds, readfds, writefds, exceptfds, 0, 0);
+    }
+}
+
+int pselect(int nfds, fd_set *readfds, fd_set *writefds,
+           fd_set *exceptfds, const struct timespec *timeout, const sigset_t *sigmask)
+{
+    if (!pselect_f) initHook();
+    if (!crn_in_procer()) return pselect_f(nfds, readfds, writefds, exceptfds, timeout, sigmask);
+    linfo("%d %p %d.%d\n", nfds, timeout, timeout? timeout->tv_sec : -1, timeout? timeout->tv_nsec : -1);
+
+    // not blocking
+    if (timeout != 0 && timeout->tv_sec==0 && timeout->tv_nsec == 0) {
+        return pselect_f(nfds, readfds, writefds, exceptfds, timeout, sigmask);
+    }
+
+    long nsu = 1000*1000*1000;
+    struct timespec bts = {0};
+    clock_gettime(CLOCK_REALTIME, &bts);
+    long  tons = bts.tv_nsec + ((long)bts.tv_sec)*nsu;
+    if (timeout != 0) {
+        tons += timeout->tv_nsec + ((long)bts.tv_sec)*nsu;
+    }
+
+    while (1) {
+        int beblk = 1; int rdcnt = 0; int wrcnt = 0; int etcnt = 0;
+        int n = 0; long fds[nfds+1]; int ytypes[nfds+1];
+
+        for (int i = 0; i < nfds; i++) {
+            if (readfds != 0 && FD_ISSET(i, readfds)) {
+                fds[n] = i;
+                ytypes[n] = YIELD_TYPE_READ;
+                n ++; rdcnt ++;
+                if (!crn_fd_would_blocking(i, 0)) { beblk = 0; }
+            }
+            if (writefds != 0 && FD_ISSET(i, writefds)) {
+                fds[n] = i;
+                ytypes[n] = YIELD_TYPE_WRITE;
+                n ++; wrcnt ++;
+                if (!crn_fd_would_blocking(i, 1)) { beblk = 0; }
+            }
+            if (exceptfds != 0 && FD_ISSET(i, exceptfds)) {
+                etcnt ++;
+                assert(0); // not impl
+            }
+        }
+        lwarn("rdcnt/wrcnt/etcnt %d/%d\n", rdcnt, wrcnt, etcnt);
+        if (beblk) {
+            if (timeout != 0) {
+                struct timespec ts = {0};
+                clock_gettime(CLOCK_REALTIME, &ts);
+                long nowns = ts.tv_nsec + ((long)ts.tv_sec)*nsu;
+                if (nowns >= tons) {
+                    return 0;
+                }
+
+                fds[n] = timeout->tv_nsec + ((long)timeout->tv_sec)*nsu;
+                ytypes[n] = YIELD_TYPE_NANOSLEEP;
+                n++;
+            }
+
+            crn_procer_yield_multi(YIELD_TYPE_PSELECT, n, fds, ytypes);
+            continue;
+        }
+
+        struct timespec ztv = {0};
+        int rc = pselect_f(nfds, readfds, writefds, exceptfds, timeout, sigmask);
+        return rc;
+    }
+
+    assert(0);
 }
 
 unsigned int sleep(unsigned int seconds)
@@ -1084,7 +1176,8 @@ int dup(int oldfd)
 {
     if (!dup_f) initHook();
     linfo("%d\n", oldfd);
-    assert(1==2);
+    int rv = dup_f(oldfd);
+    return rv;
 }
 // TODO: support FD_CLOEXEC
 int dup2(int oldfd, int newfd)
@@ -1093,7 +1186,8 @@ int dup2(int oldfd, int newfd)
     if (!crn_in_procer()) return dup2_f(oldfd, newfd);
 
     linfo("%d\n", newfd);
-    assert(1==2);
+    int rv = dup2_f(oldfd, newfd);
+    return rv;
 }
 // TODO: support FD_CLOEXEC
 int dup3(int oldfd, int newfd, int flags)
@@ -1102,7 +1196,8 @@ int dup3(int oldfd, int newfd, int flags)
     if (!crn_in_procer()) return dup3_f(oldfd, newfd, flags);
 
     linfo("%d\n", flags);
-    assert(1==2);
+    int rv = dup3_f(oldfd, newfd, flags);
+    return rv;
 }
 
 int fclose(FILE* fp)
@@ -1344,6 +1439,8 @@ ATTRIBUTE_WEAK extern int __libc_ppoll(struct pollfd *fds, nfds_t nfds,
                           const struct timespec *tmo_p, const sigset_t *sigmask);
 ATTRIBUTE_WEAK extern int __select(int nfds, fd_set *readfds, fd_set *writefds,
                           fd_set *exceptfds, struct timeval *timeout);
+ATTRIBUTE_WEAK extern int __pselect(int nfds, fd_set *readfds, fd_set *writefds,
+                          fd_set *exceptfds, const struct timespec *timeout, const sigset_t *sigmask);
 ATTRIBUTE_WEAK extern unsigned int __sleep(unsigned int seconds);
 ATTRIBUTE_WEAK extern int __nanosleep(const struct timespec *req, struct timespec *rem);
 ATTRIBUTE_WEAK extern int __libc_close(int);
@@ -1410,6 +1507,7 @@ static int doInitHook()
         poll_f = (poll_t)dlsym(RTLD_NEXT, "poll");
         ppoll_f = (ppoll_t)dlsym(RTLD_NEXT, "ppoll");
         select_f = (select_t)dlsym(RTLD_NEXT, "select");
+        pselect_f = (pselect_t)dlsym(RTLD_NEXT, "pselect");
         sleep_f = (sleep_t)dlsym(RTLD_NEXT, "sleep");
         usleep_f = (usleep_t)dlsym(RTLD_NEXT, "usleep");
         nanosleep_f = (nanosleep_t)dlsym(RTLD_NEXT, "nanosleep");
@@ -1467,6 +1565,7 @@ static int doInitHook()
         poll_f = &__libc_poll;
         ppoll_f = &__libc_ppoll;
         select_f = &__select;
+        pselect_f = &__pselect;
         sleep_f = &__sleep;
         usleep_f = &__usleep;
         nanosleep_f = &__nanosleep;

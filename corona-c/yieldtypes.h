@@ -24,6 +24,7 @@ typedef enum yield_type
      YIELD_TYPE_POLL,
      YIELD_TYPE_UUPOLL, // __poll
      YIELD_TYPE_SELECT,
+     YIELD_TYPE_PSELECT,
      YIELD_TYPE_ACCEPT,
 
      YIELD_TYPE_LOCK,
@@ -48,4 +49,3 @@ typedef enum yield_type
 const char* yield_type_name(int ytype);
 
 #endif
-

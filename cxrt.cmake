@@ -55,10 +55,19 @@ set(cltc_c_srcs
 		${cltcdir}/common.c
 )
 
-add_library(crn STATIC ${corona_c_srcs}
+# this is the "object library" target: compiles the sources only once
+add_library(crn_objlib OBJECT  ${corona_c_srcs}
 		${cltc_c_srcs}
 		# ${plthook_c_srcs}
 		)
+# shared libraries need PIC
+set_property(TARGET crn_objlib PROPERTY POSITION_INDEPENDENT_CODE 1)
+
+add_library(crn_st STATIC $<TARGET_OBJECTS:crn_objlib>)
+add_library(crn_sh SHARED $<TARGET_OBJECTS:crn_objlib>)
+set_target_properties(crn_st PROPERTIES OUTPUT_NAME crn)
+set_target_properties(crn_sh PROPERTIES OUTPUT_NAME crn)
+target_link_libraries(crn_sh cxrt)
 
 #add_executable(corona ${corona_c_srcs} corona-c/main.c)
 set(CMAKE_C_FLAGS "-g -O0 -fPIC -std=c11 -D_GNU_SOURCE ")
@@ -82,11 +91,14 @@ set(corona_c_flags "${corona_c_flags}  -D_XOPEN_SOURCE") # only macos, fix the s
 set(corona_c_flags "${corona_c_flags}  -DLOG_USE_COLOR")
 # set(corona_c_flags "${corona_c_flags} -fstack-usage")
 
-set_target_properties(crn PROPERTIES COMPILE_FLAGS ${corona_c_flags})
+set_target_properties(crn_objlib PROPERTIES COMPILE_FLAGS ${corona_c_flags})
+set_target_properties(crn_st PROPERTIES COMPILE_FLAGS ${corona_c_flags})
+set_target_properties(crn_sh PROPERTIES COMPILE_FLAGS ${corona_c_flags})
 #set_target_properties(corona PROPERTIES COMPILE_FLAGS ${corona_c_flags})
 #target_link_libraries(corona -L./bdwgc/.libs -L./cltc/lib gc collectc event event_pthreads pthread dl)
 #set(gclib "${mydir}/bdwgc/.libs/libgc.a") # -L${mydir}/bdwgc/.libs
-set(gclib "-lgc")
+set(gclib "-lgc -lsigsegv")
 set(libevents_ldflags "-levent -levent_pthreads")
 set(cxrt_ldflags "${gclib} -lpthread -ldl -lc")
+target_link_libraries(crn_sh "${libevents_ldflags} ${cxrt_ldflags}")
 # note: all libraries which maybe create threads, must put before -lgc
