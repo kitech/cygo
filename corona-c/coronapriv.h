@@ -100,7 +100,7 @@ struct fiber {
 
 // procer callbacks, impl in corona.c
 extern int crn_procer_yield(long fd, int ytype);
-extern int crn_procer_yield_multi(int ytype, int nfds, long fds[], int ytypes[]);
+extern int crn_procer_yield_multi(int ytype, int nfds, const long fds[], const int ytypes[]);
 extern bool crn_in_procer();
 extern void crn_procer_resume_one(void* gr_, int ytype, int grid, int mcid);
 extern fiber* crn_fiber_getcur();

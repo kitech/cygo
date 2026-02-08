@@ -69,6 +69,12 @@ set_target_properties(crn_st PROPERTIES OUTPUT_NAME crn)
 set_target_properties(crn_sh PROPERTIES OUTPUT_NAME crn)
 target_link_libraries(crn_sh cxrt)
 
+# eg. cmake -DCMAKE_PREFIX_PATH="path1;path2;path3" ..
+find_library(LIBEVENT1 event_threads)
+find_library(LIBEVENT2 event)
+find_library(LIBGC gc)
+find_library(LIBSIGSEGV sigsegv)
+
 #add_executable(corona ${corona_c_srcs} corona-c/main.c)
 set(CMAKE_C_FLAGS "-g -O0 -fPIC -std=c11 -D_GNU_SOURCE ")
 #set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -pedantic") # non ISO C warning

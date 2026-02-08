@@ -7,6 +7,7 @@
 #include "coronagc.h"
 #include "coronapriv.h"
 #include "futex.h"
+#include "yieldtypes.h"
 
 // 由于 hook中没有hook epoll_wait, epoll_create,
 // 所以在这是可以使用libev/libuv。
@@ -357,6 +358,9 @@ void* netpoller_dnsresolv(const char* hostname, int ytype, fiber* gr, struct add
 
 // when ytype is SLEEP/USLEEP/NANOSLEEP, fd is the nanoseconds
 void netpoller_yieldfd(long fd, int ytype, fiber* gr) {
+    if (ytype >= YIELD_TYPE_MAX) {
+        lwarn("wtt %d %d %d\n", ytype, fd, gr->id);
+    }
     assert(ytype > YIELD_TYPE_NONE);
     assert(ytype < YIELD_TYPE_MAX);
 

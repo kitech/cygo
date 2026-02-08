@@ -41,8 +41,8 @@ typedef struct yieldinfo {
     int ytype;
     long fd;
     int nfds;
-    long fds[9];
-    int ytypes[9];
+    long fds[19];
+    int ytypes[19];
     // fiber* curgr;
 } yieldinfo;
 typedef struct machine {
@@ -1115,6 +1115,12 @@ void crn_procer_yield_commit(machine* mc, fiber* gr) {
 
     if (yinfo->ismulti == true) {
         for (int i = 0; i < yinfo->nfds; i++) {
+            if (yinfo->ytypes[i]>=YIELD_TYPE_MAX) {
+                for (int j = 0; j < yinfo->nfds; j++) {
+                    lwarn("j=%d nfds=%d ytype=%d fd=%d\n", j, yinfo->nfds, yinfo->ytypes[i], yinfo->fds[i]);
+                }
+                assert(0);
+            }
             netpoller_yieldfd(yinfo->fds[i], yinfo->ytypes[i], gr);
         }
     }else{
@@ -1243,7 +1249,7 @@ int crn_procer_yield(long fd, int ytype) {
     crn_fiber_suspend(gr);
     return 0;
 }
-int crn_procer_yield_multi(int ytype, int nfds, long fds[], int ytypes[]) {
+int crn_procer_yield_multi(int ytype, int nfds, const long fds[], const int ytypes[]) {
     // check是否是procer线程
     if (gcurmcid__ == 0) {
         linfo("maybe not procer thread %d %d\n", nfds, ytype);
@@ -1257,6 +1263,8 @@ int crn_procer_yield_multi(int ytype, int nfds, long fds[], int ytypes[]) {
     assert(gr != nilptr);
     gr->pkreason = ytype;
 
+    assert(nfds < (sizeof(mc->yinfo.ytypes)/sizeof(int)));
+    assert(mc->yinfo.seted == false);
     mc->yinfo.seted = true;
     mc->yinfo.ismulti = true;
     mc->yinfo.ytype = ytype;
@@ -1264,15 +1272,17 @@ int crn_procer_yield_multi(int ytype, int nfds, long fds[], int ytypes[]) {
 
     for (int i = 0; i < nfds; i ++) {
         long fd = fds[i];
-        int ytype = ytypes[i];
-        if (ytype == YIELD_TYPE_CHAN_RECV || ytype == YIELD_TYPE_CHAN_SEND ||
-            ytype == YIELD_TYPE_CHAN_SELECT || ytype == YIELD_TYPE_CHAN_SELECT_NOCASE) {
+        int typ = ytypes[i];
+        if (typ == YIELD_TYPE_CHAN_RECV || typ == YIELD_TYPE_CHAN_SEND ||
+            typ == YIELD_TYPE_CHAN_SELECT || typ == YIELD_TYPE_CHAN_SELECT_NOCASE) {
             assert(1==2);
         } else {
             mc->yinfo.fds[i] = fds[i];
             mc->yinfo.ytypes[i] = ytypes[i];
             // netpoller_yieldfd(fd, ytype, gr);
         }
+        linfo("myield nfds=%d ytype=%d fd=%d\n", nfds, typ, fds[i]);
+        assert(typ < YIELD_TYPE_MAX);
     }
     crn_fiber_mark_curstk_used(gr);
     crn_fiber_suspend(gr);

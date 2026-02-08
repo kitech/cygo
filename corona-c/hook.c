@@ -186,7 +186,7 @@ int connect(int fd, const struct sockaddr *addr, socklen_t addrlen)
 {
     if (!connect_f) initHook();
     if (!crn_in_procer()) return connect_f(fd, addr, addrlen);
-    // linfo("%d\n", fd);
+    linfo("%d\n", fd);
 
     time_t btime = time(0);
     for (int i = 0;; i++) {
@@ -211,7 +211,11 @@ int connect(int fd, const struct sockaddr *addr, socklen_t addrlen)
             linfo("Unknown %d %d %d %d %s\n", fd, rv, eno, i, strerror(eno));
             return rv;
         }
-        // linfo("yield %d %d %d\n", fd, rv, eno);
+        if (eno == EINPROGRESS || eno == EALREADY) {
+            return rv;
+        }
+        linfo("yield %d %d %d %s\n", fd, rv, eno, strerror(eno));
+        assert(0);
         crn_procer_yield(fd, YIELD_TYPE_CONNECT);
     }
     assert(1==2); // unreachable
