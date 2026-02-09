@@ -1,7 +1,7 @@
 #include <assert.h>
 #include <pthread.h>
 
-#include "hook.h"
+#include "iohook.h"
 #include "futex.h"
 #include "coronagc.h"
 #include "coronapriv.h"

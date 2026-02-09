@@ -20,9 +20,9 @@ include_directories(${mydir}/corona-c ${cltcdir}/include ${cltcdir} ${vaitdir})
 set(corona_c_srcs
 		${mydir}/corona-c/coro.c
 	${mydir}/corona-c/corowp.c
-	${mydir}/corona-c/hook.c
-	${mydir}/corona-c/hookcb.c
-	${mydir}/corona-c/hook2.c
+	${mydir}/corona-c/iohook.c
+	${mydir}/corona-c/iohookcb.c
+	${mydir}/corona-c/iohook2.c
 #	${mydir}/corona-c/hookbyplt.c
 	${mydir}/corona-c/futex.c
 	${mydir}/corona-c/corona_util.c

@@ -1,5 +1,5 @@
-#include "hook.h"
-#include "hookcb.h"
+#include "iohook.h"
+#include "iohookcb.h"
 #include "yieldtypes.h"
 #include <time.h>
 #include <stdlib.h>

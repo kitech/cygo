@@ -1,6 +1,6 @@
 // libc non syscall hook
 
-#include "hook2.h"
+#include "iohook2.h"
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <netdb.h>
