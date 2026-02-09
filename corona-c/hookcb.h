@@ -20,6 +20,7 @@ bool fdcontext_is_tcpsocket(fdcontext*fdctx);
 bool fdcontext_is_file(fdcontext*fdctx);
 bool fdcontext_is_nonblocking(fdcontext*fdctx);
 bool fd_is_nonblocking(int fd);
+int fd_set_nonblocking(int fd, bool isNonBlocking);
 int hookcb_fd_set_nonblocking(int fd, bool isNonBlocking);
 int fdcontext_get_fdtype(fdcontext*fdctx);
 
@@ -32,4 +33,3 @@ bool hookcb_getin_poll(int fd, bool isread);
 fdcontext* hookcb_get_fdcontext(int fd);
 
 #endif
-

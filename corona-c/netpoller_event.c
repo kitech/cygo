@@ -3,6 +3,7 @@
 #include <event2/thread.h>
 #include <event2/dns.h>
 #include <stdio.h>
+#include <string.h>
 
 #include "coronagc.h"
 #include "coronapriv.h"
@@ -263,13 +264,13 @@ static struct addrinfo* netpoller_dump_addrinfo(struct evutil_addrinfo* addr) {
             break;
         }
 
-        struct addrinfo* tai = crn_gc_malloc(sizeof(struct addrinfo));
+        struct addrinfo* tai = crn_raw_malloc(sizeof(struct addrinfo));
         tai->ai_flags = ai->ai_flags;
         tai->ai_family = ai->ai_family;
         tai->ai_socktype = ai->ai_socktype;
         tai->ai_protocol = ai->ai_protocol;
         tai->ai_addrlen = ai->ai_addrlen;
-        tai->ai_addr = crn_gc_malloc(sizeof(struct sockaddr));
+        tai->ai_addr = crn_raw_malloc(sizeof(struct sockaddr));
         memcpy(tai->ai_addr, ai->ai_addr, sizeof(struct sockaddr));
         tai->ai_canonname = ai->ai_canonname == nilptr ? nilptr : strdup(ai->ai_canonname);
         tai->ai_next = resout;
@@ -292,9 +293,9 @@ void evdns_resolv_cbproc(int errcode, struct evutil_addrinfo *addr, void *ptr)
     const char *name = (const char*)d->fd;
     struct addrinfo *resout = nilptr;
     struct addrinfo **resout2 = (struct addrinfo**)d->out;
-    if (errcode) {
+    if (errcode != 0) {
         assert(addr == nilptr);
-        lerror("%s -> %s\n", name, evutil_gai_strerror(errcode));
+        linfo("%s -> %s\n", evutil_gai_strerror(errcode), name);
     } else {
         if (addr->ai_canonname) {
             // linfo(" [%s]\n", addr->ai_canonname);
@@ -302,7 +303,6 @@ void evdns_resolv_cbproc(int errcode, struct evutil_addrinfo *addr, void *ptr)
         resout = netpoller_dump_addrinfo(addr);
         evutil_freeaddrinfo(addr);
     }
-
     evdata_free(d);
 
     //crn_post_gclock_proc(__func__);
@@ -318,6 +318,7 @@ void evdns_resolv_cbproc(int errcode, struct evutil_addrinfo *addr, void *ptr)
     crn_procer_resume_one(dd, ytype, grid, mcid);
 }
 
+// addr call free
 void* netpoller_dnsresolv(const char* hostname, int ytype, fiber* gr, struct addrinfo** addr, int *errcode) {
     netpoller* np = gnpl__;
     //crn_pre_gclock_proc(__func__);
@@ -327,7 +328,7 @@ void* netpoller_dnsresolv(const char* hostname, int ytype, fiber* gr, struct add
     d->grid = gr->id;
     d->mcid = gr->mcid;
     d->ytype = ytype;
-    d->fd = (long)hostname;
+    d->fd = (long)hostname; assert(sizeof(long)==sizeof(char*));
     d->out = (void**)addr;
     d->errcode = errcode;
 
@@ -349,11 +350,12 @@ void* netpoller_dnsresolv(const char* hostname, int ytype, fiber* gr, struct add
     crn_post_gclock_proc(__func__);
 
     if (req == NULL) {
-        lwarn("    [request for %s returned immediately]\n", hostname);
+        // call cb then return, so result exist now
+        linfo("    [request for %s returned immediately] %d\n", hostname, *errcode);
     }
 
     // linfo("dnsrv add d=%p %ld\n", d, hostname);
-    return req;
+    return req; // caller dont need free req
 }
 
 // when ytype is SLEEP/USLEEP/NANOSLEEP, fd is the nanoseconds

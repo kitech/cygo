@@ -45,6 +45,7 @@ int getaddrinfo(const char *node, const char *service,
     if (!getaddrinfo_f) initHook2();
     if (!crn_in_procer()) return getaddrinfo_f(node, service, hints, res);
     // linfo("%s **res=%d\n", node, res);
+
     extern void* netpoller_dnsresolv(const char* hostname, int ytype, fiber* gr, void** out, int* errcode);
 
     fiber* gr = crn_fiber_getcur();
@@ -55,31 +56,27 @@ int getaddrinfo(const char *node, const char *service,
     int errcode = 0;
     void* retptr = netpoller_dnsresolv(hostname, YIELD_TYPE_GETADDRINFO, gr, (void**)&res2, &errcode);
     // If we can answer the request immediately (with an error or not!), then we invoke cb immediately and return NULL.
+    int imdret = retptr == nilptr;
     // assert(retptr != nilptr && res2 == nilptr);
-    if (retptr == nilptr) {
-        assert(res2 != nilptr);
+    if (imdret) {
+        if (errcode != 0) {
+            assert(res2 == nilptr);
+        }else{
+            assert(res2 != nilptr);
+        }
+        *res = res2;
+        return errcode;
     }else{
         assert(res2 == nilptr);
     }
 
-    int yielded = 1;
-    if (retptr == nilptr && res2 != nilptr) {
-        yielded = 0;
-    }else{
-        crn_procer_yield((long)node, YIELD_TYPE_GETADDRINFO);
-    }
-    if (retptr == nilptr) {
-        assert(yielded == 0);
-    }else{
-        assert(yielded == 1);
-    }
+    crn_procer_yield((long)node, YIELD_TYPE_GETADDRINFO);
 
-    linfo("%d %p %d %p %s %s\n", yielded, oldres, res2 != nilptr, res2, node, service);
+    linfo("%p %d %p %s %s\n", oldres, res2 != nilptr, res2, node, service);
     if (res2 != nilptr) {
         *res = res2;
-        return 0;
     }
-    return -1;
+    return errcode;
 }
 
 #include <arpa/inet.h>

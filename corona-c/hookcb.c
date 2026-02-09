@@ -65,12 +65,7 @@ bool fd_is_nonblocking(int fd) {
     bool old = flags & O_NONBLOCK;
     return old;
 }
-int fdcontext_set_nonblocking(fdcontext*fdctx, bool isNonBlocking) {
-    if (fdctx == 0) {
-        return 0;
-    }
-
-    int fd = fdctx->fd;
+int fd_set_nonblocking(int fd, bool isNonBlocking) {
     int flags = fcntl_f(fd, F_GETFL, 0);
     bool old = flags & O_NONBLOCK;
     if (isNonBlocking == old)  return old;
@@ -83,6 +78,15 @@ int fdcontext_set_nonblocking(fdcontext*fdctx, bool isNonBlocking) {
         // setsockopt(fd, IPPROTO_TCP, TCP_NODELAY, &one, sizeof(int));
     }
     return rv;
+}
+
+int fdcontext_set_nonblocking(fdcontext*fdctx, bool isNonBlocking) {
+    if (fdctx == 0) {
+        return 0;
+    }
+
+    int fd = fdctx->fd;
+    return fd_set_nonblocking(fd, isNonBlocking);
 }
 int hookcb_fd_set_nonblocking(int fd, bool isNonBlocking) {
     fdcontext* fdctx = hookcb_get_fdcontext(fd);

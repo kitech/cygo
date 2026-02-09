@@ -1,4 +1,5 @@
 #include "hook.h"
+#include "hookcb.h"
 #include "yieldtypes.h"
 #include <time.h>
 #include <stdlib.h>
@@ -182,69 +183,6 @@ int socketpair(int domain, int type, int protocol, int sv[2])
     return rv;
 }
 
-int connect(int fd, const struct sockaddr *addr, socklen_t addrlen)
-{
-    if (!connect_f) initHook();
-    if (!crn_in_procer()) return connect_f(fd, addr, addrlen);
-    linfo("%d\n", fd);
-
-    time_t btime = time(0);
-    for (int i = 0;; i++) {
-        char buf[200] = {0};
-        struct sockaddr_in* sa = (struct sockaddr_in*) addr;
-        // linfo("what addr %s\n", inet_ntop(AF_INET, &sa->sin_addr.s_addr, buf, 200));
-        // linfo("blocking?? fd=%d %d\n", fd, fd_is_nonblocking(fd));
-        if (!fd_is_nonblocking(fd)) {
-            lwarn("why fd is blocking mode %d?\n", fd);
-            // memcpy(1, 2, 3);
-            // hookcb_fd_set_nonblocking(fd, 1);
-        }
-        assert(fd_is_nonblocking(fd) == 1);
-        int rv = connect_f(fd, addr, addrlen);
-        // linfo("what addr %s\n", inet_ntop(AF_INET, &sa->sin_addr.s_addr, buf, 200));
-        int eno = rv < 0 ? errno : 0;
-        if (rv >= 0) {
-            // linfo("connect ok %d %d, %d, %d\n", fd, errno, time(0)-btime, i);
-            return rv;
-        }
-        if (eno != EINPROGRESS && eno != EALREADY) {
-            linfo("Unknown %d %d %d %d %s\n", fd, rv, eno, i, strerror(eno));
-            return rv;
-        }
-        if (eno == EINPROGRESS || eno == EALREADY) {
-            return rv;
-        }
-        linfo("yield %d %d %d %s\n", fd, rv, eno, strerror(eno));
-        assert(0);
-        crn_procer_yield(fd, YIELD_TYPE_CONNECT);
-    }
-    assert(1==2); // unreachable
-}
-
-int accept(int sockfd, struct sockaddr *addr, socklen_t *addrlen)
-{
-    if (!accept_f) initHook();
-    if (!crn_in_procer()) return accept_f(sockfd, addr, addrlen);
-
-    // linfo("%d fdnb=%d\n", sockfd, fd_is_nonblocking(sockfd));
-    while(1){
-        int rv = accept_f(sockfd, addr, addrlen);
-        int eno = rv < 0 ? errno : 0;
-        if (rv >= 0) {
-            hookcb_oncreate(rv, FDISSOCKET, false, AF_INET, SOCK_STREAM, 0);
-            linfo("%d fdnb=%d newfd=%d newnb=%d\n", sockfd, fd_is_nonblocking(sockfd),
-                  rv, fd_is_nonblocking(rv));
-            return rv;
-        }
-        if (eno != EINPROGRESS && eno != EAGAIN) {
-            linfo("fd=%d err=%d eno=%d err=%s\n", sockfd, rv, errno, strerror(errno));
-            return rv;
-        }
-        crn_procer_yield(sockfd, YIELD_TYPE_ACCEPT);
-    }
-    assert(1==2); // unreachable
-}
-
 // ioctl read/write queue
 static int crn_getiocq(int fd, int isout)  {
     // fix macos
@@ -305,6 +243,78 @@ static int crn_fd_would_blocking(int fd, int iswr) {
     } else {
         return 0; // nonblocking
     }
+}
+
+int crn_socket_geterr(int sock) {
+    // Check the socket's status to confirm success or failure
+    int so_error;
+    socklen_t len = sizeof(so_error);
+    getsockopt(sock, SOL_SOCKET, SO_ERROR, &so_error, &len);
+    return so_error;
+}
+
+int connect(int fd, const struct sockaddr *addr, socklen_t addrlen)
+{
+    if (!connect_f) initHook();
+    if (!crn_in_procer()) return connect_f(fd, addr, addrlen);
+    linfo("%d\n", fd);
+
+    if (fd_is_nonblocking(fd)) return connect_f(fd, addr, addrlen);
+    assert(!fd_is_nonblocking(fd));
+
+    // handle blocking fd now
+    // temporary set to O_NONBLOCING
+    fd_set_nonblocking(fd, true);
+    time_t btime = time(0);
+    for (int i = 0;; i++) {
+        char buf[200] = {0};
+        struct sockaddr_in* sa = (struct sockaddr_in*) addr;
+        // linfo("what addr %s\n", inet_ntop(AF_INET, &sa->sin_addr.s_addr, buf, 200));
+        // linfo("blocking?? fd=%d %d\n", fd, fd_is_nonblocking(fd));
+
+        int rv = connect_f(fd, addr, addrlen);
+        // linfo("what addr %s\n", inet_ntop(AF_INET, &sa->sin_addr.s_addr, buf, 200));
+        int eno = rv < 0 ? errno : 0;
+        if (rv >= 0) {
+            linfo("connect ok %d %d, %d, %d\n", fd, errno, time(0)-btime, i);
+            fd_set_nonblocking(fd, false);
+            return rv;
+        }
+        if (eno != EINPROGRESS && eno != EALREADY && eno != EWOULDBLOCK) {
+            linfo("Unknown %d %d %d %d %s\n", fd, rv, eno, i, strerror(eno));
+            fd_set_nonblocking(fd, false);
+            return rv;
+        }
+        int soerr = crn_socket_geterr(fd);
+        linfo("yield %d(%d) %d %d %s\n", fd, soerr, rv, eno, strerror(eno));
+        assert(soerr==0);
+        crn_procer_yield(fd, YIELD_TYPE_CONNECT);
+    }
+    assert(0); // unreachable
+}
+
+int accept(int sockfd, struct sockaddr *addr, socklen_t *addrlen)
+{
+    if (!accept_f) initHook();
+    if (!crn_in_procer()) return accept_f(sockfd, addr, addrlen);
+
+    // linfo("%d fdnb=%d\n", sockfd, fd_is_nonblocking(sockfd));
+    while(1){
+        int rv = accept_f(sockfd, addr, addrlen);
+        int eno = rv < 0 ? errno : 0;
+        if (rv >= 0) {
+            hookcb_oncreate(rv, FDISSOCKET, false, AF_INET, SOCK_STREAM, 0);
+            linfo("%d fdnb=%d newfd=%d newnb=%d\n", sockfd, fd_is_nonblocking(sockfd),
+                  rv, fd_is_nonblocking(rv));
+            return rv;
+        }
+        if (eno != EINPROGRESS && eno != EAGAIN) {
+            linfo("fd=%d err=%d eno=%d err=%s\n", sockfd, rv, errno, strerror(errno));
+            return rv;
+        }
+        crn_procer_yield(sockfd, YIELD_TYPE_ACCEPT);
+    }
+    assert(1==2); // unreachable
 }
 
 ssize_t read(int fd, void *buf, size_t count)
