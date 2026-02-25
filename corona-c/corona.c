@@ -217,6 +217,7 @@ static void crn_fiber_fault_setup(fiber* gr) {
     // machine* mc = crn_machine_get(gr->mcid);
     // assert(mc!=0);
 
+    if (!nr->rtsets->use_libsigsegv) return ;
     void* ticket = sigsegv_register(&nr->sigdpt, gr->stkptr, gr->stksz, crn_fiber_fault_handler, gr);
     gr->sig_regi_ticket = ticket;
     assert(ticket!=0);
@@ -362,8 +363,10 @@ void crn_fiber_destroy(fiber* gr) {
 
         // todo
         corona* nr = gnr__;
-        assert(gr->sig_regi_ticket!=0);
-        sigsegv_unregister(&nr->sigdpt, gr->sig_regi_ticket);
+	if (nr->rtsets->use_libsigsegv) {
+	    assert(gr->sig_regi_ticket!=0);
+	    sigsegv_unregister(&nr->sigdpt, gr->sig_regi_ticket);
+	}
 
         if (gr->libcmalloc) { free(gr->stkptr); }
         else if (gr->usemmap) {int rv = munmap(gr->stkptr, gr->stksz); assert(rv==0); }
@@ -630,6 +633,8 @@ static void crn_machine_fault_setup(machine* mc) {
     void* stackaddr = 0; size_t stacksize = 0;
     int rv = thread_getstack(pthread_self(), &stackaddr, &stacksize); assert(rv==0);
     ldebug("mc %d stk, gchi1 %p, top1 %lu, top2 %p, size=%lu\n", mc->id, mc->stksb.mem_base, mc->stksb.mem_base-stackaddr, stackaddr, stacksize);
+
+    if (!nr->rtsets->use_libsigsegv) return ;
     void* ticket = sigsegv_register(&gnr__->sigdpt, stackaddr, stacksize, crn_machine_fault_handler, mc);
     assert(ticket!=0);
     mc->sig_regi_ticket = ticket;
@@ -1808,16 +1813,19 @@ corona* crn_new() {
     pcond_init(&nr->initcd, nilptr);
     nr->mths = crnmap_new_uintptr();
     nr->mchs = crnmap_new_uintptr();
+    nr->rtsets = rtsets;
 
     nr->gridno = 12;
     nr->inuseids = crnmap_new_uintptr();
     nr->np = netpoller_new();
 
-    sigsegv_init(&nr->sigdpt);
-    int rv = sigsegv_install_handler(crn_global_fault_handler);
-    assert(rv==0);
-    rv = stackoverflow_install_handler(crn_global_so_handler, crn_sigso_altstack, SIGSTKSZ);
-    assert(rv==0);
+    if (nr->rtsets->use_libsigsegv) {
+	sigsegv_init(&nr->sigdpt);
+	int rv = sigsegv_install_handler(crn_global_fault_handler);
+	assert(rv==0);
+	rv = stackoverflow_install_handler(crn_global_so_handler, crn_sigso_altstack, SIGSTKSZ);
+	assert(rv==0);
+    }
 
     assert(gnr__ == nilptr);
     gnr__ = nr;

@@ -117,7 +117,7 @@
 #define cstr_tolower(s) for(char*p=s;*p!=0;p++){if(*p>='A'&&*p<='Z') *p += ('z'-'a'); }
 #define cstrs_hasstr(arr, s2) ({int has_=0; for(char*tmp_=arr; tmp_!=0; tmp_++) {if(cxstreq(tmp_,s2)) { has_=1; break;} } has_; })
 #define cstrs_index(arr, s2) ({int idx_=-1; int cnt_; for(char*tmp_=arr; tmp_!=0; tmp_++, cnt_++) {if(cxstreq(tmp_,s2)) { idx_=cnt_; break;} } idx_; })
-#define cstrs_len(arr) ({int cnt_; for(char*tmp_=arr; tmp_!=0; tmp_++,cnt_++){} cnt_;})
+#define cstrs_len(arr) ({int cnt_; for(char**tmp_=arr; *tmp_!=0; tmp_++,cnt_++){} cnt_;})
 extern void cstrs_sort(char** arr, int desc);
 // #define cxstrs_reverse(arr) ({})
 
@@ -151,7 +151,7 @@ typedef int64_t i64;
 typedef uintptr_t usize;
 typedef uintptr_t uintptr;
 // typedef intptr_t isize;
-typedef long isize;
+// typedef long isize;
 typedef long long longlong ;
 typedef unsigned long ulong;
 typedef unsigned long long ulonglong ;

@@ -1,5 +1,7 @@
 #include "cxtypedefs.h"
 #include <stdio.h>
+#include <string.h>
+#include <ctype.h>
 
 // todo WIP
 // v1, simple version one line ascii, one line hex

@@ -56,6 +56,7 @@ typedef struct rtsettings {
     int usemmap_stack;
     int usebdwgc_stack;
     int uselibc_stack;
+    int use_libsigsegv;
 } rtsettings;
 extern rtsettings* rtsets;
 void crn_loglvl_forenv();

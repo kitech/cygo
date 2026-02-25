@@ -287,7 +287,7 @@ int connect(int fd, const struct sockaddr *addr, socklen_t addrlen)
         }
         int soerr = crn_socket_geterr(fd);
         linfo("yield %d(%d) %d %d %s\n", fd, soerr, rv, eno, strerror(eno));
-        assert(soerr==0);
+        if (soerr != 0) { fd_set_nonblocking(fd, false); return -1; }
         crn_procer_yield(fd, YIELD_TYPE_CONNECT);
     }
     assert(0); // unreachable
