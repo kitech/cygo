@@ -450,24 +450,24 @@ static bool checkhtkeys(crnmap* ht) {
 // gnr__->mchs
 // check mc->id valid
 static bool crn_check_mchs(crnmap* ht) {
-    Array* arr = nilptr;
+    Array* arr1 = nilptr;
     Array* arr2 = nilptr;
     array_new(&arr2);
-    int rv = crnmap_get_keys(ht, &arr);
+    int rv = crnmap_get_keys(ht, &arr1);
     int htsz = crnmap_size(ht);
     int haserr = 0;
     for (int i = 0; i < htsz; i++) {
         void* mcid = 0;
-        rv = array_get_at(arr, (usize)i, &mcid);
+        rv = array_get_at(arr1, (usize)i, &mcid);
         assert(rv==CC_OK);
         machine* mc=0;
         rv = crnmap_get(ht, (usize)mcid, (void**)&mc);
         if(mc->id != (int)(usize)mcid) { haserr += 1; }
         array_add(arr2, (void*)(usize)mc->id);
     }
-    if (haserr) lerror("errcnt %d, keys [%s], inner keys [%s]\n", haserr, crn_array_tostr_int(arr), crn_array_tostr_int(arr2));;
-    if (arr != nilptr) array_destroy(arr);
-    if (arr2 != nilptr) array_destroy(arr);
+    if (haserr) lerror("errcnt %d, keys [%s], inner keys [%s]\n", haserr, crn_array_tostr_int(arr1), crn_array_tostr_int(arr2));;
+    if (arr1 != nilptr) array_destroy(arr1);
+    if (arr2 != nilptr) array_destroy(arr2);
     return false;
 }
 

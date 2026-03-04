@@ -31,25 +31,21 @@ static Allocator* cxalt_ = 1 ? (&cxaltgc) : (&cxaltrc);
 
 void* cxmalloc(size_t size) {
     void* ptr = cxalt_->malloc(size);
-    // void* ptr = crn_gc_malloc(size);
     return ptr;
 }
 void* cxrealloc(void*ptr, size_t size) {
     return cxalt_->realloc(ptr, size);
-    // return crn_gc_realloc(ptr, size);
 }
 void cxfree(void* ptr) {
     cxalt_->free(ptr);
-    // crn_gc_free(ptr);
 }
 void* cxcalloc(size_t blocks, size_t size) {
     return cxalt_->calloc(blocks, size);
-    // return crn_gc_malloc(blocks*size);
 }
 
 /////
 // safe when null
-int cstrlen(const char* str) { return str==0?0 : strlen(str); }
+int cstrlen(const char* str) { return str==0? 0 : strlen(str); }
 char* cstrcpy(char* dst, const char* src) {
     if(dst==0||src==0) {return dst; }
     return strcpy(dst, src);
