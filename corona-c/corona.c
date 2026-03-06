@@ -1920,6 +1920,7 @@ void crn_init(corona* nr) {
         pthread_detach(*t);
     }
 
+    array_destroy(keys);
     crn_check_mchs(nr->mchs);
     // GC_enable();
 }

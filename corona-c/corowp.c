@@ -137,7 +137,11 @@ void corowp_create(coro_context *ctx, coro_func coro, void *arg, void *sptr,  si
     // ucontext_t should 700+, why so small???
     assert(sizeof(coro_context)>=sizeof(ucontext_t));
     ldebug("sizeof(coro_context)=%lu, sizeof(ucontext_t)=%lu\n", sizeof(coro_context), sizeof(ucontext_t));
-    assert(sizeof(ucontext_t)>700); // linux 900+, mac 700+
+    if (sizeof(void*) <= 4) {
+	assert(sizeof(ucontext_t)>300); // linux 900+, mac 700+
+    } else {
+	assert(sizeof(ucontext_t)>700); // linux 900+, mac 700+
+    }
 
     ldebug("corowp_create %p %p %p %p %lu\n", ctx, coro, arg, sptr, ssze);
     assert(ctx != nilptr);
