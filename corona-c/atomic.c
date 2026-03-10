@@ -30,7 +30,8 @@ int64_t atomic_addi64(int64_t* v, int64_t delta) {
 
 bool atomic_notbool(bool* v) {
     crn_atomic_byptr(bool, vp, v);
-    return atomic_compare_exchange_strong(vp, vp, !*vp);
+    bool tv = *v;
+    return atomic_compare_exchange_strong(vp, vp, !tv);
 }
 
 bool atomic_casbool(bool* v, bool oldval, bool newval) {
