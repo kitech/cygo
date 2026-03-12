@@ -4,6 +4,7 @@
 #include "coronagc.h"
 #include "futex.h"
 
+#include <time.h>
 #include <stddef.h>
 #include <gc/gc.h>
 #include <pthread.h>
@@ -927,7 +928,10 @@ static void* crn_procer1(void*arg) {
         if (newgn == 0 && oldgn == 0) {
             pmutex_lock(&mc->pkmu);
             mc->parking = true;
-            pcond_wait(&mc->pkcd, &mc->pkmu);
+	    struct timespec ts = {0};
+	    clock_gettime(CLOCK_REALTIME, &ts); // absolute time
+	    ts.tv_sec += 3600*24*365; // timeout period
+	    pcond_timedwait(&mc->pkcd, &mc->pkmu, &ts);
             mc->parking = false;
             pmutex_unlock(&mc->pkmu);
 	    continue;
@@ -986,6 +990,14 @@ static void* crn_procer1(void*arg) {
 		    mct = nilptr;
 		}
             }
+	    // ensure one, disabled default
+	    if (0 && mct == nilptr) {
+		int rdidx = abs(rand()) % arr2sz;
+		void* key = nilptr;
+		int rv = array_get_at(mcids, rdidx, &key);
+		mct = crn_machine_get((int)(uintptr_t)key);
+		assert(mct != nilptr);
+	    }
             if (mct == nilptr) {
                 lwarn("no enough mc? %d\n", gr->id);
                 // try select random one?

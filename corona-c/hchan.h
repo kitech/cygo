@@ -2,20 +2,21 @@
 #define _HCHAN_H_
 
 #include <stdbool.h>
+#include <stdint.h>
 // #include <threads.h>
 
 // typedef struct hchan hchan;
 
-typedef struct hchan {
+typedef struct crn_hchan {
     chan_t* c;
     int cap;
     pmutex_t lock;
     szqueue_t* recvq; // fiber*
     szqueue_t* sendq; // fiber*
     int closed;
-} hchan;
+} crn_hchan;
 
-typedef struct hcdata  {
+typedef struct crn_hcdata  {
     int grid;
     int mcid;
     fiber* gr;
@@ -26,18 +27,17 @@ typedef struct hcdata  {
     int wokecase; // caseSend/caseRecv
     fiber* wokeby; //
     void* wokehc; // hchan*
-} hcdata;
+} crn_hcdata;
 
-int hchan_is_closed(hchan* hc);
-int hchan_cap(hchan* hc);
-int hchan_len(hchan* hc);
+int crn_hchan_is_closed(crn_hchan* hc);
+int crn_hchan_cap(crn_hchan* hc);
+int crn_hchan_len(crn_hchan* hc);
 
-hcdata* hcdata_new(fiber* gr);
-void hcdata_free(hcdata* d);
+crn_hcdata* crn_hcdata_new(fiber* gr);
+void crn_hcdata_free(crn_hcdata* d);
 
-typedef struct scase scase;
-scase* scase_new(hchan* hc, uint16_t kind, void* elem);
-void scase_free(scase* cas);
+typedef struct crn_scase crn_scase;
+crn_scase* crn_scase_new(crn_hchan* hc, uint16_t kind, void* elem);
+void crn_scase_free(crn_scase* cas);
 
 #endif
-

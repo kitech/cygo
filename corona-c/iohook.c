@@ -269,11 +269,9 @@ int connect(int fd, const struct sockaddr *addr, socklen_t addrlen)
     for (int i = 0;; i++) {
         char buf[200] = {0};
         struct sockaddr_in* sa = (struct sockaddr_in*) addr;
-        // linfo("what addr %s\n", inet_ntop(AF_INET, &sa->sin_addr.s_addr, buf, 200));
         // linfo("blocking?? fd=%d %d\n", fd, fd_is_nonblocking(fd));
 
         int rv = connect_f(fd, addr, addrlen);
-        // linfo("what addr %s\n", inet_ntop(AF_INET, &sa->sin_addr.s_addr, buf, 200));
         int eno = rv < 0 ? errno : 0;
         if (rv >= 0) {
             linfo("connect ok %d %d, %d, %d\n", fd, errno, time(0)-btime, i);

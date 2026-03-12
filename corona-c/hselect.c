@@ -2,20 +2,20 @@
 #include "coronapriv.h"
 #include "hchan.h"
 
-typedef struct scase {
-    hchan* hc;
+typedef struct crn_scase {
+    crn_hchan* hc;
     uint16_t kind;
     void* hcelem;
-    hcdata* hcdt;
+    crn_hcdata* hcdt;
     uintptr_t pc;
     int64_t reltime;
-} scase;
+} crn_scase;
 
 // TODO some cases hcdata is not need
-scase* scase_new(hchan* hc, uint16_t kind, void* elem) {
-    scase* cas = (scase*)crn_gc_malloc(sizeof(scase));
+crn_scase* crn_scase_new(crn_hchan* hc, uint16_t kind, void* elem) {
+    crn_scase* cas = (crn_scase*)crn_gc_malloc(sizeof(crn_scase));
     fiber* mygr = crn_fiber_getcur();
-    hcdata* hcdt= hcdata_new(mygr);
+    crn_hcdata* hcdt= crn_hcdata_new(mygr);
     if (kind == caseRecv) {
         hcdt->rvelem = &cas->hcelem;
     }else if(kind == caseSend){
@@ -26,50 +26,50 @@ scase* scase_new(hchan* hc, uint16_t kind, void* elem) {
     cas->hcdt = hcdt;
     return cas;
 }
-void scase_free(scase* cas) {
-    hcdata_free(cas->hcdt);
+void crn_scase_free(crn_scase* cas) {
+    crn_hcdata_free(cas->hcdt);
     crn_gc_free(cas);
 }
 
 static
-void sellock(scase** cas0, uint16_t* lockorder, int ncases) {
+void crn_sellock(crn_scase** cas0, uint16_t* lockorder, int ncases) {
     for (int i = 0; i < ncases; i++) {
-        scase* cas = cas0[lockorder[i]];
+        crn_scase* cas = cas0[lockorder[i]];
         pmutex_lock(&cas->hc->lock);
     }
 }
 static
-void selunlock(scase** cas0, uint16_t* lockorder, int ncases) {
+void crn_selunlock(crn_scase** cas0, uint16_t* lockorder, int ncases) {
     for (int i = ncases-1; i >= 0; i--) {
-        scase* cas = cas0[lockorder[i]];
+        crn_scase* cas = cas0[lockorder[i]];
         pmutex_unlock(&cas->hc->lock);
     }
 }
 static
-bool selparkcommit() {
+bool crn_selparkcommit() {
     return false;
 }
 static
-void selblock() {
+void crn_selblock() {
 }
 
 static
-bool selectgo(int* rcasi, scase** cas0, uint16_t* order0, int ncases) {
+bool crn_selectgo(int* rcasi, crn_scase** cas0, uint16_t* order0, int ncases) {
     fiber* mygr = crn_fiber_getcur();
-    sellock(cas0, order0, ncases);
+    crn_sellock(cas0, order0, ncases);
     linfo("rcasi=%d cas0=%p order0=%p ncases=%d\n", *rcasi, cas0, order0, ncases);
-    hchan* hc = nilptr;
-    scase* sk = nilptr;
-    hcdata* hcdt = nilptr;
+    crn_hchan* hc = nilptr;
+    crn_scase* sk = nilptr;
+    crn_hcdata* hcdt = nilptr;
     fiber* gr = nilptr;
     fiber* wkgr = nilptr;
     int casewk = 0;
-    hchan* wkhc = nilptr;
+    crn_hchan* wkhc = nilptr;
 
     int dfti = 0;
-    scase* dftv = nilptr;
+    crn_scase* dftv = nilptr;
     int casi = 0;
-    scase* cas = nilptr;
+    crn_scase* cas = nilptr;
     bool recvok = false;
     int retline = 0;
 
@@ -90,17 +90,17 @@ bool selectgo(int* rcasi, scase** cas0, uint16_t* order0, int ncases) {
             gr = hcdt->gr;
             if (gr != nilptr) { assert(gr->id == hcdt->grid); }
             if (gr != nilptr) goto recv;
-            if (hchan_len(hc)>0) goto bufrecv;
-            if (hchan_is_closed(hc)) goto rclose;
+            if (crn_hchan_len(hc)>0) goto bufrecv;
+            if (crn_hchan_is_closed(hc)) goto rclose;
             break;
 
         case caseSend:
-            if (hchan_is_closed(hc)) goto sclose;
+            if (crn_hchan_is_closed(hc)) goto sclose;
             hcdt = szqueue_remove(hc->recvq);
             gr = hcdt->gr;
             if (gr != nilptr) { assert(gr->id == hcdt->grid); }
             if (gr != nilptr) goto send;
-            if (hchan_len(hc) < hchan_cap(hc)) goto bufsend;
+            if (crn_hchan_len(hc) < crn_hchan_cap(hc)) goto bufsend;
             break;
         case caseDefault:
             dfti = casi;
@@ -112,7 +112,7 @@ bool selectgo(int* rcasi, scase** cas0, uint16_t* order0, int ncases) {
     }
 
     if (dftv != nilptr) {
-        selunlock(cas0, order0, ncases);
+        crn_selunlock(cas0, order0, ncases);
         casi = dfti;
         cas = dftv;
         goto retc;
@@ -143,11 +143,11 @@ bool selectgo(int* rcasi, scase** cas0, uint16_t* order0, int ncases) {
     }
 
     // wait for someone to wake us up
-    selunlock(cas0, order0, ncases);
+    crn_selunlock(cas0, order0, ncases);
     linfo("should here %d\n", 0);
     crn_procer_yield(-1, YIELD_TYPE_CHAN_SELECT);
     linfo("should here %d\n", 0);
-    sellock(cas0, order0, ncases);
+    crn_sellock(cas0, order0, ncases);
 
     // pass 3  - dequeue from unsuccessful chans
     casi = -1;
@@ -196,25 +196,25 @@ bool selectgo(int* rcasi, scase** cas0, uint16_t* order0, int ncases) {
         recvok = true;
     }
 
-    selunlock(cas0, order0, ncases);
+    crn_selunlock(cas0, order0, ncases);
     retline = __LINE__;
     goto retc;
 
  bufrecv:
     recvok = true;
     chan_recv(hc->c, &cas->hcelem);
-    selunlock(cas0, order0, ncases);
+    crn_selunlock(cas0, order0, ncases);
     retline = __LINE__;
     goto retc;
 
  bufsend:
     chan_send(hc->c, cas->hcelem);
-    selunlock(cas0, order0, ncases);
+    crn_selunlock(cas0, order0, ncases);
     retline = __LINE__;
     goto retc;
 
  recv:
-    selunlock(cas0, order0, ncases);
+    crn_selunlock(cas0, order0, ncases);
     crn_procer_resume_one(gr, 0, hcdt->grid, hcdt->mcid);
     linfo("syncrecv: cas0=%p hc=%p val=%p\n", cas0, hc, cas->hcelem);
     recvok = true;
@@ -222,13 +222,13 @@ bool selectgo(int* rcasi, scase** cas0, uint16_t* order0, int ncases) {
     goto retc;
 
  rclose:
-    selunlock(cas0, order0, ncases);
+    crn_selunlock(cas0, order0, ncases);
     recvok = false;
     retline = __LINE__;
     goto retc;
 
  send:
-    selunlock(cas0, order0, ncases);
+    crn_selunlock(cas0, order0, ncases);
     linfo("syncsend: cas0=%p hc=%p val=%p\n", cas0, hc, cas->hcelem);
     retline = __LINE__;
     goto retc;
@@ -244,14 +244,14 @@ bool selectgo(int* rcasi, scase** cas0, uint16_t* order0, int ncases) {
     return false;
 }
 
-static void blocknocase() {
+static void crn_blocknocase() {
     crn_procer_yield(-1, YIELD_TYPE_CHAN_SELECT_NOCASE);
 }
 
-bool goselect(int* rcasi, scase** cas0, int ncases) {
+bool crn_goselect(int* rcasi, crn_scase** cas0, int ncases) {
     if (ncases == 0) {
         // parking forever
-        blocknocase();
+        crn_blocknocase();
         assert(1==2); // not reachable
     }
 
@@ -260,7 +260,7 @@ bool goselect(int* rcasi, scase** cas0, int ncases) {
     for (int i = 0; i < ncases; i ++) {
         order0[i] = i;
     }
-    return selectgo(rcasi, cas0, order0, ncases);
+    return crn_selectgo(rcasi, cas0, order0, ncases);
 }
 
 // go 1.12.5
