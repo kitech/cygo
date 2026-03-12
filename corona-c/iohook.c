@@ -300,6 +300,14 @@ int accept(int sockfd, struct sockaddr *addr, socklen_t *addrlen)
 
     // linfo("%d fdnb=%d\n", sockfd, fd_is_nonblocking(sockfd));
     while(1){
+        int beblk = crn_fd_would_blocking(sockfd, 0);
+        if (beblk<0) { return beblk; }
+        if (beblk) {
+            linfo("accept yield %d\n", sockfd);
+            crn_procer_yield(sockfd, YIELD_TYPE_ACCEPT);
+            continue;
+        }
+
         int rv = accept_f(sockfd, addr, addrlen);
         int eno = rv < 0 ? errno : 0;
         if (rv >= 0) {
