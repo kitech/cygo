@@ -905,7 +905,6 @@ void* crn_procer_netpoller(void*arg) {
     return nilptr;
 }
 
-
 static void* crn_procer1(void*arg) {
     machine* mc = (machine*)arg;
     gcurmcobj = mc;
@@ -926,14 +925,15 @@ static void* crn_procer1(void*arg) {
         int newgn = crnqueue_size(mc->ngrs);
         int oldgn = crnmap_size(mc->grs);
         if (newgn == 0 && oldgn == 0) {
-            mc->parking = true;
             pmutex_lock(&mc->pkmu);
+            mc->parking = true;
             pcond_wait(&mc->pkcd, &mc->pkmu);
             mc->parking = false;
             pmutex_unlock(&mc->pkmu);
+	    continue;
         }
 
-        // linfo("newgr %d\n", newgn);
+        /* linfo("newgr %d, oldgr %d\n", newgn, oldgn); */
         for (int cnt = 0; newgn > 0; cnt++) {
             fiber* newgr = nilptr;
             int rv = crnqueue_poll(mc->ngrs, (void**)&newgr);
@@ -946,16 +946,20 @@ static void* crn_procer1(void*arg) {
             crn_machine_gradd(mc, newgr);
             // dumphtkeys(gnr__->mchs);
             checkhtkeys(gnr__->mchs);
-        }
-        if (newgn == 0 && oldgn == 0) continue;
+	}
+        oldgn = crnmap_size(mc->grs);
+        if (oldgn == 0) continue;
 
         // TODO 应该放到schedule中
         // find free machine and runnable fiber
-        Array* arr2 = nilptr;
-        int rv = crnmap_get_keys(gnr__->mchs, &arr2);
-        assert(rv == CC_OK);
-        int arr2sz = arr2 == nilptr ? 0 : array_size(arr2);
-        for (;arr2 != nilptr;) {
+        Array* mcids = nilptr;
+        int rv = crnmap_get_keys(gnr__->mchs, &mcids);
+        assert(rv == CC_OK); assert(mcids != nilptr);
+	array_remove(mcids, (void*)1, nilptr);
+	array_remove(mcids, (void*)2, nilptr);
+        int arr2sz = array_size(mcids);
+        for (;;) {
+	    if (crnmap_size(mc->grs) == 0) { break; }
             fiber* gr = crn_machine_grtake(mc);
             if (gr == nilptr) {
                 linfo("why nil %d %d mcid=%d\n", crnmap_size(mc->grs), arr2sz, mc->id);
@@ -963,50 +967,46 @@ static void* crn_procer1(void*arg) {
             }
 
             machine* mct = 0;
-            linfo("arr2=%p sz=%d, keys=[%s]\n", arr2, array_size(arr2), crn_array_tostr_int(arr2));
+            linfo("arr2=%p sz=%d, keys=[%s]\n", mcids, array_size(mcids), crn_array_tostr_int(mcids));
             for (int j = 0; j < arr2sz; j++) {
-                int rdidx = abs(rand()) % arr2sz;
+		int rdidx = abs(rand()) % arr2sz;
                 void* key = nilptr;
-                int rv = array_get_at(arr2, rdidx, &key);
-                if (rv != CC_OK) {
-                    linfo("rv=%d keycnt %d, rdidx %d, mcid=%d\n", rv, arr2sz, rdidx, mc->id);
-                    for (int n=0; n < arr2sz;n++) {
-                        rv = array_get_at(arr2, n, &key);
-                        linfo("n=%d, key=%p\n", n, key);
-                        key = 0;
-                    }
-                }
+                int rv = array_get_at(mcids, rdidx, &key);
                 assert(rv == CC_OK);
-                if ((uintptr_t)key <= 2) continue;
+		assert((uintptr_t)key > 2);
                 assert((uintptr_t)key < 999);
 
                 // linfo("checking machine %d/%d %d\n", j, array_size(arr2), key);
                 mct = crn_machine_get((int)(uintptr_t)key);
                 assert (mct != nilptr);
                 if (mct->parking) {
-                    // linfo("got a packing machine %d <- gr %d\n", mct->id, gr->id);
+                    // linfo("got packing mcid %d <- gr %d\n", mct->id, gr->id);
                     break;
-                }
-                if (gr->id == 1) { break; }
-                mct = nilptr;
+                } else {
+		    mct = nilptr;
+		}
             }
             if (mct == nilptr) {
-                ldebug("no enough mc? %d\n", gr->id);
+                lwarn("no enough mc? %d\n", gr->id);
                 // try select random one?
                 // 暂时先放回全局队列中吧
                 crn_machine_gradd(mc, gr);
                 break;
             }
+
+	    newgn = crnqueue_size(mc->ngrs);
+	    oldgn = crnmap_size(mc->grs);
             if (mct != nilptr) {
-                lverb("move %d to %d\n", gr->id, mct->id);
                 crn_machine_gradd(mct, gr);
                 crn_machine_grtorunq(mct, gr->id);
                 crn_machine_signal(mct);
-                break;
+                linfo("< moved %d to %d, newgr %d, oldgr %d\n", gr->id, mct->id, newgn, oldgn);
             }
+
         }
-        if (arr2 != nilptr) { array_destroy(arr2); }
+        array_destroy(mcids);
     }
+    assert(0);
 }
 
 // schedue functions
@@ -1014,6 +1014,7 @@ static
 fiber* crn_sched_get_glob_one(machine*mc) {
     // linfo("try get glob %d\n", mc->id);
     machine* mc1 = crn_machine_get(1);
+    assert(mc1 != 0);
     if (mc1 == 0) return 0;
 
     fiber* gr = crn_machine_grtake(mc1);
@@ -1156,6 +1157,7 @@ static void* crn_procerx(void*arg) {
         assert (mc->id == gcurmcid__);
         // check global queue
         bool stopworld = atomic_getint(&gnr__->stopworld);
+	stopworld = false;
         if (!stopworld) {
             fiber* rungr = nilptr;
             rungr = crn_sched_get_ready_one(mc);
@@ -1164,7 +1166,8 @@ static void* crn_procerx(void*arg) {
                 crn_procer_yield_commit(mc, rungr);
                 continue;
             }
-            if (rand() % 3 == 1) {
+	    // seems not run proper, disabled
+            if (0 && rand() % 3 == 1) {
                 rungr = crn_sched_get_glob_one(mc);
                 if (rungr != 0) {
                     crn_machine_gradd(mc, rungr);
