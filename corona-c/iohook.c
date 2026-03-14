@@ -930,48 +930,50 @@ int pselect(int nfds, fd_set *readfds, fd_set *writefds,
     }
 
     while (1) {
-        int beblk = 1; int rdcnt = 0; int wrcnt = 0; int etcnt = 0;
+        int rdcnt = 0; int wrcnt = 0; int etcnt = 0;
         int n = 0; long fds[nfds+1]; int ytypes[nfds+1];
 
         for (int i = 0; i < nfds; i++) {
             if (readfds != 0 && FD_ISSET(i, readfds)) {
-                fds[n] = i;
-                ytypes[n] = YIELD_TYPE_READ;
-                n ++; rdcnt ++;
-                if (!crn_fd_would_blocking(i, 0)) { beblk = 0; }
+		if (!fd_is_nonblocking(i)) {
+		    fds[n] = i;
+		    ytypes[n] = YIELD_TYPE_READ;
+		    n ++; rdcnt ++;
+		}
             }
             if (writefds != 0 && FD_ISSET(i, writefds)) {
-                fds[n] = i;
-                ytypes[n] = YIELD_TYPE_WRITE;
-                n ++; wrcnt ++;
-                if (!crn_fd_would_blocking(i, 1)) { beblk = 0; }
+		if (!fd_is_nonblocking(i)) {
+		    fds[n] = i;
+		    ytypes[n] = YIELD_TYPE_WRITE;
+		    n ++; wrcnt ++;
+		}
             }
             if (exceptfds != 0 && FD_ISSET(i, exceptfds)) {
                 etcnt ++;
                 assert(0); // not impl
             }
         }
-        lwarn("rdcnt/wrcnt/etcnt %d/%d\n", rdcnt, wrcnt, etcnt);
-        if (beblk) {
-            if (timeout != 0) {
-                struct timespec ts = {0};
-                clock_gettime(CLOCK_REALTIME, &ts);
-                long nowns = ts.tv_nsec + ((long)ts.tv_sec)*nsu;
-                if (nowns >= tons) {
-                    return 0;
-                }
+	if (timeout != 0) {
+	    struct timespec ts = {0};
+	    clock_gettime(CLOCK_REALTIME, &ts);
+	    long nowns = ts.tv_nsec + ((long)ts.tv_sec)*nsu;
+	    if (nowns >= tons) {
+		return 0;
+	    }
 
-                fds[n] = timeout->tv_nsec + ((long)timeout->tv_sec)*nsu;
-                ytypes[n] = YIELD_TYPE_NANOSLEEP;
-                n++;
-            }
-
+	    fds[n] = timeout->tv_nsec + ((long)timeout->tv_sec)*nsu;
+	    ytypes[n] = YIELD_TYPE_NANOSLEEP;
+	    n++;
+	}
+        linfo("rdcnt/wrcnt/etcnt %d/%d/%d n %d\n", rdcnt, wrcnt, etcnt, n);
+	// n == 0, no timeout set, some fd(s) nonblocing
+        if (n > 0) {
             crn_procer_yield_multi(YIELD_TYPE_PSELECT, n, fds, ytypes);
-            continue;
         }
 
         struct timespec ztv = {0};
-        int rc = pselect_f(nfds, readfds, writefds, exceptfds, timeout, sigmask);
+        int rc = pselect_f(nfds, readfds, writefds, exceptfds, &ztv, sigmask);
+	linfo("wtrc %d %d %s\n", rc, errno, strerror(errno));
         return rc;
     }
 
