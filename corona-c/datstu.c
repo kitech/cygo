@@ -2,6 +2,7 @@
 #include <collectc/hashtable.h>
 #include <collectc/array.h>
 #include <collectc/queue.h>
+#include <pthread.h>
 
 #include "coronapriv.h"
 #include "futex.h"
@@ -62,7 +63,12 @@ HashTable* crnhashtable_new_uintptr() {
 
 crnmap* crnmap_new_uintptr() {
     crnmap* mp = (crnmap*)crn_gc_malloc(sizeof(crnmap));
-    pmutex_init(&mp->mu, nilptr);
+    pthread_mutexattr_t attr;
+    pthread_mutexattr_init(&attr);
+    if (0) {
+	pthread_mutexattr_settype(&attr, PTHREAD_MUTEX_RECURSIVE);
+    }
+    pmutex_init(&mp->mu, &attr);
     mp->ht = crnhashtable_new_uintptr();
     return mp;
 }
