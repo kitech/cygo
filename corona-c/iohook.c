@@ -318,7 +318,7 @@ int accept(int sockfd, struct sockaddr *addr, socklen_t *addrlen)
             linfo("fd=%d err=%d eno=%d err=%s\n", sockfd, rv, errno, strerror(errno));
             return rv;
         }
-        crn_procer_yield(sockfd, YIELD_TYPE_ACCEPT);
+	return rv;
     }
     assert(1==2); // unreachable
 }
@@ -351,7 +351,7 @@ ssize_t read(int fd, void *buf, size_t count)
             // hookcb_setin_poll(fd, false, true); // cannot clear flag, or unexpected yeild/suspend
             return rv;
         }
-        crn_procer_yield(fd, YIELD_TYPE_READ);
+	return rv;
     }
     assert(1==2); // unreachable
 }
@@ -403,7 +403,9 @@ ssize_t recv(int sockfd, void *buf, size_t len, int flags)
             linfo("invalid fd=%d val=%d\n", sockfd, fdvalid);
             assert(fd_is_valid(sockfd) == 1);
         }
-        crn_procer_yield(sockfd, YIELD_TYPE_RECV);
+	linfo("fd=%d err=%d eno=%d err=%s\n", sockfd, rv, errno, strerror(errno));
+	return rv;
+
     }
     assert(1==2); // unreachable
 }
@@ -441,7 +443,7 @@ ssize_t recvfrom(int sockfd, void *buf, size_t len, int flags,
             linfo("fd=%d rv=%d eno=%d err=%s\n", sockfd, rv, eno, strerror(eno));
             return rv;
         }
-        crn_procer_yield(sockfd, YIELD_TYPE_RECVFROM);
+	return rv;
     }
     assert(1==2); // unreachable
 }
@@ -483,34 +485,7 @@ ssize_t recvmsg(int sockfd, struct msghdr *msg, int flags)
         }
         // hotfix xlib fd nowait
         if (eno == EAGAIN && fdcontext_get_fdtype(fdctx) == FDXLIB) { return rv; }
-        if (isudp) {
-            time_t dtime = time(0) - btime;
-            if (i > 0 && dtime >= 5) {
-                linfo("timedout udpfd=%d, %ld\n", sockfd, dtime);
-                return 0; // timedout
-            }
-
-            int optval = 0;
-            socklen_t optlen = 0;
-            int rv2 = getsockopt(sockfd, SOL_SOCKET, SO_ERROR, &optval, &optlen);
-            // linfo("opt rv2=%d, len=%d val=%d\n", rv2, optlen, optval);
-            int rv3 = getsockopt(sockfd, SOL_SOCKET, SO_RCVTIMEO, &optval, &optlen);
-            // linfo("opt rv3=%d, len=%d val=%d\n", rv3, optlen, optval);
-
-            long timeoms = optval > 0 ? optval : 5678;
-            // default udp timeout 5s
-            long tfds[2] = {0};
-            int ytypes[2] = {0};
-            tfds[0] = sockfd;
-            ytypes[0] = YIELD_TYPE_RECVMSG;
-            tfds[1] = timeoms;
-            ytypes[1] = YIELD_TYPE_MSLEEP;
-            crn_procer_yield_multi(YIELD_TYPE_RECVMSG_TIMEOUT, 2, tfds, ytypes);
-        }else{
-            // linfo("recvmsg yeild fd=%d isudp=%d rv=%d eno=%d err=%s\n", sockfd, isudp, rv, eno, strerror(eno));
-            // assert(1==2);
-            crn_procer_yield(sockfd, YIELD_TYPE_RECVMSG);
-        }
+	return rv;
     }
     assert(1==2); // unreachable
 }
@@ -543,7 +518,7 @@ ssize_t write(int fd, const void *buf, size_t count)
 
         bool inpoll = hookcb_getin_poll(fd, false);
         linfo("write yeild %d n %d nb %d inpoll %d\n", fd, count, fd_is_nonblocking(fd), inpoll);
-        crn_procer_yield(fd, YIELD_TYPE_WRITE);
+	return rv;
     }
     assert(1==2); // unreachable
 }
@@ -577,7 +552,7 @@ ssize_t writev(int fd, const struct iovec *iov, int iovcnt)
             return rv;
         }
         // linfo("writev yield fd=%d rv=%d len=%d\n", fd, rv, totlen);
-        crn_procer_yield(fd, YIELD_TYPE_WRITEV);
+	return rv;
     }
     assert(1==2);
 }
@@ -615,7 +590,7 @@ ssize_t send(int sockfd, const void *buf, size_t len, int flags)
             linfo("fd=%d rv=%d eno=%d err=%s\n", sockfd, rv, eno, strerror(eno));
             return rv;
         }
-        crn_procer_yield(sockfd, YIELD_TYPE_SEND);
+	return rv;
     }
     assert(1==2); // unreachable
 }
@@ -670,7 +645,7 @@ ssize_t sendmsg(int sockfd, const struct msghdr *msg, int flags)
             linfo("fd=%d rv=%d eno=%d err=%s\n", sockfd, rv, eno, strerror(eno));
             return rv;
         }
-        crn_procer_yield(sockfd, YIELD_TYPE_SENDMSG);
+	return rv;
     }
     assert(1==2); // unreachable
 }
