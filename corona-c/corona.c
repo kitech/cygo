@@ -275,6 +275,7 @@ void crn_fiber_new2(fiber*gr, size_t stksz) {
     } else if (usemmap) {
         // size_t virtsize = 4*1024*1024;
         size_t virtsize = 0;
+	// |MAP_STACK|MAP_GROWSDOWN seem's affect gc
         stkptr = mmap(NULL, virtsize + stksz, PROT_WRITE|PROT_EXEC, MAP_PRIVATE|MAP_ANONYMOUS, -1, 0);
         assert(stkptr!=MAP_FAILED);
         stksz += virtsize;

@@ -50,6 +50,7 @@ crn_hchan* crn_hchan_new(int cap) {
     return hc;
 }
 
+// TODO non fiber thread should works also
 int crn_hchan_close(crn_hchan* hc) {
     if (!atomic_casint(&hc->closed, 0, 1)) {
         return true;
@@ -64,6 +65,8 @@ int crn_hchan_close(crn_hchan* hc) {
     if (qsz > 0) { linfo("discard recvq %d\n", qsz); }
     while (hc->recvq != nilptr) {
         crn_hcdata* hcdt = (crn_hcdata*)szqueue_remove(hc->recvq);
+	if (hcdt == nilptr) break;
+	assert(hcdt != nilptr);
         fiber* gr = hcdt->gr;
         if (gr == nilptr) {
             break;
@@ -78,6 +81,8 @@ int crn_hchan_close(crn_hchan* hc) {
     if (qsz > 0) { linfo("discard sendq %d\n", qsz); }
     while(hc->sendq != nilptr) {
         crn_hcdata* hcdt = (crn_hcdata*)szqueue_remove(hc->sendq);
+	if (hcdt == nilptr) break;
+	assert(hcdt != nilptr);
         fiber* gr = hcdt->gr;
         if (gr == nilptr) {
             break;
@@ -89,12 +94,13 @@ int crn_hchan_close(crn_hchan* hc) {
     if (hc->sendq != nilptr) szqueue_dispose(hc->sendq);
 
     int bufsz = chan_size(hc->c);
-    if (bufsz > 0) { linfo("Warning, discard bufsz %d\n", bufsz); }
+    if (bufsz > 0) { lwarn("discard bufsz %d\n", bufsz); }
     chan_dispose(hc->c);
     hc->c = nilptr;
     bzero(hc, sizeof(crn_hchan));
-    crn_gc_free(hc);
+    atomic_setint(&hc->closed, 1);
     pmutex_unlock(&hc->lock);
+    crn_gc_free(hc); // gc_free is later
     return true;
 }
 int crn_hchan_is_closed(crn_hchan* hc) {
@@ -104,6 +110,7 @@ int crn_hchan_cap(crn_hchan* hc) { return hc->cap; }
 int crn_hchan_len(crn_hchan* hc) { return chan_size(hc->c); }
 
 // TODO when sending/recving, hchan closed case
+// TODO non fiber thread should works also
 int crn_hchan_send(crn_hchan* hc, void* data) {
     fiber* mygr = crn_fiber_getcur();
     assert(mygr != nilptr);
