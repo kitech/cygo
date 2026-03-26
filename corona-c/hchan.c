@@ -132,7 +132,7 @@ int crn_hchan_send(crn_hchan* hc, void* data) {
         }
 
         // cannot send directly
-        {
+        if (hcdt == nilptr) {
             // put data to my hcelem, put self to sendq, then parking self
             crn_hcdata* hcdt = crn_hcdata_new(mygr);
             hcdt->sdelem = data;
@@ -150,12 +150,14 @@ int crn_hchan_send(crn_hchan* hc, void* data) {
         if (bufsz < hc->cap) {
             chan_send(hc->c, data);
             crn_hcdata* hcdt = (crn_hcdata*)szqueue_remove(hc->recvq);
-            fiber* gr = hcdt->gr;
-            if (gr != nilptr) {
-                assert(gr->id == hcdt->grid);
-                crn_hcdata_woke_set(hcdt, mygr, hc, caseRecv, data);
-                crn_procer_resume_one(gr, 0, hcdt->grid, hcdt->mcid);
-            }
+	    if (hcdt != nilptr) {
+		fiber* gr = hcdt->gr;
+		if (gr != nilptr) {
+		    assert(gr->id == hcdt->grid);
+		    crn_hcdata_woke_set(hcdt, mygr, hc, caseRecv, data);
+		    crn_procer_resume_one(gr, 0, hcdt->grid, hcdt->mcid);
+		}
+	    }
             pmutex_unlock(&hc->lock);
             return 1;
         }else{
