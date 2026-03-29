@@ -1,4 +1,4 @@
-
+#include <assert.h>
 #include "chan.h"
 #include "hchan.h"
 #include "coronapriv.h"
@@ -111,6 +111,7 @@ int crn_hchan_len(crn_hchan* hc) { return chan_size(hc->c); }
 
 // TODO when sending/recving, hchan closed case
 // TODO non fiber thread should works also
+// if bufed, all data must enqueue
 int crn_hchan_send(crn_hchan* hc, void* data) {
     fiber* mygr = crn_fiber_getcur();
     assert(mygr != nilptr);
@@ -144,11 +145,16 @@ int crn_hchan_send(crn_hchan* hc, void* data) {
             return 1;
         }
     } else {
+    bufed_send:
         // if not full, enqueue data
         // if full, put self in sendq, then parking
         int bufsz = chan_size(hc->c);
         if (bufsz < hc->cap) {
+	    int sz0 = chan_size(hc->c);
             chan_send(hc->c, data);
+	    int sz1 = chan_size(hc->c);
+	    /* lwarn("sz0 %d sz1 %d\n", sz0, sz1); */
+	    assert ((sz0+1) == sz1);
             crn_hcdata* hcdt = (crn_hcdata*)szqueue_remove(hc->recvq);
 	    if (hcdt != nilptr) {
 		fiber* gr = hcdt->gr;
@@ -180,6 +186,7 @@ int crn_hchan_send(crn_hchan* hc, void* data) {
 
             pmutex_unlock(&hc->lock);
             crn_procer_yield(-1, YIELD_TYPE_CHAN_SEND);
+	    /* goto bufed_send; */
             return 1;
         }
     }
@@ -189,12 +196,14 @@ int crn_hchan_recv(crn_hchan* hc, void** pdata) {
     fiber* mygr = crn_fiber_getcur();
     assert(mygr != nilptr);
 
-    pmutex_lock(&hc->lock);
+    int bufed = hc->cap > 0;
     if (hc->cap == 0) {
         // if have elem not nil, get it
         // else if any sendq, wakeup them,
         // else parking
 
+    nobufed_recv:
+	pmutex_lock(&hc->lock);
         crn_hcdata* hcdt = (crn_hcdata*)szqueue_remove(hc->sendq);
         if (hcdt != nilptr) {
             fiber* gr = hcdt->gr;
@@ -213,40 +222,52 @@ int crn_hchan_recv(crn_hchan* hc, void** pdata) {
             int rv = szqueue_add(hc->recvq, hcdt);
             assert(rv != -1);
             // linfo("chan recv %d\n", mygr->id);
-            linfo("yield me recver %d/%d, qc %d ch=%p\n", mygr->id, mygr->mcid, hc->recvq->size, hc);
-            mygr->hclock = &hc->lock;
+            linfo("yield recver %d/%d, qc %d ch=%p\n", mygr->id, mygr->mcid, hc->recvq->size, hc);
+            mygr->hclock = &hc->lock; // what means?
             crn_procer_yield(-1, YIELD_TYPE_CHAN_RECV);
-            assert(*pdata != invlidptr);
+            assert(*pdata != invalidptr);
             return 1;
         }
     }else{
         // if size > 0, recv right now
         // if empty then put self in recvq, then parking
         // else parking
+    bufed_recv:
+	pmutex_lock(&hc->lock);
         int bufsz = chan_size(hc->c);
         if (bufsz > 0) {
+	    int sz0 = chan_size(hc->c);
             chan_recv(hc->c, pdata);
+	    int sz1 = chan_size(hc->c);
+	    assert ((sz0-1) == sz1);
+	    /* lwarn("sz0 %d sz1 %d\n", sz0, sz1); */
             pmutex_unlock(&hc->lock);
             return 1;
         }
 
         crn_hcdata* hcdt = (crn_hcdata*)szqueue_remove(hc->sendq);
-        fiber* gr = hcdt->gr;
-        if (gr != nilptr) {
-            // assert(gr->id == hcdt->grid);
-            *pdata = hcdt->sdelem;
-            pmutex_unlock(&hc->lock);
-            crn_procer_resume_one(gr, 0, hcdt->grid, hcdt->mcid);
-            return 1;
-        }
+	if (hcdt != nilptr) {
+	    fiber* gr = hcdt->gr;
+	    if (gr != nilptr) {
+		// assert(gr->id == hcdt->grid);
+		*pdata = hcdt->sdelem;
+		pmutex_unlock(&hc->lock);
+		crn_procer_resume_one(gr, 0, hcdt->grid, hcdt->mcid);
+		return 1;
+	    }
 
-        hcdt = crn_hcdata_new(mygr);
-        hcdt->rvelem = pdata;
-        int rv = szqueue_add(hc->recvq, hcdt);
-        assert(rv != -1);
+	}
+
+	hcdt = crn_hcdata_new(mygr);
+	hcdt->rvelem = pdata;
+	int rv = szqueue_add(hc->recvq, hcdt);
+	assert(rv != -1);
+
         pmutex_unlock(&hc->lock);
+	/* printf("recver yield %s:%d\n", __FILE__, __LINE__); */
+	/* mygr->hclock = &hc->lock; // what means? */
         crn_procer_yield(-1, YIELD_TYPE_CHAN_RECV);
-        return 1;
+	goto bufed_recv;
     }
 }
 

@@ -32,7 +32,7 @@
 #ifndef nilptr
 #define nilptr ((void*)NULL)
 #endif
-#define invlidptr ((void*)1234567)
+#define invalidptr ((void*)1234567)
 
 // project
 #include "datstu.h"
