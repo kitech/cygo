@@ -1,5 +1,8 @@
 #include <assert.h>
+#include <stdint.h>
 
+// this implemention hash functoin arch relate
+// should improve to uint64_t hash() even on x32
 #include <collectc/hashtable.h>
 
 #include "cxrtbase.h"
@@ -13,6 +16,14 @@ int __attribute__((no_instrument_function))
 cxhashtable_cmp_uintptr(const void *key1, const void *key2) {
     if (key1 == key2) return 0;
     else if((uintptr_t)(key1) > (uintptr_t)(key2)) return 1;
+    else return -1;
+}
+
+static
+int __attribute__((no_instrument_function))
+cxhashtable_cmp_uint64(const void *key1, const void *key2) {
+    if (key1 == key2) return 0;
+    else if((uint64_t)(key1) > (uint64_t)(key2)) return 1;
     else return -1;
 }
 
@@ -56,14 +67,13 @@ HashTable* cxhashtable_new_conf(HashTableConf* htconf) {
 HashTable* cxhashtable_new_uintptr() {
     HashTableConf htconf = {0};
     hashtable_conf_init(&htconf);
+    htconf.key_length = sizeof(void*);
     htconf.hash = hashtable_hash_ptr;
     htconf.key_compare = cxhashtable_cmp_uintptr;
 
     return cxhashtable_new_conf(&htconf);
 }
-HashTable* cxhashtable_new(int keykind, int valkind) {
-    return cxhashtable_new_uintptr();
-}
+
 HashTable* cxhashtable_new_cxstr() {
     HashTableConf htconf = {0};
     hashtable_conf_init(&htconf);
@@ -77,7 +87,7 @@ HashTable* cxhashtable_new_cxstr() {
 HashTable* cxhashtable_new_cstr() {
     HashTableConf htconf = {0};
     hashtable_conf_init(&htconf);
-
+    /* htconf.initial_capacity = 123456; */
     htconf.hash = hashtable_hash_string;
     htconf.key_compare = cc_common_cmp_str;
 

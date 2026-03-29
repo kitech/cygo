@@ -54,11 +54,10 @@ cxstring* cxstring_new_rune(rune ch) {
     return t;
 }
 
-// for null terminated string
 char* cxstring_to_cstr(cxstring* sobj) {
     return (char*)cstrndup(sobj->ptr, sobj->len);
 }
-// for non null terminated string
+// with user spec len
 char* cxstring_to_cstr2(cxstring* sobj, int len) {
     return (char*)cstrndup(sobj->ptr, len);
 }
