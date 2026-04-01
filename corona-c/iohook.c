@@ -1125,6 +1125,7 @@ int fcntl(int __fd, int __cmd, ...)
     assert(1==2);
 }
 
+__attribute__((overloadable))
 int ioctl(int fd, unsigned long int request, ...)
 {
     if (!ioctl_f) initHook();

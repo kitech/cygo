@@ -145,10 +145,11 @@ int crn_hchan_send(crn_hchan* hc, void* data) {
             return 1;
         }
     } else {
+	int bufsz = 0;
     bufed_send:
         // if not full, enqueue data
         // if full, put self in sendq, then parking
-        int bufsz = chan_size(hc->c);
+        bufsz = chan_size(hc->c);
         if (bufsz < hc->cap) {
 	    int sz0 = chan_size(hc->c);
             chan_send(hc->c, data);

@@ -4,6 +4,9 @@
 #include <event2/dns.h>
 #include <stdio.h>
 #include <string.h>
+#include <netdb.h>
+#include <sys/socket.h>
+#include <netinet/in.h>
 
 #include "coronagc.h"
 #include "coronapriv.h"

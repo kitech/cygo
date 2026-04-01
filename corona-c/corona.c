@@ -1785,7 +1785,8 @@ void crn_init_intern() {
     GC_set_free_space_divisor(50); // default 3
     GC_set_dont_precollect(1);
     GC_set_dont_expand(1);
-    // GC_enable_incremental();
+    /* GC_set_force_unmap_on_gcollect(1); */
+    /* GC_enable_incremental(); */
     // GC_set_rate(5);
     // GC_set_all_interior_pointers(1);
     // TODO

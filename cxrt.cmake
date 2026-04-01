@@ -70,10 +70,27 @@ set_target_properties(crn_sh PROPERTIES OUTPUT_NAME crn)
 target_link_libraries(crn_sh cxrt)
 
 # eg. cmake -DCMAKE_PREFIX_PATH="path1;path2;path3" ..
-find_library(LIBEVENT1 event_threads)
+# crox: $ cmake -DANDROID_PLATFORM=android-28 -DCMAKE_TOOLCHAIN_FILE=/opt/android-ndk/build/cmake/android.toolchain.cmake -DANDROID_ABI=arm64-v8a -DCMAKE_FIND_ROOT_PATH="/opt/devsys-arm64;/opt/vcpkg/installed/arm64-android-release"  ..
+#
+# set(CMAKE_FIND_ROOT_PATH "${FIND_DIRS}")
+# set(CMAKE_PREFIX_PATH "${FIND_DIRS}")
+# set(CMAKE_LIBRARY_PATH "${FIND_DIRS}")
+find_library(LIBEVENT1 event_pthreads)
 find_library(LIBEVENT2 event)
 find_library(LIBGC gc)
+find_file(GC_H gc.h)
+find_file(EVENT_H event.h)
 find_library(LIBSIGSEGV sigsegv)
+
+cmake_path(GET GC_H PARENT_PATH GC_INCDIR)
+cmake_path(GET EVENT_H PARENT_PATH EVENT_INCDIR)
+
+message("libgc info ${LIBGC}")
+message("libgc info ${GC_H} ${GC_INC_DIR}")
+message("libgc info ${LIBEVENT1}")
+message("libgc info ${LIBSIGSEGV}")
+
+include_directories(${GC_INCDIR} ${EVENT_INCDIR})
 
 #add_executable(corona ${corona_c_srcs} corona-c/main.c)
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -g -O0 -fPIC -std=c11 -D_GNU_SOURCE ")
@@ -103,8 +120,9 @@ set_target_properties(crn_sh PROPERTIES COMPILE_FLAGS ${corona_c_flags})
 #set_target_properties(corona PROPERTIES COMPILE_FLAGS ${corona_c_flags})
 #target_link_libraries(corona -L./bdwgc/.libs -L./cltc/lib gc collectc event event_pthreads pthread dl)
 #set(gclib "${mydir}/bdwgc/.libs/libgc.a") # -L${mydir}/bdwgc/.libs
-set(gclib "-lgc -lsigsegv")
-set(libevents_ldflags "-levent -levent_pthreads")
-set(cxrt_ldflags "${gclib} -lpthread -ldl -lc")
-target_link_libraries(crn_sh "${libevents_ldflags} ${cxrt_ldflags}")
+# set(gclib "-lgc -lsigsegv -L/opt/vcpkg/installed/x86-linux/lib -L/opt/devsys32/lib")
+# set(libevents_ldflags "-levent -levent_pthreads")
+# set(cxrt_ldflags "${gclib} -lpthread -ldl -lc")
+target_link_libraries(crn_sh ${LIBGC} ${LIBEVENT1} ${LIBEVENT2} ${LIBSIGSEGV})
+# target_link_libraries(crn_sh "${libevents_ldflags} ${cxrt_ldflags}")
 # note: all libraries which maybe create threads, must put before -lgc
