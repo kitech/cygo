@@ -21,14 +21,14 @@ creflect.o: $(ROOT)/src/creflect.c
 # Zig C-ABI demo object (same rule as cxrt.cmake)
 ZIGOBJ = crn_zig_demo.o
 $(ZIGOBJ): $(SRCDIR)/zigsrc/corona_zig.zig
-	zig build-obj -fPIC -O Debug -femit-bin=$@ $<
+	zig build-obj -fPIC -O Debug -lc -femit-bin=$@ $<
 
 CLTCDIR=$(ROOT)/3rdparty/cltc/src
 CLTCOBJS = array.o hashtable.o treetable.o queue.o deque.o pqueue.o common.o hashset.o
 
 TESTS = t01_spawn t02_pingpong t03_buffered t04_close t05_select t06_timer \
   t07_mutex t08_net t09_stress t10_hammer t11_gcstack t12_sched t13_handshake t14_stats \
-  t15_zigdemo
+  t15_zigdemo t16_zarray
 
 all: $(LIBOBJS) $(CLTCOBJS) creflect.o $(ZIGOBJ) $(TESTS)
 

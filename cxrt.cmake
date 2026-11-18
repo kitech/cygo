@@ -67,7 +67,7 @@ set(ZIG_OBJS "")
 if(ZIG_EXECUTABLE)
   add_custom_command(
     OUTPUT  ${ZIG_DEMO_OBJ}
-    COMMAND ${ZIG_EXECUTABLE} build-obj -fPIC -O Debug
+    COMMAND ${ZIG_EXECUTABLE} build-obj -fPIC -O Debug -lc
             -femit-bin=${ZIG_DEMO_OBJ}
             ${ZIG_DEMO_SRC}
     DEPENDS ${ZIG_DEMO_SRC}

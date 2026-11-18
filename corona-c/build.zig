@@ -84,7 +84,7 @@ const test_names: []const []const u8 = &.{
     "t01_spawn", "t02_pingpong", "t03_buffered", "t04_close",
     "t05_select", "t06_timer",   "t07_mutex",    "t08_net",
     "t09_stress", "t10_hammer",  "t11_gcstack",  "t12_sched",
-    "t13_handshake", "t14_stats", "t15_zigdemo",
+    "t13_handshake", "t14_stats", "t15_zigdemo", "t16_zarray",
 };
 
 pub fn build(b: *std.Build) void {
@@ -109,6 +109,7 @@ pub fn build(b: *std.Build) void {
             .target = target,
             .optimize = optimize,
             .pic = true,
+            .link_libc = true, // zarray default allocators use malloc/calloc/free
         }),
     });
 
