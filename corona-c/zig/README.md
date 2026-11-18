@@ -22,12 +22,22 @@ zig build -Doptimize=Debug    # 默认即 Debug
 
 产物在 `zig-out/bin/`、`zig-out/lib/`；缓存 `.zig-cache/`。
 
+## 编译速度优先（默认）
+
+- C 侧 `-O0`、无 `-g`、无 `-fstack-protector-all` 插桩、`-pipe`
+- 默认步骤只构建 `crn` + `corona` + `crnreport`；测试与 bdwgc-zig 需显式步骤
+- 需要 C 调试符号 / 栈保护：`zig build -Dcdebug=true`
+- 需要性能压测：`zig build -Doptimize=ReleaseFast`
+- 并行度按 CPU 数，也可显式 `zig build -j8`
+
 ## 与 CMake 的对应关系
 
 | CMake | Zig |
 |---|---|
-| `add_library(crn_objlib ...)` + `crn_st` | `crn` 静态库（`addLibrary`） |
-| `add_executable(corona main.c)` + `target_link_libraries(corona crn cxrt LIBGC)` | `corona` 可执行，链接 `crn` + 系统 `gc/event/event_pthreads/sigsegv/dl/pthread` |
+| `add_library(crn_objlib ...)` + `crn_st` | `crn` 静态库（`addLibrary`）→ `zig-out/lib/libcrn.a` |
+| `add_library(crn_sh SHARED ...)` | `crn_sh` 共享库（同源集，PIC，链接 cxrt + 系统库）→ `zig-out/lib/libcrn.so` |
+| `add_library(cxrt STATIC src/cxrtbase.c ...)` | `cxrt` 静态库 → `zig-out/lib/libcxrt.a` |
+| `add_executable(corona main.c)` + `target_link_libraries(corona crn cxrt LIBGC)` | `corona` 可执行，链接 `crn` + `cxrt` + 系统 `gc/event/event_pthreads/sigsegv/dl/pthread` |
 | `-Wl,--export-dynamic` | `exe.rdynamic = true` |
 | `corona_c_flags`（`-DNRDEBUG -DCORO_* ...`） | `cflags` 常量，逐项一致 |
 | `# netpoller_ev.c / netpoller_epoll.c` 注释切换 | `-Dnetpoller=libevent\|epoll` |

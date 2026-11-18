@@ -1,7 +1,7 @@
 .{
     .name = .corona_c,
     .version = "0.1.0",
-    .fingerprint = 0xf1c9a7d0c0a3e2a1,
+    .fingerprint = 0x604458352d240e43,
     .minimum_zig_version = "0.17.0",
 
     .dependencies = .{

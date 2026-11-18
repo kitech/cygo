@@ -1,7 +1,7 @@
 // corona-c Zig build — mirrors CMakeLists.txt + cxrt.cmake
 //
 // Steps:
-//   zig build                 -> crn lib + corona exe + crnreport tool
+//   zig build                 -> crn libs (static+shared) + cxrt + corona exe + crnreport
 //   zig build corona          -> just the corona executable
 //   zig build tests           -> 14 test executables
 //   zig build check           -> run all tests (see tests/runtests.sh for retries)
@@ -11,11 +11,12 @@
 // Options:
 //   -Dnetpoller=libevent|epoll (default libevent, same as CMake)
 //   -Doptimize=Debug|ReleaseFast|... (default Debug)
+//   -Dcdebug=true|false (default false: no -g, no stack protector -> fastest C compile)
 //   -Dtarget=... (default native)
 
 const std = @import("std");
 
-const cflags: []const []const u8 = &.{
+const cflags_base: []const []const u8 = &.{
     "-std=c11",
     "-D_GNU_SOURCE",
     "-DNRDEBUG",
@@ -27,10 +28,22 @@ const cflags: []const []const u8 = &.{
     "-DGC_THREADS",
     "-DLOG_USE_COLOR",
     "-D_XOPEN_SOURCE",
+    "-O0", // explicit: no optimization, compile-speed first
     "-fno-omit-frame-pointer",
-    "-fstack-protector-all",
-    "-g",
+    "-pipe", // stream through pipes instead of temp files
+    // no -g: DWARF is the dominant C compile cost (use -Dcdebug=true)
+    // no -fstack-protector-all: per-function instrumentation, slower to compile
 };
+
+fn makeCflags(alloc: std.mem.Allocator, cdebug: bool) []const []const u8 {
+    var list: std.ArrayList([]const u8) = .empty;
+    list.appendSlice(alloc, cflags_base) catch @panic("OOM");
+    if (cdebug) {
+        list.append(alloc, "-g") catch @panic("OOM");
+        list.append(alloc, "-fstack-protector-strong") catch @panic("OOM");
+    }
+    return list.toOwnedSlice(alloc) catch @panic("OOM");
+}
 
 const corona_srcs: []const []const u8 = &.{
     "coro.c",
@@ -60,6 +73,13 @@ const cltc_srcs: []const []const u8 = &.{
     "deque.c",    "pqueue.c",    "common.c",    "hashset.c",
 };
 
+// mirrors add_library(cxrt STATIC ...) in cxrt.cmake (callable.c/cxutil.c are
+// deliberately not part of it there either)
+const cxrt_srcs: []const []const u8 = &.{
+    "cxrtbase.c", "cxmemory.c",  "cxstring.c", "cxhashtable.c",
+    "cxarray.c",  "cxqueue.c",   "cxiface.c",  "creflect.c",
+};
+
 const test_names: []const []const u8 = &.{
     "t01_spawn", "t02_pingpong", "t03_buffered", "t04_close",
     "t05_select", "t06_timer",   "t07_mutex",    "t08_net",
@@ -71,6 +91,8 @@ pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{ .preferred_optimize_mode = .Debug });
     const backend = b.option([]const u8, "netpoller", "netpoller backend: libevent|epoll") orelse "libevent";
+    const cdebug = b.option(bool, "cdebug", "emit -g and stack protector for C sources (default off: compile speed)") orelse false;
+    const cflags = makeCflags(b.allocator, cdebug);
 
     const use_epoll = std.mem.eql(u8, backend, "epoll");
     if (!use_epoll and !std.mem.eql(u8, backend, "libevent")) {
@@ -78,6 +100,9 @@ pub fn build(b: *std.Build) void {
     }
 
     // ---------------------------------------------------------------- crn lib
+    const backend_file = if (use_epoll) netpoller_epoll else netpoller_libevent;
+
+    // crn_st: mirrors add_library(crn_st STATIC $<TARGET_OBJECTS:crn_objlib>)
     const crn = b.addLibrary(.{
         .name = "crn",
         .linkage = .static,
@@ -87,30 +112,49 @@ pub fn build(b: *std.Build) void {
             .link_libc = true,
         }),
     });
-
-    // corona-c sources: the two netpoller backends define the same symbols,
-    // so exactly one of them is compiled in (mirrors cxrt.cmake).
-    for (corona_srcs) |f| crn.root_module.addCSourceFile(.{ .file = b.path(f), .flags = cflags });
-    crn.root_module.addCSourceFile(.{
-        .file = b.path(if (use_epoll) netpoller_epoll else netpoller_libevent),
-        .flags = cflags,
-    });
-
-    crn.root_module.addCSourceFiles(.{
-        .root = b.path("../3rdparty/cltc/src"),
-        .files = cltc_srcs,
-        .flags = cflags,
-    });
-    crn.root_module.addCSourceFile(.{ .file = b.path("../src/creflect.c"), .flags = cflags });
-
-    crn.root_module.addIncludePath(b.path("."));
-    crn.root_module.addIncludePath(b.path("../src"));
-    crn.root_module.addIncludePath(b.path("../include"));
-    crn.root_module.addIncludePath(b.path("../3rdparty/cltc/src"));
-    crn.root_module.addIncludePath(b.path("../3rdparty/cltc/src/include"));
-    crn.root_module.addIncludePath(b.path("../3rdparty"));
-
+    addCrnSources(b, crn, cflags, backend_file);
     b.installArtifact(crn);
+
+    // --------------------------------------------------------------- cxrt lib
+    // mirrors: add_library(cxrt STATIC src/cxrtbase.c ...) in cxrt.cmake
+    const cxrt = b.addLibrary(.{
+        .name = "cxrt",
+        .linkage = .static,
+        .root_module = b.createModule(.{
+            .target = target,
+            .optimize = optimize,
+            .link_libc = true,
+        }),
+    });
+    cxrt.root_module.addCSourceFiles(.{
+        .root = b.path("../src"),
+        .files = cxrt_srcs,
+        .flags = cflags,
+    });
+    cxrt.root_module.addIncludePath(b.path("."));
+    cxrt.root_module.addIncludePath(b.path("../src"));
+    cxrt.root_module.addIncludePath(b.path("../include"));
+    cxrt.root_module.addIncludePath(b.path("../3rdparty/cltc/src"));
+    cxrt.root_module.addIncludePath(b.path("../3rdparty/cltc/src/include"));
+    cxrt.root_module.addIncludePath(b.path("../3rdparty"));
+    b.installArtifact(cxrt);
+
+    // crn_sh: mirrors add_library(crn_sh SHARED ...) -> libcrn.so
+    // PIC comes from .pic = true (CMake used POSITION_INDEPENDENT_CODE 1)
+    const crn_sh = b.addLibrary(.{
+        .name = "crn",
+        .linkage = .dynamic,
+        .root_module = b.createModule(.{
+            .target = target,
+            .optimize = optimize,
+            .link_libc = true,
+            .pic = true,
+        }),
+    });
+    addCrnSources(b, crn_sh, cflags, backend_file);
+    crn_sh.root_module.linkLibrary(cxrt); // CMake: target_link_libraries(crn_sh cxrt)
+    linkRuntimeLibs(crn_sh);              // + ${LIBGC} ${LIBEVENT1} ${LIBEVENT2} ${LIBSIGSEGV}
+    b.installArtifact(crn_sh);
 
     // ------------------------------------------------------------ corona exe
     const exe = b.addExecutable(.{
@@ -128,6 +172,7 @@ pub fn build(b: *std.Build) void {
     exe.root_module.addIncludePath(b.path("../3rdparty/cltc/src/include"));
     exe.root_module.addIncludePath(b.path("../3rdparty"));
     exe.root_module.linkLibrary(crn);
+    exe.root_module.linkLibrary(cxrt); // CMake: link crn cxrt ${LIBGC}
     exe.rdynamic = true; // replaces -Wl,--export-dynamic (PLT hooks)
 
     linkRuntimeLibs(exe);
@@ -161,6 +206,7 @@ pub fn build(b: *std.Build) void {
         t.root_module.addIncludePath(b.path("../3rdparty/cltc/src/include"));
         t.root_module.addIncludePath(b.path("../3rdparty"));
         t.root_module.linkLibrary(crn);
+        t.root_module.linkLibrary(cxrt);
         linkRuntimeLibs(t);
 
         test_step.dependOn(&t.step);
@@ -197,6 +243,31 @@ pub fn build(b: *std.Build) void {
         const st = b.step("bdwgc-zig", "Compile bdwgc-zig bindings only (not referenced)");
         st.dependOn(&probe.step);
     }
+}
+
+fn addCrnSources(
+    b: *std.Build,
+    c: *std.Build.Step.Compile,
+    cflags: []const []const u8,
+    backend_file: []const u8,
+) void {
+    // corona-c sources: the two netpoller backends define the same symbols,
+    // so exactly one of them is compiled in (mirrors cxrt.cmake).
+    for (corona_srcs) |f| c.root_module.addCSourceFile(.{ .file = b.path(f), .flags = cflags });
+    c.root_module.addCSourceFile(.{ .file = b.path(backend_file), .flags = cflags });
+    c.root_module.addCSourceFiles(.{
+        .root = b.path("../3rdparty/cltc/src"),
+        .files = cltc_srcs,
+        .flags = cflags,
+    });
+    // creflect.c lives in cxrt (same as CMake), not here
+
+    c.root_module.addIncludePath(b.path("."));
+    c.root_module.addIncludePath(b.path("../src"));
+    c.root_module.addIncludePath(b.path("../include"));
+    c.root_module.addIncludePath(b.path("../3rdparty/cltc/src"));
+    c.root_module.addIncludePath(b.path("../3rdparty/cltc/src/include"));
+    c.root_module.addIncludePath(b.path("../3rdparty"));
 }
 
 fn linkRuntimeLibs(c: *std.Build.Step.Compile) void {

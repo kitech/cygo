@@ -105,7 +105,7 @@ int pipe(int pipefd[2])
     }
     return rv;
 }
-int __pipe(int pipefd[2]) {
+ATTRIBUTE_WEAK int __pipe(int pipefd[2]) {
     linfo("%d\n", 11233456);
     assert(1==2);
 }
@@ -128,7 +128,7 @@ int pipe2(int pipefd[2], int flags)
     }
     return rv;
 }
-int __pipe2(int pipefd[2], int flags) {
+ATTRIBUTE_WEAK int __pipe2(int pipefd[2], int flags) {
     linfo("%d\n", flags);
     assert(1==2);
 }
@@ -1128,7 +1128,15 @@ int fcntl(int __fd, int __cmd, ...)
     assert(1==2);
 }
 
-__attribute__((overloadable))
+// glibc already declares ioctl(); clang rejects redeclaring it as
+// 'overloadable' (gcc merely warns). The attribute is a C++ convenience that
+// is inert in this C translation unit, so drop it under clang.
+#if defined(__clang__)
+# define CRN_IOCTL_ATTR
+#else
+# define CRN_IOCTL_ATTR __attribute__((overloadable))
+#endif
+CRN_IOCTL_ATTR
 int ioctl(int fd, unsigned long int request, ...)
 {
     if (!ioctl_f) initHook();
@@ -1417,8 +1425,6 @@ int epoll_wait_wip(int epfd, struct epoll_event *events, int maxevents, int time
 #endif
 
 #if defined(LIBGO_SYS_Linux)
-ATTRIBUTE_WEAK extern int __pipe(int pipefd[2]);
-ATTRIBUTE_WEAK extern int __pipe2(int pipefd[2], int flags);
 ATTRIBUTE_WEAK extern int __socket(int domain, int type, int protocol);
 ATTRIBUTE_WEAK extern int __socketpair(int domain, int type, int protocol, int sv[2]);
 ATTRIBUTE_WEAK extern int __connect(int fd, const struct sockaddr *addr, socklen_t addrlen);
