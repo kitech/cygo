@@ -60,56 +60,51 @@ int crn_hchan_close(crn_hchan* hc) {
     assert(mygr != nilptr);
 
     pmutex_lock(&hc->lock);
-    int qsz = 0;
-    qsz = hc->recvq->size;
+    // collect waiters first, then unlock and wake them: resume_one may run a
+    // woken fiber on this same thread, and a select fiber re-locks hc->lock
+    // first thing (crn_sellock) -> would self-deadlock while we hold it
+    crn_hcdata* wakers[512];
+    int nwake = 0;
+    int qsz = hc->recvq->size;
     if (qsz > 0) { linfo("discard recvq %d\n", qsz); }
-    while (hc->recvq != nilptr) {
+    while (nwake < 512) {
         crn_hcdata* hcdt = (crn_hcdata*)szqueue_remove(hc->recvq);
-	if (hcdt == nilptr) break;
-	assert(hcdt != nilptr);
-        fiber* gr = hcdt->gr;
-        if (gr == nilptr) {
-            break;
-        }
-        crn_hcdata_woke_set(hcdt, mygr, hc, caseClose, nilptr);
-        crn_procer_resume_one(gr, 0, hcdt->grid, hcdt->mcid);
-        // hcdata_free(hcdt);
+        if (hcdt == nilptr) break;
+        if (hcdt->gr == nilptr) break;
+        wakers[nwake++] = hcdt;
     }
-    if (hc->recvq != nilptr) {
-        // do NOT dispose: szqueue internals are all GC memory (szqueue_init
-        // uses crn_gc_malloc), and a woken fiber (direct send/recv or select)
-        // may still be running szqueue_remove/add on this queue concurrently.
-        // GC reclaims both queues when hc becomes unreachable. Zero real leak.
-    }
-
     qsz = hc->sendq->size;
     if (qsz > 0) { linfo("discard sendq %d\n", qsz); }
-    while(hc->sendq != nilptr) {
+    while (nwake < 512) {
         crn_hcdata* hcdt = (crn_hcdata*)szqueue_remove(hc->sendq);
-	if (hcdt == nilptr) break;
-	assert(hcdt != nilptr);
+        if (hcdt == nilptr) break;
+        if (hcdt->gr == nilptr) break;
+        wakers[nwake++] = hcdt;
+    }
+    pmutex_unlock(&hc->lock);
+
+    // do NOT dispose recvq/sendq: szqueue internals are all GC memory
+    // (szqueue_init uses crn_gc_malloc) and woken fibers may still touch
+    // these queues concurrently. GC reclaims them with hc.
+
+    for (int i = 0; i < nwake; i++) {
+        crn_hcdata* hcdt = wakers[i];
         fiber* gr = hcdt->gr;
-        if (gr == nilptr) {
-            break;
-        }
         crn_hcdata_woke_set(hcdt, mygr, hc, caseClose, nilptr);
         crn_procer_resume_one(gr, 0, hcdt->grid, hcdt->mcid);
         // hcdata_free(hcdt);
-    }
-    if (hc->sendq != nilptr) {
-        // (same as recvq above: no dispose, GC reclaims)
     }
 
     int bufsz = chan_size(hc->c);
     if (bufsz > 0) { lwarn("discard bufsz %d\n", bufsz); }
     // do NOT dispose/bzero/free hc here:
-    // - parked fibers hold hclock = &hc->lock and their hcdata holds wokehc = hc
+    // - parked fibers' hcdata holds wokehc = hc
     // - chan_dispose would destroy a mutex/cond other fibers may block on
     // - bzero would zero the pthread_mutex_t before unlock (UB)
     // hc (and its buffer chan, recvq/sendq) is GC-managed; finalizer cleans up.
     // Note: crn_gc_free is a no-op today, so the old bzero+free was silently
     // corrupting live memory. Keep closed=1 (set by the CAS at entry).
-    pmutex_unlock(&hc->lock);
+
     return true;
 }
 int crn_hchan_is_closed(crn_hchan* hc) {
@@ -191,6 +186,10 @@ int crn_hchan_send(crn_hchan* hc, void* data) {
             // if has recvq, put to peer hcelem, wakeup peer and return
             // put data to my hcelem, put self to sendq, then parking self
             crn_hcdata* hcdt = (crn_hcdata*)szqueue_remove(hc->recvq);
+            if (hcdt == nilptr) {
+                // buffer full and nobody waiting: park self in sendq below
+                goto bufed_send_park;
+            }
             fiber* gr = hcdt->gr;
             if (gr != nilptr) {
                 // assert(gr->id == hcdt->grid);
@@ -201,6 +200,7 @@ int crn_hchan_send(crn_hchan* hc, void* data) {
                 return 1;
             }
 
+        bufed_send_park:
             hcdt = crn_hcdata_new(mygr);
             hcdt->sdelem = data;
             int rv = szqueue_add(hc->sendq, hcdt);

@@ -84,6 +84,7 @@ struct fiber {
     coro_context *coctx0; // ref to machine.coctx0
     grstate state;
     int isresume;
+    int wake_pending; // cross-thread resume raced with a still-running fiber
     pmutex_t* hclock; // hchan.lock
     int pkreason;
     struct timeval pktime;

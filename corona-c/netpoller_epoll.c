@@ -642,6 +642,9 @@ void netpoller_yieldfd(long fd, int ytype, fiber* gr) {
         assert(1==2);// cannot process this type
         netpoller_timer(1000, ytype, gr);
         break;
+    case YIELD_TYPE_LOCK:
+        // mutex parking: no fd to register, crn_mutex_unlock resumes us
+        break;
     case YIELD_TYPE_CHAN_RECV:
         assert(1==2);// cannot process this type
         netpoller_timer(1000, ytype, gr);

@@ -414,6 +414,10 @@ void netpoller_yieldfd(long fd, int ytype, fiber* gr) {
     case YIELD_TYPE_GETADDRINFO:
     //    netpoller_dnsresolv((char*)fd, ytype, gr);
         break;
+    case YIELD_TYPE_LOCK:
+        // mutex parking: no fd to register, crn_mutex_unlock resumes us
+        // (fd is -1 here, default branch would assert)
+        break;
     default:
         // linfo("add reader fd=%d ytype=%d=%s\n", fd, ytype, yield_type_name(ytype));
         assert(fd >= 0);

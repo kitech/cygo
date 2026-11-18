@@ -27,6 +27,7 @@ typedef struct fiber fiber;
 typedef struct crnqueue crnqueue;
 typedef struct crn_mutex {
     pthread_mutex_t lock;
+    pthread_mutex_t qmu; // protects holder+waitq against lost wakeups
     crnqueue* waitq; // fiber*
     fiber* holder; // fiber*
 } crn_mutex;

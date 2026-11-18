@@ -597,6 +597,15 @@ void crn_fiber_resume_xthread(fiber* gr, int ytype) {
     }
     if (state == executing) {
         ldebug("resume but executing grid=%d, mcid=%d ytype=%s\n", gr->id, gr->mcid, yield_type_name(ytype));
+        // The fiber is still running and has not parked yet. Record a pending
+        // wake so its next suspend returns immediately instead of parking;
+        // simply dropping it here loses the wakeup and the peer parks forever.
+        atomic_setint(&gr->wake_pending, 1);
+        if (crn_fiber_getstate(gr) != executing) {
+            // it parked in the meantime: cancel pending and wake normally
+            atomic_setint(&gr->wake_pending, 0);
+            continue;
+        }
         return;
     }
     if (state == finished) {
@@ -622,6 +631,14 @@ void crn_fiber_suspend(fiber* gr) {
     crn_set_frame(gr->savefrm);
     gettimeofday(&gr->pktime, nilptr);
     crn_fiber_setstate(gr,waiting);
+    if (atomic_getint(&gr->wake_pending) != 0) {
+        // a cross-thread resume arrived while we were still executing;
+        // consume it and keep running instead of parking (lost-wakeup fix)
+        atomic_setint(&gr->wake_pending, 0);
+        crn_fiber_setstate(gr, executing);
+        lverb("pending wake consumed fid %d mcid %d\n", gr->id, gr->mcid);
+        return;
+    }
     lverb("coctx before swapto mainco fid %d mcid %d\n", gr->id, gr->mcid);
 
     crn_check_mchs(gnr__->mchs); // before
@@ -1329,6 +1346,13 @@ bool crn_procer_resume_prechk(void* gr_, int ytype, int grid, int mcid) {
     machine* mc = crn_machine_get(mcid);
     assert(mc != nilptr);
     fiber* gr2 = crn_machine_grget(mc, grid);
+    if (gr2 != gr && gr != nilptr && gr->mcid != mcid) {
+        // queued event carried a stale mcid because the fiber migrated;
+        // the fiber's own mcid is authoritative
+        mcid = gr->mcid;
+        mc = crn_machine_get(mcid);
+        if (mc != nilptr) { gr2 = crn_machine_grget(mc, grid); }
+    }
     if (gr2 != gr) {
         ldebug("Invalid gr %p=%p curid=%d %d\n", gr, gr2, grid);
         return false;
@@ -1346,6 +1370,14 @@ void crn_procer_resume_one(void* gr_, int ytype, int grid, int mcid) {
     machine* mc = crn_machine_get(mcid);
     assert(mc != nilptr);
     fiber* gr2 = crn_machine_grget(mc, grid);
+    if (gr2 != gr && gr != nilptr && gr->mcid != mcid) {
+        // queued event carried a stale mcid because the fiber migrated;
+        // the fiber's own mcid is authoritative. Without this the wakeup is
+        // silently dropped below and the peer parks forever (lost wakeup).
+        mcid = gr->mcid;
+        mc = crn_machine_get(mcid);
+        if (mc != nilptr) { gr2 = crn_machine_grget(mc, grid); }
+    }
     if (gr2 != gr) {
         ldebug("Invalid gr %p=%p curid=%d %d\n", gr, gr2, grid);
         return;

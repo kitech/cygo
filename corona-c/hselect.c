@@ -15,6 +15,8 @@ typedef struct crn_scase {
 crn_scase* crn_scase_new(crn_hchan* hc, uint16_t kind, void* elem) {
     crn_scase* cas = (crn_scase*)crn_gc_malloc(sizeof(crn_scase));
     fiber* mygr = crn_fiber_getcur();
+    cas->hc = hc; // was never set: crn_sellock() locked a NULL hc afterwards
+    cas->kind = kind; // was never set either: every case looked like caseNil
     crn_hcdata* hcdt= crn_hcdata_new(mygr);
     if (kind == caseRecv) {
         hcdt->rvelem = &cas->hcelem;
@@ -35,6 +37,12 @@ static
 void crn_sellock(crn_scase** cas0, uint16_t* lockorder, int ncases) {
     for (int i = 0; i < ncases; i++) {
         crn_scase* cas = cas0[lockorder[i]];
+        if (cas->hc == nilptr) continue; // caseDefault/nil case: nothing to lock
+        int dup = 0;
+        for (int j = 0; j < i; j++) { // dedup: same hc appears once in a select
+            if (cas0[lockorder[j]]->hc == cas->hc) { dup = 1; break; }
+        }
+        if (dup) continue;
         pmutex_lock(&cas->hc->lock);
     }
 }
@@ -42,6 +50,12 @@ static
 void crn_selunlock(crn_scase** cas0, uint16_t* lockorder, int ncases) {
     for (int i = ncases-1; i >= 0; i--) {
         crn_scase* cas = cas0[lockorder[i]];
+        if (cas->hc == nilptr) continue; // caseDefault/nil case: nothing locked
+        int dup = 0;
+        for (int j = i - 1; j >= 0; j--) { // unlock only the first occurrence
+            if (cas0[lockorder[j]]->hc == cas->hc) { dup = 1; break; }
+        }
+        if (dup) continue;
         pmutex_unlock(&cas->hc->lock);
     }
 }
@@ -160,7 +174,7 @@ bool crn_selectgo(int* rcasi, crn_scase** cas0, uint16_t* order0, int ncases) {
     /* casewk = mygr->wokecase; */
     for (int i = 0; i < ncases; i ++) {
         sk = cas0[i];
-        if (sk->kind == caseNil) continue;
+        if (sk->kind == caseNil || sk->kind == caseDefault) continue;
 
         // cas was set to nilptr before this loop; use this case's own hcdt
         wkgr = sk->hcdt->wokeby;
@@ -183,9 +197,16 @@ bool crn_selectgo(int* rcasi, crn_scase** cas0, uint16_t* order0, int ncases) {
             }else{
                 hcdt = szqueue_remove(hc->recvq);
             }
-            assert(hcdt != nilptr);
+            if (hcdt == nilptr) {
+                // our hcdt was already removed (e.g. chan close drained the
+                // queue and woke us with caseClose); nothing left to dequeue
+                continue;
+            }
             gr = hcdt->gr;
-            assert(gr == mygr);
+            if (gr != mygr) {
+                // not ours (queue order raced with another waker); skip
+                continue;
+            }
             gr = nilptr;
             hcdt = nilptr;
         }
