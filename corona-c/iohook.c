@@ -105,7 +105,7 @@ int pipe(int pipefd[2])
     }
     return rv;
 }
-ATTRIBUTE_WEAK int __pipe(int pipefd[2]) {
+int __pipe(int pipefd[2]) {
     linfo("%d\n", 11233456);
     assert(1==2);
 }

@@ -4,11 +4,11 @@
 CC=gcc
 ROOT=../..
 SRCDIR=..
-CFLAGS=-g -O0 -std=c11 -D_GNU_SOURCE -DNRDEBUG -DCORO_STACKALLOC -DCORO_UCONTEXT \
+CFLAGS=-g -O0 -std=c11 -D_GNU_SOURCE -D_XOPEN_SOURCE -DNRDEBUG -DCORO_STACKALLOC -DCORO_UCONTEXT \
   -DHAVE_UCONTEXT_H -DHAVE_SETJMP_H -DHAVE_SIGALTSTACK -DGC_THREADS -DLOG_USE_COLOR \
-  -I$(SRCDIR) -I$(ROOT) -I$(ROOT)/src -I. \
+  -I$(SRCDIR) -I$(ROOT) -I$(ROOT)/src -I. -I/opt/local/include \
   -I$(ROOT)/3rdparty/cltc/src -I$(ROOT)/3rdparty/cltc/src/include -I$(ROOT)/3rdparty
-LDFLAGS=-levent -levent_pthreads -lgc -lpthread -ldl -lsigsegv -Wl,--export-dynamic
+LDFLAGS=-levent -levent_pthreads -lgc -lpthread -ldl -lsigsegv  -L/opt/local/lib
 
 LIBSRCS = coro.c corowp.c iohook.c iohookcb.c iohook2.c futex.c corona_util.c \
   rxilog.c atomic.c datstu.c szqueue.c chan.c hchan.c hselect.c netpoller_event.c \

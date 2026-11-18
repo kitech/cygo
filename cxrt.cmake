@@ -123,6 +123,12 @@ set_target_properties(crn_sh PROPERTIES COMPILE_FLAGS ${corona_c_flags})
 # set(gclib "-lgc -lsigsegv -L/opt/vcpkg/installed/x86-linux/lib -L/opt/devsys32/lib")
 # set(libevents_ldflags "-levent -levent_pthreads")
 # set(cxrt_ldflags "${gclib} -lpthread -ldl -lc")
-target_link_libraries(crn_sh ${LIBGC} ${LIBEVENT1} ${LIBEVENT2} ${LIBSIGSEGV})
+
+set(gclib ${LIBGC} ${LIBSIGSEGV})
+set(libevents_ldflags ${LIBEVENT2} ${LIBEVENT1})
+set(cxrt_ldflags ${gclib}  -lpthread -ldl -lc)
+target_link_libraries(crn_sh ${libevents_ldflags} ${cxrt_ldflags})
+
+# target_link_libraries(crn_sh ${LIBGC} ${LIBEVENT1} ${LIBEVENT2} ${LIBSIGSEGV})
 # target_link_libraries(crn_sh "${libevents_ldflags} ${cxrt_ldflags}")
 # note: all libraries which maybe create threads, must put before -lgc

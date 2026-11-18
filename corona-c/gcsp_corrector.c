@@ -6,7 +6,7 @@ static void crn_sp_corrector(void** sp_ptr, void* tid) {
     char* stack_addr;
 #ifdef __APPLE__
     extern size_t pthread_get_stacksize_np(pthread_t);
-	extern char* pthread_get_stackaddr_np(pthread_t);
+	extern void* pthread_get_stackaddr_np(pthread_t);
     stack_size = pthread_get_stacksize_np((pthread_t)tid);
     stack_addr = (char*) pthread_get_stackaddr_np((pthread_t)tid);
 #elif defined(_WIN64)
