@@ -100,6 +100,7 @@ static char* lookup_host_impl2 (const char *host)
 
     char* ipaddr = crn_gc_malloc(120);
     linfo ("Host: %s %p\n", host, res);
+    struct addrinfo* res0 = res; // keep head: freeaddrinfo needs it after the loop
     while (res) {
         inet_ntop (res->ai_family, res->ai_addr->sa_data, addrstr, 100);
 
@@ -118,7 +119,7 @@ static char* lookup_host_impl2 (const char *host)
         memcpy(ipaddr, addrstr, strlen(addrstr));
         res = res->ai_next;
     }
-    freeaddrinfo(res);
+    if (res0 != nilptr) { freeaddrinfo(res0); } // was freeaddrinfo(res) with res==NULL: leaked the whole chain
 
     return ipaddr;
 }

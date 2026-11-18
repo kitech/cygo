@@ -150,6 +150,7 @@ void netpoller_yieldfd(long fd, int ytype, fiber* gr) {
     case YIELD_TYPE_SLEEP:
         ns = (long)fd*1000000000;
         netpoller_timer(ns, gr);
+        break; // was missing: fell through to USLEEP and registered twice
     case YIELD_TYPE_USLEEP:
         ns = (long)fd*1000;
         netpoller_timer(ns, gr);

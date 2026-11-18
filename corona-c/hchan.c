@@ -95,12 +95,14 @@ int crn_hchan_close(crn_hchan* hc) {
 
     int bufsz = chan_size(hc->c);
     if (bufsz > 0) { lwarn("discard bufsz %d\n", bufsz); }
-    chan_dispose(hc->c);
-    hc->c = nilptr;
-    bzero(hc, sizeof(crn_hchan));
-    atomic_setint(&hc->closed, 1);
+    // do NOT dispose/bzero/free hc here:
+    // - parked fibers hold hclock = &hc->lock and their hcdata holds wokehc = hc
+    // - chan_dispose would destroy a mutex/cond other fibers may block on
+    // - bzero would zero the pthread_mutex_t before unlock (UB)
+    // hc (and its buffer chan, recvq/sendq) is GC-managed; finalizer cleans up.
+    // Note: crn_gc_free is a no-op today, so the old bzero+free was silently
+    // corrupting live memory. Keep closed=1 (set by the CAS at entry).
     pmutex_unlock(&hc->lock);
-    crn_gc_free(hc); // gc_free is later
     return true;
 }
 int crn_hchan_is_closed(crn_hchan* hc) {
@@ -142,6 +144,8 @@ int crn_hchan_send(crn_hchan* hc, void* data) {
             linfo("yield me sender %d/%d %p\n", mygr->id, mygr->mcid, data);
             mygr->hclock = &hc->lock;
             crn_procer_yield(-1, YIELD_TYPE_CHAN_SEND);
+            // woken by close: send fails
+            if (crn_hchan_is_closed(hc)) { return 0; }
             return 1;
         }
     } else {
@@ -188,6 +192,8 @@ int crn_hchan_send(crn_hchan* hc, void* data) {
             pmutex_unlock(&hc->lock);
             crn_procer_yield(-1, YIELD_TYPE_CHAN_SEND);
 	    /* goto bufed_send; */
+            // woken by close: send fails, no receiver took the data
+            if (crn_hchan_is_closed(hc)) { return 0; }
             return 1;
         }
     }
@@ -226,6 +232,11 @@ int crn_hchan_recv(crn_hchan* hc, void** pdata) {
             linfo("yield recver %d/%d, qc %d ch=%p\n", mygr->id, mygr->mcid, hc->recvq->size, hc);
             mygr->hclock = &hc->lock; // what means?
             crn_procer_yield(-1, YIELD_TYPE_CHAN_RECV);
+            // woken by close: no data was written into *pdata
+            if (crn_hchan_is_closed(hc)) {
+                *pdata = nilptr;
+                return 0;
+            }
             assert(*pdata != invalidptr);
             return 1;
         }
@@ -268,6 +279,11 @@ int crn_hchan_recv(crn_hchan* hc, void** pdata) {
 	/* printf("recver yield %s:%d\n", __FILE__, __LINE__); */
 	/* mygr->hclock = &hc->lock; // what means? */
         crn_procer_yield(-1, YIELD_TYPE_CHAN_RECV);
+        // woken by close: the queue is gone, do not loop back into it
+        if (crn_hchan_is_closed(hc)) {
+            *pdata = nilptr;
+            return 0;
+        }
 	goto bufed_recv;
     }
 }

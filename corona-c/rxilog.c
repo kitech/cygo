@@ -193,6 +193,19 @@ static int log_log_snprintf_arg(char* buf, int len, int idx, int tyid, void* arg
 // todo more case tyid
 // tyids if ctypeid enum values
 // vallens used for cannot correct recognize literal char 'x'
+// bounded append helper: snprintf returns the WOULD-BE length, so raw
+// accumulation overflows buf once it fills up; clamp the return value
+static int logno_append(char* buf, int bufsz, int pos, const char* fmt, ...) {
+    if (pos < 0) { pos = 0; }
+    if (pos > bufsz - 1) { return pos; }
+    va_list args;
+    va_start(args, fmt);
+    int n2 = vsnprintf(buf+pos, bufsz-pos-1, fmt, args);
+    va_end(args);
+    if (n2 < 0) { n2 = 0; }
+    if (n2 >= bufsz - pos) { n2 = bufsz - pos - 1; }
+    return pos + n2;
+}
 int log_log_nofmt(int level, const char *file, int line, int vallens[], int tyids[], int argcx, ...) {
     // printf("got in normal func, arc=%d\n", argc);
     char buf[4096] = {0};
@@ -200,7 +213,7 @@ int log_log_nofmt(int level, const char *file, int line, int vallens[], int tyid
 
     // time level file line
     const char* filemid = log_log_file_trim(file, 1);
-    // pos += snprintf(buf+pos, sizeof(buf)-pos-1, "%s:%d ", filemid, line);
+    // pos += logno_append(buf, sizeof(buf), pos, "%s:%d ", filemid, line);
 
     // args
     va_list args;
@@ -210,42 +223,42 @@ int log_log_nofmt(int level, const char *file, int line, int vallens[], int tyid
         const char* tystr = ctypeid_tostr(tyid);
         // printf("arg%d tyid=%d\n", idx, tyid);
 
-        // pos += snprintf(buf+pos, sizeof(buf)-pos-1, "%d: ", idx);
+        // pos += logno_append(buf, sizeof(buf), pos, "%d: ", idx);
         switch (tyid) {
         case ctypeid_int: {
             int val = va_arg(args, int);
-            pos += snprintf(buf+pos, sizeof(buf)-pos-1, "%d", val);
+            pos += logno_append(buf, sizeof(buf), pos, "%d", val);
             // if (val==4) cxpanic(0, "www");
             }
             break;
         case ctypeid_uchar: {
             uchar val = va_arg(args, unsigned char);
-            pos += snprintf(buf+pos, sizeof(buf)-pos-1, "%u", val);
+            pos += logno_append(buf, sizeof(buf), pos, "%u", val);
             }
             break;
         case ctypeid_char: {
             char val = va_arg(args, char);
-            pos += snprintf(buf+pos, sizeof(buf)-pos-1, "%c", val);
+            pos += logno_append(buf, sizeof(buf), pos, "%c", val);
             }
             break;
         case ctypeid_double: {
             double val = va_arg(args, double);
-            pos += snprintf(buf+pos, sizeof(buf)-pos-1, "%g", val);
+            pos += logno_append(buf, sizeof(buf), pos, "%g", val);
             }
             break;
         case ctypeid_float: {
             double val = va_arg(args, double);
-            pos += snprintf(buf+pos, sizeof(buf)-pos-1, "%g", val);
+            pos += logno_append(buf, sizeof(buf), pos, "%g", val);
             }
             break;
         case ctypeid_ulong: {
             ulong val = va_arg(args, ulong);
-            pos += snprintf(buf+pos, sizeof(buf)-pos-1, "%lu", val);
+            pos += logno_append(buf, sizeof(buf), pos, "%lu", val);
             }
             break;
         case ctypeid_long: {
             long val = va_arg(args, long);
-            pos += snprintf(buf+pos, sizeof(buf)-pos-1, "%ld", val);
+            pos += logno_append(buf, sizeof(buf), pos, "%ld", val);
             }
             break;
         case ctypeid_charptr: {
@@ -254,35 +267,35 @@ int log_log_nofmt(int level, const char *file, int line, int vallens[], int tyid
             if (idx==0 && strchr(val, '%') && !strstr(val, "%%")) {
                 // log_log(LOG_WARN, filemid, line, "maybe old usage %s", val);
             }
-            pos += snprintf(buf+pos, sizeof(buf)-pos-1, "%s", val);
+            pos += logno_append(buf, sizeof(buf), pos, "%s", val);
             }
             break;
         case ctypeid_charptrptr: {
             char** val = va_arg(args, char**);
-            pos += snprintf(buf+pos, sizeof(buf)-pos-1, "%p", val);
+            pos += logno_append(buf, sizeof(buf), pos, "%p", val);
             }
             break;
         case ctypeid_bool: {
             _Bool val = va_arg(args, _Bool);
-            pos += snprintf(buf+pos, sizeof(buf)-pos-1, "%s", val?"true":"false");
+            pos += logno_append(buf, sizeof(buf), pos, "%s", val?"true":"false");
             }
             break;
         case ctypeid_voidptr: {
             void* val = va_arg(args, void*);
-            pos += snprintf(buf+pos, sizeof(buf)-pos-1, "%p", val);
+            pos += logno_append(buf, sizeof(buf), pos, "%p", val);
             }
             break;
         default: // must all used for va_arg adder inner offset
             { int val = va_arg(args, int); }
-            pos += snprintf(buf+pos, sizeof(buf)-pos-1, "???(%d,%s)", tyid, tystr);
+            pos += logno_append(buf, sizeof(buf), pos, "???(%d,%s)", tyid, tystr);
             break;
         }
-        // pos += snprintf(buf+pos, sizeof(buf)-pos-1, "(%s=%d)", ctypeid_tostr(tyid), tyid);
-        pos += snprintf(buf+pos, sizeof(buf)-pos-1, " ");
+        // pos += logno_append(buf, sizeof(buf), pos, "(%s=%d)", ctypeid_tostr(tyid), tyid);
+        pos += logno_append(buf, sizeof(buf), pos, " ");
     }
     va_end(args);
     // printf("logline lenth: %d\n", pos);
-    pos += snprintf(buf+pos, sizeof(buf)-pos-1, " \x1b[0m \x1b[90mlen: %d, argc: %d\x1b[0m", pos, argcx);
+    pos += logno_append(buf, sizeof(buf), pos, " \x1b[0m \x1b[90mlen: %d, argc: %d\x1b[0m", pos, argcx);
     // printf("wttt %d, %d %s\n", pos, strlen(buf), buf);
     // puts(buf); fflush(stderr);
     log_log(level, filemid, line, "%s", buf);

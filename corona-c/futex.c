@@ -122,9 +122,13 @@ int crn_mutex_unlock(crn_mutex *mutex)
 
     void* wtgr = nilptr;
     int rv2 = crnqueue_poll(mutex->waitq, &wtgr);
-    assert(rv2 == CC_OK);
+    // empty queue is normal: nobody waiting
+    assert(rv2 == CC_OK || rv2 == CC_ERR_OUT_OF_RANGE);
     if (wtgr != nilptr) {
-        crn_procer_resume_one(wtgr, 0, mygr->id, mygr->mcid);
+        // must pass the waker fiber's own id/mcid, not the unlocker's;
+        // resume_one validates grid and silently drops otherwise -> deadlock
+        fiber* wgr = (fiber*)wtgr;
+        crn_procer_resume_one(wtgr, 0, wgr->id, wgr->mcid);
     }
 
     return rv;

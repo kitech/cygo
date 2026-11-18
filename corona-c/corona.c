@@ -414,10 +414,16 @@ static char* crn_array_tostr_int(Array* arr2) {
         void* key = 0;
         int rv = array_get_at(arr2, n, &key);
         // linfo("n=%d, key=%p\n", n, key);
-        blen += snprintf(buf+blen, sizeof(buf)-blen-1, "%lu ", (uintptr_t)key);
+        // snprintf returns the WOULD-BE length; accumulate with clamp only
+        if (blen >= (int)sizeof(buf) - 2) { break; }
+        int n2 = snprintf(buf+blen, sizeof(buf)-blen-1, "%lu ", (uintptr_t)key);
+        blen += (n2 > 0 && n2 < (int)sizeof(buf) - blen) ? n2 : (int)sizeof(buf) - blen - 1;
     }
     char* mem = crn_gc_malloc(99);
+    if (blen < 0) { blen = 0; }
+    if (blen > 98) { blen = 98; }
     memcpy(mem, buf, blen);
+    mem[blen] = '\0';
     return mem;
 }
 

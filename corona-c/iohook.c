@@ -901,7 +901,8 @@ int pselect(int nfds, fd_set *readfds, fd_set *writefds,
     clock_gettime(CLOCK_REALTIME, &bts);
     long  tons = bts.tv_nsec + ((long)bts.tv_sec)*nsu;
     if (timeout != 0) {
-        tons += timeout->tv_nsec + ((long)bts.tv_sec)*nsu;
+        // was bts.tv_sec here: added the current time twice instead of the timeout
+        tons += timeout->tv_nsec + ((long)timeout->tv_sec)*nsu;
     }
 
     while (1) {

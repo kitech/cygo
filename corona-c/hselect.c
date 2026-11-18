@@ -87,6 +87,7 @@ bool crn_selectgo(int* rcasi, crn_scase** cas0, uint16_t* order0, int ncases) {
             assert(1==2); break;
         case caseRecv:
             hcdt = szqueue_remove(hc->sendq);
+            if (hcdt == nilptr) break; // empty queue: no sender waiting
             gr = hcdt->gr;
             if (gr != nilptr) { assert(gr->id == hcdt->grid); }
             if (gr != nilptr) goto recv;
@@ -97,6 +98,7 @@ bool crn_selectgo(int* rcasi, crn_scase** cas0, uint16_t* order0, int ncases) {
         case caseSend:
             if (crn_hchan_is_closed(hc)) goto sclose;
             hcdt = szqueue_remove(hc->recvq);
+            if (hcdt == nilptr) break; // empty queue: no receiver waiting
             gr = hcdt->gr;
             if (gr != nilptr) { assert(gr->id == hcdt->grid); }
             if (gr != nilptr) goto send;
@@ -160,9 +162,10 @@ bool crn_selectgo(int* rcasi, crn_scase** cas0, uint16_t* order0, int ncases) {
         sk = cas0[i];
         if (sk->kind == caseNil) continue;
 
-        wkgr = cas->hcdt->wokeby;
-        wkhc = cas->hcdt->wokehc;
-        casewk = cas->hcdt->wokecase;
+        // cas was set to nilptr before this loop; use this case's own hcdt
+        wkgr = sk->hcdt->wokeby;
+        wkhc = sk->hcdt->wokehc;
+        casewk = sk->hcdt->wokecase;
 
         // try match which case woke
         if (casewk == sk->kind && sk->hc == wkhc) {

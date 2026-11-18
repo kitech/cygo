@@ -81,6 +81,7 @@ void* crn_gc_malloc(size_t size) {
     crn_pre_gclock(__func__);
     void* ptr = GC_MALLOC(size);
     crn_post_gclock(__func__);
+    if (ptr == nilptr) { return ptr; } // OOM: callers already check NULL, do not memset
     memset(ptr, 0, size);
     // GC_register_finalizer(ptr, crn_gc_finalizer, 0, 0, 0);
     return ptr;
@@ -107,7 +108,11 @@ void crn_gc_free(void* ptr) {
     if (__we_take_free_owner == 1) {
         GC_FREE(ptr);
         // GC_do_blocking(crn_gc_free_block, ptr);
-    }else{}
+    }else{
+        // no-op by design: memory stays in the GC heap and is reclaimed later.
+        // Callers must NOT assume reuse-after-free safety here; bzero'ing
+        // "freed" memory actually zeroes live GC memory (see hchan close).
+    }
     crn_post_gclock(__func__);
 }
 void crn_gc_free_uncollectable(void* ptr) {
@@ -120,6 +125,7 @@ void* crn_gc_calloc(size_t n, size_t size) {
     crn_pre_gclock(__func__);
     void* ptr = GC_MALLOC(n*size);
     crn_post_gclock(__func__);
+    if (ptr == nilptr) { return ptr; } // OOM: do not memset
     memset(ptr, 0, n*size);
     return ptr;
 }
@@ -128,6 +134,7 @@ void* crn_gc_malloc_uncollectable(size_t size) {
     crn_pre_gclock(__func__);
     void* ptr = GC_MALLOC_UNCOLLECTABLE(size);
     crn_post_gclock(__func__);
+    if (ptr == nilptr) { return ptr; } // OOM: do not memset
     memset(ptr, 0, size);
     return ptr;
 }

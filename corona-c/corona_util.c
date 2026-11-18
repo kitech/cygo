@@ -216,7 +216,13 @@ crn_simlog(int level, const char *filename, int line, const char* funcname, cons
 
     va_list args;
     va_start(args, fmt);
-    len += vsnprintf(obuf+len, sizeof(obuf)-len-1, fmt, args);
+    // snprintf returns the WOULD-BE length; accumulate with clamp only
+    if (len >= 0 && len < (int)sizeof(obuf) - 1) {
+        int n2 = vsnprintf(obuf+len, sizeof(obuf)-len-1, fmt, args);
+        len += (n2 >= 0 && n2 < (int)sizeof(obuf) - len) ? n2 : (int)sizeof(obuf) - len - 1;
+    } else {
+        len = (int)sizeof(obuf) - 1;
+    }
     va_end(args);
     obuf[len] = '\0';
     // fprintf(stderr, "%s", buf);
@@ -234,14 +240,23 @@ void crn_simlog2(int level, const char *filename, int line, const char* funcname
     gettimeofday(&ltv, 0);
     // loglock();
     // fprintf(stderr, "%ld.%ld %s:%d %s: ", ltv.tv_sec, ltv.tv_usec, fbname, line, funcname);
-    int len = snprintf(obuf, sizeof(obuf), "%ld.%ld %s:%d %s: ",
+    int len = snprintf(obuf, sizeof(obuf)-1, "%ld.%ld %s:%d %s: ",
                        ltv.tv_sec, ltv.tv_usec, fbname, line, funcname);
+    if (len < 0) { len = 0; }
+    if (len > (int)sizeof(obuf) - 1) { len = (int)sizeof(obuf) - 1; }
 
     va_list args;
     va_start(args, fmt);
     // vfprintf(stderr, fmt, args);
-    len += vsnprintf(obuf+len,sizeof(obuf)-len,fmt,args);
+    // snprintf returns the WOULD-BE length; accumulate with clamp only
+    if (len < (int)sizeof(obuf) - 1) {
+        int n2 = vsnprintf(obuf+len, sizeof(obuf)-len, fmt, args);
+        len += (n2 >= 0 && n2 < (int)sizeof(obuf) - len) ? n2 : (int)sizeof(obuf) - len;
+    } else {
+        len = (int)sizeof(obuf);
+    }
     va_end(args);
+    if (len > (int)sizeof(obuf)) { len = (int)sizeof(obuf); }
     write(STDERR_FILENO, obuf, len);
     // fflush(stderr);
     // logunlock();

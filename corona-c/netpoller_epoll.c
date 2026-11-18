@@ -80,6 +80,21 @@ typedef struct netpoller {
 
 static netpoller* gnpl__ = 0;
 
+// evfds is a fixed-size table indexed by system fd: bound-check every access
+#define CRN_EVFDS_SZ ((int)(sizeof(((netpoller*)0)->evfds)/sizeof(((netpoller*)0)->evfds[0])))
+static evdata2* np_evfds_get(netpoller* np, int fd) {
+    if (fd < 0 || fd >= CRN_EVFDS_SZ) { return nilptr; }
+    return np->evfds[fd];
+}
+static int np_evfds_set(netpoller* np, int fd, evdata2* d2) {
+    if (fd < 0 || fd >= CRN_EVFDS_SZ) {
+        lwarn("evfds out of range fd=%d\n", fd);
+        return 0;
+    }
+    np->evfds[fd] = d2;
+    return 1;
+}
+
 static void netpoller_logcb(int severity, const char *msg) {
     linfo("lvl=%d msg=%s\n", severity, msg);
 }
@@ -244,9 +259,9 @@ void netpoller_loop() {
         rv = epoll_ctl(np->epfd, EPOLL_CTL_DEL, evfd, nilptr);
         // assert(rv == 0);
         pthread_mutex_lock(&np->evmu);
-        evdata2* d2 = np->evfds[evfd];
+        evdata2* d2 = np_evfds_get(np, evfd);
         if (d2 != 0) {
-            np->evfds[evfd] = nilptr; // clear
+            np_evfds_set(np, evfd, nilptr); // clear
             // linfo("clear fd %d\n", evfd);
         }
         pthread_mutex_unlock(&np->evmu);
@@ -340,7 +355,7 @@ void netpoller_crnev_globcb(int epfd, int fd, int events, void* cbarg) {
         if (d2->dr != nilptr) { newev |= EPOLLIN; }
         if (d2->dw != nilptr) { newev |= EPOLLOUT; }
         if (newev != 0) {
-            np->evfds[fd] = d2;
+            np_evfds_set(np, fd, d2);
         }
         pthread_mutex_unlock(&np->evmu);
         if (newev != 0) {
@@ -378,11 +393,17 @@ void netpoller_readfd(int fd, int ytype, fiber* gr) {
 
     crn_pre_gclock_proc(__func__);
     int rv = 0;
+    if (fd < 0 || fd >= CRN_EVFDS_SZ) {
+        lwarn("readfd out of range fd=%d\n", fd);
+        evdata_free(d);
+        return;
+    }
     pthread_mutex_lock(&np->evmu);
-    int inuse = np->evfds[fd] != 0;
+    evdata2* d2old = np->evfds[fd];
+    int inuse = d2old != 0;
     // assert (inuse == 0);
     if (inuse) {
-        evdata2* d2 = np->evfds[fd];
+        evdata2* d2 = d2old;
         int druse = d2->dr != nilptr;
         int samefib = druse ? d2->dr->data == gr : 0;
         int override = 0;
@@ -390,6 +411,7 @@ void netpoller_readfd(int fd, int ytype, fiber* gr) {
             // ignore ok?
         }else{
             override = 1;
+            // previous dr loses its reference here; it is GC memory, GC reclaims it
             d2->dr = d;
             int newev = EPOLLET;
             if (d2->dw != nilptr) { newev |= EPOLLOUT; }
@@ -412,7 +434,7 @@ void netpoller_readfd(int fd, int ytype, fiber* gr) {
         struct epoll_event evt = {0};
         evt.events = EPOLLIN | EPOLLET;
         evt.data.fd = fd;
-        np->evfds[fd] = d2;
+        np_evfds_set(np, fd, d2);
         rv = epoll_ctl(np->epfd, EPOLL_CTL_ADD, fd, &evt);
         // linfo("add r new %d\n", fd);
     }
@@ -420,7 +442,15 @@ void netpoller_readfd(int fd, int ytype, fiber* gr) {
     crn_post_gclock_proc(__func__);
     if (rv != 0) {
         lwarn("add error %d %d %d\n", rv, fd, gr->id);
-        // evdata2_free(d2);
+        // detach pointers BEFORE freeing, else d2->dr / evfds[fd] dangle
+        evdata2* d2 = np_evfds_get(np, fd);
+        if (d2 != nilptr && d2->dr == d) {
+            d2->dr = nilptr;
+            if (d2->dw == nilptr && d2->dt == nilptr) {
+                np_evfds_set(np, fd, nilptr);
+                evdata2_free(d2);
+            }
+        }
         evdata_free(d);
         // assert(rv == 0);
         return;
@@ -445,16 +475,23 @@ void netpoller_writefd(int fd, int ytype, fiber* gr) {
 
     int rv = 0;
     crn_pre_gclock_proc(__func__);
+    if (fd < 0 || fd >= CRN_EVFDS_SZ) {
+        lwarn("writefd out of range fd=%d\n", fd);
+        evdata_free(d);
+        return;
+    }
     pthread_mutex_lock(&np->evmu);
-    int inuse = np->evfds[fd] != 0;
+    evdata2* d2old = np->evfds[fd];
+    int inuse = d2old != 0;
     if (inuse) {
-        evdata2* d2 = np->evfds[fd];
+        evdata2* d2 = d2old;
         int dwuse = d2->dw != nilptr;
         int samefib = dwuse ? d2->dw->data == gr : 0;
         int override = 0;
         if (dwuse && samefib) {
         }else{
             override = 1;
+            // previous dw loses its reference here; it is GC memory, GC reclaims it
             d2->dw = d;
             int newev = EPOLLET;
             if (d2->dr != nilptr) { newev |= EPOLLIN; }
@@ -477,7 +514,7 @@ void netpoller_writefd(int fd, int ytype, fiber* gr) {
         struct epoll_event evt = {0};
         evt.events = EPOLLOUT | EPOLLET;
         evt.data.fd = fd;
-        np->evfds[fd] = d2;
+        np_evfds_set(np, fd, d2);
         rv = epoll_ctl(np->epfd, EPOLL_CTL_ADD, fd, &evt);
         // linfo("add w new %d\n", fd);
     }
@@ -485,7 +522,15 @@ void netpoller_writefd(int fd, int ytype, fiber* gr) {
     crn_post_gclock_proc(__func__);
     if (rv != 0) {
         lwarn("add error %d %d %d\n", rv, fd, gr->id);
-        // evdata2_free(evt);
+        // detach pointers BEFORE freeing, else d2->dw / evfds[fd] dangle
+        evdata2* d2 = np_evfds_get(np, fd);
+        if (d2 != nilptr && d2->dw == d) {
+            d2->dw = nilptr;
+            if (d2->dr == nilptr && d2->dt == nilptr) {
+                np_evfds_set(np, fd, nilptr);
+                evdata2_free(d2);
+            }
+        }
         evdata_free(d);
         // assert(rv == 0);
         return;
