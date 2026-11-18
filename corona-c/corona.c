@@ -633,9 +633,14 @@ void crn_fiber_suspend(fiber* gr) {
     crn_fiber_setstate(gr,waiting);
     if (atomic_getint(&gr->wake_pending) != 0) {
         // a cross-thread resume arrived while we were still executing;
-        // consume it and keep running instead of parking (lost-wakeup fix)
+        // consume it and keep running instead of parking (lost-wakeup fix).
+        // NOTE: this suspend never reaches the machine loop, so the yieldinfo
+        // recorded by crn_procer_yield(_multi) must be cleared here, otherwise
+        // the next yield_multi asserts on yinfo.seted != false.
         atomic_setint(&gr->wake_pending, 0);
         crn_fiber_setstate(gr, executing);
+        machine* mcp = crn_machine_get(gr->mcid);
+        if (mcp != nilptr) { memset(&mcp->yinfo, 0, sizeof(mcp->yinfo)); }
         lverb("pending wake consumed fid %d mcid %d\n", gr->id, gr->mcid);
         return;
     }

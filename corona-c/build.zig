@@ -193,9 +193,37 @@ pub fn build(b: *std.Build) void {
     linkRuntimeLibs(exe);
 
     b.installArtifact(exe);
+    const corona_step = b.step("corona", "Build the corona demo");
+    corona_step.dependOn(&b.addInstallArtifact(exe, .{}).step);
     const run_corona = b.addRunArtifact(exe);
     const run_step = b.step("run", "Run the corona demo");
     run_step.dependOn(&run_corona.step);
+
+    // ------------------------------------------------------ main2 soak driver
+    const exe2 = b.addExecutable(.{
+        .name = "corona2",
+        .root_module = b.createModule(.{
+            .target = target,
+            .optimize = optimize,
+            .link_libc = true,
+        }),
+    });
+    exe2.root_module.addCSourceFile(.{ .file = b.path("main2.c"), .flags = cflags });
+    exe2.root_module.addIncludePath(b.path("."));
+    exe2.root_module.addIncludePath(b.path("../src"));
+    exe2.root_module.addIncludePath(b.path("../3rdparty/cltc/src"));
+    exe2.root_module.addIncludePath(b.path("../3rdparty/cltc/src/include"));
+    exe2.root_module.addIncludePath(b.path("../3rdparty"));
+    exe2.root_module.linkLibrary(crn);
+    exe2.root_module.linkLibrary(cxrt);
+    exe2.rdynamic = true;
+    linkRuntimeLibs(exe2);
+    b.installArtifact(exe2);
+    const corona2_build_step = b.step("corona2", "Build the main2 soak driver");
+    corona2_build_step.dependOn(&b.addInstallArtifact(exe2, .{}).step);
+    const run2 = b.addRunArtifact(exe2);
+    const run2_step = b.step("run2", "Run the main2 soak driver");
+    run2_step.dependOn(&run2.step);
 
     // ------------------------------------------------------- 14 test programs
     const test_step = b.step("tests", "Build all corona-c tests");

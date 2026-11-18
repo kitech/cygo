@@ -22,6 +22,11 @@ add_executable(corona corona-c/main.c)
 set_target_properties(corona PROPERTIES COMPILE_FLAGS ${corona_c_flags})
 # target_link_libraries(corona -L. crn cxrt -L./bdwgc/.libs -L./cltc/lib gc event event_pthreads pthread dl sigsegv)
 target_link_libraries(corona -L. crn cxrt ${LIBGC})
+
+# long-running multi-scenario soak driver (see corona-c/MAIN2.md)
+add_executable(corona2 corona-c/main2.c)
+set_target_properties(corona2 PROPERTIES COMPILE_FLAGS ${corona_c_flags})
+target_link_libraries(corona2 -L. crn cxrt ${LIBGC})
 # for mac, on linux just /usr/include
 # set(vcpkg_dir "/opt/vcpkg/root/installed/x64-osx-dynamic")
 # set(vcpkg_dir "/opt/vcpkg/installed/x86-linux")
