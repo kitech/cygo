@@ -51,9 +51,14 @@ typedef struct evdata2 {
 static int crn_tree_timer_cmp(const void* k1x, const void* k2x) {
     evdata* k1 = (evdata*)k1x;
     evdata* k2 = (evdata*)k2x;
-    int k1us = k1->tv.tv_sec*CRN_USEC + k1->tv.tv_usec;
-    int k2us = k2->tv.tv_sec*CRN_USEC + k2->tv.tv_usec;
-    return -(k1us - k2us);
+    // tv_sec*1e6 overflows int for timers > ~2146s; compare in 64-bit
+    long long k1us = (long long)k1->tv.tv_sec*CRN_USEC + k1->tv.tv_usec;
+    long long k2us = (long long)k2->tv.tv_sec*CRN_USEC + k2->tv.tv_usec;
+    long long diff = -(k1us - k2us);
+    // cmp contract only needs the sign; clamp to int range
+    if (diff > 0) return 1;
+    if (diff < 0) return -1;
+    return 0;
 }
 static TreeTableConf crndftttconf = {.cmp   = crn_tree_timer_cmp,
                                       .mem_alloc  = crn_gc_malloc,

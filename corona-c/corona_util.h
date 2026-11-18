@@ -65,6 +65,9 @@ void crn_simlog(int level, const char *filename, int line, const char* funcname,
 // internal use
 void crn_simlog2(int level, const char *filename, int line, const char* funcname, const char *fmt, ...);
 
+// thread-local PRNG: avoids the process-global rand()/srand() state
+unsigned crn_rand();
+
 
 #define LOGLVL_FATAL 0
 #define LOGLVL_ERROR 1

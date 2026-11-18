@@ -980,7 +980,7 @@ static void* crn_procer1(void*arg) {
             machine* mct = 0;
             linfo("arr2=%p sz=%d, keys=[%s]\n", mcids, array_size(mcids), crn_array_tostr_int(mcids));
             for (int j = 0; j < arr2sz; j++) {
-		int rdidx = abs(rand()) % arr2sz;
+		int rdidx = abs((int)crn_rand()) % arr2sz;
                 void* key = nilptr;
                 int rv = array_get_at(mcids, rdidx, &key);
                 assert(rv == CC_OK);
@@ -999,7 +999,7 @@ static void* crn_procer1(void*arg) {
             }
 	    // ensure one, disabled default
 	    if (0 && mct == nilptr) {
-		int rdidx = abs(rand()) % arr2sz;
+		int rdidx = abs((int)crn_rand()) % arr2sz;
 		void* key = nilptr;
 		int rv = array_get_at(mcids, rdidx, &key);
 		mct = crn_machine_get((int)(uintptr_t)key);

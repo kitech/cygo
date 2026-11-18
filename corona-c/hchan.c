@@ -166,7 +166,11 @@ int crn_hchan_send(crn_hchan* hc, void* data) {
 		if (gr != nilptr) {
 		    assert(gr->id == hcdt->grid);
 		    crn_hcdata_woke_set(hcdt, mygr, hc, caseRecv, data);
+		    // unlock BEFORE resume: resume may run the woken fiber on
+		    // this same thread; it may immediately relock hc->lock
+		    pmutex_unlock(&hc->lock);
 		    crn_procer_resume_one(gr, 0, hcdt->grid, hcdt->mcid);
+		    return 1;
 		}
 	    }
             pmutex_unlock(&hc->lock);
@@ -179,8 +183,9 @@ int crn_hchan_send(crn_hchan* hc, void* data) {
             if (gr != nilptr) {
                 // assert(gr->id == hcdt->grid);
                 crn_hcdata_woke_set(hcdt, mygr, hc, caseRecv, data);
-                crn_procer_resume_one(gr, 0, hcdt->grid, hcdt->mcid);
+                // unlock BEFORE resume, same reason as the branch above
                 pmutex_unlock(&hc->lock);
+                crn_procer_resume_one(gr, 0, hcdt->grid, hcdt->mcid);
                 return 1;
             }
 

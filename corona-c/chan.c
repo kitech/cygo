@@ -440,13 +440,9 @@ int chan_select(chan_t* recv_chans[], int recv_count, void** recv_out,
         return -1;
     }
 
-    // Seed rand using current time in nanoseconds.
-    struct timespec ts;
-    current_utc_time(&ts);
-    srand(ts.tv_nsec);
-
-    // Select candidate and perform operation.
-    select_op_t select = candidates[rand() % count];
+    // thread-local PRNG: no srand() on the global state, and a fresh
+    // nanosecond seed per call was making rand() degenerate anyway
+    select_op_t select = candidates[crn_rand() % count];
     if (select.recv && chan_recv(select.chan, recv_out) != 0)
     {
         return -1;

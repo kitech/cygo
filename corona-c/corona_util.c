@@ -4,6 +4,7 @@
 #include <string.h>
 #include <assert.h>
 #include <stdint.h>
+#include <time.h>
 
 #include <sys/param.h>
 #include <unistd.h>
@@ -342,4 +343,16 @@ const char* grstate2str(grstate s) {
     default:
         assert(s >= nostack && s <= finished);
     }
+}
+
+// thread-local PRNG: the process-global rand()/srand() state was being
+// stomped by every chan_select caller (srand on each call) and by the
+// scheduler's steal randomization. rand_r keeps state per thread.
+unsigned crn_rand() {
+    static __thread unsigned seed;
+    if (seed == 0) {
+        seed = (unsigned)time(0) ^ (unsigned)(uintptr_t)pthread_self();
+        if (seed == 0) { seed = 1; }
+    }
+    return (unsigned)rand_r(&seed);
 }

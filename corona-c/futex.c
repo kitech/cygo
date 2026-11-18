@@ -12,6 +12,7 @@ extern void crn_post_gclock_proc(const char* funcname);
 // for some internal use, cannot let thread yield
 int pmutex_lock(pmutex_t *mutex)
 {
+    if (pmutex_lock_f == nilptr) { initHook(); }
     assert(pmutex_lock_f != nilptr);
     crn_pre_gclock_proc(__func__);
     int rv = pmutex_lock_f(mutex);
@@ -28,6 +29,7 @@ int pmutex_trylock(pmutex_t *mutex)
 }
 int pmutex_unlock(pmutex_t *mutex)
 {
+    if (pmutex_unlock_f == nilptr) { initHook(); }
     assert(pmutex_unlock_f != nilptr);
     crn_pre_gclock_proc(__func__);
     int rv = pmutex_unlock_f(mutex);
@@ -46,20 +48,24 @@ int pmutex_destroy(pmutex_t *mutex)
 int pcond_timedwait(pcond_t * cond, pmutex_t * mutex,
                    const struct timespec * abstime)
 {
+    if (pcond_timedwait_f == nilptr) { initHook(); }
     return pcond_timedwait_f(cond, mutex, abstime);
 }
 int pcond_wait(pcond_t * cond, pmutex_t * mutex)
 {
+    if (pcond_wait_f == nilptr) { initHook(); }
     int rv = pcond_wait_f(cond, mutex);
     assert(rv==0);
     return rv;
 }
 int pcond_broadcast(pcond_t *cond)
 {
+    if (pcond_broadcast_f == nilptr) { initHook(); }
     return pcond_broadcast_f(cond);
 }
 int pcond_signal(pcond_t *cond)
 {
+    if (pcond_signal_f == nilptr) { initHook(); }
     return pcond_signal_f(cond);
 }
 int pcond_destroy(pcond_t *cond)
