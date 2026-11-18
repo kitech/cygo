@@ -6,7 +6,7 @@
 # -finstrument-functions
 # TODO -fstack-usage not work on macos
 # TODO ucontex hard depcreated on macos
-MAC_CFLAGS= # -D_XOPEN_SOURCE
+MAC_CFLAGS=-D_XOPEN_SOURCE=600 # macos: explicit level for ucontext_t
 LNX_CFLAGS=-fstack-usage
 CFLAGS=-g -O0 -std=c11 -D_GNU_SOURCE -DNRDEBUG -DCORO_STACKALLOC -DCORO_UCONTEXT -DHAVE_UCONTEXT_H -DHAVE_SETJMP_H -DHAVE_SIGALTSTACK -I. -I../3rdparty/cltc/src -DGC_THREADS ${MAC_CFLAGS} # -finstrument-functions
 

@@ -27,7 +27,7 @@ const cflags_base: []const []const u8 = &.{
     "-DHAVE_SIGALTSTACK",
     "-DGC_THREADS",
     "-DLOG_USE_COLOR",
-    "-D_XOPEN_SOURCE",
+    "-D_XOPEN_SOURCE=600", // macOS: explicit level (bare -D means 1)
     "-O0", // explicit: no optimization, compile-speed first
     "-fno-omit-frame-pointer",
     "-pipe", // stream through pipes instead of temp files

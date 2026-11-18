@@ -137,7 +137,7 @@ set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -DGC_THREADS")
 #set(CMAKE_CXX_COMPILER "cc")
 
 set(corona_c_flags "-DNRDEBUG -DCORO_STACKALLOC -DCORO_UCONTEXT -DHAVE_UCONTEXT_H -DHAVE_SETJMP_H -DHAVE_SIGALTSTACK")
-set(corona_c_flags "${corona_c_flags}  -D_XOPEN_SOURCE") # only macos, fix the sizeof(ucontext_t) too small
+set(corona_c_flags "${corona_c_flags}  -D_XOPEN_SOURCE=600") # macos: explicit level, fixes tiny sizeof(ucontext_t)
 set(corona_c_flags "${corona_c_flags}  -DLOG_USE_COLOR")
 # set(corona_c_flags "${corona_c_flags} -fstack-usage")
 

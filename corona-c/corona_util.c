@@ -69,12 +69,16 @@ int crn_is_ptr_onstack(void* ptr, void* stkbtm, size_t stksz, int out) {
 
 pid_t gettid() {
     #ifdef __APPLE__
-        uint64_t tid, tid2;
-        extern void pthread_threadid_np(void*, uint64_t*);
-        pthread_threadid_np(NULL, &tid);
-        tid2 = syscall(SYS_thread_selfid);
-        assert(tid==tid2);
-        return tid;
+        uint64_t tid = 0, tid2 = 0;
+        // real prototype: int pthread_threadid_np(pthread_t, uint64_t *);
+        // (was declared as returning void; NULL means the calling thread)
+        extern int pthread_threadid_np(pthread_t, uint64_t*);
+        int rv = pthread_threadid_np(NULL, &tid);
+        assert(rv == 0);
+        tid2 = (uint64_t)syscall(SYS_thread_selfid);
+        assert(tid == tid2);
+        // pid_t is 32-bit; truncation is intentional (ids are for logging)
+        return (pid_t)tid;
     #else
 #ifdef SYS_gettid
     pid_t tid = syscall(SYS_gettid);
