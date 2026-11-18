@@ -113,6 +113,18 @@ bool crnmap_contains_key(crnmap *table, uintptr_t key) {
     return rv;
 }
 
+// atomic contains+add: closes the race between two concurrent adders that
+// plain contains_key-then-add has; used for fiber id allocation
+bool crnmap_add_ifabsent(crnmap *table, uintptr_t key, void *val) {
+    pmutex_lock(&table->mu);
+    bool exists = hashtable_contains_key(table->ht, (void*)key);
+    if (!exists) {
+        hashtable_add(table->ht, (void*)key, val);
+    }
+    pmutex_unlock(&table->mu);
+    return !exists;
+}
+
 size_t crnmap_size(crnmap *table){
     pmutex_lock(&table->mu);
     size_t rv = hashtable_size(table->ht);

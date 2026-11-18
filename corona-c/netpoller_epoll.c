@@ -333,8 +333,13 @@ void netpoller_crnev_globcb(int epfd, int fd, int events, void* cbarg) {
     switch (d2->evtyp) {
     case CXEV_TIMER:
         // linfo("fd=%d events=%d cbarg=%p %p\n", fd, events, cbarg, 0);
-        close(fd);
         pthread_mutex_lock(&np->evmu);
+        // close under evmu: a concurrent readfd/writefd could otherwise
+        // re-register this fd between the loop's DEL and this close, and
+        // the close would silently kill the new registration (fd reuse).
+        // Branch is unreachable today (only CXEV_IO d2s are created), but
+        // keep it correct for when timerfds get registered.
+        close(fd);
         dv[dvcnt++] = d2->dt;
         d2->dt = nilptr;
         pthread_mutex_unlock(&np->evmu);

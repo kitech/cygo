@@ -113,11 +113,13 @@ static int crn_nxtid(corona* nr) {
             atomic_casint(&nr->gridno, id, 0);
             continue;
         }
-        if (crnmap_contains_key(nr->inuseids, id)) {
+        // register the id atomically; on collision try the next one.
+        // this makes fiber ids never reused while in use, so stale
+        // netpoller/chan pointers holding (grid,mcid) can never match
+        // a new fiber (M7 fix, part 1)
+        if (!crnmap_add_ifabsent(nr->inuseids, (uintptr_t)id, (void*)(uintptr_t)1)) {
             continue;
         }
-        // int rv = crnmap_add(nr->inuseids,(uintptr_t)id,(void*)(uintptr_t)1);
-        // assert(rv == CC_OK);
         return id;
     }
     assert(1==2);
@@ -764,6 +766,12 @@ void crn_machine_grfree(machine* mc, int id) {
     fiber* gr = crn_machine_grdel(mc, id);
     assert(gr != nilptr);
     assert(gr->id == id);
+    // release the id only on finished fibers; waiting fibers keep it
+    // occupied (they are still referenced by netpoller/chan queues)
+    if (gnr__ != nilptr && gnr__->inuseids != nilptr) {
+        void* oldv = nilptr;
+        crnmap_remove(gnr__->inuseids, (uintptr_t)id, &oldv);
+    }
     crn_fiber_destroy(gr);
 }
 // for mc->id == 1

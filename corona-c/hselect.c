@@ -168,7 +168,10 @@ bool crn_selectgo(int* rcasi, crn_scase** cas0, uint16_t* order0, int ncases) {
         casewk = sk->hcdt->wokecase;
 
         // try match which case woke
-        if (casewk == sk->kind && sk->hc == wkhc) {
+        // caseClose wakes parked senders AND receivers: match it so the
+        // woken fiber still runs the dequeue pass for its other cases,
+        // instead of goto loop and leaving its hcdt stranded in queues
+        if ((casewk == sk->kind || casewk == caseClose) && sk->hc == wkhc) {
             casi = i;
             cas = sk;
             linfo("case woke i=%d direction=%d by=%p val=%p\n", i, casewk, wkgr, sk->hcelem);
@@ -194,6 +197,13 @@ bool crn_selectgo(int* rcasi, crn_scase** cas0, uint16_t* order0, int ncases) {
 
     hc = cas->hc;
     linfo("wait-return: cas0=%p hc=%p cas=%p kind=%d\n", cas0, hc, cas, cas->kind);
+
+    // woken by close: recv reports EOF (false); send on closed chan is
+    // invalid (Go panics, we report false). selunlock happens in the labels.
+    if (casewk == caseClose) {
+        if (cas->kind == caseRecv) { goto rclose; }
+        goto sclose;
+    }
 
     if (cas->kind == caseRecv) {
         recvok = true;
@@ -243,7 +253,8 @@ bool crn_selectgo(int* rcasi, crn_scase** cas0, uint16_t* order0, int ncases) {
 
  sclose:
     linfo("send closed chan %d", 0);
-    assert(1==2);
+    // reachable both from pass1 (locks held) and close-wake: unlock first
+    crn_selunlock(cas0, order0, ncases);
     return false;
 }
 

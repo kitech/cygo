@@ -75,7 +75,12 @@ int crn_hchan_close(crn_hchan* hc) {
         crn_procer_resume_one(gr, 0, hcdt->grid, hcdt->mcid);
         // hcdata_free(hcdt);
     }
-    if (hc->recvq != nilptr) szqueue_dispose(hc->recvq);
+    if (hc->recvq != nilptr) {
+        // do NOT dispose: szqueue internals are all GC memory (szqueue_init
+        // uses crn_gc_malloc), and a woken fiber (direct send/recv or select)
+        // may still be running szqueue_remove/add on this queue concurrently.
+        // GC reclaims both queues when hc becomes unreachable. Zero real leak.
+    }
 
     qsz = hc->sendq->size;
     if (qsz > 0) { linfo("discard sendq %d\n", qsz); }
@@ -91,7 +96,9 @@ int crn_hchan_close(crn_hchan* hc) {
         crn_procer_resume_one(gr, 0, hcdt->grid, hcdt->mcid);
         // hcdata_free(hcdt);
     }
-    if (hc->sendq != nilptr) szqueue_dispose(hc->sendq);
+    if (hc->sendq != nilptr) {
+        // (same as recvq above: no dispose, GC reclaims)
+    }
 
     int bufsz = chan_size(hc->c);
     if (bufsz > 0) { lwarn("discard bufsz %d\n", bufsz); }
@@ -119,6 +126,11 @@ int crn_hchan_send(crn_hchan* hc, void* data) {
     assert(mygr != nilptr);
 
     pmutex_lock(&hc->lock);
+    // TODO hchan closed case — implemented: send on closed chan fails
+    if (crn_hchan_is_closed(hc)) {
+        pmutex_unlock(&hc->lock);
+        return 0;
+    }
     if (hc->cap == 0) {
         // if any fiber waiting, put data to it elem and then wakeup
         // else put self to sendq and then parking self
@@ -216,6 +228,11 @@ int crn_hchan_recv(crn_hchan* hc, void** pdata) {
 
     nobufed_recv:
 	pmutex_lock(&hc->lock);
+	if (crn_hchan_is_closed(hc)) {
+	    pmutex_unlock(&hc->lock);
+	    *pdata = nilptr;
+	    return 0;
+	}
         crn_hcdata* hcdt = (crn_hcdata*)szqueue_remove(hc->sendq);
         if (hcdt != nilptr) {
             fiber* gr = hcdt->gr;
@@ -251,6 +268,11 @@ int crn_hchan_recv(crn_hchan* hc, void** pdata) {
         // else parking
     bufed_recv:
 	pmutex_lock(&hc->lock);
+	if (crn_hchan_is_closed(hc)) {
+	    pmutex_unlock(&hc->lock);
+	    *pdata = nilptr;
+	    return 0;
+	}
         int bufsz = chan_size(hc->c);
         if (bufsz > 0) {
 	    int sz0 = chan_size(hc->c);
