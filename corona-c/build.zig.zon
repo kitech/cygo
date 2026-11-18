@@ -1,0 +1,20 @@
+.{
+    .name = .corona_c,
+    .version = "0.1.0",
+    .fingerprint = 0xf1c9a7d0c0a3e2a1,
+    .minimum_zig_version = "0.17.0",
+
+    .dependencies = .{
+        // real use: crnreport formats strings with it
+        .zigstr = .{ .path = "zig/vendor/zig-string" },
+        // compile-only: `zig build bdwgc-zig`; nothing imports or links it
+        .bdwgc_zig = .{ .path = "zig/vendor/bdwgc-zig" },
+    },
+
+    .paths = .{
+        "", // whole package tree: build.zig needs ../src and ../3rdparty
+        "build.zig",
+        "build.zig.zon",
+        "zig",
+    },
+}
