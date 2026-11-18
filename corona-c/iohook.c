@@ -797,6 +797,8 @@ struct hostent* gethostbyname(const char* name)
     assert(buf != nilptr); assert(host != nilptr);
 
     int rv = -1;
+    // buf is 5096 bytes (line 789) but only 4096 is declared here; the
+    // extra 1000 bytes are headroom. note ERANGE path below asserts.
     rv = gethostbyname_r(name, host, &buf[0], 4096, &result, &herrno);
     int eno = rv;
     if (rv == 0 && host == result) {

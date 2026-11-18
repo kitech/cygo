@@ -31,9 +31,11 @@ __cyg_profile_func_enter (void *func,  void *caller)
     int rv = dladdr(func, &di);
     Dl_info di2;
     int rv2 = dladdr(caller, &di2);
+    const char* sname1 = di.dli_sname != 0 ? di.dli_sname : "?";
+    const char* sname2 = di2.dli_sname != 0 ? di2.dli_sname : "?";
 
     printf("%s:%d func=%p caller=%p %s <- %s\n",
-           __FILE__, __LINE__, func, caller, di.dli_sname, di2.dli_sname);
+           __FILE__, __LINE__, func, caller, sname1, sname2);
 
     fiber* gr = crn_fiber_getcur();
     if (gr == 0) return;
@@ -41,8 +43,12 @@ __cyg_profile_func_enter (void *func,  void *caller)
     void* basesp = gr!=0?gr->stack.sptr:0;
     ssize_t stksz = gr!=0 ? ((uintptr_t)&base - (uintptr_t)gr->stack.sptr) : 0;
     printf("%s:%d func=%p caller=%p %s id=%d stksz=%ld cursp=%p basesp=%p\n",
-           __FILE__, __LINE__, func, caller, di.dli_sname, gr!=0?gr->id:0, stksz, &base, basesp);
+           __FILE__, __LINE__, func, caller, sname1, gr!=0?gr->id:0, stksz, &base, basesp);
     if (gr != 0) {
+        // keep the original abort semantics, but log before dying so the
+        // trace (fiber id, stack usage) survives in the log
+        lwarn("instraced func in fiber %d stksz=%ld cursp=%p basesp=%p\n",
+              gr->id, stksz, &base, basesp);
         assert(1==2);
     }
 }

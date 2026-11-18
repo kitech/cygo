@@ -1404,7 +1404,10 @@ void crn_gc_push_other_roots1() {
         TableEntry *entry = nilptr;
         while (hashtable_iter_next(&htiter, &entry) != CC_ITER_END) {
             fiber* gr = entry->value;
-            executing_cnt += gr->state == executing ? 1 : 0;
+            // GC thread reads a fiber-side written field: use atomic read
+            // to avoid the (benign) data race UB; read once and reuse
+            int grstate = atomic_getint((int*)&gr->state);
+            executing_cnt += grstate == executing ? 1 : 0;
 
             void* stktop = gr->stack.sptr;
             void* stkbtm = ((void*)((uintptr_t)gr->stack.sptr) + gr->stack.ssze);
@@ -1416,10 +1419,10 @@ void crn_gc_push_other_roots1() {
             // linfo2("stkinfo top=%p btm=%p szo=%ld szr=%ld\n", stktop, stkbtm, gr->stack.ssze, stksz);
             GC_remove_roots(gr->stack.sptr, gr->stack.sptr + 1);
             // GC_add_roots(gr->stack.sptr, ((void*)((uintptr_t)gr->stack.sptr) + 130000));
-            if (gr->state != executing) {
+            if (grstate != executing) {
                 GC_push_all_eager(stktop, stkbtm);
             }else
-            if (gr->state == executing) {
+            if (grstate == executing) {
                 // GC_remove_roots(stktop, (void*)((uintptr_t)stkbtm + 1)); // assert crash
             }
         }

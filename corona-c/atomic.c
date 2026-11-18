@@ -30,8 +30,13 @@ int64_t atomic_addi64(int64_t* v, int64_t delta) {
 
 bool atomic_notbool(bool* v) {
     crn_atomic_byptr(bool, vp, v);
-    bool tv = *v;
-    return atomic_compare_exchange_strong(vp, vp, !tv);
+    // was: expected pointed at the target itself, plus a non-atomic read
+    // racing with the CAS. proper CAS loop, returns the flipped value
+    for (;;) {
+        bool tv = atomic_load(vp);
+        bool want = !tv;
+        if (atomic_compare_exchange_strong(vp, &tv, want)) { return want; }
+    }
 }
 
 bool atomic_casbool(bool* v, bool oldval, bool newval) {
