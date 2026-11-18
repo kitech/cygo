@@ -55,16 +55,43 @@ set(cltc_c_srcs
 		${cltcdir}/common.c
 )
 
+# ---- Zig sources with C ABI (compiled into libcrn) ----
+#   corona-c/zigsrc/corona_zig.zig exports crn_zig_* functions (see
+#   corona-c/zigsrc/corona_zig.h). Built as a single PIC object so the same
+#   object serves libcrn.a and libcrn.so. If zig is unavailable, C-only build
+#   still works (warning only).
+find_program(ZIG_EXECUTABLE zig)
+set(ZIG_DEMO_SRC ${mydir}/corona-c/zigsrc/corona_zig.zig)
+set(ZIG_DEMO_OBJ ${CMAKE_CURRENT_BINARY_DIR}/crn_zig_demo.o)
+set(ZIG_OBJS "")
+if(ZIG_EXECUTABLE)
+  add_custom_command(
+    OUTPUT  ${ZIG_DEMO_OBJ}
+    COMMAND ${ZIG_EXECUTABLE} build-obj -fPIC -O Debug
+            -femit-bin=${ZIG_DEMO_OBJ}
+            ${ZIG_DEMO_SRC}
+    DEPENDS ${ZIG_DEMO_SRC}
+    COMMENT "zig build-obj corona-c/zigsrc/corona_zig.zig"
+    VERBATIM)
+  set_source_files_properties(${ZIG_DEMO_OBJ} PROPERTIES
+      GENERATED TRUE
+      EXTERNAL_OBJECT TRUE)
+  set(ZIG_OBJS ${ZIG_DEMO_OBJ})
+else()
+  message(WARNING "zig not found: zigsrc demos are omitted from libcrn")
+endif()
+
 # this is the "object library" target: compiles the sources only once
 add_library(crn_objlib OBJECT  ${corona_c_srcs}
 		${cltc_c_srcs}
+		${ZIG_OBJS}
 		# ${plthook_c_srcs}
 		)
 # shared libraries need PIC
 set_property(TARGET crn_objlib PROPERTY POSITION_INDEPENDENT_CODE 1)
 
-add_library(crn_st STATIC $<TARGET_OBJECTS:crn_objlib>)
-add_library(crn_sh SHARED $<TARGET_OBJECTS:crn_objlib>)
+add_library(crn_st STATIC $<TARGET_OBJECTS:crn_objlib> ${ZIG_OBJS})
+add_library(crn_sh SHARED $<TARGET_OBJECTS:crn_objlib> ${ZIG_OBJS})
 set_target_properties(crn_st PROPERTIES OUTPUT_NAME crn)
 set_target_properties(crn_sh PROPERTIES OUTPUT_NAME crn)
 target_link_libraries(crn_sh cxrt)

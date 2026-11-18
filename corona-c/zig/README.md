@@ -30,6 +30,27 @@ zig build -Doptimize=Debug    # 默认即 Debug
 - 需要性能压测：`zig build -Doptimize=ReleaseFast`
 - 并行度按 CPU 数，也可显式 `zig build -j8`
 
+## Zig C-ABI 源码（`zigsrc/`）
+
+`corona-c/zigsrc/corona_zig.zig` 导出 C ABI 函数（`crn_zig_*`），编进 `libcrn.a` 与
+`libcrn.so`，C 侧通过 `zigsrc/corona_zig.h` 调用：
+
+| 函数 | 说明 |
+|---|---|
+| `crn_zig_hello()` | 返回静态字符串 |
+| `crn_zig_add(a,b)` | 整数加 |
+| `crn_zig_fib(n)` | 迭代 fibonacci |
+| `crn_zig_sum(ptr,len)` | i32 数组求和（i64） |
+| `crn_zig_is_sorted(ptr,len)` | 是否非递减 |
+| `crn_zig_banner(buf,cap)` | 写 `corona-zig/<ver>`，返回长度 |
+
+- Zig 构建：`zig_demo = b.addObject(...pic=true)`，object 同时加入 `crn`/`crn_sh`
+- CMake 构建：`cxrt.cmake` 中 `add_custom_command` 调用
+  `zig build-obj -fPIC -O Debug -femit-bin=... corona_zig.zig`，
+  产物作为 `EXTERNAL_OBJECT` 加入 `crn_objlib` 并显式并入 `crn_st`/`crn_sh`
+- 机器上没有 zig 时仅告警，C-only 构建继续可用
+- 验证：`corona-c/tests/t15_zigdemo.c`（`make -C corona-c/tests t15_zigdemo`）
+
 ## 与 CMake 的对应关系
 
 | CMake | Zig |

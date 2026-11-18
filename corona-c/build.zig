@@ -84,7 +84,7 @@ const test_names: []const []const u8 = &.{
     "t01_spawn", "t02_pingpong", "t03_buffered", "t04_close",
     "t05_select", "t06_timer",   "t07_mutex",    "t08_net",
     "t09_stress", "t10_hammer",  "t11_gcstack",  "t12_sched",
-    "t13_handshake", "t14_stats",
+    "t13_handshake", "t14_stats", "t15_zigdemo",
 };
 
 pub fn build(b: *std.Build) void {
@@ -98,6 +98,19 @@ pub fn build(b: *std.Build) void {
     if (!use_epoll and !std.mem.eql(u8, backend, "libevent")) {
         std.debug.panic("unknown -Dnetpoller={s} (use libevent|epoll)", .{backend});
     }
+
+    // ------------------------------------------------------ zig C-ABI demos
+    // zigsrc/corona_zig.zig: compiled once, the object goes into both libcrn
+    // variants (mirrors cxrt.cmake's zig build-obj rule).
+    const zig_demo = b.addObject(.{
+        .name = "crn_zig_demo",
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("zigsrc/corona_zig.zig"),
+            .target = target,
+            .optimize = optimize,
+            .pic = true,
+        }),
+    });
 
     // ---------------------------------------------------------------- crn lib
     const backend_file = if (use_epoll) netpoller_epoll else netpoller_libevent;
@@ -113,6 +126,7 @@ pub fn build(b: *std.Build) void {
         }),
     });
     addCrnSources(b, crn, cflags, backend_file);
+    crn.root_module.addObjectFile(zig_demo.getEmittedBin());
     b.installArtifact(crn);
 
     // --------------------------------------------------------------- cxrt lib
@@ -152,6 +166,7 @@ pub fn build(b: *std.Build) void {
         }),
     });
     addCrnSources(b, crn_sh, cflags, backend_file);
+    crn_sh.root_module.addObjectFile(zig_demo.getEmittedBin());
     crn_sh.root_module.linkLibrary(cxrt); // CMake: target_link_libraries(crn_sh cxrt)
     linkRuntimeLibs(crn_sh);              // + ${LIBGC} ${LIBEVENT1} ${LIBEVENT2} ${LIBSIGSEGV}
     b.installArtifact(crn_sh);
@@ -200,6 +215,7 @@ pub fn build(b: *std.Build) void {
             .flags = cflags,
         });
         t.root_module.addIncludePath(b.path("tests"));
+        t.root_module.addIncludePath(b.path("zigsrc"));
         t.root_module.addIncludePath(b.path("."));
         t.root_module.addIncludePath(b.path("../src"));
         t.root_module.addIncludePath(b.path("../3rdparty/cltc/src"));
