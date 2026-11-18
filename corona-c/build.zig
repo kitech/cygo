@@ -35,9 +35,11 @@ const cflags_base: []const []const u8 = &.{
     // no -fstack-protector-all: per-function instrumentation, slower to compile
 };
 
-fn makeCflags(alloc: std.mem.Allocator, cdebug: bool) []const []const u8 {
+fn makeCflags(alloc: std.mem.Allocator, cdebug: bool, is_macos: bool) []const []const u8 {
     var list: std.ArrayList([]const u8) = .empty;
     list.appendSlice(alloc, cflags_base) catch @panic("OOM");
+    // macOS: _XOPEN_SOURCE hides BSD types (u_char/u_int) used by nameser.h
+    if (is_macos) list.append(alloc, "-D_DARWIN_C_SOURCE") catch @panic("OOM");
     if (cdebug) {
         list.append(alloc, "-g") catch @panic("OOM");
         list.append(alloc, "-fstack-protector-strong") catch @panic("OOM");
@@ -92,7 +94,7 @@ pub fn build(b: *std.Build) void {
     const optimize = b.standardOptimizeOption(.{ .preferred_optimize_mode = .Debug });
     const backend = b.option([]const u8, "netpoller", "netpoller backend: libevent|epoll") orelse "libevent";
     const cdebug = b.option(bool, "cdebug", "emit -g and stack protector for C sources (default off: compile speed)") orelse false;
-    const cflags = makeCflags(b.allocator, cdebug);
+    const cflags = makeCflags(b.allocator, cdebug, target.result.os.tag == .macos);
 
     const use_epoll = std.mem.eql(u8, backend, "epoll");
     if (!use_epoll and !std.mem.eql(u8, backend, "libevent")) {

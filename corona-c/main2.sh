@@ -44,20 +44,41 @@ run() {                      # run <name> <est_sec> <timeout_sec> <cmd...>
     echo
     echo "=== $name ===（est ~$(fmt_dur $est)，timeout ${to}s）"
     echo "CMD: $*"
-    timeout "$to" "$@" >"$LOG_DIR/$name.log" 2>&1
+    with_timeout "$to" "$@" >"$LOG_DIR/$name.log" 2>&1
     local rc=$?
     local el=$(( $(date +%s) - t0 ))
     if [ $rc -eq 0 ]; then
-        echo "PASS $name（实际 $(fmt_dur $el)）"; pass=$((pass+1))
+        echo "PASS ${name}（实际 $(fmt_dur ${el})）"; pass=$((pass+1))
     elif [ $rc -eq 124 ]; then
-        echo "FAIL $name（timeout ${to}s，实际 $(fmt_dur $el)）"
+        echo "FAIL ${name}（timeout ${to}s，实际 $(fmt_dur ${el})）"
         tail -3 "$LOG_DIR/$name.log"; fail=$((fail+1))
     else
-        echo "FAIL $name rc=$rc（实际 $(fmt_dur $el)，log $LOG_DIR/$name.log）"
+        echo "FAIL ${name} rc=${rc}（实际 $(fmt_dur ${el})，log ${LOG_DIR}/${name}.log）"
         tail -5 "$LOG_DIR/$name.log"; fail=$((fail+1))
     fi
 }
-skip_if() { echo "SKIP $1（$2）"; skip=$((skip+1)); }
+skip_if() { echo "SKIP ${1}（${2}）"; skip=$((skip+1)); }
+
+# macOS has no GNU `timeout`: prefer timeout/gtimeout, else emulate with a
+# background watchdog. Returns 124 on timeout (same as GNU timeout).
+with_timeout() {           # with_timeout <sec> <cmd...>
+    local to="$1"; shift
+    if command -v timeout >/dev/null 2>&1; then
+        timeout "$to" "$@"; return $?
+    fi
+    if command -v gtimeout >/dev/null 2>&1; then
+        gtimeout "$to" "$@"; return $?
+    fi
+    "$@" &
+    local pid=$!
+    ( sleep "$to"; kill -TERM "$pid" 2>/dev/null; sleep 2; kill -KILL "$pid" 2>/dev/null ) &
+    local watchdog=$!
+    wait "$pid"; local rc=$?
+    kill "$watchdog" 2>/dev/null
+    wait "$watchdog" 2>/dev/null
+    if [ $rc -ge 128 ] && ! kill -0 "$pid" 2>/dev/null; then return 124; fi
+    return $rc
+}
 
 # ---------------------------------------------------------------- build
 echo
@@ -77,7 +98,7 @@ if [ ! -x "$BIN" ]; then
         BIN="./build/corona2"
     fi
 else
-    echo "SKIP build（已存在 $BIN）"
+    echo "SKIP build（已存在 ${BIN}）"
 fi
 echo "BIN: $BIN"
 
@@ -101,13 +122,13 @@ echo
 echo "=== overflow ===（est ~$(fmt_dur 10)，timeout 60s）"
 echo "CMD: env CRN2_OVERFLOW=1 CRN2_SCENARIOS=s18 $BIN"
 t0=$(date +%s)
-timeout 60 env CRN2_OVERFLOW=1 CRN2_SCENARIOS=s18 "$BIN" >"$LOG_DIR/overflow.log" 2>&1
+with_timeout 60 env CRN2_OVERFLOW=1 CRN2_SCENARIOS=s18 "$BIN" >"$LOG_DIR/overflow.log" 2>&1
 rc=$?
 if [ $rc -ne 0 ] && [ $rc -ne 124 ] && grep -q "^SO-" "$LOG_DIR/overflow.log"; then
-    echo "PASS overflow（handler captured SO- markers，rc=$rc，实际 $(fmt_dur $(( $(date +%s) - t0 )))）"
+    echo "PASS overflow（handler captured SO- markers，rc=${rc}，实际 $(fmt_dur $(( $(date +%s) - t0 )))）"
     pass=$((pass+1))
 else
-    echo "FAIL overflow rc=$rc（log $LOG_DIR/overflow.log）"
+    echo "FAIL overflow rc=${rc}（log ${LOG_DIR}/overflow.log）"
     tail -5 "$LOG_DIR/overflow.log"; fail=$((fail+1))
 fi
 

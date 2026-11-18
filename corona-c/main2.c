@@ -21,13 +21,15 @@
 #include <netdb.h>
 #include <arpa/inet.h>
 #include <sys/socket.h>
-#include <sys/epoll.h>
-
-#ifndef EFD_NONBLOCK
-#define EFD_NONBLOCK 0x800
-#endif
-extern int eventfd(unsigned int initval, int flags);
 #include <sys/select.h>
+
+#ifdef __linux__
+# include <sys/epoll.h>
+# ifndef EFD_NONBLOCK
+#  define EFD_NONBLOCK 0x800
+# endif
+extern int eventfd(unsigned int initval, int flags);
+#endif
 
 #include "iohook.h"
 
@@ -190,6 +192,21 @@ static int set_nonblock(int fd) {
     int fl = fcntl(fd, F_GETFL, 0);
     if (fl < 0) return -1;
     return fcntl(fd, F_SETFL, fl | O_NONBLOCK);
+}
+
+// pipe2 is Linux-only; emulate with pipe + fcntl elsewhere (macOS/BSD)
+static int mkpipe_nonblock(int p[2]) {
+#ifdef __linux__
+    return pipe2(p, O_NONBLOCK);
+#else
+    if (pipe(p) != 0) return -1;
+    if (set_nonblock(p[0]) != 0 || set_nonblock(p[1]) != 0) {
+        close(p[0]);
+        close(p[1]);
+        return -1;
+    }
+    return 0;
+#endif
 }
 
 static int count_fds(void) {
@@ -551,12 +568,14 @@ static void s10(void* arg) {
         tick(S10, 0);
         char* ip = crn_getaddrinfo("localhost");
         CHECK(ip != nilptr, "s10 getaddrinfo ip=%p", ip);
+#ifdef __linux__
         struct hostent he;
         struct hostent* res = nilptr;
         char buf2[1024] = {0};
         int herr = 0;
         tick(S10, 1);
         gethostbyname_r("localhost", &he, buf2, sizeof(buf2) - 1, &res, &herr);
+#endif
         usleep(20 * 1000);
     }
     leave(S10);
@@ -656,8 +675,12 @@ static void s14(void* arg) {
 static void s15(void* arg) {
     (void)arg;
     int pfd[2];
-    if (pipe2(pfd, O_NONBLOCK) != 0) { leave(S15); return; }
+    if (mkpipe_nonblock(pfd) != 0) { leave(S15); return; }
+#ifdef __linux__
     int efd = eventfd(0, EFD_NONBLOCK);
+#else
+    int efd = -1; // eventfd is Linux-only
+#endif
     LOOP_WHILE(S15) {
         char c = 'x';
         tick(S15, 0);
@@ -881,6 +904,11 @@ static void s23(void* arg) {
 // ------------------------------------------------------------------ s24 epoll
 static void s24(void* arg) {
     (void)arg;
+#ifndef __linux__
+    // epoll is Linux-only; this scenario is disabled elsewhere
+    leave(S24);
+    return;
+#else
     int ep = epoll_create1(EPOLL_CLOEXEC);
     int efd = eventfd(0, EFD_NONBLOCK);
     if (ep < 0 || efd < 0) {
@@ -905,13 +933,14 @@ static void s24(void* arg) {
     close(ep);
     close(efd);
     leave(S24);
+#endif
 }
 
 // ------------------------------------------------------------------ s25 select
 static void s25(void* arg) {
     (void)arg;
     int p[2];
-    if (pipe2(p, O_NONBLOCK) != 0) return;
+    if (mkpipe_nonblock(p) != 0) { leave(S25); return; }
     LOOP_WHILE(S25) {
         char c = 'y';
         write(p[1], &c, 1);
@@ -1095,7 +1124,9 @@ int main(void) {
         if (i == S10 && !g_dns) on = 0;
         if (i == S18 && !g_overflow) on = 0;
         if (i == S23 && count_fds() < 0) on = 0;
-        if (i == S9 && 0) on = 0;
+#ifndef __linux__
+        if (i == S24) on = 0; // epoll scenario is Linux-only
+#endif
         atomic_store(&g_enabled[i], on);
         atomic_store(&g_hb[i], now_ms());
     }

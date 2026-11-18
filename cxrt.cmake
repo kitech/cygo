@@ -64,10 +64,31 @@ find_program(ZIG_EXECUTABLE zig)
 set(ZIG_DEMO_SRC ${mydir}/corona-c/zigsrc/corona_zig.zig)
 set(ZIG_DEMO_OBJ ${CMAKE_CURRENT_BINARY_DIR}/crn_zig_demo.o)
 set(ZIG_OBJS "")
+
+# macOS: the raw object is linked by clang/ld which does not provide Zig's
+# compiler-rt, so `___zig_probe_stack` would be undefined (ziglang/zig#6817).
+#   -fno-stack-check   removes that reference (object has only small frames)
+#   -target ...macos.N also silences "built for newer macOS version" warnings
+# Alternative if stack probing must be kept: build a static lib with
+#   zig build-lib -static -fcompiler-rt ...  and link it instead of the .o.
+set(ZIG_TARGET_FLAGS "")
+if(APPLE)
+  if(CMAKE_SYSTEM_PROCESSOR MATCHES "arm64|aarch64")
+    set(ZIG_ARCH aarch64)
+  else()
+    set(ZIG_ARCH x86_64)
+  endif()
+  if(NOT CMAKE_OSX_DEPLOYMENT_TARGET)
+    set(CMAKE_OSX_DEPLOYMENT_TARGET "11.0")
+  endif()
+  set(ZIG_TARGET_FLAGS "-target;${ZIG_ARCH}-macos.${CMAKE_OSX_DEPLOYMENT_TARGET}")
+endif()
+
 if(ZIG_EXECUTABLE)
   add_custom_command(
     OUTPUT  ${ZIG_DEMO_OBJ}
-    COMMAND ${ZIG_EXECUTABLE} build-obj -fPIC -O Debug -lc
+    COMMAND ${ZIG_EXECUTABLE} build-obj -fPIC -O Debug -lc -fno-stack-check
+            ${ZIG_TARGET_FLAGS}
             -femit-bin=${ZIG_DEMO_OBJ}
             ${ZIG_DEMO_SRC}
     DEPENDS ${ZIG_DEMO_SRC}
@@ -138,6 +159,12 @@ set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -DGC_THREADS")
 
 set(corona_c_flags "-DNRDEBUG -DCORO_STACKALLOC -DCORO_UCONTEXT -DHAVE_UCONTEXT_H -DHAVE_SETJMP_H -DHAVE_SIGALTSTACK")
 set(corona_c_flags "${corona_c_flags}  -D_XOPEN_SOURCE=600") # macos: explicit level, fixes tiny sizeof(ucontext_t)
+if(APPLE)
+  # _XOPEN_SOURCE hides BSD types (u_char/u_int in nameser.h via resolv.h);
+  # _DARWIN_C_SOURCE re-enables them while keeping the XOPEN visibility level
+  set(corona_c_flags "${corona_c_flags}  -D_DARWIN_C_SOURCE")
+  set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -D_DARWIN_C_SOURCE")
+endif()
 set(corona_c_flags "${corona_c_flags}  -DLOG_USE_COLOR")
 # set(corona_c_flags "${corona_c_flags} -fstack-usage")
 

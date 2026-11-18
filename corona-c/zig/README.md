@@ -51,6 +51,27 @@ zig build -Doptimize=Debug    # 默认即 Debug
 - 机器上没有 zig 时仅告警，C-only 构建继续可用
 - 验证：`corona-c/tests/t15_zigdemo.c`（`make -C corona-c/tests t15_zigdemo`）
 
+## macOS：Zig 对象与 clang 链接
+
+CMake 用 `zig build-obj` 生成 `crn_zig_demo.o`，再由 clang/ld 链接。系统链接器
+**不提供 Zig 的 compiler-rt**，Debug 模式下对象会引用 `___zig_probe_stack`
+（ziglang/zig#6817），导致 `Undefined symbols`。当前处理：
+
+- `-fno-stack-check`：去掉该引用（对象内只有 zarray 等小帧函数）
+- `-target <arch>-macos.<CMAKE_OSX_DEPLOYMENT_TARGET>`：消除
+  “object built for newer macOS version” 警告，并对齐部署目标
+
+若需保留栈探测，改为用 `zig build-lib -static -fcompiler-rt` 产出静态库并链接
+（`cxrt.cmake` 注释中保留该备选命令）。Zig 自身构建路径（`zig build`）不受影响：
+动态库/可执行由 Zig 链接，compiler-rt 自动包含。
+
+### `_XOPEN_SOURCE` 与 BSD 类型（`u_char/u_int`）
+
+`_XOPEN_SOURCE=600`（`ucontext_t` 必需）会让 Apple SDK 隐藏 BSD 扩展类型，
+`iohook.c` 经 `iohook.h -> resolv.h -> nameser.h` 会报
+`unknown type name 'u_char'`。修复：Apple 平台同时定义 `_DARWIN_C_SOURCE`
+（`cxrt.cmake`、`build.zig`、`tests/Makefile` 均已加，Linux 不受影响）。
+
 ## 与 CMake 的对应关系
 
 | CMake | Zig |
