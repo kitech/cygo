@@ -116,6 +116,10 @@ grep "^STATS" soak.log | awk '{print $2, $5, $6}'   # 时间戳 / fiber_totcnt /
 - 开跑前打印 **mode / 日志目录 / 预估总耗时 / 开始时间**
 - 每一步打印 **完整命令（含 env 变量）/ 预估耗时 / timeout 上限**
 - 结束后打印 PASS/FAIL/SKIP 汇总与 **预估 vs 实际耗时**
+- macOS 没有 GNU `timeout`：脚本优先 `timeout`/`gtimeout`，否则用后台进程 +
+  看门狗实现等价超时（超时返回 124）
+- 变量统一 `${VAR}` 写法，避免中文标点紧跟变量名时被 bash 并入变量名
+  （`set -u` 下会报 unbound variable）
 
 日志输出到 `/tmp/opencode/main2/`（可用 `LOG_DIR=` 覆盖）。
 

@@ -301,8 +301,8 @@ void crn_fiber_new2(fiber*gr, size_t stksz) {
     rv = mprotect(stkptr, 4096, PROT_READ);
     if(rv != 0) { lerror("rv=%d, errno=%d, errstr=%s\n", rv, errno, strerror(errno)); }
     assert(rv == 0);
-    gr->mystksb.mem_base = (void*)((uintptr_t)gr->stack.sptr);
-    // gr->mystksb.mem_base = (void*)((uintptr_t)gr->stack.sptr + stksz);
+    // ucontext 栈从 sptr+stksz 向下生长；libgc stack_end 是栈顶高地址(+1)
+    gr->mystksb.mem_base = (void*)((uintptr_t)gr->stack.sptr + stksz);
     GC_add_roots(stkptr, stkptr+stksz);
 
     crn_fiber_fault_setup(gr);
@@ -492,8 +492,9 @@ void crn_fiber_forward(void* arg) {
     // linfo("coro end??? %d\n", 1);
     // TODO coro 结束，回收coro栈
 
-    // 好像应该在外层处理
-    crn_call_with_alloc_lock(crn_gc_setbottom0, gr);
+    // 不能在此恢复 pthread 栈底：SP 仍在 fiber 栈上，
+    // stack_end=pthread_top 会形成 [fiber_sp, pthread_top) 巨大正向区间。
+    // 由 crn_sched_run_one 切回 pthread 栈后恢复。
 
     // 这个跳回ctx应该是不对的，有可能要跳到其他的gr而不是默认gr？
     corowp_transfer(&gr->coctx, gr->coctx0); // 这句要写在函数fnproc退出之前？
@@ -526,7 +527,6 @@ void crn_fiber_run_first(fiber* gr) {
     corowp_transfer(gr->coctx0, &gr->coctx);
     // corowp_transfer(&gr->coctx, gr->coctx0); // 这句要写在函数fnproc退出之前？
     lverb("coctx returned to mainco fid %d mcid %d\n", gr->id, gr->mcid);
-    crn_check_mchs(gnr__->mchs);
 }
 
 // 由于需要考虑线程的问题，不能直接在netpoller线程调用
@@ -544,7 +544,6 @@ void crn_fiber_resume(fiber* gr) {
     lverb("coctx before swapto workco fid %d mcid %d\n", gr->id, gr->mcid);
     corowp_transfer(gr->coctx0, &gr->coctx);
     lverb("coctx returned to mainco fid %d mcid %d\n", gr->id, gr->mcid);
-    crn_check_mchs(gnr__->mchs);
 }
 
 void crn_fiber_run(fiber* gr) {
@@ -647,10 +646,11 @@ void crn_fiber_suspend(fiber* gr) {
     lverb("coctx before swapto mainco fid %d mcid %d\n", gr->id, gr->mcid);
 
     crn_check_mchs(gnr__->mchs); // before
-    crn_call_with_alloc_lock(crn_gc_setbottom0, gr); // must before transfer, closely
+    // 不能在此恢复 pthread 栈底：SP 仍在 fiber 栈上，
+    // stack_end=pthread_top 会形成 [fiber_sp, pthread_top) 巨大正向区间。
+    // 由 crn_sched_run_one 切回 pthread 栈后恢复。
     corowp_transfer(&gr->coctx, gr->coctx0);
     lverb("coctx returned to workco fid %d mcid %d\n", gr->id, gr->mcid);
-    crn_check_mchs(gnr__->mchs);
 }
 
 static int crn_machine_fault_handler(void* fault_address, void* user_arg) {
@@ -1125,7 +1125,10 @@ void crn_sched_run_one(machine* mc, fiber* rungr) {
     rungr->mcid = mc->id;
     rungr->savefrm = mc->savefrm;
     crn_fiber_run(rungr);
-    // crn_call_with_alloc_lock(crn_gc_setbottom0, rungr);
+    // 切回 pthread 栈后才恢复线程栈底；在 fiber 栈上设置会形成
+    // [fiber_sp, pthread_top) 巨大正向区间，导致 GC_mark_from 崩溃。
+    crn_call_with_alloc_lock(crn_gc_setbottom0, rungr);
+    crn_check_mchs(gnr__->mchs); // 栈底已恢复，此处 GC 分配不会丢 pthread 栈根
     gcurgrid__ = 0;
     mc->curgr = nilptr;
 
