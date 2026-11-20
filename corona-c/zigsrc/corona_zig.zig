@@ -9,6 +9,9 @@ const std = @import("std");
 
 const version = "0.1.0";
 
+const voidptr = ?*anyopaque;
+const coidptr = ?*const anyopaque;
+
 /// Returns a static greeting string.
 export fn crn_zig_hello() [*:0]const u8 {
     return "hello from zig";
@@ -91,14 +94,14 @@ const CC_MAX_ELEMENTS: usize = std.math.maxInt(usize) - 1;
 const ZA_DEFAULT_CAPACITY: usize = 8;
 const ZA_DEFAULT_EXP: f32 = 2.0;
 
-const AllocFn = *const fn (usize) callconv(.c) ?*anyopaque;
-const CallocFn = *const fn (usize, usize) callconv(.c) ?*anyopaque;
-const FreeFn = *const fn (?*anyopaque) callconv(.c) void;
-const CmpFn = *const fn (?*const anyopaque, ?*const anyopaque) callconv(.c) c_int;
-const PredFn = *const fn (?*const anyopaque) callconv(.c) bool;
-const MapFn = *const fn (?*anyopaque) callconv(.c) void;
-const ReduceFn = *const fn (?*anyopaque, ?*anyopaque, ?*anyopaque) callconv(.c) void;
-const CpFn = *const fn (?*anyopaque) callconv(.c) ?*anyopaque;
+const AllocFn = *const fn (usize) callconv(.c) voidptr;
+const CallocFn = *const fn (usize, usize) callconv(.c) voidptr;
+const FreeFn = *const fn (voidptr) callconv(.c) void;
+const CmpFn = *const fn (coidptr, coidptr) callconv(.c) c_int;
+const PredFn = *const fn (coidptr) callconv(.c) bool;
+const MapFn = *const fn (voidptr) callconv(.c) void;
+const ReduceFn = *const fn (voidptr, voidptr, voidptr) callconv(.c) void;
+const CpFn = *const fn (voidptr) callconv(.c) voidptr;
 
 const ZArrayConf = extern struct {
     capacity: usize,
@@ -109,11 +112,11 @@ const ZArrayConf = extern struct {
 };
 
 // same layout as collectc's ArrayIter / ArrayZipIter (ar is ZArray* in C terms)
-const ZArrayIter = extern struct { ar: ?*anyopaque, index: usize, last_removed: bool };
-const ZArrayZipIter = extern struct { ar1: ?*anyopaque, ar2: ?*anyopaque, index: usize, last_removed: bool };
+const ZArrayIter = extern struct { ar: voidptr, index: usize, last_removed: bool };
+const ZArrayZipIter = extern struct { ar1: voidptr, ar2: voidptr, index: usize, last_removed: bool };
 
 pub const ZArray = struct {
-    items: std.ArrayListUnmanaged(?*anyopaque) = .empty,
+    items: std.ArrayListUnmanaged(voidptr) = .empty,
     exp: f32 = ZA_DEFAULT_EXP,
     am: AllocFn,
     cm: CallocFn,
@@ -135,29 +138,29 @@ const CAlloc = struct {
         .remap = aRemap,
         .free = aFree,
     };
-    fn aAlloc(ctx: *anyopaque, len: usize, al: std.mem.Alignment, ra: usize) ?[*]u8 {
+    fn aAlloc(ctx: voidptr, len: usize, al: std.mem.Alignment, ra: usize) ?[*]u8 {
         _ = ra;
         const self: *CAlloc = @ptrCast(@alignCast(ctx));
         if (al.toByteUnits() > 16) return null; // libc/GC provide >= 16
         const p = self.am(len) orelse return null;
         return @ptrCast(p);
     }
-    fn aResize(ctx: *anyopaque, mem: []u8, al: std.mem.Alignment, nl: usize, ra: usize) bool {
+    fn aResize(ctx: voidptr, mem: []u8, al: std.mem.Alignment, nl: usize, ra: usize) bool {
         _ = ctx; _ = mem; _ = al; _ = nl; _ = ra;
         return false;
     }
-    fn aRemap(ctx: *anyopaque, mem: []u8, al: std.mem.Alignment, nl: usize, ra: usize) ?[*]u8 {
+    fn aRemap(ctx: voidptr, mem: []u8, al: std.mem.Alignment, nl: usize, ra: usize) ?[*]u8 {
         _ = ctx; _ = mem; _ = al; _ = nl; _ = ra;
         return null;
     }
-    fn aFree(ctx: *anyopaque, mem: []u8, al: std.mem.Alignment, ra: usize) void {
+    fn aFree(ctx: voidptr, mem: []u8, al: std.mem.Alignment, ra: usize) void {
         _ = al; _ = ra;
         const self: *CAlloc = @ptrCast(@alignCast(ctx));
         self.fm(@ptrCast(mem.ptr));
     }
 };
 
-fn zOf(p: ?*anyopaque) *ZArray {
+fn zOf(p: voidptr) *ZArray {
     return @ptrCast(@alignCast(p.?));
 }
 fn zAlloc(z: *ZArray, buf: *CAlloc) std.mem.Allocator {
@@ -186,17 +189,17 @@ export fn zarray_conf_init(conf: ?*ZArrayConf) void {
 
 // declared as plain C externs: the object is also built standalone by CMake's
 // `zig build-obj`, where libc is not linked at compile time
-extern "c" fn malloc(size: usize) ?*anyopaque;
-extern "c" fn calloc(blocks: usize, size: usize) ?*anyopaque;
-extern "c" fn free(ptr: ?*anyopaque) void;
+extern "c" fn malloc(size: usize) voidptr;
+extern "c" fn calloc(blocks: usize, size: usize) voidptr;
+extern "c" fn free(ptr: voidptr) void;
 
-fn dAlloc(n: usize) callconv(.c) ?*anyopaque {
+fn dAlloc(n: usize) callconv(.c) voidptr {
     return malloc(n);
 }
-fn dCalloc(n: usize, sz: usize) callconv(.c) ?*anyopaque {
+fn dCalloc(n: usize, sz: usize) callconv(.c) voidptr {
     return calloc(n, sz);
 }
-fn dFree(p: ?*anyopaque) callconv(.c) void {
+fn dFree(p: voidptr) callconv(.c) void {
     free(p);
 }
 
@@ -252,7 +255,7 @@ export fn zarray_destroy_cb(arp: ?*ZArray, cb: ?MapFn) void {
     zarray_destroy(z);
 }
 
-export fn zarray_add(arp: ?*ZArray, e: ?*anyopaque) c_int {
+export fn zarray_add(arp: ?*ZArray, e: voidptr) c_int {
     const z = arp orelse return CC_ERR_ALLOC;
     var buf: CAlloc = undefined;
     const a = zAlloc(z, &buf);
@@ -265,7 +268,7 @@ export fn zarray_add(arp: ?*ZArray, e: ?*anyopaque) c_int {
     return CC_OK;
 }
 
-export fn zarray_add_at(arp: ?*ZArray, e: ?*anyopaque, idx: usize) c_int {
+export fn zarray_add_at(arp: ?*ZArray, e: voidptr, idx: usize) c_int {
     const z = arp orelse return CC_ERR_ALLOC;
     var buf: CAlloc = undefined;
     const a = zAlloc(z, &buf);
@@ -280,7 +283,7 @@ export fn zarray_add_at(arp: ?*ZArray, e: ?*anyopaque, idx: usize) c_int {
     return CC_OK;
 }
 
-export fn zarray_replace_at(arp: ?*ZArray, e: ?*anyopaque, idx: usize, out: ?*?*anyopaque) c_int {
+export fn zarray_replace_at(arp: ?*ZArray, e: voidptr, idx: usize, out: ?*voidptr) c_int {
     const z = arp orelse return CC_ERR_ALLOC;
     if (idx >= z.items.items.len) return CC_ERR_OUT_OF_RANGE;
     if (out) |o| o.* = z.items.items[idx];
@@ -298,7 +301,7 @@ export fn zarray_swap_at(arp: ?*ZArray, index1: usize, index2: usize) c_int {
     return CC_OK;
 }
 
-fn zRemoveAt(z: *ZArray, idx: usize, out: ?*?*anyopaque) c_int {
+fn zRemoveAt(z: *ZArray, idx: usize, out: ?*voidptr) c_int {
     const n = z.items.items.len;
     if (idx >= n) return CC_ERR_OUT_OF_RANGE;
     const v = z.items.orderedRemove(idx);
@@ -306,12 +309,12 @@ fn zRemoveAt(z: *ZArray, idx: usize, out: ?*?*anyopaque) c_int {
     return CC_OK;
 }
 
-export fn zarray_remove_at(arp: ?*ZArray, idx: usize, out: ?*?*anyopaque) c_int {
+export fn zarray_remove_at(arp: ?*ZArray, idx: usize, out: ?*voidptr) c_int {
     const z = arp orelse return CC_ERR_ALLOC;
     return zRemoveAt(z, idx, out);
 }
 
-export fn zarray_remove(arp: ?*ZArray, e: ?*anyopaque, out: ?*?*anyopaque) c_int {
+export fn zarray_remove(arp: ?*ZArray, e: voidptr, out: ?*voidptr) c_int {
     const z = arp orelse return CC_ERR_ALLOC;
     for (z.items.items, 0..) |v, i| {
         if (v == e) return zRemoveAt(z, i, out);
@@ -319,7 +322,7 @@ export fn zarray_remove(arp: ?*ZArray, e: ?*anyopaque, out: ?*?*anyopaque) c_int
     return CC_ERR_VALUE_NOT_FOUND;
 }
 
-export fn zarray_remove_last(arp: ?*ZArray, out: ?*?*anyopaque) c_int {
+export fn zarray_remove_last(arp: ?*ZArray, out: ?*voidptr) c_int {
     const z = arp orelse return CC_ERR_ALLOC;
     if (z.items.items.len == 0) return CC_ERR_VALUE_NOT_FOUND;
     const v = z.items.pop().?;
@@ -338,7 +341,7 @@ export fn zarray_remove_all_free(arp: ?*ZArray) void {
     z.items.clearRetainingCapacity();
 }
 
-export fn zarray_get_at(arp: ?*ZArray, idx: usize, out: ?*?*anyopaque) c_int {
+export fn zarray_get_at(arp: ?*ZArray, idx: usize, out: ?*voidptr) c_int {
     const z = arp orelse return CC_ERR_ALLOC;
     const o = out orelse return CC_ERR_OUT_OF_RANGE;
     if (idx >= z.items.items.len) return CC_ERR_OUT_OF_RANGE;
@@ -346,7 +349,7 @@ export fn zarray_get_at(arp: ?*ZArray, idx: usize, out: ?*?*anyopaque) c_int {
     return CC_OK;
 }
 
-export fn zarray_get_last(arp: ?*ZArray, out: ?*?*anyopaque) c_int {
+export fn zarray_get_last(arp: ?*ZArray, out: ?*voidptr) c_int {
     const z = arp orelse return CC_ERR_ALLOC;
     const o = out orelse return CC_ERR_OUT_OF_RANGE;
     if (z.items.items.len == 0) return CC_ERR_OUT_OF_RANGE;
@@ -362,7 +365,7 @@ export fn zarray_capacity(arp: ?*ZArray) usize {
     return if (arp) |z| z.items.capacity else 0;
 }
 
-export fn zarray_get_buffer(arp: ?*ZArray) ?[*]const ?*const anyopaque {
+export fn zarray_get_buffer(arp: ?*ZArray) ?[*]const coidptr {
     const z = arp orelse return null;
     return @ptrCast(z.items.items.ptr);
 }
@@ -426,7 +429,7 @@ export fn zarray_copy_deep(arp: ?*ZArray, cp: ?CpFn, out: ?*?*ZArray) c_int {
 
 export fn zarray_reverse_(arp: ?*ZArray) void {
     const z = arp orelse return;
-    std.mem.reverse(?*anyopaque, z.items.items);
+    std.mem.reverse(voidptr, z.items.items);
 }
 
 export fn zarray_trim_capacity(arp: ?*ZArray) c_int {
@@ -439,7 +442,7 @@ export fn zarray_trim_capacity(arp: ?*ZArray) c_int {
     return CC_OK;
 }
 
-export fn zarray_contains(arp: ?*ZArray, e: ?*anyopaque) usize {
+export fn zarray_contains(arp: ?*ZArray, e: voidptr) usize {
     const z = arp orelse return 0;
     var n: usize = 0;
     for (z.items.items) |v| {
@@ -448,19 +451,19 @@ export fn zarray_contains(arp: ?*ZArray, e: ?*anyopaque) usize {
     return n;
 }
 
-export fn zarray_contains_value(arp: ?*ZArray, e: ?*anyopaque, cmp: ?CmpFn) usize {
+export fn zarray_contains_value(arp: ?*ZArray, e: voidptr, cmp: ?CmpFn) usize {
     const z = arp orelse return 0;
     const f = cmp orelse return zarray_contains(arp, e);
     var n: usize = 0;
-    var ev: ?*anyopaque = e;
+    var ev: voidptr = e;
     for (z.items.items) |v| {
-        var vv: ?*anyopaque = v;
+        var vv: voidptr = v;
         if (f(@ptrCast(&ev), @ptrCast(&vv)) == 0) n += 1;
     }
     return n;
 }
 
-export fn zarray_index_of(arp: ?*ZArray, e: ?*anyopaque, idx: ?*usize) c_int {
+export fn zarray_index_of(arp: ?*ZArray, e: voidptr, idx: ?*usize) c_int {
     const z = arp orelse return CC_ERR_ALLOC;
     const o = idx orelse return CC_ERR_VALUE_NOT_FOUND;
     for (z.items.items, 0..) |v, i| {
@@ -473,16 +476,16 @@ export fn zarray_index_of(arp: ?*ZArray, e: ?*anyopaque, idx: ?*usize) c_int {
 }
 
 const SortCtx = struct { f: CmpFn };
-fn zLess(ctx: SortCtx, a: ?*anyopaque, b: ?*anyopaque) bool {
-    var av: ?*anyopaque = a;
-    var bv: ?*anyopaque = b;
+fn zLess(ctx: SortCtx, a: voidptr, b: voidptr) bool {
+    var av: voidptr = a;
+    var bv: voidptr = b;
     return ctx.f(@ptrCast(&av), @ptrCast(&bv)) < 0;
 }
 
 export fn zarray_sort(arp: ?*ZArray, cmp: ?CmpFn) void {
     const z = arp orelse return;
     const f = cmp orelse return;
-    std.sort.pdq(?*anyopaque, z.items.items, SortCtx{ .f = f }, zLess);
+    std.sort.pdq(voidptr, z.items.items, SortCtx{ .f = f }, zLess);
 }
 
 export fn zarray_map(arp: ?*ZArray, fnc: ?MapFn) void {
@@ -490,7 +493,7 @@ export fn zarray_map(arp: ?*ZArray, fnc: ?MapFn) void {
     if (fnc) |f| for (z.items.items) |e| f(e);
 }
 
-export fn zarray_reduce(arp: ?*ZArray, fnc: ?ReduceFn, result: ?*anyopaque) void {
+export fn zarray_reduce(arp: ?*ZArray, fnc: ?ReduceFn, result: voidptr) void {
     const z = arp orelse return;
     const f = fnc orelse return;
     const n = z.items.items.len;
@@ -543,7 +546,7 @@ export fn zarray_iter_init(iter: ?*ZArrayIter, arp: ?*ZArray) void {
     it.last_removed = false;
 }
 
-export fn zarray_iter_next(iter: ?*ZArrayIter, out: ?*?*anyopaque) c_int {
+export fn zarray_iter_next(iter: ?*ZArrayIter, out: ?*voidptr) c_int {
     const it = iter orelse return CC_ITER_END;
     const z = zOf(it.ar);
     if (it.index >= z.items.items.len) return CC_ITER_END;
@@ -553,7 +556,7 @@ export fn zarray_iter_next(iter: ?*ZArrayIter, out: ?*?*anyopaque) c_int {
     return CC_OK;
 }
 
-export fn zarray_iter_remove(iter: ?*ZArrayIter, out: ?*?*anyopaque) c_int {
+export fn zarray_iter_remove(iter: ?*ZArrayIter, out: ?*voidptr) c_int {
     const it = iter orelse return CC_ERR_OUT_OF_RANGE;
     if (it.last_removed) return CC_ERR_VALUE_NOT_FOUND;
     if (it.index == 0) return CC_ERR_OUT_OF_RANGE;
@@ -565,14 +568,14 @@ export fn zarray_iter_remove(iter: ?*ZArrayIter, out: ?*?*anyopaque) c_int {
     return r;
 }
 
-export fn zarray_iter_add(iter: ?*ZArrayIter, e: ?*anyopaque) c_int {
+export fn zarray_iter_add(iter: ?*ZArrayIter, e: voidptr) c_int {
     const it = iter orelse return CC_ERR_OUT_OF_RANGE;
     const r = zarray_add_at(zOf(it.ar), e, it.index);
     if (r == CC_OK) it.index += 1;
     return r;
 }
 
-export fn zarray_iter_replace(iter: ?*ZArrayIter, e: ?*anyopaque, out: ?*?*anyopaque) c_int {
+export fn zarray_iter_replace(iter: ?*ZArrayIter, e: voidptr, out: ?*voidptr) c_int {
     const it = iter orelse return CC_ERR_OUT_OF_RANGE;
     if (it.index == 0) return CC_ERR_OUT_OF_RANGE;
     return zarray_replace_at(zOf(it.ar), e, it.index - 1, out);
@@ -591,7 +594,7 @@ export fn zarray_zip_iter_init(iter: ?*ZArrayZipIter, a1: ?*ZArray, a2: ?*ZArray
     it.last_removed = false;
 }
 
-export fn zarray_zip_iter_next(iter: ?*ZArrayZipIter, o1: ?*?*anyopaque, o2: ?*?*anyopaque) c_int {
+export fn zarray_zip_iter_next(iter: ?*ZArrayZipIter, o1: ?*voidptr, o2: ?*voidptr) c_int {
     const it = iter orelse return CC_ITER_END;
     const z1 = zOf(it.ar1);
     const z2 = zOf(it.ar2);
@@ -603,7 +606,7 @@ export fn zarray_zip_iter_next(iter: ?*ZArrayZipIter, o1: ?*?*anyopaque, o2: ?*?
     return CC_OK;
 }
 
-export fn zarray_zip_iter_add(iter: ?*ZArrayZipIter, e1: ?*anyopaque, e2: ?*anyopaque) c_int {
+export fn zarray_zip_iter_add(iter: ?*ZArrayZipIter, e1: voidptr, e2: voidptr) c_int {
     const it = iter orelse return CC_ERR_OUT_OF_RANGE;
     const i = it.index;
     const r1 = zarray_add_at(zOf(it.ar1), e1, i);
@@ -614,7 +617,7 @@ export fn zarray_zip_iter_add(iter: ?*ZArrayZipIter, e1: ?*anyopaque, e2: ?*anyo
     return CC_OK;
 }
 
-export fn zarray_zip_iter_remove(iter: ?*ZArrayZipIter, o1: ?*?*anyopaque, o2: ?*?*anyopaque) c_int {
+export fn zarray_zip_iter_remove(iter: ?*ZArrayZipIter, o1: ?*voidptr, o2: ?*voidptr) c_int {
     const it = iter orelse return CC_ERR_OUT_OF_RANGE;
     if (it.index == 0) return CC_ERR_OUT_OF_RANGE;
     if (it.last_removed) return CC_ERR_VALUE_NOT_FOUND;
@@ -632,7 +635,7 @@ export fn zarray_zip_iter_remove(iter: ?*ZArrayZipIter, o1: ?*?*anyopaque, o2: ?
     return if (r1 != CC_OK) r1 else r2;
 }
 
-export fn zarray_zip_iter_replace(iter: ?*ZArrayZipIter, e1: ?*anyopaque, e2: ?*anyopaque, o1: ?*?*anyopaque, o2: ?*?*anyopaque) c_int {
+export fn zarray_zip_iter_replace(iter: ?*ZArrayZipIter, e1: voidptr, e2: voidptr, o1: ?*voidptr, o2: ?*voidptr) c_int {
     const it = iter orelse return CC_ERR_OUT_OF_RANGE;
     if (it.index == 0) return CC_ERR_OUT_OF_RANGE;
     const i = it.index - 1;
