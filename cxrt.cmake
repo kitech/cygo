@@ -165,6 +165,10 @@ if(APPLE)
   set(corona_c_flags "${corona_c_flags}  -D_DARWIN_C_SOURCE")
   set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -D_DARWIN_C_SOURCE")
 endif()
+if(ANDROID)
+  # bionic: _XOPEN_SOURCE alone hides some declarations; enable default APIs
+  set(corona_c_flags "${corona_c_flags}  -D_DEFAULT_SOURCE")
+endif()
 set(corona_c_flags "${corona_c_flags}  -DLOG_USE_COLOR")
 # set(corona_c_flags "${corona_c_flags} -fstack-usage")
 

@@ -19,6 +19,21 @@ static int thread_getstack(pthread_t pth, void** stk, size_t* size) {
     *size = size2; *stk = stk2-size2;
     return stk2==NULL ? -1 : 0;
 }
+#elif defined(__ANDROID__)
+#include <sys/prctl.h>
+#if __ANDROID_API__ >= 26
+#define thread_setname0(name) pthread_setname_np(pthread_self(), name)
+#define thread_setname(th, name) pthread_setname_np(th, name)
+#else
+#define thread_setname0(name) prctl(PR_SET_NAME, (name), 0, 0, 0)
+#define thread_setname(th, name) prctl(PR_SET_NAME, (name), 0, 0, 0)
+#endif
+static int thread_getstack(pthread_t pth, void** stk, size_t* size) {
+    int ret = 0; pthread_attr_t attr;
+    ret = pthread_getattr_np(pth, &attr); assert(ret == 0);
+    ret = pthread_attr_getstack(&attr, stk, size); assert(ret == 0);
+    return ret;
+}
 #else
 #define thread_setname0(name) pthread_setname_np(pthread_self(), name)
 #define thread_setname(th, name) pthread_setname_np(th, name)

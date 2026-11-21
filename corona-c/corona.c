@@ -655,7 +655,11 @@ void crn_fiber_suspend(fiber* gr) {
 
 static int crn_machine_fault_handler(void* fault_address, void* user_arg) {
     char thname[32] = {0}; size_t strsz = sizeof(thname)-1;
+#if defined(__ANDROID__) && __ANDROID_API__ < 26
+    prctl(PR_GET_NAME, thname);
+#else
     pthread_getname_np(pthread_self(), thname, strsz);
+#endif
     lerror("mch fault: addr %p, arg %p, thname %s\n", fault_address, user_arg, thname);
     return 0;
 }

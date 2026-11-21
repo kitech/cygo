@@ -2,6 +2,7 @@
 #include <stdlib.h>
 #include <stdbool.h>
 #include <stdint.h>
+#include <inttypes.h>
 #include <errno.h>
 #include <string.h>
 #include <sys/time.h>
@@ -576,7 +577,7 @@ void netpoller_timer(int64_t ns, int ytype, fiber* gr) {
     rv = write(np->tmupevfd, &tmval, sizeof(uint64_t));
     rv = rv == sizeof(uint64_t) ? 0 : rv;
     if (rv != 0) {
-        lwarn("add error %d %ld %d\n", rv, ns, gr->id);
+        lwarn("add error %d %" PRId64 " %d\n", rv, ns, gr->id);
         // evdata2_free(tmer);
         evdata_free(d);
         // assert(rv == 0);

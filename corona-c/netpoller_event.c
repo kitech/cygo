@@ -4,6 +4,7 @@
 #include <event2/dns.h>
 #include <stdio.h>
 #include <stdint.h>
+#include <inttypes.h>
 #include <string.h>
 #include <netdb.h>
 #include <sys/socket.h>
@@ -238,7 +239,7 @@ void netpoller_timer(int64_t ns, int ytype, fiber* gr) {
     int rv = evtimer_add(tmer, &d->tv);
     crn_post_gclock_proc(__func__);
     if (rv != 0) {
-        lwarn("add error %d %ld %d\n", rv, ns, gr->id);
+        lwarn("add error %d %" PRId64 " %d\n", rv, ns, gr->id);
         event_free(tmer);
         evdata_free(d);
         // assert(rv == 0);

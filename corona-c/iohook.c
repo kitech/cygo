@@ -28,6 +28,8 @@
 # define ATTRIBUTE_WEAK __attribute__((weak))
 #elif defined(LIBGO_SYS_FreeBSD)
 # define ATTRIBUTE_WEAK __attribute__((weak_import))
+#elif defined(LIBGO_SYS_Android)
+# define ATTRIBUTE_WEAK __attribute__((weak))
 #endif
 
 pipe_t pipe_f = NULL;
