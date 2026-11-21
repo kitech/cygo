@@ -978,14 +978,29 @@ unsigned int sleep(unsigned int seconds)
 
 int usleep(useconds_t usec)
 {
-    if (!crn_in_procer()) return usleep_f(usec);
     if (!usleep_f) initHook();
-    // linfo("%d\n", usec);
+    if (!crn_in_procer()) return usleep_f(usec);
 
-    time_t btime = time(0);
-    {
-        int rv = crn_procer_yield(usec, YIELD_TYPE_USLEEP);
-        return 0;
+    // linfo("%d\n", usec);
+    long long total = (long long)usec * 1000LL;
+    struct timespec start, now;
+    clock_gettime(CLOCK_MONOTONIC, &start);
+
+    for (;;) {
+        clock_gettime(CLOCK_MONOTONIC, &now);
+        long long elapsed = (long long)(now.tv_sec - start.tv_sec) * 1000000000LL
+                          + (now.tv_nsec - start.tv_nsec);
+        long long left = total - elapsed;
+        if (left <= 1000000LL)
+            return 0;
+
+        errno = 0;
+        int rv = crn_procer_yield((long)(left / 1000LL), YIELD_TYPE_USLEEP);
+        if (rv != 0) {
+            errno = EINTR;
+            return -1;
+        }
+        /* rv == 0: early wakeup (stale timer/tick/GC) -> retry */
     }
 }
 
@@ -995,10 +1010,30 @@ int nanosleep(const struct timespec *req, struct timespec *rem)
     if (!crn_in_procer()) return nanosleep_f(req, rem);
 
     // linfo("%d, %d\n", req->tv_sec, req->tv_nsec);
-    {
-        long ns = req->tv_sec * 1000000000 + req->tv_nsec;
-        int rv = crn_procer_yield(ns, YIELD_TYPE_NANOSLEEP);
-        return rv;
+    long long total = (long long)req->tv_sec * 1000000000LL + req->tv_nsec;
+    struct timespec start, now;
+    clock_gettime(CLOCK_MONOTONIC, &start);
+
+    for (;;) {
+        clock_gettime(CLOCK_MONOTONIC, &now);
+        long long elapsed = (long long)(now.tv_sec - start.tv_sec) * 1000000000LL
+                          + (now.tv_nsec - start.tv_nsec);
+        long long left = total - elapsed;
+        if (left <= 1000000LL)      /* 1ms tolerance */
+            return 0;
+
+        errno = 0;
+        int rv = crn_procer_yield((long)left, YIELD_TYPE_NANOSLEEP);
+        if (rv != 0) {
+            /* unexpected scheduler failure: report EINTR + remaining */
+            if (rem) {
+                rem->tv_sec  = (time_t)(left / 1000000000LL);
+                rem->tv_nsec = (long)(left % 1000000000LL);
+            }
+            errno = EINTR;
+            return -1;
+        }
+        /* rv == 0: early wakeup (stale timer/tick/GC) -> retry */
     }
 }
 
