@@ -36,7 +36,7 @@ CLTCOBJS = array.o hashtable.o treetable.o queue.o deque.o pqueue.o common.o has
 
 TESTS = t01_spawn t02_pingpong t03_buffered t04_close t05_select t06_timer \
   t07_mutex t08_net t09_stress t10_hammer t11_gcstack t12_sched t13_handshake t14_stats \
-  t15_zigdemo t16_zarray
+  t15_zigdemo t16_zarray t17_nanosleep t18_intr
 
 all: $(LIBOBJS) $(CLTCOBJS) creflect.o $(ZIGOBJ) $(TESTS)
 
