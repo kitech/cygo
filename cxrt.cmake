@@ -42,6 +42,38 @@ set(corona_c_srcs
 	#	${party3dir}/picoev/picoev_epoll.c
 		)
 
+# ---- target detection: NDK / Termux / plain Linux|macOS ----
+# No files are created; this only reads CMake variables, environment
+# variables, and compiler predefined macros.
+set(CRN_IS_ANDROID FALSE)
+if(CMAKE_SYSTEM_NAME STREQUAL "Android")
+  set(CRN_IS_ANDROID TRUE)
+elseif(DEFINED ENV{TERMUX_VERSION})
+  set(CRN_IS_ANDROID TRUE)
+elseif("$ENV{PREFIX}" MATCHES "com\\.termux")
+  set(CRN_IS_ANDROID TRUE)
+elseif(CMAKE_C_COMPILER MATCHES "android|termux")
+  set(CRN_IS_ANDROID TRUE)
+endif()
+
+# Fallback: ask the compiler for its predefined macros (no file written).
+if(NOT CRN_IS_ANDROID AND NOT WIN32)
+  execute_process(
+    COMMAND ${CMAKE_C_COMPILER} -dM -E -x c /dev/null
+    OUTPUT_VARIABLE _crn_macros
+    ERROR_QUIET)
+  if(_crn_macros MATCHES "__ANDROID__|__BIONIC__")
+    set(CRN_IS_ANDROID TRUE)
+  endif()
+endif()
+
+if(CRN_IS_ANDROID)
+  # bionic has no ucontext; use vendored higan-emu/libco.
+  # repo:   https://github.com/higan-emu/libco
+  # commit: e18e09d634d612a01781168ad4d76be10a7e3bad (2024-09-09, v20, ISC)
+  list(APPEND corona_c_srcs ${mydir}/3rdparty/libco/libco.c)
+endif()
+
 # include_directories(${party3dir}/plthook)
 # set(plthook_c_srcs
 #    ${party3dir}/plthook/plthook_elf.c
@@ -157,7 +189,13 @@ set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -DGC_THREADS")
 #set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -DGC_DEBUG")
 #set(CMAKE_CXX_COMPILER "cc")
 
-set(corona_c_flags "-DNRDEBUG -DCORO_STACKALLOC -DCORO_UCONTEXT -DHAVE_UCONTEXT_H -DHAVE_SETJMP_H -DHAVE_SIGALTSTACK")
+set(corona_c_flags "-DNRDEBUG -DCORO_STACKALLOC -DHAVE_SETJMP_H -DHAVE_SIGALTSTACK")
+if(CRN_IS_ANDROID)
+  # bionic has no ucontext; use vendored higan-emu/libco
+  set(corona_c_flags "${corona_c_flags} -DCORO_LIBCO89 -DLIBCO_MP")
+else()
+  set(corona_c_flags "${corona_c_flags} -DCORO_UCONTEXT -DHAVE_UCONTEXT_H")
+endif()
 set(corona_c_flags "${corona_c_flags}  -D_XOPEN_SOURCE=600") # macos: explicit level, fixes tiny sizeof(ucontext_t)
 if(APPLE)
   # _XOPEN_SOURCE hides BSD types (u_char/u_int in nameser.h via resolv.h);
@@ -165,7 +203,7 @@ if(APPLE)
   set(corona_c_flags "${corona_c_flags}  -D_DARWIN_C_SOURCE")
   set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -D_DARWIN_C_SOURCE")
 endif()
-if(ANDROID)
+if(CRN_IS_ANDROID)
   # bionic: _XOPEN_SOURCE alone hides some declarations; enable default APIs
   set(corona_c_flags "${corona_c_flags}  -D_DEFAULT_SOURCE")
 endif()

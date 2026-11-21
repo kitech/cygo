@@ -18,7 +18,7 @@
 #endif
 
 #include <pthread.h>
-#if defined(LIBGO_SYS_Linux)
+#if defined(LIBGO_SYS_Linux) || defined(LIBGO_SYS_Android)
 #include <sys/epoll.h>
 #include <sys/inotify.h>
 #endif
@@ -26,7 +26,7 @@
 typedef int (*pipe_t)(int pipefd[2]);
 extern pipe_t pipe_f;
 
-#if defined(LIBGO_SYS_Linux)
+#if defined(LIBGO_SYS_Linux) || defined(LIBGO_SYS_Android)
 
 typedef int (*pipe2_t)(int pipefd[2], int flags);
 extern pipe2_t pipe2_f;
@@ -84,7 +84,7 @@ typedef int (*ppoll_t)(struct pollfd *fds, nfds_t nfds,
                        const struct timespec *tmo_p, const sigset_t *sigmask);
 extern ppoll_t ppoll_f;
 
-#if defined(LIBGO_SYS_Linux)
+#if defined(LIBGO_SYS_Linux) || defined(LIBGO_SYS_Android)
 typedef int (*epoll_wait_t)(int epfd, struct epoll_event *events,
         int maxevents, int timeout);
 extern epoll_wait_t epoll_wait_f;
@@ -174,7 +174,7 @@ extern pcond_signal_t pcond_signal_f;
 typedef int (*pcond_broadcast_t)(pthread_cond_t *cond);
 extern pcond_broadcast_t pcond_broadcast_f;
 
-#if defined(LIBGO_SYS_Linux)
+#if defined(LIBGO_SYS_Linux) || defined(LIBGO_SYS_Android)
 // DNS by libcares
 // gethostent
 

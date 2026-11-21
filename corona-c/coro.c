@@ -48,7 +48,7 @@
 /*****************************************************************************/
 /* ucontext/setjmp/asm backends                                              */
 /*****************************************************************************/
-#if CORO_UCONTEXT || CORO_SJLJ || CORO_LOSER || CORO_LINUX || CORO_IRIX || CORO_ASM
+#if !defined(CORO_LIBCO89) && (CORO_UCONTEXT || CORO_SJLJ || CORO_LOSER || CORO_LINUX || CORO_IRIX || CORO_ASM)
 
 # if CORO_UCONTEXT
 #  include <stddef.h>
@@ -664,7 +664,7 @@ coro_destroy (coro_context *ctx)
   DeleteFiber (ctx->fiber);
 }
 
-#else
+#elif !defined (CORO_LIBCO89)
   #error unsupported backend
 #endif
 

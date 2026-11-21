@@ -15,6 +15,18 @@
 #endif
 #include "coro.h"
 
+// ---- coro backend selection: Android uses vendored libco, others ucontext ----
+// Android: vendored higan-emu/libco
+//   repo:   https://github.com/higan-emu/libco
+//   commit: e18e09d634d612a01781168ad4d76be10a7e3bad
+//   date:   2024-09-09 (libco v20, ISC)
+// Linux/macOS: POSIX ucontext
+#if defined(CORO_LIBCO89)
+  #include "../3rdparty/libco/libco.h"
+#else
+  #define CORO_BACKEND_UCONEXT
+#endif
+
 #include "corona_util.h"
 #include "coronapriv.h"
 #include "futex.h"
@@ -39,12 +51,12 @@ coro_context* corowp_context_new() {
 __thread coro_context *crn_main_coro_ctx = 0;
 void corowp_set_main_ctx(coro_context* ctx) {
     crn_main_coro_ctx = ctx;
+#if defined(CORO_LIBCO89)
+    co_active(); // initialise libco's thread-local primary context
+#endif
 }
 
-// #define CORO_BACKEND_FCONTEXT
-#define CORO_BACKEND_UCONEXT
-// https://github.com/semistrict/libcoro
-// #define CORO_BACKEND_LIBCORO
+// backend is selected above: CORO_LIBCO -> libco, otherwise ucontext
 
 // 加锁逻辑是错的，这个函数就像开始调用一个函数一样，可以多线程并发调用的。
 // 如果真的需要同步调用，那么也还是要考虑在上层视逻辑需要决定是否加锁。
@@ -111,6 +123,46 @@ void corowp_transfer(coro_context *prev, coro_context *next) {
 
 void corowp_destroy (coro_context *ctx) {
     // coro_destroy(ctx);
+}
+
+#elif defined (CORO_LIBCO89)
+
+static __thread coro_context* crn_libco_boot_ctx;
+
+static void corowp_libco_entry(void) {
+    coro_context* ctx = crn_libco_boot_ctx;
+    assert(ctx != nilptr);
+    assert(ctx->coro != 0);
+    ctx->coro(ctx->arg);
+    assert(0); // corowp_transfer should have switched away
+}
+
+void corowp_create(coro_context *ctx, coro_func coro, void *arg, void *sptr, size_t ssze) {
+    void *mem = sptr;
+    size_t memsz = ssze;
+
+    assert(ctx != nilptr);
+    ctx->coro = coro;
+    ctx->arg = arg;
+    /* corona.c makes the first page of each fiber stack a read-only guard.
+     * libco writes its handle block at the low end of `memory`, so start
+     * after the guard page. Stack top stays mem+memsz == sptr+ssze. */
+    if (memsz > CRN_FIBER_GUARD_SIZE) {
+        mem   = (char*)mem + CRN_FIBER_GUARD_SIZE;
+        memsz -= CRN_FIBER_GUARD_SIZE;
+    }
+    crn_libco_boot_ctx = ctx; // thread-local: create is followed by transfer
+    ctx->handle = co_derive(mem, (unsigned int)memsz, corowp_libco_entry);
+    assert(ctx->handle != NULL);
+}
+
+void corowp_transfer(coro_context *prev, coro_context *next) {
+    prev->handle = co_active(); // libco saves current state into co_active_handle
+    co_switch(next->handle);
+}
+
+void corowp_destroy (coro_context *ctx) {
+    // stack is released by corona's munmap, not co_delete()
 }
 
 #elif defined (CORO_BACKEND_UCONEXT)

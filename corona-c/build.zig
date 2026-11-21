@@ -21,8 +21,6 @@ const cflags_base: []const []const u8 = &.{
     "-D_GNU_SOURCE",
     "-DNRDEBUG",
     "-DCORO_STACKALLOC",
-    "-DCORO_UCONTEXT",
-    "-DHAVE_UCONTEXT_H",
     "-DHAVE_SETJMP_H",
     "-DHAVE_SIGALTSTACK",
     "-DGC_THREADS",
@@ -41,7 +39,15 @@ fn makeCflags(alloc: std.mem.Allocator, cdebug: bool, is_macos: bool, is_android
     // macOS: _XOPEN_SOURCE hides BSD types (u_char/u_int) used by nameser.h
     if (is_macos) list.append(alloc, "-D_DARWIN_C_SOURCE") catch @panic("OOM");
     // bionic: _XOPEN_SOURCE alone hides some declarations; enable default APIs
-    if (is_android) list.append(alloc, "-D_DEFAULT_SOURCE") catch @panic("OOM");
+    if (is_android) {
+        list.append(alloc, "-D_DEFAULT_SOURCE") catch @panic("OOM");
+        // bionic has no ucontext; use vendored higan-emu/libco
+        list.append(alloc, "-DCORO_LIBCO89") catch @panic("OOM");
+        list.append(alloc, "-DLIBCO_MP") catch @panic("OOM");
+    } else {
+        list.append(alloc, "-DCORO_UCONTEXT") catch @panic("OOM");
+        list.append(alloc, "-DHAVE_UCONTEXT_H") catch @panic("OOM");
+    }
     if (cdebug) {
         list.append(alloc, "-g") catch @panic("OOM");
         list.append(alloc, "-fstack-protector-strong") catch @panic("OOM");
@@ -96,7 +102,8 @@ pub fn build(b: *std.Build) void {
     const optimize = b.standardOptimizeOption(.{ .preferred_optimize_mode = .Debug });
     const backend = b.option([]const u8, "netpoller", "netpoller backend: libevent|epoll") orelse "libevent";
     const cdebug = b.option(bool, "cdebug", "emit -g and stack protector for C sources (default off: compile speed)") orelse false;
-    const cflags = makeCflags(b.allocator, cdebug, target.result.os.tag == .macos, target.result.abi == .android);
+    const is_android = target.result.abi == .android;
+    const cflags = makeCflags(b.allocator, cdebug, target.result.os.tag == .macos, is_android);
 
     const use_epoll = std.mem.eql(u8, backend, "epoll");
     if (!use_epoll and !std.mem.eql(u8, backend, "libevent")) {
@@ -130,7 +137,7 @@ pub fn build(b: *std.Build) void {
             .link_libc = true,
         }),
     });
-    addCrnSources(b, crn, cflags, backend_file);
+    addCrnSources(b, crn, cflags, backend_file, is_android);
     crn.root_module.addObjectFile(zig_demo.getEmittedBin());
     b.installArtifact(crn);
 
@@ -170,7 +177,7 @@ pub fn build(b: *std.Build) void {
             .pic = true,
         }),
     });
-    addCrnSources(b, crn_sh, cflags, backend_file);
+    addCrnSources(b, crn_sh, cflags, backend_file, is_android);
     crn_sh.root_module.addObjectFile(zig_demo.getEmittedBin());
     crn_sh.root_module.linkLibrary(cxrt); // CMake: target_link_libraries(crn_sh cxrt)
     linkRuntimeLibs(crn_sh);              // + ${LIBGC} ${LIBEVENT1} ${LIBEVENT2} ${LIBSIGSEGV}
@@ -299,11 +306,18 @@ fn addCrnSources(
     c: *std.Build.Step.Compile,
     cflags: []const []const u8,
     backend_file: []const u8,
+    is_android: bool,
 ) void {
     // corona-c sources: the two netpoller backends define the same symbols,
     // so exactly one of them is compiled in (mirrors cxrt.cmake).
     for (corona_srcs) |f| c.root_module.addCSourceFile(.{ .file = b.path(f), .flags = cflags });
     c.root_module.addCSourceFile(.{ .file = b.path(backend_file), .flags = cflags });
+    if (is_android) {
+        // bionic has no ucontext; vendored higan-emu/libco
+        // repo:   https://github.com/higan-emu/libco
+        // commit: e18e09d634d612a01781168ad4d76be10a7e3bad (2024-09-09, v20, ISC)
+        c.root_module.addCSourceFile(.{ .file = b.path("../3rdparty/libco/libco.c"), .flags = cflags });
+    }
     c.root_module.addCSourceFiles(.{
         .root = b.path("../3rdparty/cltc/src"),
         .files = cltc_srcs,

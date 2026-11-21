@@ -78,7 +78,7 @@ pcond_wait_t pcond_wait_f = NULL;
 pcond_signal_t pcond_signal_f = NULL;
 pcond_broadcast_t pcond_broadcast_f = NULL;
 
-#if defined(LIBGO_SYS_Linux)
+#if defined(LIBGO_SYS_Linux) || defined(LIBGO_SYS_Android)
 inotify_init_t inotify_init_f = NULL;
 inotify_init1_t inotify_init1_f = NULL;
 
@@ -1196,7 +1196,11 @@ int fcntl(int __fd, int __cmd, ...)
 # define CRN_IOCTL_ATTR __attribute__((overloadable))
 #endif
 CRN_IOCTL_ATTR
+#if defined(LIBGO_SYS_Android)
+int ioctl(int fd, int request, ...)
+#else
 int ioctl(int fd, unsigned long int request, ...)
+#endif
 {
     if (!ioctl_f) initHook();
     // linfo("%d\n", fd);

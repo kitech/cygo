@@ -63,6 +63,10 @@ void netpoller_use_threads();
 
 // for fiber
 typedef struct coro_stack coro_stack;
+/* corona reserves this many bytes at the low end of every fiber stack and
+ * mprotects them PROT_READ (see crn_fiber_new2). libco must not place its
+ * saved-register block there. */
+#define CRN_FIBER_GUARD_SIZE 4096
 typedef enum grstate {nostack=0, runnable, executing, waiting, finished, } grstate;
 extern const char* grstate2str(grstate s);
 // 每个fiber 同时只能属于某一个machine

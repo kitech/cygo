@@ -313,7 +313,8 @@ void coro_stack_free (struct coro_stack *stack);
 
 /*****************************************************************************/
 
-#if !defined CORO_LOSER      && !defined CORO_UCONTEXT \
+#if !defined CORO_LIBCO89 \
+    && !defined CORO_LOSER && !defined CORO_UCONTEXT \
     && !defined CORO_SJLJ    && !defined CORO_LINUX \
     && !defined CORO_IRIX    && !defined CORO_ASM \
     && !defined CORO_PTHREAD && !defined CORO_FIBER
@@ -334,7 +335,18 @@ error unknown or unsupported architecture
 
 /*****************************************************************************/
 
-#if CORO_UCONTEXT
+#if CORO_LIBCO89
+
+struct coro_context
+{
+  void*     handle;   /* cothread_t from libco */
+  coro_func coro;
+  void*     arg;
+};
+
+# define coro_destroy(ctx) (void *)(ctx)
+
+#elif CORO_UCONTEXT
 
 # include <ucontext.h>
 

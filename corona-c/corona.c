@@ -259,7 +259,7 @@ static grstate crn_fiber_getstate(fiber* gr) {
 void crn_fiber_new2(fiber*gr, size_t stksz) {
     int usemmap = 1; // when usemmap, virtual alloc, stksz is will be modified
     int libcmalloc = 0;
-    size_t guardsize = 4096;
+    size_t guardsize = CRN_FIBER_GUARD_SIZE;
     void *stkptr = nilptr;
     int rv = 0;
 
@@ -294,11 +294,11 @@ void crn_fiber_new2(fiber*gr, size_t stksz) {
     gr->stack.sptr = (void*)stkptr; // no need jump guard page
     gr->stack.ssze = stksz;
 
-    memset(stkptr, 123, 4096);
+    memset(stkptr, 123, CRN_FIBER_GUARD_SIZE);
     gr->stkmid = (void*)((uintptr_t)stkptr + stksz/2 - 2048);
     memset(gr->stkmid, 123, 4096);
 
-    rv = mprotect(stkptr, 4096, PROT_READ);
+    rv = mprotect(stkptr, CRN_FIBER_GUARD_SIZE, PROT_READ);
     if(rv != 0) { lerror("rv=%d, errno=%d, errstr=%s\n", rv, errno, strerror(errno)); }
     assert(rv == 0);
     // ucontext 栈从 sptr+stksz 向下生长；libgc stack_end 是栈顶高地址(+1)
@@ -520,7 +520,9 @@ void crn_fiber_run_first(fiber* gr) {
     mc->curgr = gr;
     coro_context* curcoctx = curgr == 0? gr->coctx0 : &curgr->coctx; // 暂时无用
 
+#if !defined(CORO_LIBCO89)
     ((ucontext_t*)(&gr->coctx))->uc_link = (ucontext_t*)gr->coctx0;
+#endif
     lverb("coctx before swapto workco fid %d mcid %d\n", gr->id, gr->mcid);
     crn_call_with_alloc_lock(crn_gc_setbottom1, gr);
     // 对-DCORO_UCONTEXT/-DCORO_ASM等来说，这句是真正开始执行
@@ -540,7 +542,9 @@ void crn_fiber_resume(fiber* gr) {
     if (gr->myfrm != nilptr) crn_set_frame(gr->myfrm); // 恢复fiber的frame
     crn_call_with_alloc_lock(crn_gc_setbottom1, gr);
     // 对-DCORO_UCONTEXT/-DCORO_ASM等来说，这句是真正开始执行
+#if !defined(CORO_LIBCO89)
     ((ucontext_t*)(&gr->coctx))->uc_link = (ucontext_t*)gr->coctx0;
+#endif
     lverb("coctx before swapto workco fid %d mcid %d\n", gr->id, gr->mcid);
     corowp_transfer(gr->coctx0, &gr->coctx);
     lverb("coctx returned to mainco fid %d mcid %d\n", gr->id, gr->mcid);
