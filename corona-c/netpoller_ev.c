@@ -1,5 +1,6 @@
 
 #include <ev.h>
+#include <stdint.h>
 
 #include "coronapriv.h"
 #include "rxilog.h"
@@ -125,7 +126,7 @@ void netpoller_writefd(int fd, void* gr) {
 }
 
 static
-void netpoller_timer(long ns, void* gr) {
+void netpoller_timer(int64_t ns, void* gr) {
     netpoller* np = gnpl__;
 
     // ev_suspend(np->loop);
@@ -141,11 +142,11 @@ void netpoller_timer(long ns, void* gr) {
 }
 
 // when ytype is SLEEP/USLEEP/NANOSLEEP, fd is the nanoseconds
-void netpoller_yieldfd(long fd, int ytype, fiber* gr) {
+void netpoller_yieldfd(int64_t fd, int ytype, fiber* gr) {
     assert(ytype > YIELD_TYPE_NONE);
     assert(ytype < YIELD_TYPE_MAX);
 
-    long ns = 0;
+    int64_t ns = 0;
     switch (ytype) {
     case YIELD_TYPE_SLEEP:
         ns = (long)fd*1000000000;

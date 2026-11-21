@@ -40,9 +40,9 @@ typedef struct yieldinfo {
     bool seted;
     bool ismulti;
     int ytype;
-    long fd;
+    int64_t fd;
     int nfds;
-    long fds[19];
+    int64_t fds[19];
     int ytypes[19];
     // fiber* curgr;
 } yieldinfo;
@@ -1272,7 +1272,7 @@ static int crn_fiber_mark_curstk_used(fiber* gr) {
     }
     return used_stksz;
 }
-int crn_procer_yield(long fd, int ytype) {
+int crn_procer_yield(int64_t fd, int ytype) {
     // check是否是procer线程
     if (gcurmcid__ == 0) {
         // linfo("maybe not procer thread %ld %d %s\n", fd, ytype, yield_type_name(ytype));
@@ -1315,7 +1315,7 @@ int crn_procer_yield(long fd, int ytype) {
     crn_fiber_suspend(gr);
     return 0;
 }
-int crn_procer_yield_multi(int ytype, int nfds, const long fds[], const int ytypes[]) {
+int crn_procer_yield_multi(int ytype, int nfds, const int64_t fds[], const int ytypes[]) {
     // check是否是procer线程
     if (gcurmcid__ == 0) {
         linfo("maybe not procer thread %d %d\n", nfds, ytype);

@@ -1,6 +1,7 @@
 
 #include <stdlib.h>
 #include <stdbool.h>
+#include <stdint.h>
 #include <errno.h>
 #include <string.h>
 #include <sys/time.h>
@@ -550,7 +551,7 @@ void netpoller_writefd(int fd, int ytype, fiber* gr) {
 }
 
 static
-void netpoller_timer(long ns, int ytype, fiber* gr) {
+void netpoller_timer(int64_t ns, int ytype, fiber* gr) {
     netpoller* np = gnpl__;
 
     evdata* d = evdata_new(CXEV_TIMER, gr);
@@ -606,7 +607,7 @@ void* netpoller_dnsresolv(const char* hostname, int ytype, fiber* gr, struct add
 }
 
 // when ytype is SLEEP/USLEEP/NANOSLEEP, fd is the nanoseconds
-void netpoller_yieldfd(long fd, int ytype, fiber* gr) {
+void netpoller_yieldfd(int64_t fd, int ytype, fiber* gr) {
     assert(ytype > YIELD_TYPE_NONE);
     assert(ytype < YIELD_TYPE_MAX);
 
@@ -621,7 +622,7 @@ void netpoller_yieldfd(long fd, int ytype, fiber* gr) {
     }
     // linfo("fd=%ld, ytype=%d\n", fd, ytype);
 
-    long ns = 0;
+    int64_t ns = 0;
     switch (ytype) {
     case YIELD_TYPE_SLEEP:
         ns = fd*1000000000;

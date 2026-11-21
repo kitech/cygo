@@ -57,7 +57,7 @@ typedef struct fiber fiber;
 typedef struct netpoller netpoller;
 netpoller* netpoller_new();
 void netpoller_loop();
-void netpoller_yieldfd(long fd, int ytype, fiber* gr);
+void netpoller_yieldfd(int64_t fd, int ytype, fiber* gr);
 void netpoller_use_threads();
 // const char* netpoller_name();
 
@@ -101,8 +101,8 @@ struct fiber {
 };
 
 // procer callbacks, impl in corona.c
-extern int crn_procer_yield(long fd, int ytype);
-extern int crn_procer_yield_multi(int ytype, int nfds, const long fds[], const int ytypes[]);
+extern int crn_procer_yield(int64_t fd, int ytype);
+extern int crn_procer_yield_multi(int ytype, int nfds, const int64_t fds[], const int ytypes[]);
 extern bool crn_in_procer();
 extern void crn_procer_resume_one(void* gr_, int ytype, int grid, int mcid);
 extern fiber* crn_fiber_getcur();

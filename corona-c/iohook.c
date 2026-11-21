@@ -2,6 +2,7 @@
 #include "iohookcb.h"
 #include "yieldtypes.h"
 #include <time.h>
+#include <stdint.h>
 #include <stdlib.h>
 #include <dlfcn.h>
 #include <fcntl.h>
@@ -678,7 +679,7 @@ int __poll(struct pollfd fds[], nfds_t nfds, int timeout)
             linfo("blocking socket found %d %d\n", i, fds[i].fd);
         }
     }
-    long tfds[nevts+1];
+    int64_t tfds[nevts+1];
     int tytypes[nevts+1];
     for (int i = 0, j = 0; i < nfds; i ++) {
         if (fds[i].events & POLLIN) {
@@ -909,7 +910,7 @@ int pselect(int nfds, fd_set *readfds, fd_set *writefds,
 
     while (1) {
         int rdcnt = 0; int wrcnt = 0; int etcnt = 0;
-        int n = 0; long fds[nfds+1]; int ytypes[nfds+1];
+        int n = 0; int64_t fds[nfds+1]; int ytypes[nfds+1];
 
         for (int i = 0; i < nfds; i++) {
             if (readfds != 0 && FD_ISSET(i, readfds)) {
@@ -939,7 +940,7 @@ int pselect(int nfds, fd_set *readfds, fd_set *writefds,
 		return 0;
 	    }
 
-	    fds[n] = timeout->tv_nsec + ((long)timeout->tv_sec)*nsu;
+	    fds[n] = timeout->tv_nsec + ((int64_t)timeout->tv_sec)*nsu;
 	    ytypes[n] = YIELD_TYPE_NANOSLEEP;
 	    n++;
 	}
@@ -1004,7 +1005,7 @@ int usleep(useconds_t usec)
         long long slice_us = left / 1000LL;
         if (slice_us > 100000LL) slice_us = 100000LL; /* max 100ms */
         errno = 0;
-        int rv = crn_procer_yield((long)slice_us, YIELD_TYPE_USLEEP);
+        int rv = crn_procer_yield((int64_t)slice_us, YIELD_TYPE_USLEEP);
         if (rv != 0) {
             errno = EINTR;
             return -1;
@@ -1044,7 +1045,7 @@ int nanosleep(const struct timespec *req, struct timespec *rem)
 
         long long slice = left < 100000000LL ? left : 100000000LL; /* max 100ms */
         errno = 0;
-        int rv = crn_procer_yield((long)slice, YIELD_TYPE_NANOSLEEP);
+        int rv = crn_procer_yield((int64_t)slice, YIELD_TYPE_NANOSLEEP);
         if (rv != 0) {
             /* unexpected scheduler failure: report EINTR + remaining */
             if (rem) {

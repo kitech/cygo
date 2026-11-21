@@ -3,6 +3,7 @@
 #include <event2/thread.h>
 #include <event2/dns.h>
 #include <stdio.h>
+#include <stdint.h>
 #include <string.h>
 #include <netdb.h>
 #include <sys/socket.h>
@@ -84,7 +85,7 @@ typedef struct evdata {
     int grid;
     int mcid;
     int ytype;
-    long fd; // fd or ns or hostname
+    int64_t fd; // fd or ns or hostname
     void** out; //
     int *errcode;
     struct timeval tv;
@@ -219,7 +220,7 @@ void netpoller_writefd(int fd, int ytype, fiber* gr) {
 }
 
 static
-void netpoller_timer(long ns, int ytype, fiber* gr) {
+void netpoller_timer(int64_t ns, int ytype, fiber* gr) {
     netpoller* np = gnpl__;
 
     evdata* d = evdata_new(EV_TIMER, gr);
@@ -362,7 +363,7 @@ void* netpoller_dnsresolv(const char* hostname, int ytype, fiber* gr, struct add
 }
 
 // when ytype is SLEEP/USLEEP/NANOSLEEP, fd is the nanoseconds
-void netpoller_yieldfd(long fd, int ytype, fiber* gr) {
+void netpoller_yieldfd(int64_t fd, int ytype, fiber* gr) {
     if (ytype >= YIELD_TYPE_MAX) {
         lwarn("wtt %d %d %d\n", ytype, fd, gr->id);
     }
@@ -380,7 +381,7 @@ void netpoller_yieldfd(long fd, int ytype, fiber* gr) {
     }
     // linfo("fd=%ld, ytype=%d\n", fd, ytype);
 
-    long ns = 0;
+    int64_t ns = 0;
     switch (ytype) {
     case YIELD_TYPE_SLEEP:
         ns = fd*1000000000;

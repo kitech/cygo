@@ -5,6 +5,7 @@
 #include <sys/socket.h>
 #include <netdb.h>
 #include <dlfcn.h>
+#include <stdint.h>
 
 extern void crn_pre_gclock_proc(const char* funcname);
 extern void crn_post_gclock_proc(const char* funcname);
@@ -70,7 +71,7 @@ int getaddrinfo(const char *node, const char *service,
         assert(res2 == nilptr);
     }
 
-    crn_procer_yield((long)node, YIELD_TYPE_GETADDRINFO);
+    crn_procer_yield((int64_t)(intptr_t)node, YIELD_TYPE_GETADDRINFO);
 
     linfo("%p %d %p %s %s\n", oldres, res2 != nilptr, res2, node, service);
     if (res2 != nilptr) {
