@@ -614,6 +614,7 @@ void netpoller_yieldfd(long fd, int ytype, fiber* gr) {
     switch (ytype) {
     case YIELD_TYPE_SLEEP: case YIELD_TYPE_MSLEEP:
     case YIELD_TYPE_USLEEP: case YIELD_TYPE_NANOSLEEP:
+    case YIELD_TYPE_TICK_WAKE:
         // event_base_loopbreak(gnpl__->loop);
         // event_base_loopexit(gnpl__->loop, &tv);
         break;
@@ -635,6 +636,10 @@ void netpoller_yieldfd(long fd, int ytype, fiber* gr) {
         netpoller_timer(ns, ytype, gr);
         break;
     case YIELD_TYPE_NANOSLEEP:
+        ns = fd;
+        netpoller_timer(ns, ytype, gr);
+        break;
+    case YIELD_TYPE_TICK_WAKE:
         ns = fd;
         netpoller_timer(ns, ytype, gr);
         break;

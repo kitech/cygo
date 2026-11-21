@@ -322,6 +322,8 @@ const char* yield_type_name(int ytype) {
         return "usleep";
     case YIELD_TYPE_NANOSLEEP:
         return "nanosleep";
+    case YIELD_TYPE_TICK_WAKE:
+        return "tick_wake";
 
     case YIELD_TYPE_GETHOSTBYNAMER:
         return "gethostbynamer";

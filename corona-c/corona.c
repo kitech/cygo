@@ -1403,7 +1403,7 @@ void crn_procer_resume_one(void* gr_, int ytype, int grid, int mcid) {
         crn_fiber_resume_same_thread(gr);
         // 相同machine线程的情况，要主动出让执行权。
         // 另外考虑是否只针对chan send/recv。
-        crn_procer_yield(1001, YIELD_TYPE_NANOSLEEP);
+        crn_procer_yield(1001, YIELD_TYPE_TICK_WAKE);
     }else {
         crn_fiber_resume_xthread(gr, ytype);
     }

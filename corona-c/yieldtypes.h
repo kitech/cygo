@@ -37,6 +37,7 @@ typedef enum yield_type
      YIELD_TYPE_MSLEEP,
      YIELD_TYPE_USLEEP,
      YIELD_TYPE_NANOSLEEP,
+     YIELD_TYPE_TICK_WAKE, // one scheduler tick: hand CPU to the just-woken fiber
 
      YIELD_TYPE_GETHOSTBYNAMER,
      YIELD_TYPE_GETHOSTBYNAME2R,

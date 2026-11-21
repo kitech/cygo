@@ -159,6 +159,10 @@ void netpoller_yieldfd(long fd, int ytype, fiber* gr) {
         ns = fd;
         netpoller_timer(ns, gr);
         break;
+    case YIELD_TYPE_TICK_WAKE:
+        ns = fd;
+        netpoller_timer(ns, gr);
+        break;
     case YIELD_TYPE_CONNECT: case YIELD_TYPE_WRITE: case YIELD_TYPE_WRITEV:
     case YIELD_TYPE_SEND: case YIELD_TYPE_SENDTO: case YIELD_TYPE_SENDMSG:
         netpoller_writefd(fd, gr);
