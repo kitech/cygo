@@ -814,6 +814,12 @@ void crn_machine_signal(machine* mc) {
     assert(rv==0);
 }
 
+volatile sig_atomic_t crn_signal_interrupt_flag = 0;
+
+void crn_clear_signal_interrupt(void) {
+    crn_signal_interrupt_flag = 0;
+}
+
 static __thread int gcurmcid__ = 0; // thread local
 static __thread int gcurgrid__ = 0; // thread local
 static __thread machine* gcurmcobj = 0; // thread local

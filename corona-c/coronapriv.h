@@ -10,6 +10,7 @@
 #include <stdbool.h>
 #include <errno.h>
 #include <stdatomic.h>
+#include <signal.h>
 
 // sys
 #include <time.h>
@@ -107,6 +108,12 @@ extern void crn_procer_resume_one(void* gr_, int ytype, int grid, int mcid);
 extern fiber* crn_fiber_getcur();
 extern void* crn_fiber_getspec(void* spec);
 extern void crn_fiber_setspec(void* spec, void* val);
+
+/* Set to 1 by the application's signal handler (SIGINT/SIGTERM/...).
+ * Sleep hooks return -1/EINTR while it is non-zero.
+ * Not auto-cleared: call crn_clear_signal_interrupt() after handling. */
+extern volatile sig_atomic_t crn_signal_interrupt_flag;
+void crn_clear_signal_interrupt(void);
 
 extern void loglock();
 extern void logunlock();

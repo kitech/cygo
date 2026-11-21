@@ -991,11 +991,20 @@ int usleep(useconds_t usec)
         long long elapsed = (long long)(now.tv_sec - start.tv_sec) * 1000000000LL
                           + (now.tv_nsec - start.tv_nsec);
         long long left = total - elapsed;
+        if (left < 0) left = 0;
+
+        if (crn_signal_interrupt_flag) {
+            errno = EINTR;
+            return -1;
+        }
+
         if (left <= 1000000LL)
             return 0;
 
+        long long slice_us = left / 1000LL;
+        if (slice_us > 100000LL) slice_us = 100000LL; /* max 100ms */
         errno = 0;
-        int rv = crn_procer_yield((long)(left / 1000LL), YIELD_TYPE_USLEEP);
+        int rv = crn_procer_yield((long)slice_us, YIELD_TYPE_USLEEP);
         if (rv != 0) {
             errno = EINTR;
             return -1;
@@ -1019,11 +1028,23 @@ int nanosleep(const struct timespec *req, struct timespec *rem)
         long long elapsed = (long long)(now.tv_sec - start.tv_sec) * 1000000000LL
                           + (now.tv_nsec - start.tv_nsec);
         long long left = total - elapsed;
+        if (left < 0) left = 0;
+
+        if (crn_signal_interrupt_flag) {
+            if (rem) {
+                rem->tv_sec  = (time_t)(left / 1000000000LL);
+                rem->tv_nsec = (long)(left % 1000000000LL);
+            }
+            errno = EINTR;
+            return -1;
+        }
+
         if (left <= 1000000LL)      /* 1ms tolerance */
             return 0;
 
+        long long slice = left < 100000000LL ? left : 100000000LL; /* max 100ms */
         errno = 0;
-        int rv = crn_procer_yield((long)left, YIELD_TYPE_NANOSLEEP);
+        int rv = crn_procer_yield((long)slice, YIELD_TYPE_NANOSLEEP);
         if (rv != 0) {
             /* unexpected scheduler failure: report EINTR + remaining */
             if (rem) {
