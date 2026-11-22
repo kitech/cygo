@@ -25,6 +25,13 @@
 
 #ifdef __linux__
 # include <sys/epoll.h>
+# include <sys/prctl.h>
+# ifndef PR_SET_PTRACER
+#  define PR_SET_PTRACER 0x59616d61
+# endif
+# ifndef PR_SET_PTRACER_ANY
+#  define PR_SET_PTRACER_ANY ((unsigned long)-1)
+# endif
 # ifndef EFD_NONBLOCK
 #  define EFD_NONBLOCK 0x800
 # endif
@@ -46,6 +53,7 @@ static int g_abort_on_stall = 0;
 static int g_destroy_on_exit = 0;
 static unsigned g_seed = 1;
 static volatile sig_atomic_t g_stopping = 0;
+static volatile sig_atomic_t g_term_cnt = 0;
 static volatile int g_controller_done = 0;
 static volatile int g_controller_rc = 0;
 
@@ -165,6 +173,7 @@ static void install_fatal_handlers(void) {
 static void on_term(int sig) {
     (void)sig;
     g_stopping = 1;
+    g_term_cnt++;
 }
 static void install_term_handlers(void) {
     struct sigaction sa;
@@ -174,6 +183,17 @@ static void install_term_handlers(void) {
     sigemptyset(&sa.sa_mask);
     sigaction(SIGTERM, &sa, 0);
     sigaction(SIGINT, &sa, 0);
+}
+
+// main2.sh 超时后要 `gdb -p <pid>` 抓栈；gdb 是兄弟进程，Linux yama
+// ptrace_scope=1 只允许祖先 attach，因此被测进程需自行放行。
+// 仅在 CRN2_PTRACE=1 时生效，其余情况行为不变。
+static void maybe_allow_ptrace(void) {
+#ifdef __linux__
+    const char* s = getenv("CRN2_PTRACE");
+    if (s != NULL && s[0] == '1')
+        prctl(PR_SET_PTRACER, PR_SET_PTRACER_ANY, 0, 0, 0);
+#endif
 }
 
 // machine threads: altstack per thread (SIGSEGV handling on fiber overflow)
@@ -1009,6 +1029,7 @@ static void* run_scenario(int id) {
 
 static void watchdog(void* arg) {
     (void)arg;
+    linfo("watchdog: enter tid=%d\n", gettid());
     while (!g_stopping && now_ms() < g_deadline_ms) {
         sleep(5);
         long t = now_ms();
@@ -1022,6 +1043,7 @@ static void watchdog(void* arg) {
             }
         }
     }
+    linfo("watchdog: exit stopping=%d now=%ld\n", (int)g_stopping, now_ms());
 }
 
 static void stats_dump(void) {
@@ -1035,23 +1057,30 @@ static void stats_dump(void) {
 
 static void controller(void* arg) {
     (void)arg;
+    linfo("controller: enter tid=%d\n", gettid());
     for (int i = 0; i < S_MAX; i++) {
         if (!atomic_load(&g_enabled[i])) continue;
         void (*entry)(void*) = run_scenario(i);
         if (!entry) continue;
+        linfo("controller: post %s\n", g_snames[i]);
         int rv = crn_post(entry, 0);
         CHECK(rv > 0, "post %s rv=%d", g_snames[i], rv);
         atomic_fetch_add(&g_posted, 1);
     }
     linfo("posted %d scenarios %d\n", atomic_load(&g_posted), 0);
     crn_post(watchdog, 0);
+    linfo("controller: watchdog posted tid=%d\n", gettid());
 
     long stats_at = now_ms() + g_stats_sec * 1000L;
     while (!g_stopping && now_ms() < g_deadline_ms) {
         sleep(1);
         if (now_ms() >= stats_at) { stats_dump(); stats_at = now_ms() + g_stats_sec * 1000L; }
     }
+    linfo("controller: loop exit stopping=%d sigterm=%d now=%ld deadline=%ld\n",
+          (int)g_stopping, (int)g_term_cnt, now_ms(), g_deadline_ms);
     g_stopping = 1;
+    linfo("controller: drain wait posted=%d finished=%d\n",
+          atomic_load(&g_posted), atomic_load(&g_finished));
     // let scenarios unwind
     for (int i = 0; i < 30; i++) {
         if (atomic_load(&g_finished) >= atomic_load(&g_posted)) break;
@@ -1060,12 +1089,16 @@ static void controller(void* arg) {
     stats_dump();
     int posted = atomic_load(&g_posted);
     int fin = atomic_load(&g_finished);
+    linfo("controller: drain done %d/%d\n", fin, posted);
     linfo("DONE posted=%d finished=%d\n", posted, fin);
     if (t_fails > 0) { linfo("FAIL checks=%d\n", t_fails); }
     if (g_destroy_on_exit) {
+        linfo("controller: crn_destroy begin tid=%d\n", gettid());
         crn_destroy(crn_get());
+        linfo("controller: crn_destroy done tid=%d\n", gettid());
     }
     g_controller_rc = (t_fails > 0 || fin < posted) ? 1 : 0;
+    linfo("controller: set done rc=%d\n", g_controller_rc);
     g_controller_done = 1;
 }
 
@@ -1104,15 +1137,21 @@ static int scenario_selected(const char* name) {
 int main(void) {
     install_fatal_handlers();
     install_term_handlers();
+    maybe_allow_ptrace();
+    linfo("main2: init begin tid=%d\n", gettid());
     // register the per-thread handler hook BEFORE crn_init: machine threads are
     // created during init, and only threads created afterwards run the callback
     // (otherwise a fiber stack overflow on those threads dies without markers)
     extern void initHook();
     initHook();
+    linfo("main2: initHook done tid=%d\n", gettid());
     corona* nr0 = crn_new();
+    linfo("main2: crn_new ok nr=%p\n", (void*)nr0);
     crn_set_thread_createcb(thread_create_cb, 0);
     crn_init(nr0);
+    linfo("main2: crn_init returned tid=%d\n", gettid());
     crn_wait_init_done(nr0);
+    linfo("main2: crn_wait_init_done ok tid=%d\n", gettid());
 
     g_seconds = env_i("CRN2_SECONDS", 3600);
     g_seed = env_u("CRN2_SEED", (unsigned)time(0));
@@ -1123,6 +1162,7 @@ int main(void) {
     g_abort_on_stall = env_i("CRN2_ABORT_ON_STALL", 0);
     g_destroy_on_exit = env_i("CRN2_DESTROY_ON_EXIT", 0);
     g_deadline_ms = now_ms() + (long)g_seconds * 1000;
+    linfo("main2: deadline_at=%ld now=%ld\n", g_deadline_ms, now_ms());
 
     for (int i = 0; i < S_MAX; i++) {
         int on = scenario_selected(g_snames[i]);
@@ -1139,6 +1179,7 @@ int main(void) {
           g_seconds, g_seed, g_stats_sec, g_dns, g_deep, g_overflow);
 
     crn_post(controller, 0);
+    linfo("main2: controller posted, waiting tid=%d\n", gettid());
     for (;;) {
         if (g_controller_done) break;
         if (now_ms() > g_deadline_ms + 10000) {
@@ -1147,5 +1188,6 @@ int main(void) {
         }
         sleep(1);
     }
+    linfo("main2: controller done rc=%d\n", g_controller_rc);
     return g_controller_rc;
 }

@@ -29,6 +29,13 @@ fi
 # main2.c s26 uses this for its file-io scenario
 export CRN2_TMPDIR="${CRN2_TMPDIR:-$LOG_DIR}"
 
+# ------------------------------------------------------- timeout forensics
+# 超时后先抓现场再杀：/proc 快照 + gdb 全线程栈，最后才 TERM/KILL。
+export CRN2_PTRACE="${CRN2_PTRACE:-1}"   # 允许 gdb 以兄弟进程身份 attach
+BT_ON_TIMEOUT="${BT_ON_TIMEOUT:-1}"      # 0: 不抓现场，退回普通 timeout
+BT_BUDGET="${BT_BUDGET:-20}"             # gdb 最多占用（秒）
+BT_KILL_GRACE="${BT_KILL_GRACE:-5}"      # TERM 与 KILL 之间的宽限（秒）
+
 BIN="${BIN:-./zig-out/bin/corona2}"
 [ -x "$BIN" ] || BIN="./build/corona2"
 [ -x "$BIN" ] || BIN="../build/corona2"
@@ -45,6 +52,7 @@ fmt_dur() { # seconds -> 1m23s
 
 # ---------------------------------------------------------------- estimates
 case "$MODE" in
+    bt-selftest) TOTAL_EST=0; MODE_DESC="bt-selftest（取证链路自检）" ;;
     quick)   TOTAL_EST=180;  MODE_DESC="quick（冒烟/过滤/栈探针）" ;;
     long)    TOTAL_EST=2050; MODE_DESC="long（默认项 + 30 分钟长跑）" ;;
     all)     TOTAL_EST=5700; MODE_DESC="all（long + 1 小时目标复现）" ;;
@@ -61,11 +69,12 @@ say "================================================================"
 run() {                      # run <name> <est_sec> <timeout_sec> <cmd...>
     local name="$1"; local est="$2"; local to="$3"; shift 3
     local t0=$(date +%s)
+    local hard=$(( to + BT_BUDGET + BT_KILL_GRACE + 20 ))
     say ""
     say "=== $name === start（est ~$(fmt_dur $est)，timeout ${to}s）"
     say "CMD: $*"
-    rm -f "$LOG_DIR/$name.rc"
-    ( with_timeout "$to" "$@" >"$LOG_DIR/$name.log" 2>&1; \
+    rm -f "$LOG_DIR/$name.rc" "$LOG_DIR/$name.bt" "$LOG_DIR/$name.proc"
+    ( with_timeout "$name" "$to" "$@" >"$LOG_DIR/$name.log" 2>&1; \
       echo $? >"$LOG_DIR/$name.rc" ) &
     local wpid=$!
     while kill -0 "$wpid" 2>/dev/null; do
@@ -73,6 +82,11 @@ run() {                      # run <name> <est_sec> <timeout_sec> <cmd...>
         if kill -0 "$wpid" 2>/dev/null; then
             say "  [$name] running $(( $(date +%s) - t0 ))s"
             tail -n 1 "$LOG_DIR/$name.log" 2>/dev/null | sed 's/^/      /'
+        fi
+        if [ $(( $(date +%s) - t0 )) -gt "$hard" ]; then
+            say "  [$name] forensics wedged（>${hard}s），强制结束"
+            kill -KILL "$wpid" 2>/dev/null
+            break
         fi
     done
     wait "$wpid" 2>/dev/null
@@ -84,7 +98,18 @@ run() {                      # run <name> <est_sec> <timeout_sec> <cmd...>
         say "PASS ${name}（实际 $(fmt_dur ${el})）"; pass=$((pass+1))
     elif [ "$rc" -eq 124 ]; then
         say "FAIL ${name}（timeout ${to}s，实际 $(fmt_dur ${el})）"
-        tail -5 "$LOG_DIR/$name.log"; fail=$((fail+1))
+        grep -a -E 'main2 start|DONE|controller stalled' "$LOG_DIR/$name.log" 2>/dev/null \
+            | tail -3 | sed 's/^/    /'
+        tail -5 "$LOG_DIR/$name.log" 2>/dev/null | sed 's/^/    /'
+        if [ -f "$LOG_DIR/$name.bt" ]; then
+            say "    bt  : $LOG_DIR/$name.bt"
+            grep -a -E '^[ *]*[0-9]+ +Thread|^#[0-9]+ ' "$LOG_DIR/$name.bt" \
+                | head -40 | sed 's/^/    /'
+        fi
+        if [ -f "$LOG_DIR/$name.proc" ]; then
+            say "    proc: $LOG_DIR/$name.proc"
+        fi
+        fail=$((fail+1))
     else
         say "FAIL ${name} rc=${rc}（实际 $(fmt_dur ${el})，log ${LOG_DIR}/${name}.log）"
         tail -5 "$LOG_DIR/$name.log"; fail=$((fail+1))
@@ -92,26 +117,129 @@ run() {                      # run <name> <est_sec> <timeout_sec> <cmd...>
 }
 skip_if() { say "SKIP ${1}（${2}）"; skip=$((skip+1)); }
 
-# macOS has no GNU `timeout`: prefer timeout/gtimeout, else emulate with a
-# background watchdog. Returns 124 on timeout (same as GNU timeout).
-with_timeout() {           # with_timeout <sec> <cmd...>
-    local to="$1"; shift
-    if command -v timeout >/dev/null 2>&1; then
-        timeout -k 5 "$to" "$@"; return $?
+# ---- 超时取证：先抓现场，再 TERM/KILL；返回码仍是 124（同 GNU timeout）。
+alive() {                   # alive <pid>：Linux 僵尸态视为已退出
+    kill -0 "$1" 2>/dev/null || return 1
+    if [ -r "/proc/$1/status" ]; then
+        grep -q '^State:.*Z' "/proc/$1/status" 2>/dev/null && return 1
     fi
-    if command -v gtimeout >/dev/null 2>&1; then
-        gtimeout -k 5 "$to" "$@"; return $?
+    return 0
+}
+
+pick_target() {             # pick_target <pid>：valgrind 场景取真正的被测进程
+    local c
+    if ! command -v pgrep >/dev/null 2>&1; then echo "$1"; return; fi
+    c=$(pgrep -P "$1" 2>/dev/null | head -n1)
+    if [ -n "$c" ]; then echo "$c"; else echo "$1"; fi
+}
+
+kill_tree() {               # kill_tree <pid>：先子后父
+    local c
+    if command -v pgrep >/dev/null 2>&1; then
+        for c in $(pgrep -P "$1" 2>/dev/null); do kill_tree "$c"; done
+    fi
+    kill -KILL "$1" 2>/dev/null
+    return 0
+}
+
+proc_dump() {               # proc_dump <pid> <out>
+    local tgt="$1" out="$2" t cg
+    {
+        echo "== $(date '+%F %T') pid=$tgt"
+        echo "== yama_ptrace_scope: $(cat /proc/sys/kernel/yama/ptrace_scope 2>/dev/null || echo n/a)"
+        echo "== threads: $(ls /proc/$tgt/task 2>/dev/null | wc -l)"
+        echo "== cgroup: $(tr '\n' ' ' < "/proc/$tgt/cgroup" 2>/dev/null)"
+        for cg in $(awk -F: '{print $3}' "/proc/$tgt/cgroup" 2>/dev/null); do
+            echo "   freeze($cg): $(cat "/sys/fs/cgroup$cg/cgroup.freeze" 2>/dev/null || echo n/a)"
+        done
+        for t in /proc/$tgt/task/*; do
+            [ -d "$t" ] || continue
+            echo "-- tid=${t##*/} comm=$(cat "$t/comm" 2>/dev/null) wchan=$(cat "$t/wchan" 2>/dev/null)"
+            grep -E '^(State|SigBlk|SigPnd|ShdPnd|SigCgt)' "$t/status" 2>/dev/null | sed 's/^/     /'
+            awk '{printf "     stat: state=%s utime=%s stime=%s\n", $3, $14, $15}' "$t/stat" 2>/dev/null
+        done
+    } >"$out" 2>&1
+}
+
+gdb_dump() {                # gdb_dump <pid> <out>
+    local -a gto=()
+    if ! command -v gdb >/dev/null 2>&1; then
+        echo "no gdb: Termux 上执行 pkg install gdb" >"$2"
+        return 1
+    fi
+    if command -v timeout >/dev/null 2>&1; then
+        gto=(timeout $(( BT_BUDGET + 5 )))
+    elif command -v gtimeout >/dev/null 2>&1; then
+        gto=(gtimeout $(( BT_BUDGET + 5 )))
+    fi
+    "${gto[@]+"${gto[@]}"}" gdb -q -nx -batch -p "$1" \
+        -ex 'set pagination off' -ex 'set confirm off' \
+        -ex 'info threads' \
+        -ex 'thread apply all bt' \
+        -ex 'p (int)GC_stop_count' \
+        -ex 'p (int)GC_world_is_stopped' \
+        -ex 'detach' >"$2" 2>&1
+}
+
+dump_on_timeout() {         # dump_on_timeout <name> <pid> <target> <to>
+    local name="$1" pid="$2" tgt="$3" to="$4" base="$LOG_DIR/$1"
+    echo "" >>"$LOG_DIR/$name.log"
+    echo "### TIMEOUT ${to}s pid=$pid target=$tgt" >>"$LOG_DIR/$name.log"
+    proc_dump "$tgt" "$base.proc"
+    gdb_dump "$tgt" "$base.bt"
+    echo "### forensics: $base.proc  $base.bt" >>"$LOG_DIR/$name.log"
+}
+
+with_timeout() {            # with_timeout <name> <sec> <cmd...>  -> 124 on timeout
+    local name="$1" to="$2"; shift 2
+    if [ "$BT_ON_TIMEOUT" != "1" ]; then
+        if command -v timeout >/dev/null 2>&1; then
+            timeout -k "$BT_KILL_GRACE" "$to" "$@"; return $?
+        elif command -v gtimeout >/dev/null 2>&1; then
+            gtimeout -k "$BT_KILL_GRACE" "$to" "$@"; return $?
+        fi
     fi
     "$@" &
     local pid=$!
-    ( sleep "$to"; kill -TERM "$pid" 2>/dev/null; sleep 2; kill -KILL "$pid" 2>/dev/null ) &
-    local watchdog=$!
-    wait "$pid"; local rc=$?
-    kill "$watchdog" 2>/dev/null
-    wait "$watchdog" 2>/dev/null
-    if [ $rc -ge 128 ] && ! kill -0 "$pid" 2>/dev/null; then return 124; fi
-    return $rc
+    local tgt=$(pick_target "$pid")
+    local deadline=$(( $(date +%s) + to )) i=0
+    while alive "$pid" && [ "$(date +%s)" -lt "$deadline" ]; do sleep 1; done
+    if ! alive "$pid"; then
+        wait "$pid" 2>/dev/null
+        return $?
+    fi
+
+    say "[$name] TIMEOUT ${to}s → 先抓现场，再 TERM/KILL（pid=$pid target=$tgt）"
+    dump_on_timeout "$name" "$pid" "$tgt" "$to"
+
+    kill -TERM "$pid" 2>/dev/null
+    while alive "$pid" && [ "$i" -lt "$BT_KILL_GRACE" ]; do sleep 1; i=$((i+1)); done
+    if alive "$pid" || alive "$tgt"; then
+        say "[$name] TERM 后仍存活（pid=$pid target=$tgt）→ SIGKILL"
+        kill_tree "$pid"
+        if [ "$tgt" != "$pid" ]; then kill_tree "$tgt"; fi
+    fi
+    wait "$pid" 2>/dev/null
+    return 124
 }
+
+# 隐藏模式：./main2.sh bt-selftest —— 验证"超时→抓现场→杀掉"整条链路
+if [ "$MODE" = "bt-selftest" ]; then
+    say "=== bt-selftest ==="
+    # BT_SELFTEST_CMD 可换成真实目标，例如：
+    #   BT_SELFTEST_CMD='CRN2_PTRACE=1 CRN2_SECONDS=600 CRN2_SCENARIOS=s1 exec ./zig-out/bin/corona2'
+    if [ -n "${BT_SELFTEST_CMD:-}" ]; then
+        with_timeout selftest 5 sh -c "$BT_SELFTEST_CMD" >"$LOG_DIR/selftest.log" 2>&1
+    else
+        with_timeout selftest 5 sleep 60 >"$LOG_DIR/selftest.log" 2>&1
+    fi
+    rc=$?
+    say "rc=$rc（期望 124）"
+    ls -l "$LOG_DIR/selftest.proc" "$LOG_DIR/selftest.bt" 2>/dev/null
+    head -20 "$LOG_DIR/selftest.proc" 2>/dev/null | sed 's/^/  /'
+    grep -a -m3 -E 'nanosleep|sleep' "$LOG_DIR/selftest.bt" 2>/dev/null | sed 's/^/  /'
+    exit $(( rc != 124 ))
+fi
 
 # ---------------------------------------------------------------- build
 build_t0=$(date +%s)
@@ -144,6 +272,7 @@ else
 fi
 say "build done（$(fmt_dur $(( $(date +%s) - build_t0 )))）"
 say "BIN: $BIN"
+say "forensics: gdb=$(command -v gdb 2>/dev/null || echo none) pgrep=$(command -v pgrep 2>/dev/null || echo none) ptrace_scope=$(cat /proc/sys/kernel/yama/ptrace_scope 2>/dev/null || echo n/a)"
 
 # 1) 冒烟
 run smoke 50 120 env CRN2_SECONDS=45 CRN2_SCENARIOS=s1,s2,s4,s5,s6 "$BIN"
@@ -165,7 +294,7 @@ say ""
 say "=== overflow ===（est ~$(fmt_dur 10)，timeout 60s）"
 say "CMD: env CRN2_OVERFLOW=1 CRN2_SCENARIOS=s18 $BIN"
 t0=$(date +%s)
-with_timeout 60 env CRN2_OVERFLOW=1 CRN2_SCENARIOS=s18 "$BIN" >"$LOG_DIR/overflow.log" 2>&1
+with_timeout overflow 60 env CRN2_OVERFLOW=1 CRN2_SCENARIOS=s18 "$BIN" >"$LOG_DIR/overflow.log" 2>&1
 rc=$?
 if [ $rc -ne 0 ] && [ $rc -ne 124 ] && grep -q "^SO-" "$LOG_DIR/overflow.log"; then
     say "PASS overflow（handler captured SO- markers，rc=${rc}，实际 $(fmt_dur $(( $(date +%s) - t0 )))）"
