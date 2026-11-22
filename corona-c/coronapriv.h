@@ -112,6 +112,7 @@ extern void crn_procer_resume_one(void* gr_, int ytype, int grid, int mcid);
 extern fiber* crn_fiber_getcur();
 extern void* crn_fiber_getspec(void* spec);
 extern void crn_fiber_setspec(void* spec, void* val);
+extern int crn_sleepms_nohook(int val);
 
 /* Set to 1 by the application's signal handler (SIGINT/SIGTERM/...).
  * Sleep hooks return -1/EINTR while it is non-zero.

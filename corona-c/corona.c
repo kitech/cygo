@@ -1335,12 +1335,7 @@ int crn_procer_yield(int64_t fd, int ytype) {
             // bionic usleep() internally calls nanosleep(), which is also
             // intercepted by iohook and would yield again.  Call the real
             // nanosleep_f directly so the collector simply sleeps.
-            extern int (*nanosleep_f)(const struct timespec *, struct timespec *);
-            int64_t us = fd > 0 ? fd : 0;
-            struct timespec ts;
-            ts.tv_sec  = (time_t)(us / 1000000);
-            ts.tv_nsec = (long)(us % 1000000) * 1000L;
-            nanosleep_f(&ts, NULL);
+            crn_sleepms_nohook(fd);
             lwarn("stopworld little danger avoided %d\n", fd);
             return 0; // our sleep instead real caller
         }

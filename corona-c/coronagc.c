@@ -54,23 +54,36 @@ static void crn_gc_finalizer(void*ptr, void*clientdata) {
     printf("ptr dtor %p\n", ptr);
 }
 
+int crn_sleepms_nohook(int val) {
+
+    int fd = val <= 0 ? 1234 : val;
+    int64_t us = fd > 0 ? fd : 0;
+    struct timespec ts;
+    ts.tv_sec  = (time_t)(us / 1000000);
+    ts.tv_nsec = (long)(us % 1000000) * 1000L;
+    
+    extern int (*nanosleep_f)(const struct timespec *, struct timespec *);
+    if (nanosleep_f==NULL) {
+		nanosleep_f = dlsym(RTLD_NEXT, "nanosleep");
+	}
+	assert(nanosleep_f != NULL);
+	int rc = nanosleep_f(&ts, NULL);
+    
+    // int (*usleep_f)(long) = dlsym(RTLD_NEXT, "usleep");
+    // assert(usleep_f != NULL);
+    // extern void (*usleep_f)(int);
+	
+	return rc;
+}
+
 int crn_gc_deadlock_detect1() {
     if (atomic_getint(&crn_gc_states.stopworld)==1) {
         atomic_addu64(&crn_gc_states.stwdanger, 1);
         lwarn("stopworld little danger %d\n", 0);
         int waitcnt = 0;
-        extern int (*nanosleep_f)(const struct timespec *, struct timespec *);
-            int fd = 1234; int64_t us = fd > 0 ? fd : 0;
-            struct timespec ts;
-            ts.tv_sec  = (time_t)(us / 1000000);
-            ts.tv_nsec = (long)(us % 1000000) * 1000L;
-            // nanosleep_f(&ts, NULL);
-//        int (*usleep_f)(long) = dlsym(RTLD_NEXT, "usleep");
-  //      assert(usleep_f != NULL);
-        // extern void (*usleep_f)(int);
         while(atomic_getint(&crn_gc_states.stopworld)==1) {
-    //        usleep_f(1234); // 1ms
-			nanosleep_f(&ts, NULL);
+            // usleep_f(1234); // ~1ms
+            crn_sleepms_nohook(1234); // ~1ms
             waitcnt++;
         }
         lwarn("stopworld little danger avoided %d\n", waitcnt);
