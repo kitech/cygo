@@ -1335,7 +1335,7 @@ int crn_procer_yield(int64_t fd, int ytype) {
         return -1;
     }
     // linux only deadlock
-    if (ytype == YIELD_TYPE_USLEEP) {
+    if (ytype == YIELD_TYPE_SLEEP || ytype == YIELD_TYPE_USLEEP || ytype == YIELD_TYPE_NANOSLEEP) {
         // for GC_collect_a_little -> usleep()
         extern int crn_gc_deadlock_detect1();
         if (atomic_getint(&crn_gc_states.stopworld)==1) {
@@ -1343,7 +1343,15 @@ int crn_procer_yield(int64_t fd, int ytype) {
             // bionic usleep() internally calls nanosleep(), which is also
             // intercepted by iohook and would yield again.  Call the real
             // nanosleep_f directly so the collector simply sleeps.
-            crn_sleepms_nohook(fd/1000);
+            int64_t v = fd > 0 ? fd : 0;
+            int64_t ms = 0;
+            switch (ytype) {
+            case YIELD_TYPE_SLEEP: ms = v * 1000; break;
+            case YIELD_TYPE_USLEEP: ms = v / 1000; break;
+            case YIELD_TYPE_NANOSLEEP: ms = v / 1000000; break;
+            default: ms = v / 1000; break;
+            }
+            crn_sleepms_nohook((int)ms);
             lwarn("stopworld little danger avoided %d\n", fd);
             return 0; // our sleep instead real caller
         }

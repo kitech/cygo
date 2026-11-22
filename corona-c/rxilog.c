@@ -110,6 +110,46 @@ static const char* log_log_file_trim(const char* file, int sepcnt) {
     return ptr;
 }
 
+/* Civil date from days since 1970-01-01 (Howard Hinnant). */
+static void log_civil_from_days(int days, int* y, int* m, int* d) {
+    days += 719468;
+    int era = (days >= 0 ? days : days - 146096) / 146097;
+    unsigned doe = (unsigned)(days - era * 146097);
+    unsigned yoe = (doe - doe/1460 + doe/36524 - doe/146096) / 365;
+    int y0 = (int)yoe + era * 400;
+    unsigned doy = doe - (365*yoe + yoe/4 - yoe/100);
+    unsigned mp = (5*doy + 2) / 153;
+    *d = (int)(doy - (153*mp + 2)/5 + 1);
+    *m = (int)(mp + (mp < 10 ? 3 : -9));
+    *y = y0 + (*m <= 2);
+}
+
+/* UTC+8 time parts without gmtime_r/localtime_r/strftime/tzset locks. */
+static void log_time_parts(time_t t, int* y, int* mon, int* d, int* hh, int* mm, int* ss) {
+    long long sec = (long long)t + 8 * 3600; /* UTC+8 */
+    long long days = sec / 86400;
+    int daysec = (int)(sec % 86400);
+    if (daysec < 0) { daysec += 86400; days -= 1; }
+    log_civil_from_days((int)days, y, mon, d);
+    *hh = daysec / 3600;
+    *mm = (daysec % 3600) / 60;
+    *ss = daysec % 60;
+}
+
+/* UTC+8 HH:MM:SS without gmtime_r/localtime_r/strftime/tzset locks. */
+static void log_time_hms(char* buf, size_t sz) {
+    int y, mon, d, hh, mm, ss;
+    log_time_parts(time(NULL), &y, &mon, &d, &hh, &mm, &ss);
+    snprintf(buf, sz, "%02d:%02d:%02d", hh, mm, ss);
+}
+
+/* UTC+8 YYYY-MM-DD HH:MM:SS without gmtime_r/localtime_r/strftime/tzset locks. */
+static void log_time_ymdhms(char* buf, size_t sz) {
+    int y, mon, d, hh, mm, ss;
+    log_time_parts(time(NULL), &y, &mon, &d, &hh, &mm, &ss);
+    snprintf(buf, sz, "%04d-%02d-%02d %02d:%02d:%02d", y, mon, d, hh, mm, ss);
+}
+
 void log_log(int level, const char *file, int line, const char *fmt, ...) {
   if (level < L.level) {
     return;
@@ -119,15 +159,6 @@ void log_log(int level, const char *file, int line, const char *fmt, ...) {
   int fmtlen = strlen(fmt);
   int fmt_has_newline = (fmtlen > 0) && (fmt[fmtlen - 1] == '\n');
 
-  // todo __lll_lock_wait_private deadlock
-  /* Get current time */
-  int zone = 8;
-  time_t t = time(NULL);
-  struct tm lt0 = {0};
-  // struct tm *lt = localtime_r(&t, &lt0);
-  struct tm *lt = gmtime_r(&t, &lt0);
-  lt->tm_hour = (lt->tm_hour + zone) % 24;
-
   /* Acquire lock */
   // lock();   /* never hold the log mutex across write()/stdio: GC STW may suspend this thread */
 
@@ -136,8 +167,7 @@ void log_log(int level, const char *file, int line, const char *fmt, ...) {
   if (!L.quiet) {
     char tbuf[2048];
     char buf[16];
-    int tlen = strftime(buf, sizeof(buf), "%H:%M:%S", lt);
-    buf[tlen < (int)sizeof(buf) ? tlen : (int)sizeof(buf) - 1] = '\0';
+    log_time_hms(buf, sizeof(buf));
 
     int bpos;
 #ifdef LOG_USE_COLOR
@@ -172,8 +202,7 @@ void log_log(int level, const char *file, int line, const char *fmt, ...) {
   if (L.fp) {
     char fbuf[2048];
     char buf[32];
-    int tlen = strftime(buf, sizeof(buf), "%Y-%m-%d %H:%M:%S", lt);
-    buf[tlen < (int)sizeof(buf) ? tlen : (int)sizeof(buf) - 1] = '\0';
+    log_time_ymdhms(buf, sizeof(buf));
 
     int fpos = snprintf(fbuf, sizeof(fbuf), "%s %-5s %s:%d: ",
       buf, level_names[level], filemid, line);
