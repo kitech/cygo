@@ -5,6 +5,7 @@
 
 #ifdef USE_BDWGC
 
+#include <stdint.h>
 #include <gc.h>
 
 // gc's states not belongs to struct corona
@@ -16,6 +17,7 @@ typedef struct gcstates {
     int stopworld2; // more smaller time scope
     int inmark;
     int inclaim;
+    uint64_t stwdanger;  // crn_gc_malloc() attempts during stop-the-world (no overflow)
 } gcstates;
 extern gcstates crn_gc_states;
 

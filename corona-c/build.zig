@@ -230,6 +230,10 @@ pub fn build(b: *std.Build) void {
     exe2.root_module.linkLibrary(cxrt);
     exe2.rdynamic = true;
     linkRuntimeLibs(exe2);
+    if (is_android) {
+        // bionic has no backtrace(); Termux provides it via libexecinfo.
+        exe2.root_module.linkSystemLibrary("execinfo", .{});
+    }
     b.installArtifact(exe2);
     const corona2_build_step = b.step("corona2", "Build the main2 soak driver");
     corona2_build_step.dependOn(&b.addInstallArtifact(exe2, .{}).step);

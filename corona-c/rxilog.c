@@ -117,9 +117,7 @@ void log_log(int level, const char *file, int line, const char *fmt, ...) {
 
   const char* filemid = log_log_file_trim(file, 1);
   int fmtlen = strlen(fmt);
-  int fmt_has_newline = fmt[fmtlen-1] == '\n';
-  char tbuf[4096] = {0};
-  int bpos = 0;
+  int fmt_has_newline = (fmtlen > 0) && (fmt[fmtlen - 1] == '\n');
 
   // todo __lll_lock_wait_private deadlock
   /* Get current time */
@@ -128,55 +126,82 @@ void log_log(int level, const char *file, int line, const char *fmt, ...) {
   struct tm lt0 = {0};
   // struct tm *lt = localtime_r(&t, &lt0);
   struct tm *lt = gmtime_r(&t, &lt0);
-  lt->tm_hour = (lt->tm_hour+zone)%24;
+  lt->tm_hour = (lt->tm_hour + zone) % 24;
 
   /* Acquire lock */
-  lock();
+  // lock();   /* never hold the log mutex across write()/stdio: GC STW may suspend this thread */
 
-  /* Log to stderr */
+  /* Log to stderr: fixed 2048-byte stack buffer, truncate on overflow,
+   * single write(), and no log mutex held across the write. */
   if (!L.quiet) {
-    va_list args;
+    char tbuf[2048];
     char buf[16];
-    buf[strftime(buf, sizeof(buf), "%H:%M:%S", lt)] = '\0';
+    int tlen = strftime(buf, sizeof(buf), "%H:%M:%S", lt);
+    buf[tlen < (int)sizeof(buf) ? tlen : (int)sizeof(buf) - 1] = '\0';
+
+    int bpos;
 #ifdef LOG_USE_COLOR
-    // fprintf(
-    //   stderr, "%s %s%-5s\x1b[0m \x1b[90m%s:%d:\x1b[0m ",
-    //   buf, level_colors[level], level_names[level], filemid, line);
-    bpos += snprintf(tbuf+bpos, sizeof(tbuf)-bpos,
+    bpos = snprintf(tbuf, sizeof(tbuf),
       "%s %s%-5s\x1b[0m \x1b[90m%s:%d:\x1b[0m ",
       buf, level_colors[level], level_names[level], filemid, line);
 #else
-    // fprintf(stderr, "%s %-5s %s:%d: ", buf, level_names[level], filemid, line);
-    bpos += snprintf(tbuf+bpos, sizeof(tbuf)-bpos, "%s %-5s %s:%d: ", buf, level_names[level], filemid, line);
+    bpos = snprintf(tbuf, sizeof(tbuf), "%s %-5s %s:%d: ",
+      buf, level_names[level], filemid, line);
 #endif
+    if (bpos < 0) bpos = 0;
+    if (bpos > (int)sizeof(tbuf) - 1) bpos = (int)sizeof(tbuf) - 1;
+
+    va_list args;
     va_start(args, fmt);
-    // vfprintf(stderr, fmt, args);
-    bpos += vsnprintf(tbuf+bpos, sizeof(tbuf)-bpos, fmt, args);
+    int n = vsnprintf(tbuf + bpos, sizeof(tbuf) - bpos, fmt, args);
     va_end(args);
-    if (!fmt_has_newline) bpos+= snprintf(tbuf+bpos, sizeof(tbuf)-bpos, "\n");
-    assert (bpos<sizeof(tbuf));
-    // extern int (*write_f)();
-    // write_f(STDERR_FILENO, tbuf, bpos);
-    write(STDERR_FILENO, tbuf, bpos);
-    // fprintf(stderr, "%s", tbuf);
-    // fflush(stderr);
+    if (n < 0) n = 0;
+    if (n >= (int)sizeof(tbuf) - bpos) {
+      bpos = (int)sizeof(tbuf) - 1;   /* truncated */
+    } else {
+      bpos += n;
+    }
+    if (!fmt_has_newline && bpos < (int)sizeof(tbuf) - 1) {
+      tbuf[bpos++] = '\n';
+    }
+    tbuf[bpos] = '\0';
+    if (bpos > 0) write(STDERR_FILENO, tbuf, (size_t)bpos);
   }
 
-  /* Log to file */
+  /* Log to file: same stack-buffer policy; stdio outside the log mutex */
   if (L.fp) {
-    va_list args;
+    char fbuf[2048];
     char buf[32];
-    buf[strftime(buf, sizeof(buf), "%Y-%m-%d %H:%M:%S", lt)] = '\0';
-    fprintf(L.fp, "%s %-5s %s:%d: ", buf, level_names[level], filemid, line);
+    int tlen = strftime(buf, sizeof(buf), "%Y-%m-%d %H:%M:%S", lt);
+    buf[tlen < (int)sizeof(buf) ? tlen : (int)sizeof(buf) - 1] = '\0';
+
+    int fpos = snprintf(fbuf, sizeof(fbuf), "%s %-5s %s:%d: ",
+      buf, level_names[level], filemid, line);
+    if (fpos < 0) fpos = 0;
+    if (fpos > (int)sizeof(fbuf) - 1) fpos = (int)sizeof(fbuf) - 1;
+
+    va_list args;
     va_start(args, fmt);
-    vfprintf(L.fp, fmt, args);
+    int n = vsnprintf(fbuf + fpos, sizeof(fbuf) - fpos, fmt, args);
     va_end(args);
-    if (!fmt_has_newline) fprintf(L.fp, "\n");
-    fflush(L.fp);
+    if (n < 0) n = 0;
+    if (n >= (int)sizeof(fbuf) - fpos) {
+      fpos = (int)sizeof(fbuf) - 1;   /* truncated */
+    } else {
+      fpos += n;
+    }
+    if (!fmt_has_newline && fpos < (int)sizeof(fbuf) - 1) {
+      fbuf[fpos++] = '\n';
+    }
+    fbuf[fpos] = '\0';
+    if (fpos > 0) {
+      fwrite(fbuf, 1, (size_t)fpos, L.fp);
+      fflush(L.fp);
+    }
   }
 
   /* Release lock */
-  unlock();
+  // unlock();
 }
 
 // more powerful, no fmt string needed

@@ -56,13 +56,21 @@ static void crn_gc_finalizer(void*ptr, void*clientdata) {
 
 int crn_gc_deadlock_detect1() {
     if (atomic_getint(&crn_gc_states.stopworld)==1) {
+        atomic_addu64(&crn_gc_states.stwdanger, 1);
         lwarn("stopworld little danger %d\n", 0);
         int waitcnt = 0;
-        int (*usleep_f)(long) = dlsym(RTLD_NEXT, "usleep");
-        assert(usleep_f != NULL);
+        extern int (*nanosleep_f)(const struct timespec *, struct timespec *);
+            int fd = 1234; int64_t us = fd > 0 ? fd : 0;
+            struct timespec ts;
+            ts.tv_sec  = (time_t)(us / 1000000);
+            ts.tv_nsec = (long)(us % 1000000) * 1000L;
+            // nanosleep_f(&ts, NULL);
+//        int (*usleep_f)(long) = dlsym(RTLD_NEXT, "usleep");
+  //      assert(usleep_f != NULL);
         // extern void (*usleep_f)(int);
         while(atomic_getint(&crn_gc_states.stopworld)==1) {
-            usleep_f(1234); // 1ms
+    //        usleep_f(1234); // 1ms
+			nanosleep_f(&ts, NULL);
             waitcnt++;
         }
         lwarn("stopworld little danger avoided %d\n", waitcnt);
