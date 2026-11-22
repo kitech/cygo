@@ -1,5 +1,6 @@
-#include <collectc/queue.h>
-#include <collectc/deque.h>
+//#include <collectc/queue.h>
+//#include <collectc/deque.h>
+#include <collect_cds.h>
 
 extern void* cxmalloc(size_t size);
 extern void* cxcalloc(size_t blocks, size_t size);

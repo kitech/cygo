@@ -21,8 +21,10 @@
 
 // #include <private/pthread_support.h>
 #include <coro.h>
-#include <collectc/hashtable.h>
-#include <collectc/array.h>
+//#include <collectc/hashtable.h>
+//#include <collectc/array.h>
+#include <collect_cds.h>
+
 #include "datstu.h"
 #include "yieldtypes.h"
 

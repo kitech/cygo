@@ -1,6 +1,7 @@
 
 #include <pthread.h>
 #include <stdio.h>
+#include <string.h>
 #include <stdbool.h>
 #include <assert.h>
 #include <fcntl.h>
@@ -8,6 +9,7 @@
 
 #include "coronapriv.h"
 #include "iohookcb.h"
+#include <collect_cds.h>
 
 typedef struct fdcontext {
     int fd;

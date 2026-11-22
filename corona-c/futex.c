@@ -1,5 +1,6 @@
 #include <assert.h>
 #include <pthread.h>
+#include <collect_cds.h>
 
 #include "iohook.h"
 #include "futex.h"

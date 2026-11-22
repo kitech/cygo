@@ -26,7 +26,7 @@
 #define CC_RIGHT(x)   2 * x + 2
 
 
-#define DEFAULT_CAPACITY 8
+#define PQUEUE_DEFAULT_CAPACITY 8
 #define DEFAULT_EXPANSION_FACTOR 2
 
 
@@ -62,7 +62,7 @@ void pqueue_conf_init(PQueueConf *conf, int (*cmp)(const void *, const void *))
     conf->mem_free   = free;
     conf->cmp        = cmp;
     conf->exp_factor = DEFAULT_EXPANSION_FACTOR;
-    conf->capacity   = DEFAULT_CAPACITY;
+    conf->capacity   = PQUEUE_DEFAULT_CAPACITY;
 }
 
 
@@ -179,7 +179,7 @@ void pqueue_destroy_cb(PQueue *pq, void (*cb) (void*))
  * the memory allocation for the new buffer failed, or CC_ERR_MAX_CAPACITY
  * if the pqueue is already at maximum capacity.
  */
-static enum cc_stat expand_capacity(PQueue *pq)
+static enum cc_stat pqueue_expand_capacity(PQueue *pq)
 {
     if (pq->capacity == CC_MAX_ELEMENTS)
         return CC_ERR_MAX_CAPACITY;
@@ -222,7 +222,7 @@ enum cc_stat pqueue_push(PQueue *pq, void *element)
     size_t i = pq->size;
 
     if (i >= pq->capacity) {
-        enum cc_stat status = expand_capacity(pq);
+        enum cc_stat status = pqueue_expand_capacity(pq);
         if (status != CC_OK)
             return status;
     }

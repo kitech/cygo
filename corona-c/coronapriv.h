@@ -25,10 +25,14 @@
 
 // third
 #include "coro.h"
-#include "collectc/array.h"
-#include "collectc/hashtable.h"
-#include "collectc/treetable.h"
-#include "collectc/pqueue.h"
+//#include "collectc/array.h"
+//#include "collectc/hashtable.h"
+//#include "collectc/treetable.h"
+//#include "collectc/pqueue.h"
+//#include <collect_cds.h>
+
+typedef struct array_s Array;
+typedef struct hashtable_s HashTable;
 
 #ifndef nilptr
 #define nilptr ((void*)NULL)

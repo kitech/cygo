@@ -87,8 +87,11 @@ void* cxmemdup(void* ptr, int sz);
 extern Allocator cxaltrc;
 extern Allocator cxaltgc;
 
-#include <collectc/hashtable.h>
-#include <collectc/array.h>
+//#include <collectc/hashtable.h>
+//#include <collectc/array.h>
+// #include <collect_cds.h>
+typedef struct array_s Array;
+typedef struct hashtable_s HashTable;
 
 // cxstring begin
 typedef struct cxstring { char* ptr; int len; } cxstring;

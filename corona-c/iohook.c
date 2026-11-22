@@ -4,6 +4,7 @@
 #include <time.h>
 #include <stdint.h>
 #include <stdlib.h>
+#include <string.h>
 #include <dlfcn.h>
 #include <fcntl.h>
 #include <sys/select.h>

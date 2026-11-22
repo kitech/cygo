@@ -20,7 +20,7 @@
 
 #include "hashtable.h"
 
-#define DEFAULT_CAPACITY 16
+#define HASHTABLE_DEFAULT_CAPACITY 16
 #define DEFAULT_LOAD_FACTOR 0.75f
 
 struct hashtable_s {
@@ -118,7 +118,7 @@ void hashtable_conf_init(HashTableConf *conf)
 {
     conf->hash             = STRING_HASH;
     conf->key_compare      = cc_common_cmp_str;
-    conf->initial_capacity = DEFAULT_CAPACITY;
+    conf->initial_capacity = HASHTABLE_DEFAULT_CAPACITY;
     conf->load_factor      = DEFAULT_LOAD_FACTOR;
     conf->key_length       = KEY_LENGTH_VARIABLE;
     conf->hash_seed        = 0;

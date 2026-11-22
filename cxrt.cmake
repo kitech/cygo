@@ -16,7 +16,7 @@ add_library(cxrt STATIC  ${mydir}/src/cxrtbase.c
 
 set(cltcdir ${party3dir}/cltc/src) # need ln cltc/src/include cltc/src/collectc
 set(vaitdir ${party3dir}/)
-include_directories(${mydir}/corona-c ${cltcdir}/include ${cltcdir} ${vaitdir})
+include_directories(${mydir}/corona-c ${cltcdir}/../ ${cltcdir}/include ${vaitdir})
 set(corona_c_srcs
 		${mydir}/corona-c/coro.c
 	${mydir}/corona-c/corowp.c
@@ -80,11 +80,12 @@ endif()
 #    )
 
 set(cltc_c_srcs
-		${cltcdir}/array.c ${cltcdir}/hashtable.c
-		${cltcdir}/array.c ${cltcdir}/treetable.c
-		${cltcdir}/queue.c ${cltcdir}/deque.c
-		${cltcdir}/queue.c ${cltcdir}/pqueue.c
-		${cltcdir}/common.c
+		${cltcdir}/../collect_cds.c
+		#${cltcdir}/array.c ${cltcdir}/hashtable.c
+		#${cltcdir}/array.c ${cltcdir}/treetable.c
+		#${cltcdir}/queue.c ${cltcdir}/deque.c
+		#${cltcdir}/queue.c ${cltcdir}/pqueue.c
+		#${cltcdir}/common.c
 )
 
 # ---- Zig sources with C ABI (compiled into libcrn) ----

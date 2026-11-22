@@ -20,7 +20,7 @@
 
 #include "deque.h"
 
-#define DEFAULT_CAPACITY 8
+#define DEQUE_DEFAULT_CAPACITY 8
 #define DEFAULT_EXPANSION_FACTOR 2
 
 struct deque_s {
@@ -38,7 +38,7 @@ struct deque_s {
 static size_t upper_pow_two (size_t);
 static void   copy_buffer   (Deque const * const deque, void **buff, void *(*cp) (void*));
 
-static enum cc_stat expand_capacity (Deque *deque);
+static enum cc_stat deque_expand_capacity (Deque *deque);
 
 /**
  * Creates a new empty deque and returns a status code.
@@ -101,7 +101,7 @@ enum cc_stat deque_new_conf(DequeConf const * const conf, Deque **d)
  */
 void deque_conf_init(DequeConf *conf)
 {
-    conf->capacity   = DEFAULT_CAPACITY;
+    conf->capacity   = DEQUE_DEFAULT_CAPACITY;
     conf->mem_alloc  = malloc;
     conf->mem_calloc = calloc;
     conf->mem_free   = free;
@@ -159,7 +159,7 @@ enum cc_stat deque_add(Deque *deque, void *element)
  */
 enum cc_stat deque_add_first(Deque *deque, void *element)
 {
-    if (deque->size >= deque->capacity && expand_capacity(deque) != CC_OK)
+    if (deque->size >= deque->capacity && deque_expand_capacity(deque) != CC_OK)
         return CC_ERR_ALLOC;
 
     deque->first = (deque->first - 1) & (deque->capacity - 1);
@@ -180,7 +180,7 @@ enum cc_stat deque_add_first(Deque *deque, void *element)
  */
 enum cc_stat deque_add_last(Deque *deque, void *element)
 {
-    if (deque->capacity == deque->size && expand_capacity(deque) != CC_OK)
+    if (deque->capacity == deque->size && deque_expand_capacity(deque) != CC_OK)
         return CC_ERR_ALLOC;
 
     deque->buffer[deque->last] = element;
@@ -208,7 +208,7 @@ enum cc_stat deque_add_at(Deque *deque, void *element, size_t index)
     if (index >= deque->size)
         return CC_ERR_OUT_OF_RANGE;
 
-    if (deque->capacity == deque->size && expand_capacity(deque) != CC_OK)
+    if (deque->capacity == deque->size && deque_expand_capacity(deque) != CC_OK)
         return CC_ERR_ALLOC;
 
     const size_t c = deque->capacity - 1;
@@ -945,7 +945,7 @@ static void copy_buffer(Deque const * const deque, void **buff, void *(*cp) (voi
  * the memory allocation for the new buffer failed, or CC_ERR_MAX_CAPACITY
  * if the Deque is already at maximum capacity.
  */
-static enum cc_stat expand_capacity(Deque *deque)
+static enum cc_stat deque_expand_capacity(Deque *deque)
 {
     if (deque->capacity == MAX_POW_TWO)
         return CC_ERR_MAX_CAPACITY;
@@ -1206,8 +1206,8 @@ enum cc_stat deque_zip_iter_add(DequeZipIter *iter, void *e1, void *e2)
     /* While this check is performed by a call to deque_add_at, it is necessary to know
        in advance whether both deque buffers have enough room before inserting new elements
        because this operation must insert either both elements, or none.*/
-    if ((iter->d1->capacity == iter->d1->size && expand_capacity(iter->d1) != CC_OK) &&
-        (iter->d2->capacity == iter->d2->size && expand_capacity(iter->d2) != CC_OK)) {
+    if ((iter->d1->capacity == iter->d1->size && deque_expand_capacity(iter->d1) != CC_OK) &&
+        (iter->d2->capacity == iter->d2->size && deque_expand_capacity(iter->d2) != CC_OK)) {
         return CC_ERR_ALLOC;
     }
 

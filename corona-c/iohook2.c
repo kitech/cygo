@@ -6,6 +6,7 @@
 #include <netdb.h>
 #include <dlfcn.h>
 #include <stdint.h>
+#include <string.h>
 
 extern void crn_pre_gclock_proc(const char* funcname);
 extern void crn_post_gclock_proc(const char* funcname);

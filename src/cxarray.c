@@ -1,7 +1,8 @@
 
 #include "cxtypedefs.h"
 #include <cxrtbase.h>
-#include <collectc/array.h>
+//#include <collectc/array.h>
+#include <collect_cds.h>
 
 struct array_s {
     size_t   size;

@@ -20,7 +20,7 @@
 
 #include "array.h"
 
-#define DEFAULT_CAPACITY 8
+#define ARRAY_DEFAULT_CAPACITY 8
 #define DEFAULT_EXPANSION_FACTOR 2
 
 struct array_s {
@@ -34,7 +34,7 @@ struct array_s {
     void  (*mem_free)   (void *block);
 };
 
-static enum cc_stat expand_capacity(Array *ar);
+static enum cc_stat array_expand_capacity(Array *ar);
 
 
 /**
@@ -115,7 +115,7 @@ enum cc_stat array_new_conf(ArrayConf const * const conf, Array **out)
 void array_conf_init(ArrayConf *conf)
 {
     conf->exp_factor = DEFAULT_EXPANSION_FACTOR;
-    conf->capacity   = DEFAULT_CAPACITY;
+    conf->capacity   = ARRAY_DEFAULT_CAPACITY;
     conf->mem_alloc  = malloc;
     conf->mem_calloc = calloc;
     conf->mem_free   = free;
@@ -164,7 +164,7 @@ void array_destroy_cb(Array *ar, void (*cb) (void*))
 enum cc_stat array_add(Array *ar, void *element)
 {
     if (ar->size >= ar->capacity) {
-        enum cc_stat status = expand_capacity(ar);
+        enum cc_stat status = array_expand_capacity(ar);
         if (status != CC_OK)
             return status;
     }
@@ -200,7 +200,7 @@ enum cc_stat array_add_at(Array *ar, void *element, size_t index)
         return CC_ERR_OUT_OF_RANGE;
 
     if (ar->size >= ar->capacity) {
-        enum cc_stat status = expand_capacity(ar);
+        enum cc_stat status = array_expand_capacity(ar);
         if (status != CC_OK)
             return status;
     }
@@ -833,7 +833,7 @@ void array_sort(Array *ar, int (*cmp) (const void*, const void*))
  * the memory allocation for the new buffer failed, or CC_ERR_MAX_CAPACITY
  * if the array is already at maximum capacity.
  */
-static enum cc_stat expand_capacity(Array *ar)
+static enum cc_stat array_expand_capacity(Array *ar)
 {
     if (ar->capacity == CC_MAX_ELEMENTS)
         return CC_ERR_MAX_CAPACITY;
@@ -1103,8 +1103,8 @@ enum cc_stat array_zip_iter_add(ArrayZipIter *iter, void *e1, void *e2)
     Array  *ar2  = iter->ar2;
 
     /* Make sure both array buffers have room */
-    if ((ar1->size == ar1->capacity && (expand_capacity(ar1) != CC_OK)) ||
-            (ar2->size == ar2->capacity && (expand_capacity(ar2) != CC_OK)))
+    if ((ar1->size == ar1->capacity && (array_expand_capacity(ar1) != CC_OK)) ||
+            (ar2->size == ar2->capacity && (array_expand_capacity(ar2) != CC_OK)))
         return CC_ERR_ALLOC;
 
     array_add_at(ar1, e1, index);

@@ -7,8 +7,9 @@
 
 #include <gc.h>
 #include <coro.h>
-#include <collectc/hashtable.h>
-#include <collectc/array.h>
+//#include <collectc/hashtable.h>
+//#include <collectc/array.h>
+#include <collect_cds.h>
 #include "corona.h"
 #include "coronagc.h"
 #include "coronapriv.h"

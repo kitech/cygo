@@ -1,7 +1,8 @@
 
-#include <collectc/hashtable.h>
-#include <collectc/array.h>
-#include <collectc/queue.h>
+// #include <collectc/hashtable.h>
+// #include <collectc/array.h>
+// #include <collectc/queue.h>
+#include <collect_cds.h>
 #include <pthread.h>
 
 #include "coronapriv.h"

@@ -3,7 +3,8 @@
 
 // this implemention hash functoin arch relate
 // should improve to uint64_t hash() even on x32
-#include <collectc/hashtable.h>
+//#include <collectc/hashtable.h>
+#include <collect_cds.h>
 
 #include "cxrtbase.h"
 
