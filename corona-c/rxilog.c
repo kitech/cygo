@@ -286,12 +286,14 @@ int log_log_nofmt(int level, const char *file, int line, int vallens[], int tyid
             }
             break;
         case ctypeid_uchar: {
-            uchar val = va_arg(args, unsigned char);
+			// is promoted to ‘int’
+            uchar val = va_arg(args, int); // unsigned char);
             pos += logno_append(buf, sizeof(buf), pos, "%u", val);
             }
             break;
         case ctypeid_char: {
-            char val = va_arg(args, char);
+			// is promoted to ‘int’
+            char val = va_arg(args, int); // char);
             pos += logno_append(buf, sizeof(buf), pos, "%c", val);
             }
             break;
@@ -330,7 +332,8 @@ int log_log_nofmt(int level, const char *file, int line, int vallens[], int tyid
             }
             break;
         case ctypeid_bool: {
-            _Bool val = va_arg(args, _Bool);
+			// is promoted to ‘int’
+            _Bool val = va_arg(args, int); // _Bool);
             pos += logno_append(buf, sizeof(buf), pos, "%s", val?"true":"false");
             }
             break;

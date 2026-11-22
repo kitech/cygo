@@ -98,7 +98,7 @@ int (array_randcmp) (const void*a, const void*b) {
 // used before inited
 #define lograw(fmt, ...)                                                \
     if (SHOWLOG) {                                                      \
-        const char* filename = __FILE__; char* fbname = strrchr(filename, '/'); \
+        const char* filename = __FILE__; const char* fbname = strrchr(filename, '/'); \
         if (fbname != NULL) fbname ++;                                  \
         crn_loglock();                                                  \
         fprintf(stderr, "%s:%d %s: ", fbname, __LINE__, __func__); \
@@ -211,7 +211,7 @@ void __attribute__((no_instrument_function))
 crn_simlog(int level, const char *filename, int line, const char* funcname, const char *fmt, ...) {
     if (level > loglvl) return;
     static __thread char obuf[612] = {0};
-    char* fbname = strrchr(filename, '/');
+    const char* fbname = strrchr(filename, '/');
     if (fbname != NULL) fbname ++;
     struct timeval ltv = {0};
     gettimeofday(&ltv, 0);
@@ -239,7 +239,7 @@ crn_simlog(int level, const char *filename, int line, const char* funcname, cons
 // nolock version, used when stopped the world
 void crn_simlog2(int level, const char *filename, int line, const char* funcname, const char *fmt, ...) {
     static __thread char obuf[612] = {0};
-    char* fbname = strrchr(filename, '/');
+    const char* fbname = strrchr(filename, '/');
     if (fbname != NULL) fbname ++;
     struct timeval ltv = {0};
     gettimeofday(&ltv, 0);
