@@ -8,8 +8,26 @@ set -u
 cd "$(dirname "$0")"
 
 MODE="${1:-default}"
-LOG_DIR="${LOG_DIR:-/tmp/opencode/main2}"
-mkdir -p "$LOG_DIR"
+
+# Android/Termux: /tmp is read-only. Prefer LOG_DIR, then $TMPDIR (Termux),
+# then $PREFIX/tmp, then a repo-local directory.
+if [ -z "${LOG_DIR:-}" ]; then
+    if [ -d /tmp ] && [ -w /tmp ]; then
+        LOG_DIR=/tmp/opencode/main2
+    elif [ -n "${TMPDIR:-}" ] && [ -d "${TMPDIR}" ]; then
+        LOG_DIR="${TMPDIR}/main2"
+    elif [ -n "${PREFIX:-}" ] && [ -d "${PREFIX}/tmp" ]; then
+        LOG_DIR="${PREFIX}/tmp/main2"
+    else
+        LOG_DIR="$(pwd)/main2-logs"
+    fi
+fi
+if ! mkdir -p "$LOG_DIR" 2>/dev/null; then
+    LOG_DIR="$(pwd)/main2-logs"
+    mkdir -p "$LOG_DIR" || { echo "FAIL: cannot create log dir"; exit 1; }
+fi
+# main2.c s26 uses this for its file-io scenario
+export CRN2_TMPDIR="${CRN2_TMPDIR:-$LOG_DIR}"
 
 BIN="${BIN:-./zig-out/bin/corona2}"
 [ -x "$BIN" ] || BIN="./build/corona2"
@@ -17,6 +35,8 @@ BIN="${BIN:-./zig-out/bin/corona2}"
 
 pass=0; fail=0; skip=0
 script_start=$(date +%s)
+
+say() { echo "[$(date '+%H:%M:%S')] $*"; }
 
 fmt_dur() { # seconds -> 1m23s
     local s=$1
@@ -31,33 +51,46 @@ case "$MODE" in
     *)       TOTAL_EST=520;  MODE_DESC="default（完整默认项）" ;;
 esac
 
-echo "================================================================"
-echo " main2.sh mode=$MODE  $MODE_DESC"
-echo " log dir      : $LOG_DIR"
-echo " estimated    : ~$(fmt_dur $TOTAL_EST)（不含构建；超时上限另计）"
-echo " started at   : $(date '+%F %T')"
-echo "================================================================"
+say "================================================================"
+say "main2.sh mode=$MODE  $MODE_DESC"
+say "log dir      : $LOG_DIR"
+say "estimated    : ~$(fmt_dur $TOTAL_EST)（不含构建；超时上限另计）"
+say "started at   : $(date '+%F %T')"
+say "================================================================"
 
 run() {                      # run <name> <est_sec> <timeout_sec> <cmd...>
     local name="$1"; local est="$2"; local to="$3"; shift 3
     local t0=$(date +%s)
-    echo
-    echo "=== $name ===（est ~$(fmt_dur $est)，timeout ${to}s）"
-    echo "CMD: $*"
-    with_timeout "$to" "$@" >"$LOG_DIR/$name.log" 2>&1
-    local rc=$?
+    say ""
+    say "=== $name === start（est ~$(fmt_dur $est)，timeout ${to}s）"
+    say "CMD: $*"
+    rm -f "$LOG_DIR/$name.rc"
+    ( with_timeout "$to" "$@" >"$LOG_DIR/$name.log" 2>&1; \
+      echo $? >"$LOG_DIR/$name.rc" ) &
+    local wpid=$!
+    while kill -0 "$wpid" 2>/dev/null; do
+        sleep 5
+        if kill -0 "$wpid" 2>/dev/null; then
+            say "  [$name] running $(( $(date +%s) - t0 ))s"
+            tail -n 1 "$LOG_DIR/$name.log" 2>/dev/null | sed 's/^/      /'
+        fi
+    done
+    wait "$wpid" 2>/dev/null
+    local rc=$(cat "$LOG_DIR/$name.rc" 2>/dev/null)
+    rm -f "$LOG_DIR/$name.rc"
+    [ -n "$rc" ] || rc=1
     local el=$(( $(date +%s) - t0 ))
-    if [ $rc -eq 0 ]; then
-        echo "PASS ${name}（实际 $(fmt_dur ${el})）"; pass=$((pass+1))
-    elif [ $rc -eq 124 ]; then
-        echo "FAIL ${name}（timeout ${to}s，实际 $(fmt_dur ${el})）"
-        tail -3 "$LOG_DIR/$name.log"; fail=$((fail+1))
+    if [ "$rc" -eq 0 ]; then
+        say "PASS ${name}（实际 $(fmt_dur ${el})）"; pass=$((pass+1))
+    elif [ "$rc" -eq 124 ]; then
+        say "FAIL ${name}（timeout ${to}s，实际 $(fmt_dur ${el})）"
+        tail -5 "$LOG_DIR/$name.log"; fail=$((fail+1))
     else
-        echo "FAIL ${name} rc=${rc}（实际 $(fmt_dur ${el})，log ${LOG_DIR}/${name}.log）"
+        say "FAIL ${name} rc=${rc}（实际 $(fmt_dur ${el})，log ${LOG_DIR}/${name}.log）"
         tail -5 "$LOG_DIR/$name.log"; fail=$((fail+1))
     fi
 }
-skip_if() { echo "SKIP ${1}（${2}）"; skip=$((skip+1)); }
+skip_if() { say "SKIP ${1}（${2}）"; skip=$((skip+1)); }
 
 # macOS has no GNU `timeout`: prefer timeout/gtimeout, else emulate with a
 # background watchdog. Returns 124 on timeout (same as GNU timeout).
@@ -81,26 +114,36 @@ with_timeout() {           # with_timeout <sec> <cmd...>
 }
 
 # ---------------------------------------------------------------- build
-echo
-echo "=== build ===（est ~$(fmt_dur 20)）"
+build_t0=$(date +%s)
+say ""
+say "=== build === start（est ~$(fmt_dur 20)）"
 if [ ! -x "$BIN" ]; then
+    built=0
     if command -v zig >/dev/null 2>&1; then
-        echo "CMD: zig build corona2"
-        zig build corona2 || { echo "FAIL build"; exit 1; }
-        BIN="./zig-out/bin/corona2"
-    elif [ -d build ] || [ -d ../build ]; then
-        echo "CMD: cmake --build build --target corona2"
-        cmake --build build --target corona2 2>/dev/null || cmake --build ../build --target corona2 || { echo "FAIL build"; exit 1; }
-        [ -x ./build/corona2 ] && BIN="./build/corona2" || BIN="../build/corona2"
-    else
-        echo "CMD: cmake -B build && cmake --build build --target corona2"
-        cmake -B build >/dev/null && cmake --build build --target corona2 || { echo "FAIL build"; exit 1; }
-        BIN="./build/corona2"
+        say "CMD: zig build corona2"
+        if zig build corona2; then
+            BIN="./zig-out/bin/corona2"
+            built=1
+        else
+            say "zig build failed, falling back to CMake"
+        fi
+    fi
+    if [ "$built" -eq 0 ]; then
+        if [ -f ../build/CMakeCache.txt ]; then
+            say "CMD: cmake --build ../build --target corona2"
+            cmake --build ../build --target corona2 || { say "FAIL build"; exit 1; }
+        else
+            say "CMD: cmake -S .. -B ../build && cmake --build ../build --target corona2"
+            cmake -S .. -B ../build >/dev/null || { say "FAIL build"; exit 1; }
+            cmake --build ../build --target corona2 || { say "FAIL build"; exit 1; }
+        fi
+        BIN="../build/corona2"
     fi
 else
-    echo "SKIP build（已存在 ${BIN}）"
+    say "SKIP build（已存在 ${BIN}）"
 fi
-echo "BIN: $BIN"
+say "build done（$(fmt_dur $(( $(date +%s) - build_t0 )))）"
+say "BIN: $BIN"
 
 # 1) 冒烟
 run smoke 50 120 env CRN2_SECONDS=45 CRN2_SCENARIOS=s1,s2,s4,s5,s6 "$BIN"
@@ -112,23 +155,23 @@ run filter 50 120 env CRN2_SECONDS=45 CRN2_SCENARIOS=s5,s21,s22 "$BIN"
 run deep 65 300 env CRN2_DEEP=1 CRN2_SECONDS=60 CRN2_SCENARIOS=s17 "$BIN"
 
 if [ "$MODE" = "quick" ]; then
-    echo
-    echo "== summary: pass=$pass fail=$fail skip=$skip mode=$MODE 总耗时 $(fmt_dur $(( $(date +%s) - script_start ))) =="
+    say ""
+    say "== summary: pass=$pass fail=$fail skip=$skip mode=$MODE 总耗时 $(fmt_dur $(( $(date +%s) - script_start ))) =="
     exit $(( fail > 0 ))
 fi
 
 # 4) 蓄意栈溢出：期望 rc!=0 且日志含 SO- 标记（handler 生效）
-echo
-echo "=== overflow ===（est ~$(fmt_dur 10)，timeout 60s）"
-echo "CMD: env CRN2_OVERFLOW=1 CRN2_SCENARIOS=s18 $BIN"
+say ""
+say "=== overflow ===（est ~$(fmt_dur 10)，timeout 60s）"
+say "CMD: env CRN2_OVERFLOW=1 CRN2_SCENARIOS=s18 $BIN"
 t0=$(date +%s)
 with_timeout 60 env CRN2_OVERFLOW=1 CRN2_SCENARIOS=s18 "$BIN" >"$LOG_DIR/overflow.log" 2>&1
 rc=$?
 if [ $rc -ne 0 ] && [ $rc -ne 124 ] && grep -q "^SO-" "$LOG_DIR/overflow.log"; then
-    echo "PASS overflow（handler captured SO- markers，rc=${rc}，实际 $(fmt_dur $(( $(date +%s) - t0 )))）"
+    say "PASS overflow（handler captured SO- markers，rc=${rc}，实际 $(fmt_dur $(( $(date +%s) - t0 )))）"
     pass=$((pass+1))
 else
-    echo "FAIL overflow rc=${rc}（log ${LOG_DIR}/overflow.log）"
+    say "FAIL overflow rc=${rc}（log ${LOG_DIR}/overflow.log）"
     tail -5 "$LOG_DIR/overflow.log"; fail=$((fail+1))
 fi
 
@@ -164,7 +207,7 @@ if [ "$MODE" = "all" ]; then
     run soak1h 3630 3900 env CRN2_SECONDS=3600 CRN2_DNS=1 "$BIN"
 fi
 
-echo
-echo "== summary: pass=$pass fail=$fail skip=$skip mode=$MODE =="
-echo "== estimated ~$(fmt_dur $TOTAL_EST)，实际 $(fmt_dur $(( $(date +%s) - script_start ))) =="
+say ""
+say "== summary: pass=$pass fail=$fail skip=$skip mode=$MODE =="
+say "== estimated ~$(fmt_dur $TOTAL_EST)，实际 $(fmt_dur $(( $(date +%s) - script_start ))) =="
 exit $(( fail > 0 ))

@@ -961,7 +961,10 @@ static void s25(void* arg) {
 static void s26(void* arg) {
     (void)arg;
     char path[128];
-    snprintf(path, sizeof(path), "/tmp/opencode/main2_io.%d", (int)getpid());
+    const char* tmp = getenv("CRN2_TMPDIR");
+    if (tmp == NULL || tmp[0] == '\0') tmp = getenv("TMPDIR");
+    if (tmp == NULL || tmp[0] == '\0') tmp = "/tmp";
+    snprintf(path, sizeof(path), "%s/main2_io.%d", tmp, (int)getpid());
     LOOP_WHILE(S26) {
         int fd = open(path, O_CREAT | O_RDWR | O_TRUNC, 0600);
         if (fd >= 0) {
