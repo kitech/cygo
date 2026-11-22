@@ -46,6 +46,8 @@ static int g_abort_on_stall = 0;
 static int g_destroy_on_exit = 0;
 static unsigned g_seed = 1;
 static volatile sig_atomic_t g_stopping = 0;
+static volatile int g_controller_done = 0;
+static volatile int g_controller_rc = 0;
 
 // ------------------------------------------------------------- progress slots
 enum {
@@ -1063,8 +1065,8 @@ static void controller(void* arg) {
     if (g_destroy_on_exit) {
         crn_destroy(crn_get());
     }
-    if (t_fails > 0 || fin < posted) exit(1);
-    exit(0);
+    g_controller_rc = (t_fails > 0 || fin < posted) ? 1 : 0;
+    g_controller_done = 1;
 }
 
 // ------------------------------------------------------------------- init/main
@@ -1137,5 +1139,13 @@ int main(void) {
           g_seconds, g_seed, g_stats_sec, g_dns, g_deep, g_overflow);
 
     crn_post(controller, 0);
-    for (;;) sleep(1);
+    for (;;) {
+        if (g_controller_done) break;
+        if (now_ms() > g_deadline_ms + 10000) {
+            linfo("controller stalled; hard exit %d\n", 0);
+            _exit(1);
+        }
+        sleep(1);
+    }
+    return g_controller_rc;
 }

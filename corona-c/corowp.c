@@ -138,21 +138,14 @@ static void corowp_libco_entry(void) {
 }
 
 void corowp_create(coro_context *ctx, coro_func coro, void *arg, void *sptr, size_t ssze) {
-    void *mem = sptr;
-    size_t memsz = ssze;
-
     assert(ctx != nilptr);
     ctx->coro = coro;
     ctx->arg = arg;
-    /* corona.c makes the first page of each fiber stack a read-only guard.
-     * libco writes its handle block at the low end of `memory`, so start
-     * after the guard page. Stack top stays mem+memsz == sptr+ssze. */
-    if (memsz > CRN_FIBER_GUARD_SIZE) {
-        mem   = (char*)mem + CRN_FIBER_GUARD_SIZE;
-        memsz -= CRN_FIBER_GUARD_SIZE;
-    }
+    /* Layout (low -> high): [handle page][guard page][stack ...].
+     * libco writes its handle block at `sptr`; the guard above it faults
+     * before a stack overflow can corrupt the saved context. */
     crn_libco_boot_ctx = ctx; // thread-local: create is followed by transfer
-    ctx->handle = co_derive(mem, (unsigned int)memsz, corowp_libco_entry);
+    ctx->handle = co_derive(sptr, (unsigned int)ssze, corowp_libco_entry);
     assert(ctx->handle != NULL);
 }
 

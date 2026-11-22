@@ -97,10 +97,10 @@ skip_if() { say "SKIP ${1}（${2}）"; skip=$((skip+1)); }
 with_timeout() {           # with_timeout <sec> <cmd...>
     local to="$1"; shift
     if command -v timeout >/dev/null 2>&1; then
-        timeout "$to" "$@"; return $?
+        timeout -k 5 "$to" "$@"; return $?
     fi
     if command -v gtimeout >/dev/null 2>&1; then
-        gtimeout "$to" "$@"; return $?
+        gtimeout -k 5 "$to" "$@"; return $?
     fi
     "$@" &
     local pid=$!

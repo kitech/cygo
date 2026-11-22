@@ -179,7 +179,9 @@ static int crn_fiber_fault_handler(void* fault_address, void* user_arg) {
     fiber* gr = user_arg;
 
     crn_is_ptr_onstack(fault_address, gr->stkptr, gr->stksz, 1);
-    int inprot = crn_is_ptr_onstack(fault_address, gr->stkptr, 4096, 1);
+    int inprot = crn_is_ptr_onstack(fault_address,
+                                    (char*)gr->stkptr + CRN_FIBER_GUARD_SIZE,
+                                    CRN_FIBER_GUARD_SIZE, 1);
     int rv = 0;
 
     if (0 && inprot) {
@@ -294,11 +296,14 @@ void crn_fiber_new2(fiber*gr, size_t stksz) {
     gr->stack.sptr = (void*)stkptr; // no need jump guard page
     gr->stack.ssze = stksz;
 
-    memset(stkptr, 123, CRN_FIBER_GUARD_SIZE);
+    /* [handle page][guard page][stack ...]: libco's handle lives in the first
+     * page, so the guard is the second page. */
+    memset((char*)stkptr + CRN_FIBER_GUARD_SIZE, 123, CRN_FIBER_GUARD_SIZE);
     gr->stkmid = (void*)((uintptr_t)stkptr + stksz/2 - 2048);
     memset(gr->stkmid, 123, 4096);
 
-    rv = mprotect(stkptr, CRN_FIBER_GUARD_SIZE, PROT_READ);
+    rv = mprotect((char*)stkptr + CRN_FIBER_GUARD_SIZE,
+                  CRN_FIBER_GUARD_SIZE, PROT_READ);
     if(rv != 0) { lerror("rv=%d, errno=%d, errstr=%s\n", rv, errno, strerror(errno)); }
     assert(rv == 0);
     // ucontext 栈从 sptr+stksz 向下生长；libgc stack_end 是栈顶高地址(+1)
@@ -327,9 +332,11 @@ static void crn_fiber_checkstk(fiber* gr) {
     if (changedmid >= 0) {
         linfo("changedmid gr=%d pos=%d %d\n", grid, changedmid, ((char*)gr->stkmid)[changedmid]);
     }
-    int changed = memchanged(gr->stkptr, 123, 4096);
+    int changed = memchanged((char*)gr->stkptr + CRN_FIBER_GUARD_SIZE,
+                             123, CRN_FIBER_GUARD_SIZE);
     if (changed >= 0) {
-        linfo("changed gr=%d pos=%d %d\n", grid, changed, ((char*)gr->stkptr)[changed]);
+        linfo("changed gr=%d pos=%d %d\n", grid, changed,
+              ((char*)gr->stkptr + CRN_FIBER_GUARD_SIZE)[changed]);
     }
     assert(changed == -1);
 }
@@ -362,7 +369,8 @@ void crn_fiber_destroy(fiber* gr) {
     // linfo("gr %d on %d, freed %d, %d\n", grid, mcid, ssze, sizeof(fiber));
     corowp_destroy(&gr->coctx);
     if (gr->stack.sptr != 0) {
-        int rv = mprotect(gr->stkptr, 4096, PROT_READ|PROT_WRITE);
+        int rv = mprotect((char*)gr->stkptr + CRN_FIBER_GUARD_SIZE,
+                          CRN_FIBER_GUARD_SIZE, PROT_READ|PROT_WRITE);
         assert(rv == 0);
 
         // todo
@@ -1335,7 +1343,7 @@ int crn_procer_yield(int64_t fd, int ytype) {
             // bionic usleep() internally calls nanosleep(), which is also
             // intercepted by iohook and would yield again.  Call the real
             // nanosleep_f directly so the collector simply sleeps.
-            crn_sleepms_nohook(fd);
+            crn_sleepms_nohook(fd/1000);
             lwarn("stopworld little danger avoided %d\n", fd);
             return 0; // our sleep instead real caller
         }

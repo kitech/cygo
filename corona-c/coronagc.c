@@ -56,8 +56,8 @@ static void crn_gc_finalizer(void*ptr, void*clientdata) {
 
 int crn_sleepms_nohook(int val) {
 
-    int fd = val <= 0 ? 1234 : val;
-    int64_t us = fd > 0 ? fd : 0;
+    int64_t fd = 1000*(val <= 0 ? (1234/1000) : val); // in us
+    int64_t us = fd > 0 ? fd : 1;
     struct timespec ts;
     ts.tv_sec  = (time_t)(us / 1000000);
     ts.tv_nsec = (long)(us % 1000000) * 1000L;
@@ -83,7 +83,7 @@ int crn_gc_deadlock_detect1() {
         int waitcnt = 0;
         while(atomic_getint(&crn_gc_states.stopworld)==1) {
             // usleep_f(1234); // ~1ms
-            crn_sleepms_nohook(1234); // ~1ms
+            crn_sleepms_nohook(2); // ~2ms
             waitcnt++;
         }
         lwarn("stopworld little danger avoided %d\n", waitcnt);
