@@ -459,6 +459,11 @@ static bool checkhtkeys(crnmap* ht) {
 
 // gnr__->mchs
 // check mc->id valid
+// NOTE: this variant allocates (array_new / crnmap_get_keys -> crn_gc_calloc).
+// Do NOT call it from crn_fiber_suspend or any other path where the current
+// thread may already hold the GC allocation lock (e.g. inside GC_stop_world or
+// a GC callback): the allocation would re-acquire GC_allocate_ml and deadlock.
+// Use crn_check_mchs_noalloc() on the fiber yield path.
 static bool crn_check_mchs(crnmap* ht) {
     Array* arr1 = nilptr;
     Array* arr2 = nilptr;
@@ -479,6 +484,35 @@ static bool crn_check_mchs(crnmap* ht) {
     if (arr1 != nilptr) array_destroy(arr1);
     if (arr2 != nilptr) array_destroy(arr2);
     return false;
+}
+
+typedef struct {
+    int count;
+    int errs;
+} crn_mchcheck;
+
+static int crn_check_mchs_cb(uintptr_t key, void *val, void *arg) {
+    crn_mchcheck *st = (crn_mchcheck *)arg;
+    machine *mc = (machine *)val;
+    st->count++;
+    if (mc == nilptr || mc->id != (int)key) {
+        st->errs++;
+    }
+    return 0; /* continue */
+}
+
+// Allocation-free equivalent of crn_check_mchs() for the fiber yield path.
+// Safe while the current thread may hold the GC lock: it only walks the hash
+// table and compares integer ids.  If the map is busy, skip this pass.
+static bool crn_check_mchs_noalloc(crnmap *ht) {
+    crn_mchcheck st = {0, 0};
+    if (!crnmap_foreach(ht, crn_check_mchs_cb, &st)) {
+        return false;
+    }
+    if (st.errs != 0) {
+        lerror("mchs invalid: %d/%d entries\n", st.errs, st.count);
+    }
+    return st.errs != 0;
 }
 
 void crn_fiber_forward(void* arg) {
@@ -649,7 +683,9 @@ void crn_fiber_suspend(fiber* gr) {
     }
     lverb("coctx before swapto mainco fid %d mcid %d\n", gr->id, gr->mcid);
 
-    crn_check_mchs(gnr__->mchs); // before
+    // Yield path: must be allocation-free.  This thread may already hold the
+    // GC lock (collector), so a GC allocation here would self-deadlock.
+    crn_check_mchs_noalloc(gnr__->mchs); // before
     // 不能在此恢复 pthread 栈底：SP 仍在 fiber 栈上，
     // stack_end=pthread_top 会形成 [fiber_sp, pthread_top) 巨大正向区间。
     // 由 crn_sched_run_one 切回 pthread 栈后恢复。
@@ -1296,9 +1332,15 @@ int crn_procer_yield(int64_t fd, int ytype) {
         extern int crn_gc_deadlock_detect1();
         if (atomic_getint(&crn_gc_states.stopworld)==1) {
             lwarn("stopworld little danger %d\n", fd);
-            // assert(sizeof(useconds_t)==sizeof(long));
-            extern int (*usleep_f)(useconds_t);
-            usleep_f(fd);
+            // bionic usleep() internally calls nanosleep(), which is also
+            // intercepted by iohook and would yield again.  Call the real
+            // nanosleep_f directly so the collector simply sleeps.
+            extern int (*nanosleep_f)(const struct timespec *, struct timespec *);
+            int64_t us = fd > 0 ? fd : 0;
+            struct timespec ts;
+            ts.tv_sec  = (time_t)(us / 1000000);
+            ts.tv_nsec = (long)(us % 1000000) * 1000L;
+            nanosleep_f(&ts, NULL);
             lwarn("stopworld little danger avoided %d\n", fd);
             return 0; // our sleep instead real caller
         }
@@ -1846,6 +1888,7 @@ void crn_init_intern() {
     crn_post_gclock_fn = crn_post_gclock_proc;
 
     #ifdef __APPLE__
+    #elif __ANDROID__ || __BIONIC__
     #else
     GC_set_sp_corrector(crn_sp_corrector);
     assert(GC_get_sp_corrector()!=0);

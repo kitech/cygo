@@ -22,9 +22,12 @@ static void crn_sp_corrector(void** sp_ptr, void* tid) {
 // #else
 //     assert("unsupported platform");
 #else
+	#include <assert.h>
     pthread_attr_t gattr;
-    pthread_getattr_np((pthread_t)tid, &gattr);
-    pthread_attr_getstack(&gattr, (void**)&stack_addr, &stack_size);
+    int rc1 = pthread_getattr_np((pthread_t)tid, &gattr);
+    if (rc1 != 0) { assert(rc1==0); }
+    int rc2 = pthread_attr_getstack(&gattr, (void**)&stack_addr, &stack_size);
+    if (rc1 != 0) { assert(rc1==0); }
     pthread_attr_destroy(&gattr);
 #endif
     char *sp = (char*)*sp_ptr;

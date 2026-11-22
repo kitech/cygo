@@ -24,6 +24,10 @@ size_t crnmap_size(crnmap *table);
 size_t crnmap_capacity(crnmap *table);
 enum cc_stat crnmap_get_keys(crnmap *table, Array **out);
 enum cc_stat crnmap_get_values(crnmap *table, Array **out);
+/* Allocation-free, non-blocking iteration.
+ * Returns false without calling fn if the table lock is busy. */
+typedef int (*crnmap_iter_fn)(uintptr_t key, void *val, void *arg);
+bool crnmap_foreach(crnmap *table, crnmap_iter_fn fn, void *arg);
 void* crnmap_takeone(crnmap* table);
 void* crnmap_findone(crnmap* table, bool(*chkfn)(void* v));
 

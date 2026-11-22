@@ -11,7 +11,7 @@
 #define LIBGO_SYS_Macos
 #elif _WIN32
 #define LIBGO_SYS_Windows
-#elif defined(__ANDROID__)
+#elif defined(__ANDROID__) || defined(__BIONIC__)
 #define LIBGO_SYS_Android
 #else
 #define LIBGO_SYS_Linux

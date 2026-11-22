@@ -151,6 +151,24 @@ enum cc_stat crnmap_get_values(crnmap *table, Array **out){
     return rv;
 }
 
+// Allocation-free iteration over a crnmap.  Non-blocking: if the table lock
+// is already held (e.g. by a suspended thread), return false and skip the pass
+// instead of risking a deadlock in the yield path.
+bool crnmap_foreach(crnmap *table, crnmap_iter_fn fn, void *arg) {
+    if (pmutex_trylock(&table->mu) != 0) {
+        return false;
+    }
+    HashTableIter iter;
+    TableEntry *te = NULL;
+    hashtable_iter_init(&iter, table->ht);
+    while (hashtable_iter_next(&iter, &te) != CC_ITER_END) {
+        if (te == NULL) break;
+        if (fn((uintptr_t)te->key, te->value, arg) != 0) break;
+    }
+    pmutex_unlock(&table->mu);
+    return true;
+}
+
 // 随机摘除一个元素
 void* crnmap_takeone(crnmap* table) {
     void* val = nilptr;

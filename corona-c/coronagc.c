@@ -145,7 +145,10 @@ void crn_call_with_alloc_lock(void*(*fnptr)(void* arg1), void* arg) {
     // GC_call_with_alloc_lock(fnptr, arg);
     // GC_do_blocking(fnptr, arg);
     GC_call_with_gc_active(fnptr, arg);
+    #elif __ANDROID__ || __BIONIC__
+    GC_call_with_gc_active(fnptr, arg);
     #else
+    // GC_call_with_gc_active(fnptr, arg);
     #endif
     crn_post_gclock(__func__);
 }
