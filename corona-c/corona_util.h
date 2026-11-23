@@ -34,6 +34,43 @@ static int thread_getstack(pthread_t pth, void** stk, size_t* size) {
     ret = pthread_attr_getstack(&attr, stk, size); assert(ret == 0);
     return ret;
 }
+#elif defined(__FreeBSD__)
+#include <pthread_np.h>
+#define thread_setname0(name) pthread_setname_np(pthread_self(), name)
+#define thread_setname(th, name) pthread_setname_np(th, name)
+static int thread_getstack(pthread_t pth, void** stk, size_t* size) {
+    int ret = 0; pthread_attr_t attr;
+    ret = pthread_attr_init(&attr); assert(ret == 0);
+    ret = pthread_attr_get_np(pth, &attr); assert(ret == 0);
+    ret = pthread_attr_getstack(&attr, stk, size); assert(ret == 0);
+    pthread_attr_destroy(&attr);
+    return ret;
+}
+#elif defined(__NetBSD__)
+#define thread_setname0(name) pthread_setname_np(pthread_self(), name, NULL)
+#define thread_setname(th, name) pthread_setname_np(th, name, NULL)
+static int thread_getstack(pthread_t pth, void** stk, size_t* size) {
+    int ret = 0; pthread_attr_t attr;
+    ret = pthread_attr_init(&attr); assert(ret == 0);
+    ret = pthread_getattr_np(pth, &attr); assert(ret == 0);
+    ret = pthread_attr_getstack(&attr, stk, size); assert(ret == 0);
+    pthread_attr_destroy(&attr);
+    return ret;
+}
+#elif defined(__OpenBSD__)
+#include <pthread_np.h>
+#define thread_setname0(name) pthread_set_name_np(pthread_self(), name)
+#define thread_setname(th, name) pthread_set_name_np(th, name)
+static int thread_getstack(pthread_t pth, void** stk, size_t* size) {
+    stack_t ss = {0};
+    int ret = pthread_stackseg_np(pth, &ss);
+    assert(ret == 0);
+    /* pthread_stackseg_np(3): ss_sp points to the stack top (high address),
+     * while callers here expect the stack base (low address). */
+    *size = (size_t)ss.ss_size;
+    *stk  = (char*)ss.ss_sp - ss.ss_size;
+    return ret;
+}
 #else
 #define thread_setname0(name) pthread_setname_np(pthread_self(), name)
 #define thread_setname(th, name) pthread_setname_np(th, name)

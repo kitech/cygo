@@ -9,6 +9,11 @@
 #include <sys/param.h>
 #include <unistd.h>
 #include <sys/syscall.h>
+#if defined(__FreeBSD__)
+# include <sys/thr.h>
+#elif defined(__NetBSD__)
+# include <lwp.h>
+#endif
 // #include <threads.h>
 #include <pthread.h>
 #include <yieldtypes.h>
@@ -79,14 +84,19 @@ pid_t gettid() {
         assert(tid == tid2);
         // pid_t is 32-bit; truncation is intentional (ids are for logging)
         return (pid_t)tid;
+    #elif defined(__FreeBSD__)
+        long lwpid = 0;
+        thr_self(&lwpid);
+        return (pid_t)lwpid;
+    #elif defined(__NetBSD__)
+        return (pid_t)_lwp_self();
+    #elif defined(__OpenBSD__)
+        return getthrid();
+    #elif defined(SYS_gettid)
+        return (pid_t)syscall(SYS_gettid);
     #else
-#ifdef SYS_gettid
-    pid_t tid = syscall(SYS_gettid);
-    return tid;
-#else
-#error "SYS_gettid unavailable on this system"
-    return 0;
-#endif
+#error "no thread id primitive: add a branch for this platform"
+        return 0;
     #endif
 }
 

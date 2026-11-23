@@ -22,8 +22,7 @@ extern fcntl_t fcntl_f;
 extern getsockopt_t getsockopt_f;
 extern setsockopt_t setsockopt_f;
 
-#ifdef __APPLE__
-#else
+#if defined(LIBGO_SYS_Linux) || defined(LIBGO_SYS_Android)
 #include <sys/epoll.h>
 extern epoll_wait_t epoll_wait_f;
 

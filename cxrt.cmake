@@ -197,7 +197,13 @@ if(CRN_IS_ANDROID)
 else()
   set(corona_c_flags "${corona_c_flags} -DCORO_UCONTEXT -DHAVE_UCONTEXT_H")
 endif()
-set(corona_c_flags "${corona_c_flags}  -D_XOPEN_SOURCE=600") # macos: explicit level, fixes tiny sizeof(ucontext_t)
+# _XOPEN_SOURCE=600 exists for macOS (explicit level -> correct sizeof(ucontext_t)).
+# On the BSDs it clears __BSD_VISIBLE, hiding MSG_DONTWAIT/MSG_NOSIGNAL/
+# F_DUPFD_CLOEXEC and the u_char family, so keep the strict XSI level to
+# Darwin/Linux and let the BSDs use their default namespace.
+if(NOT CMAKE_SYSTEM_NAME MATCHES "^(FreeBSD|NetBSD|OpenBSD)$")
+  set(corona_c_flags "${corona_c_flags}  -D_XOPEN_SOURCE=600")
+endif()
 if(APPLE)
   # _XOPEN_SOURCE hides BSD types (u_char/u_int in nameser.h via resolv.h);
   # _DARWIN_C_SOURCE re-enables them while keeping the XOPEN visibility level

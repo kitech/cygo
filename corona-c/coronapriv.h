@@ -16,9 +16,7 @@
 #include <time.h>
 // #include <pthread.h>
 // #include <threads.h> // c11 mtx_t
-#ifdef __APPLE__
-#elif _WIN32
-#else
+#if defined(__linux__)
 #include <sys/epoll.h>
 #include <sys/timerfd.h>
 #endif

@@ -25,7 +25,6 @@ const cflags_base: []const []const u8 = &.{
     "-DHAVE_SIGALTSTACK",
     "-DGC_THREADS",
     "-DLOG_USE_COLOR",
-    "-D_XOPEN_SOURCE=600", // macOS: explicit level (bare -D means 1)
     "-O0", // explicit: no optimization, compile-speed first
     "-fno-omit-frame-pointer",
     "-pipe", // stream through pipes instead of temp files
@@ -33,9 +32,16 @@ const cflags_base: []const []const u8 = &.{
     // no -fstack-protector-all: per-function instrumentation, slower to compile
 };
 
-fn makeCflags(alloc: std.mem.Allocator, cdebug: bool, is_macos: bool, is_android: bool) []const []const u8 {
+// _XOPEN_SOURCE=600 exists for macOS (explicit level -> correct sizeof(ucontext_t)).
+// On the BSDs it clears __BSD_VISIBLE, which hides MSG_DONTWAIT/MSG_NOSIGNAL/
+// F_DUPFD_CLOEXEC and the u_char family, so leave the strict XSI level to
+// Darwin/Linux.  BSD then sees its normal default namespace.
+fn makeCflags(alloc: std.mem.Allocator, cdebug: bool, is_macos: bool, is_android: bool, is_bsd: bool) []const []const u8 {
     var list: std.ArrayList([]const u8) = .empty;
     list.appendSlice(alloc, cflags_base) catch @panic("OOM");
+    if (!is_bsd) {
+        list.append(alloc, "-D_XOPEN_SOURCE=600") catch @panic("OOM");
+    }
     // macOS: _XOPEN_SOURCE hides BSD types (u_char/u_int) used by nameser.h
     if (is_macos) list.append(alloc, "-D_DARWIN_C_SOURCE") catch @panic("OOM");
     // bionic: _XOPEN_SOURCE alone hides some declarations; enable default APIs
@@ -103,6 +109,10 @@ pub fn build(b: *std.Build) void {
     const backend = b.option([]const u8, "netpoller", "netpoller backend: libevent|epoll") orelse "libevent";
     const cdebug = b.option(bool, "cdebug", "emit -g and stack protector for C sources (default off: compile speed)") orelse false;
     const is_android = target.result.abi == .android;
+    const is_bsd = switch (target.result.os.tag) {
+        .freebsd, .netbsd, .openbsd => true,
+        else => false,
+    };
     // libexecinfo: bionic has no backtrace(), musl has neither <execinfo.h>
     // nor backtrace() (Alpine/Void ship them in libexecinfo). Default on for
     // Android only: zig's bundled musl headers have no <execinfo.h>, so a musl
@@ -111,7 +121,7 @@ pub fn build(b: *std.Build) void {
     // -Dexecinfo=true when they have a matching libexecinfo for the target.
     const want_execinfo = b.option(bool, "execinfo",
         "link libexecinfo for backtrace() (default: android only; pass true on musl with libexecinfo installed)") orelse is_android;
-    const cflags = makeCflags(b.allocator, cdebug, target.result.os.tag == .macos, is_android);
+    const cflags = makeCflags(b.allocator, cdebug, target.result.os.tag == .macos, is_android, is_bsd);
 
     const use_epoll = std.mem.eql(u8, backend, "epoll");
     if (!use_epoll and !std.mem.eql(u8, backend, "libevent")) {

@@ -186,13 +186,33 @@ void panicln_cimpl(cxstring*s) {
 
 #include <unistd.h>
 #include <sys/syscall.h>
+#if defined(__FreeBSD__)
+#include <sys/thr.h>
+#elif defined(__NetBSD__)
+#include <lwp.h>
+#endif
 
 pid_t cxgettid() {
-#ifdef SYS_gettid
-    pid_t tid = syscall(SYS_gettid);
-    return tid;
+#if defined(__APPLE__)
+    /* macOS lands here too: SYS_gettid does not exist, so this used to be a
+     * hard #error.  Same primitive gettid() uses in corona_util.c. */
+    uint64_t tid = 0;
+    extern int pthread_threadid_np(pthread_t, uint64_t*);
+    int rv = pthread_threadid_np(NULL, &tid);
+    assert(rv == 0);
+    return (pid_t)tid;
+#elif defined(__FreeBSD__)
+    long lwpid = 0;
+    thr_self(&lwpid);
+    return (pid_t)lwpid;
+#elif defined(__NetBSD__)
+    return (pid_t)_lwp_self();
+#elif defined(__OpenBSD__)
+    return getthrid();
+#elif defined(SYS_gettid)
+    return (pid_t)syscall(SYS_gettid);
 #else
-#error "SYS_gettid unavailable on this system"
+# error "no thread id primitive: add a branch for this platform"
     return 0;
 #endif
 }

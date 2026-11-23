@@ -4,31 +4,16 @@
 static void crn_sp_corrector(void** sp_ptr, void* tid) {
     size_t stack_size;
     char* stack_addr;
-#ifdef __APPLE__
-    extern size_t pthread_get_stacksize_np(pthread_t);
-	extern void* pthread_get_stackaddr_np(pthread_t);
-    stack_size = pthread_get_stacksize_np((pthread_t)tid);
-    stack_addr = (char*) pthread_get_stackaddr_np((pthread_t)tid);
-#elif defined(_WIN64)
+#ifdef _WIN64
     ULONG_PTR stack_low, stack_high;
     GetCurrentThreadStackLimits(&stack_low, &stack_high);
     stack_size = stack_high - stack_low;
     stack_addr = (char*)stack_low;
-// #elif defined(__linux__)
-//     pthread_attr_t gattr;
-//     pthread_getattr_np((pthread_t)tid, &gattr);
-//     pthread_attr_getstack(&gattr, (void**)&stack_addr, &stack_size);
-//     pthread_attr_destroy(&gattr);
-// #else
-//     assert("unsupported platform");
 #else
-	#include <assert.h>
-    pthread_attr_t gattr;
-    int rc1 = pthread_getattr_np((pthread_t)tid, &gattr);
-    if (rc1 != 0) { assert(rc1==0); }
-    int rc2 = pthread_attr_getstack(&gattr, (void**)&stack_addr, &stack_size);
-    if (rc1 != 0) { assert(rc1==0); }
-    pthread_attr_destroy(&gattr);
+    /* Darwin/Linux/Android/FreeBSD/NetBSD/OpenBSD: corona_util.h knows how to
+     * ask each libc for a thread's stack (base + size). */
+    int rc = thread_getstack((pthread_t)tid, (void**)&stack_addr, &stack_size);
+    assert(rc == 0);
 #endif
     char *sp = (char*)*sp_ptr;
     if(sp <= stack_addr || sp >= stack_addr+stack_size) {

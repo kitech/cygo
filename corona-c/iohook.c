@@ -25,11 +25,12 @@
 # include <sys/time.h>
 #endif
 
-#if defined(LIBGO_SYS_Linux)
-# define ATTRIBUTE_WEAK __attribute__((weak))
-#elif defined(LIBGO_SYS_FreeBSD)
+/* Mach-O needs weak_import for undefined symbols; ELF (Linux/Android/BSD)
+ * uses plain weak.  macOS and the BSD family had no branch here at all,
+ * which left ATTRIBUTE_WEAK undefined and broke the build. */
+#if defined(LIBGO_SYS_Macos)
 # define ATTRIBUTE_WEAK __attribute__((weak_import))
-#elif defined(LIBGO_SYS_Android)
+#else
 # define ATTRIBUTE_WEAK __attribute__((weak))
 #endif
 

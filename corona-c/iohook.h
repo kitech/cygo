@@ -4,7 +4,15 @@
 #include <stdbool.h>
 #include <stdio.h>
 #include <unistd.h>
-#include <resolv.h>
+/* The prototypes below use these types directly.  glibc happens to drag most
+ * of them in through <netdb.h>, but the BSD libcs do not, so name them
+ * explicitly instead of relying on transitive includes. */
+#include <signal.h>        /* sigset_t */
+#include <sys/types.h>
+#include <sys/time.h>      /* struct timeval */
+#include <sys/select.h>    /* fd_set */
+#include <sys/socket.h>    /* struct msghdr, struct sockaddr */
+#include <sys/uio.h>       /* struct iovec */
 #include <netdb.h>
 #include <poll.h>
 
@@ -15,7 +23,14 @@
 #elif defined(__ANDROID__) || defined(__BIONIC__)
 #define LIBGO_SYS_Android
 #elif defined(__FreeBSD__)
+#define LIBGO_SYS_BSD
 #define LIBGO_SYS_FreeBSD
+#elif defined(__OpenBSD__)
+#define LIBGO_SYS_BSD
+#define LIBGO_SYS_OpenBSD
+#elif defined(__NetBSD__)
+#define LIBGO_SYS_BSD
+#define LIBGO_SYS_NetBSD
 #else
 #define LIBGO_SYS_Linux
 #endif
@@ -210,8 +225,7 @@ extern gethostbyaddr_r_t gethostbyaddr_r_f;
 
     extern bool setTcpConnectTimeout(int fd, int milliseconds);
 
-#ifdef __APPLE__
-#else
+#if defined(LIBGO_SYS_Linux) || defined(LIBGO_SYS_Android)
     // libgo提供的协程版epoll_wait接口
     extern int libgo_epoll_wait(int epfd, struct epoll_event *events,
             int maxevents, int timeout);
