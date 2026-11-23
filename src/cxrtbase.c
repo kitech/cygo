@@ -1,7 +1,16 @@
 
 #include <assert.h>
 #include <stdarg.h>
-#include <execinfo.h>
+
+/* musl ships no <execinfo.h>; Alpine/Void provide it via libexecinfo
+ * (-lexecinfo). Keep the real backtrace where the header exists and fall
+ * back to an explicit message instead of pretending we have one. */
+#if __has_include(<execinfo.h>)
+# include <execinfo.h>
+# define CRN_HAVE_EXECINFO 1
+#else
+# define CRN_HAVE_EXECINFO 0
+#endif
 
 #include "cxrtbase.h"
 
@@ -151,10 +160,15 @@ void panic_cimpl(cxstring*s) {
         printf("<%p>", s);
     }
 
+#if CRN_HAVE_EXECINFO
     void *buffer[MAX_STACK_LEVELS];
     int levels = backtrace(buffer, MAX_STACK_LEVELS);
     // print to stderr (fd = 2), and remove this function from the trace
     backtrace_symbols_fd(buffer + 1, levels - 1, 2);
+#else
+    fputs("backtrace unavailable: this libc has no <execinfo.h> "
+          "(musl: install libexecinfo / link -lexecinfo)\n", stderr);
+#endif
 
     memcpy((void*)0xfffffffff, (void*)0xffffffff, 0x1);
     // abort();

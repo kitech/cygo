@@ -15,7 +15,7 @@
 #elif defined(__ANDROID__) || defined(__BIONIC__)
 #define LIBGO_SYS_Android
 #elif defined(__FreeBSD__)
-#define LIBGO_SYS_BSD
+#define LIBGO_SYS_FreeBSD
 #else
 #define LIBGO_SYS_Linux
 #endif

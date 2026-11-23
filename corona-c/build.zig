@@ -103,6 +103,14 @@ pub fn build(b: *std.Build) void {
     const backend = b.option([]const u8, "netpoller", "netpoller backend: libevent|epoll") orelse "libevent";
     const cdebug = b.option(bool, "cdebug", "emit -g and stack protector for C sources (default off: compile speed)") orelse false;
     const is_android = target.result.abi == .android;
+    // libexecinfo: bionic has no backtrace(), musl has neither <execinfo.h>
+    // nor backtrace() (Alpine/Void ship them in libexecinfo). Default on for
+    // Android only: zig's bundled musl headers have no <execinfo.h>, so a musl
+    // target would fail to link even with the library installed. Native musl
+    // builds (CMake) detect it with find_library(); zig users opt in with
+    // -Dexecinfo=true when they have a matching libexecinfo for the target.
+    const want_execinfo = b.option(bool, "execinfo",
+        "link libexecinfo for backtrace() (default: android only; pass true on musl with libexecinfo installed)") orelse is_android;
     const cflags = makeCflags(b.allocator, cdebug, target.result.os.tag == .macos, is_android);
 
     const use_epoll = std.mem.eql(u8, backend, "epoll");
@@ -180,7 +188,7 @@ pub fn build(b: *std.Build) void {
     addCrnSources(b, crn_sh, cflags, backend_file, is_android);
     crn_sh.root_module.addObjectFile(zig_demo.getEmittedBin());
     crn_sh.root_module.linkLibrary(cxrt); // CMake: target_link_libraries(crn_sh cxrt)
-    linkRuntimeLibs(crn_sh);              // + ${LIBGC} ${LIBEVENT1} ${LIBEVENT2} ${LIBSIGSEGV}
+    linkRuntimeLibs(crn_sh, want_execinfo); // + ${LIBGC} ${LIBEVENT1} ${LIBEVENT2} ${LIBSIGSEGV}
     b.installArtifact(crn_sh);
 
     // ------------------------------------------------------------ corona exe
@@ -202,7 +210,7 @@ pub fn build(b: *std.Build) void {
     exe.root_module.linkLibrary(cxrt); // CMake: link crn cxrt ${LIBGC}
     exe.rdynamic = true; // replaces -Wl,--export-dynamic (PLT hooks)
 
-    linkRuntimeLibs(exe);
+    linkRuntimeLibs(exe, want_execinfo);
 
     b.installArtifact(exe);
     const corona_step = b.step("corona", "Build the corona demo");
@@ -229,11 +237,7 @@ pub fn build(b: *std.Build) void {
     exe2.root_module.linkLibrary(crn);
     exe2.root_module.linkLibrary(cxrt);
     exe2.rdynamic = true;
-    linkRuntimeLibs(exe2);
-    if (is_android) {
-        // bionic has no backtrace(); Termux provides it via libexecinfo.
-        exe2.root_module.linkSystemLibrary("execinfo", .{});
-    }
+    linkRuntimeLibs(exe2, want_execinfo);
     b.installArtifact(exe2);
     const corona2_build_step = b.step("corona2", "Build the main2 soak driver");
     corona2_build_step.dependOn(&b.addInstallArtifact(exe2, .{}).step);
@@ -267,7 +271,7 @@ pub fn build(b: *std.Build) void {
         t.root_module.addIncludePath(b.path("../3rdparty"));
         t.root_module.linkLibrary(crn);
         t.root_module.linkLibrary(cxrt);
-        linkRuntimeLibs(t);
+        linkRuntimeLibs(t, want_execinfo);
 
         test_step.dependOn(&t.step);
         const run_t = b.addRunArtifact(t);
@@ -337,8 +341,11 @@ fn addCrnSources(
     c.root_module.addIncludePath(b.path("../3rdparty"));
 }
 
-fn linkRuntimeLibs(c: *std.Build.Step.Compile) void {
+fn linkRuntimeLibs(c: *std.Build.Step.Compile, want_execinfo: bool) void {
     for ([_][]const u8{ "gc", "event", "event_pthreads", "sigsegv", "dl", "pthread" }) |l| {
         c.root_module.linkSystemLibrary(l, .{});
     }
+    // bionic/musl: backtrace()/backtrace_symbols_fd() live in libexecinfo,
+    // not libc (see the __has_include guard in src/cxrtbase.c and main2.c).
+    if (want_execinfo) c.root_module.linkSystemLibrary("execinfo", .{});
 }

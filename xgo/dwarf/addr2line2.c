@@ -11,7 +11,12 @@
 #include <libdwarf/dwarf.h>
 #include <libelf.h>
 
-#include <execinfo.h>
+#if __has_include(<execinfo.h>)
+# include <execinfo.h>
+# define A2L_HAVE_EXECINFO 1
+#else
+# define A2L_HAVE_EXECINFO 0
+#endif
 #include <string.h>
 
 // #include "cxbase.h"
@@ -573,6 +578,13 @@ void get_elf_start_addr()  {
 }
 
 void get_process_start_virt_addr()  {
+#if !A2L_HAVE_EXECINFO
+    /* musl ships no <execinfo.h>/backtrace(); Alpine/Void need libexecinfo.
+     * Refuse loudly: guessing base addresses would produce wrong symbols. */
+    fprintf(stderr, "addr2line2: backtrace unavailable: no <execinfo.h> "
+                    "(musl: install libexecinfo / link -lexecinfo)\n");
+    return;
+#else
     char *buf[100] = {0};
     int nptr = backtrace((void**)buf, 100);
     u64 ivaddr = 0;
@@ -597,6 +609,7 @@ void get_process_start_virt_addr()  {
         }
     }
     free(stklst);
+#endif
 }
 
 int init_elf_dwarf2()

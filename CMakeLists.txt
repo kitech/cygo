@@ -28,10 +28,16 @@ add_executable(corona2 corona-c/main2.c)
 set_target_properties(corona2 PROPERTIES COMPILE_FLAGS ${corona_c_flags})
 target_link_libraries(corona2 crn_sh cxrt ${LIBGC})
 
-# Termux/bionic: backtrace()/backtrace_symbols_fd() live in libexecinfo,
-# not libc.  On glibc/macOS find_library() returns nothing and this is a no-op.
+# Termux/bionic and musl: backtrace()/backtrace_symbols_fd() live in
+# libexecinfo, not libc.  On glibc/macOS find_library() returns nothing and
+# this is a no-op.  src/cxrtbase.c and corona-c/main2.c only call backtrace()
+# when <execinfo.h> exists (__has_include), so this must cover every target
+# that pulls in cxrt.
 find_library(CRN_EXECINFO_LIB execinfo)
 if(CRN_EXECINFO_LIB)
+  target_link_libraries(cxrt    ${CRN_EXECINFO_LIB})
+  target_link_libraries(simlnk  ${CRN_EXECINFO_LIB})
+  target_link_libraries(corona  ${CRN_EXECINFO_LIB})
   target_link_libraries(corona2 ${CRN_EXECINFO_LIB})
 endif()
 # for mac, on linux just /usr/include

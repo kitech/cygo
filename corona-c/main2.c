@@ -11,7 +11,15 @@
 #include "tests/t00_common.h"
 
 #include <signal.h>
-#include <execinfo.h>
+
+/* musl ships no <execinfo.h>; Alpine/Void provide it via libexecinfo.
+ * Compile without it and say so, rather than faking a stack trace. */
+#if __has_include(<execinfo.h>)
+# include <execinfo.h>
+# define CRN_HAVE_EXECINFO 1
+#else
+# define CRN_HAVE_EXECINFO 0
+#endif
 #include <errno.h>
 #include <fcntl.h>
 #include <poll.h>
@@ -140,11 +148,21 @@ static void on_fatal(int sig, siginfo_t* si, void* uc) {
     }
     write(2, buf, n);
 #ifndef __APPLE__
+# if CRN_HAVE_EXECINFO
     {
         void* bt[32];
         int m = backtrace(bt, 32);
         backtrace_symbols_fd(bt, m, 2);
     }
+# else
+    {
+        /* signal handler: write() only (async-signal-safe) */
+        static const char msg[] =
+            "backtrace unavailable: this libc has no <execinfo.h> "
+            "(musl: install libexecinfo / link -lexecinfo)\n";
+        (void)!write(2, msg, sizeof(msg) - 1);
+    }
+# endif
 #endif
     _exit(70);
 }
