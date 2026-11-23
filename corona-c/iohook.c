@@ -762,6 +762,9 @@ int ppoll_wip(struct pollfd *fds, nfds_t nfds,
     assert(1==2);
 }
 
+#ifndef NETDB_INTERNAL
+#define NETDB_INTERNAL (-1)
+#endif
 #if defined(LIBGO_SYS_Linux)
 struct hostent* gethostbyname(const char* name)
 {
@@ -1188,16 +1191,19 @@ int fcntl(int __fd, int __cmd, ...)
     assert(1==2);
 }
 
-// glibc already declares ioctl(); clang rejects redeclaring it as
-// 'overloadable' (gcc merely warns). The attribute is a C++ convenience that
-// is inert in this C translation unit, so drop it under clang.
-#if defined(__clang__)
-# define CRN_IOCTL_ATTR
-#else
-# define CRN_IOCTL_ATTR __attribute__((overloadable))
-#endif
-CRN_IOCTL_ATTR
-#if defined(LIBGO_SYS_Android)
+/*
+ * ioctl(2) 的 request 参数类型：
+ *   glibc / uClibc / BSD / macOS : int ioctl(int, unsigned long, ...)
+ *   musl / bionic                : int ioctl(int, int, ...)
+ * musl 不定义 __MUSL__，但它的 <sys/ioctl.h> 会拉入 bits/alltypes.h，
+ * 留下 __DEFINED_struct_winsize；glibc/uClibc/macOS/BSD 都不定义它。
+ * 按 libc 判（而非 __linux__）可覆盖「musl 跑在非 Linux 内核」，
+ * 同时 macOS/BSD 继续走 unsigned long。
+ * 末尾 __linux__ 子句只是内部宏将来被改名时的兜底。
+ */
+#if defined(LIBGO_SYS_Android) || defined(__BIONIC__) \
+        || defined(__DEFINED_struct_winsize) \
+        || (defined(__linux__) && !defined(__GLIBC__))
 int ioctl(int fd, int request, ...)
 #else
 int ioctl(int fd, unsigned long int request, ...)

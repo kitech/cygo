@@ -2,6 +2,7 @@
 #define _HOOK_H_
 
 #include <stdbool.h>
+#include <stdio.h>
 #include <unistd.h>
 #include <resolv.h>
 #include <netdb.h>
@@ -13,11 +14,16 @@
 #define LIBGO_SYS_Windows
 #elif defined(__ANDROID__) || defined(__BIONIC__)
 #define LIBGO_SYS_Android
+#elif defined(__FreeBSD__)
+#define LIBGO_SYS_BSD
 #else
 #define LIBGO_SYS_Linux
 #endif
 
 #include <pthread.h>
+#if !defined(LIBGO_SYS_Windows)
+#include <sys/ioctl.h>
+#endif
 #if defined(LIBGO_SYS_Linux) || defined(LIBGO_SYS_Android)
 #include <sys/epoll.h>
 #include <sys/inotify.h>
