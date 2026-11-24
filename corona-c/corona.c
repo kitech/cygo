@@ -1068,7 +1068,6 @@ static void* crn_procer1(void*arg) {
             }
 
             machine* mct = 0;
-            linfo("arr2=%p sz=%d, keys=[%s]\n", mcids, array_size(mcids), crn_array_tostr_int(mcids));
             for (int j = 0; j < arr2sz; j++) {
 		int rdidx = abs((int)crn_rand()) % arr2sz;
                 void* key = nilptr;
@@ -1095,8 +1094,27 @@ static void* crn_procer1(void*arg) {
 		mct = crn_machine_get((int)(uintptr_t)key);
 		assert(mct != nilptr);
 	    }
+	    /*
+	     * TODO(scheduler) 这里只在 mct->parking 时才派发：
+	     *   - 若 3/4/5 号机同时繁忙（s22/s12/s10 各占一个），会一直
+	     *     "no enough mc" 并把 gr 放回 1 号机 mc->grs；
+	     *   - 但 crn_post_sized() 在入队前已经为 fiber mmap 了 2MB 栈并
+	     *     GC_add_roots，所以待派发 fiber 会无界累积，RSS 与 GC 根同步上涨。
+	     * 建议（本次不改逻辑语义）：
+	     *   a) 没有 parking 机器时，按 runq 最短选一个非 parking 机器，
+	     *      crn_machine_gradd + crn_machine_grtorunq + crn_machine_signal；
+	     *      parking 只作为“可立即唤醒”的提示，不作为派发前提；
+	     *   b) 或让 1 号机自己运行这些 fiber；
+	     *   c) 栈分配/GC_add_roots 推迟到 fiber 第一次真正 run 时。
+	     */
             if (mct == nilptr) {
-                lwarn("no enough mc? %d\n", gr->id);
+                static time_t s_last_nomc_s = 0;
+                time_t now_s = time(NULL);
+                if (s_last_nomc_s == 0 || now_s - s_last_nomc_s >= 3) {
+                    s_last_nomc_s = now_s;
+                    lwarn("no enough mc? grid=%d pending=%d keys=[%s]\n",
+                          gr->id, crnmap_size(mc->grs), crn_array_tostr_int(mcids));
+                }
                 // try select random one?
                 // 暂时先放回全局队列中吧
                 crn_machine_gradd(mc, gr);

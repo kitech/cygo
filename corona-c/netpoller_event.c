@@ -67,15 +67,18 @@ void netpoller_loop() {
     tv.tv_sec =  0;
     tv.tv_usec = 586000;
 
-    for (;;) {
+    for (int64_t no = 0;; no ++) {
         // int rv = event_base_dispatch(np->loop);
         int flags = EVLOOP_NO_EXIT_ON_EMPTY;
         // flags = 0;
         // int rv = event_base_loop(np->loop, flags);
         int rv = event_base_loopexit(np->loop, &tv);
         event_base_dispatch(np->loop);
-        linfo("ohno, rv=%d\n", rv);
+        if (no % 9 == 0) {
+			linfo("ohno, rv=%d, evlo reset %ld\n", rv, no);
+		}
         // event_base_dump_events(np->loop, stdout);
+        assert(rv == 0); // always 0, or must OOM
     }
     assert(1==2);
 }

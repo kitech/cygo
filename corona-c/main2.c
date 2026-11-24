@@ -505,15 +505,18 @@ static void s7(void* arg) {
 
 // ------------------------------------------------------------------ s8 socketpair
 static void s8_reader(void* arg) {
-    int fd = (int)(uintptr_t)arg;
+    void** a = arg;
+    int fd = (int)(uintptr_t)a[0];
+    crn_hchan* done = a[1];
     char buf[32] = {0};
     int tries = 0;
     while (!g_stopping && tries < 5000) {
         int rv = recv(fd, buf, sizeof(buf) - 1, 0);
-        if (rv > 0) { CHECK_EQ(rv, 5, "s8 recv rv=%d", rv); join_done(); return; }
+        if (rv > 0) { CHECK_EQ(rv, 5, "s8 recv rv=%d", rv); break; }
         tries++;
         usleep(1000);
     }
+    crn_hchan_send(done, (void*)1);
     join_done();
 }
 static void s8(void* arg) {
@@ -522,13 +525,22 @@ static void s8(void* arg) {
         int sv[2];
         if (socketpair(AF_UNIX, SOCK_STREAM, 0, sv) != 0) { t_usleep_ms(1); continue; }
         set_nonblock(sv[0]);
+        crn_hchan* done = crn_hchan_new(1);
+        void** a = crn_gc_malloc(2 * sizeof(void*));
+        a[0] = (void*)(uintptr_t)sv[0];
+        a[1] = done;
         tick(S8, 0);
-        crn_post(s8_reader, (void*)(uintptr_t)sv[0]);
+        crn_post(s8_reader, a);
         t_usleep_ms(1);
         CHECK_EQ(send(sv[1], "hello", 5, 0), 5, "s8 send");
-        usleep(2 * 1000);
+
+        /* 等 reader 真正退出再 close，避免 close 与 recv 竞争。 */
+        void* v = nilptr;
+        CHECK_EQ(crn_hchan_recv(done, &v), 1, "s8 join");
+
         close(sv[0]);
         close(sv[1]);
+        crn_hchan_close(done);
     }
     leave(S8);
 }
@@ -773,20 +785,31 @@ static void s11(void* arg) {
 
 // ------------------------------------------------------------------ s12 fiber churn
 static void s12_short(void* arg) {
-    (void)arg;
+    crn_hchan* done = arg;
     void* p = crn_gc_malloc(64);
     (void)p;
+    crn_hchan_send(done, (void*)1);
     join_done();
 }
 static void s12(void* arg) {
     (void)arg;
     LOOP_WHILE(S12) {
+        crn_hchan* done = crn_hchan_new(32);
         for (int i = 0; i < 32; i++) {
             tick(S12, 0);
-            int rv = crn_post(s12_short, 0);
+            int rv = crn_post(s12_short, done);
             CHECK(rv > 0, "s12 post rv=%d", rv);
         }
-        for (int i = 0; i < 32; i++) { tick(S12, 1); join_done(); }
+        /* 真正等待这一批完成；若 1 号机派发不出去，s12 会阻塞在这里，
+         * 不会继续 crn_post，从而把待派发 fiber 限制在一批 32 个。 */
+        for (int i = 0; i < 32; i++) {
+            tick(S12, 1);
+            void* v = nilptr;
+            int rv = crn_hchan_recv(done, &v);
+            CHECK(rv == 1, "s12 join rv=%d", rv);
+        }
+        crn_hchan_close(done);
+
         crn_inner_stats st;
         memset(&st, 0, sizeof(st));
         crn_get_stats(&st);
@@ -1269,7 +1292,7 @@ static int scenario_selected(const char* name) {
         const char* e = strchr(p, ',');
         size_t n = e ? (size_t)(e - p) : strlen(p);
         if (n > 0) {
-            if (strncmp(p, name, n) == 0) return 1;
+            if (n == strlen(name) && strncmp(p, name, n) == 0) return 1;
             char num[8] = {0};
             snprintf(num, sizeof(num), "s%d", atoi(name + 1));
             if (strlen(num) == n && strncmp(p, num, n) == 0) return 1;

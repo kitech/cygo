@@ -406,7 +406,9 @@ ssize_t recv(int sockfd, void *buf, size_t len, int flags)
         int fdvalid = fd_is_valid(sockfd);
         if (fdvalid != 1) {
             linfo("invalid fd=%d val=%d\n", sockfd, fdvalid);
-            assert(fd_is_valid(sockfd) == 1);
+            // assert(fd_is_valid(sockfd) == 1);
+            errno = EBADF;
+            return -1;
         }
 	linfo("fd=%d err=%d eno=%d err=%s\n", sockfd, rv, errno, strerror(errno));
 	return rv;
@@ -1006,9 +1008,15 @@ int usleep(useconds_t usec)
             return -1;
         }
 
-        if (left <= 1000000LL)
+       if (left <= 50000LL) {          /* ≤50µs 自旋 */
+            do {
+                clock_gettime(CLOCK_MONOTONIC, &now);
+                /* 重新算 elapsed/left，或直接和 total 比较 */
+            } while ((long long)(now.tv_sec - start.tv_sec) * 1000000000LL
+                     + (now.tv_nsec - start.tv_nsec) < total);
             return 0;
-
+        }
+        
         long long slice_us = left / 1000LL;
         if (slice_us > 100000LL) slice_us = 100000LL; /* max 100ms */
         errno = 0;
