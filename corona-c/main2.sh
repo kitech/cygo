@@ -1,9 +1,9 @@
 #!/bin/bash
 # main2.sh — 顺序执行 main2 的全部验证项
-#   ./main2.sh            默认：构建→冒烟→过滤→栈探针→溢出取证→DNS→fd→valgrind
+#   ./main2.sh            默认：构建→冒烟→全场景→过滤→栈探针→溢出取证→DNS→fd→valgrind
 #   ./main2.sh quick      只跑冒烟+过滤+栈探针（~3 分钟）
 #   ./main2.sh long       追加 30 分钟长跑
-#   ./main2.sh all        追加 1 小时目标复现（CRN2_DNS=1）
+#   ./main2.sh all        追加 1 小时目标复现
 set -u
 cd "$(dirname "$0")"
 
@@ -56,7 +56,7 @@ case "$MODE" in
     quick)   TOTAL_EST=180;  MODE_DESC="quick（冒烟/过滤/栈探针）" ;;
     long)    TOTAL_EST=2050; MODE_DESC="long（默认项 + 30 分钟长跑）" ;;
     all)     TOTAL_EST=5700; MODE_DESC="all（long + 1 小时目标复现）" ;;
-    *)       TOTAL_EST=520;  MODE_DESC="default（完整默认项）" ;;
+    *)       TOTAL_EST=650;  MODE_DESC="default（完整默认项，含全场景）" ;;
 esac
 
 say "================================================================"
@@ -289,6 +289,9 @@ if [ "$MODE" = "quick" ]; then
     exit $(( fail > 0 ))
 fi
 
+# 3b) 全场景：默认把 s1..s27 全部跑一遍（s18/s27 仍由各自开关控制）
+run full 120 240 env CRN2_SECONDS=90 "$BIN"
+
 # 4) 蓄意栈溢出：期望 rc!=0 且日志含 SO- 标记（handler 生效）
 say ""
 say "=== overflow ===（est ~$(fmt_dur 10)，timeout 60s）"
@@ -304,12 +307,8 @@ else
     tail -5 "$LOG_DIR/overflow.log"; fail=$((fail+1))
 fi
 
-# 5) DNS（受限环境跳过）
-if command -v getent >/dev/null 2>&1 && getent hosts localhost >/dev/null 2>&1; then
-    run dns 50 120 env CRN2_DNS=1 CRN2_SECONDS=45 CRN2_SCENARIOS=s10 "$BIN"
-else
-    skip_if dns "no resolver"
-fi
+# 5) DNS（默认执行；本地名必须解析，真实域名失败只 WARN）
+run dns 50 120 env CRN2_SECONDS=45 CRN2_SCENARIOS=s10 "$BIN"
 
 # 6) fd 巡检（Linux）
 if [ -d /proc/self/fd ]; then
@@ -331,9 +330,9 @@ if [ "$MODE" = "long" ] || [ "$MODE" = "all" ]; then
     run long 1830 2100 env CRN2_SECONDS=1800 CRN2_STATS_SEC=30 "$BIN"
 fi
 
-# 9) 目标复现（1 小时，DNS 开启）
+# 9) 目标复现（1 小时）
 if [ "$MODE" = "all" ]; then
-    run soak1h 3630 3900 env CRN2_SECONDS=3600 CRN2_DNS=1 "$BIN"
+    run soak1h 3630 3900 env CRN2_SECONDS=3600 "$BIN"
 fi
 
 say ""

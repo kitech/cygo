@@ -104,21 +104,33 @@ static char* lookup_host_impl2 (const char *host)
     linfo ("Host: %s %p\n", host, res);
     struct addrinfo* res0 = res; // keep head: freeaddrinfo needs it after the loop
     while (res) {
-        inet_ntop (res->ai_family, res->ai_addr->sa_data, addrstr, 100);
-
+        ptr = nilptr;
         switch (res->ai_family) {
         case AF_INET:
-            ptr = &((struct sockaddr_in *) res->ai_addr)->sin_addr;
+            if (res->ai_addr != nilptr)
+                ptr = &((struct sockaddr_in *) res->ai_addr)->sin_addr;
             break;
         case AF_INET6:
-            ptr = &((struct sockaddr_in6 *) res->ai_addr)->sin6_addr;
+            if (res->ai_addr != nilptr)
+                ptr = &((struct sockaddr_in6 *) res->ai_addr)->sin6_addr;
+            break;
+        default:
             break;
         }
-        inet_ntop (res->ai_family, ptr, addrstr, 100);
+        if (ptr == nilptr) {
+            res = res->ai_next;
+            continue;
+        }
+        if (inet_ntop (res->ai_family, ptr, addrstr, sizeof(addrstr)) == nilptr) {
+            res = res->ai_next;
+            continue;
+        }
         linfo ("IPv%d address: %s (%s)\n", res->ai_family == PF_INET6 ? 6 : 4,
                 addrstr, res->ai_canonname);
 
-        memcpy(ipaddr, addrstr, strlen(addrstr));
+        /* 覆盖写，必须补 NUL：多地址时后一个地址可能比前一个短，
+         * 直接 memcpy 会留下上一个地址的尾巴（IPv6+IPv4 混合时必现）。 */
+        snprintf(ipaddr, 120, "%s", addrstr);
         res = res->ai_next;
     }
     if (res0 != nilptr) { freeaddrinfo(res0); } // was freeaddrinfo(res) with res==NULL: leaked the whole chain

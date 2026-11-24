@@ -252,31 +252,45 @@ void netpoller_timer(int64_t ns, int ytype, fiber* gr) {
 static struct addrinfo* netpoller_dump_addrinfo(struct evutil_addrinfo* addr) {
     struct addrinfo *resout = nilptr;
     struct evutil_addrinfo *ai;
-    int cnter = 0;
-    for (ai = addr; ai; ai = ai->ai_next, cnter++) {
+    for (ai = addr; ai; ai = ai->ai_next) {
         char buf[128] = {0};
         const char *s = NULL;
-        if (ai->ai_family == AF_INET) {
+        if (ai->ai_family == AF_INET && ai->ai_addr != NULL) {
             struct sockaddr_in *sin = (struct sockaddr_in *)ai->ai_addr;
-            s = evutil_inet_ntop(AF_INET, &sin->sin_addr, buf, 128);
-        } else if (ai->ai_family == AF_INET6) {
+            s = evutil_inet_ntop(AF_INET, &sin->sin_addr, buf, sizeof(buf));
+        } else if (ai->ai_family == AF_INET6 && ai->ai_addr != NULL) {
             struct sockaddr_in6 *sin6 = (struct sockaddr_in6 *)ai->ai_addr;
-            s = evutil_inet_ntop(AF_INET6, &sin6->sin6_addr, buf, 128);
+            s = evutil_inet_ntop(AF_INET6, &sin6->sin6_addr, buf, sizeof(buf));
         }
-        if (s) {
-            // linfo("-> %s\n", s);
-        }else{
+        if (s == NULL) {
             break;
         }
+        // linfo("-> %s\n", s);
 
         struct addrinfo* tai = crn_raw_malloc(sizeof(struct addrinfo));
+        if (tai == nilptr) {
+            break;
+        }
         tai->ai_flags = ai->ai_flags;
         tai->ai_family = ai->ai_family;
         tai->ai_socktype = ai->ai_socktype;
         tai->ai_protocol = ai->ai_protocol;
         tai->ai_addrlen = ai->ai_addrlen;
-        tai->ai_addr = crn_raw_malloc(sizeof(struct sockaddr));
-        memcpy(tai->ai_addr, ai->ai_addr, sizeof(struct sockaddr));
+        tai->ai_addr = nilptr;
+        /*
+         * 必须按 ai_addrlen 分配/拷贝：IPv6 是 28 字节（sockaddr_in6），
+         * sizeof(struct sockaddr) 只有 16。旧代码只拷 16 字节，导致
+         * sin6_addr 偏移 8 之后的高 8 字节被清零（地址被破坏），
+         * 同时调用方读 sockaddr_in6 时越界。
+         */
+        if (ai->ai_addr != NULL && ai->ai_addrlen > 0) {
+            tai->ai_addr = crn_raw_malloc((size_t)ai->ai_addrlen);
+            if (tai->ai_addr == nilptr) {
+                crn_raw_free(tai);
+                break;
+            }
+            memcpy(tai->ai_addr, ai->ai_addr, (size_t)ai->ai_addrlen);
+        }
         tai->ai_canonname = ai->ai_canonname == nilptr ? nilptr : strdup(ai->ai_canonname);
         tai->ai_next = resout;
         resout = tai;

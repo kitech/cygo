@@ -54,7 +54,7 @@ extern pid_t gettid();
 static long g_deadline_ms;
 static int g_seconds = 3600;
 static int g_stats_sec = 30;
-static int g_dns = 0;
+static int g_dns = 1;   /* DNS 默认开启；CRN2_DNS=0 可关闭 */
 static int g_deep = 0;
 static int g_overflow = 0;
 static int g_abort_on_stall = 0;
@@ -601,20 +601,148 @@ static void s9(void* arg) {
 }
 
 // ------------------------------------------------------------------ s10 dns
+/*
+ * DNS 默认执行（CRN2_DNS=0 可关闭）。
+ * - 本地名（hosts / 数字地址）必须成功；
+ * - 真实域名成功则做结构校验，失败只 WARN（离线/受限环境不判失败）；
+ * - 真实域名限速（最多 1 秒 1 次），.invalid 最多 5 秒 1 次；
+ * - 不校验具体 IP / 顺序 / ai_canonname：event 与 uv 后端这两项本来就不同。
+ */
+static const char* s10_hosts[] = {
+    "localhost",
+    "127.0.0.1",
+    "::1",
+    "example.com",
+    "www.example.org",
+    "one.one.one.one",
+    "crn-no-such-host.invalid",
+};
+
+static int s10_is_local(const char* h) {
+    return strcmp(h, "localhost") == 0 ||
+           strcmp(h, "127.0.0.1") == 0 ||
+           strcmp(h, "::1") == 0;
+}
+
+static int s10_expect_fail(const char* h) {
+    return strcmp(h, "crn-no-such-host.invalid") == 0;
+}
+
+/* 直接走 hooked getaddrinfo()，校验后端返回的 addrinfo 结构与所有权。
+ * 返回条目数；-1 表示可容忍的解析失败（真实域名/预期失败域名）。 */
+static int s10_check_addrinfo(const char* host) {
+    struct addrinfo h;
+    memset(&h, 0, sizeof(h));
+    h.ai_family = AF_UNSPEC;
+    h.ai_socktype = SOCK_STREAM;
+    h.ai_flags = AI_CANONNAME;
+
+    struct addrinfo* res = nilptr;
+    int rv = getaddrinfo(host, NULL, &h, &res);
+
+    if (rv != 0) {
+        CHECK(res == nilptr, "s10 %s rv=%d res!=nil", host, rv);
+        if (s10_is_local(host)) {
+            CHECK(0, "s10 local %s rv=%d", host, rv);
+        } else if (!s10_expect_fail(host)) {
+            lwarn("s10 %s rv=%d（外部域名，离线/受限时容忍）\n", host, rv);
+        }
+        return -1;
+    }
+
+    CHECK(res != nilptr, "s10 %s rv=0 res=nil", host);
+    int n = 0;
+    for (struct addrinfo* ai = res; ai != nilptr; ai = ai->ai_next) {
+        CHECK(ai->ai_family == AF_INET || ai->ai_family == AF_INET6,
+              "s10 %s family=%d", host, ai->ai_family);
+        CHECK(ai->ai_addr != nilptr, "s10 %s addr=nil", host);
+        size_t need = ai->ai_family == AF_INET ? sizeof(struct sockaddr_in)
+                                               : sizeof(struct sockaddr_in6);
+        CHECK((size_t)ai->ai_addrlen >= need,
+              "s10 %s addrlen=%u need=%lu", host,
+              (unsigned)ai->ai_addrlen, (unsigned long)need);
+        if (ai->ai_addr != nilptr) {
+            char abuf[INET6_ADDRSTRLEN] = {0};
+            void* p = ai->ai_family == AF_INET
+                    ? (void*)&((struct sockaddr_in*)ai->ai_addr)->sin_addr
+                    : (void*)&((struct sockaddr_in6*)ai->ai_addr)->sin6_addr;
+            CHECK(inet_ntop(ai->ai_family, p, abuf, sizeof(abuf)) != nilptr &&
+                  abuf[0] != '\0',
+                  "s10 %s inet_ntop family=%d", host, ai->ai_family);
+        }
+        n++;
+    }
+    CHECK(n >= 1, "s10 %s no entries", host);
+    if (s10_expect_fail(host)) {
+        lwarn("s10 %s 被解析为有效地址（DNS 劫持？仅记录）\n", host);
+    }
+    freeaddrinfo(res);
+    return n;
+}
+
 static void s10(void* arg) {
     (void)arg;
     extern char* crn_getaddrinfo(const char* hostname);
+    const int nhost = (int)(sizeof(s10_hosts) / sizeof(s10_hosts[0]));
+    int idx = 0;
+    long last_real = 0;
+    long last_bad = 0;
+
     LOOP_WHILE(S10) {
+        const char* host = s10_hosts[idx++ % nhost];
+        int is_local = s10_is_local(host);
+        int is_bad = s10_expect_fail(host);
+        long now = now_ms();
+
+        /* 限速：外部域名 1 秒最多 1 次，预期失败域名 5 秒最多 1 次。 */
+        if (!is_local && !is_bad && now - last_real < 1000) {
+            tick(S10, 0);
+            usleep(20 * 1000);
+            continue;
+        }
+        if (is_bad && now - last_bad < 5000) {
+            tick(S10, 0);
+            usleep(20 * 1000);
+            continue;
+        }
+        if (!is_local && !is_bad) last_real = now;
+        if (is_bad) last_bad = now;
+
         tick(S10, 0);
-        char* ip = crn_getaddrinfo("localhost");
-        CHECK(ip != nilptr, "s10 getaddrinfo ip=%p", ip);
-#ifdef __linux__
-        struct hostent he;
-        struct hostent* res = nilptr;
-        char buf2[1024] = {0};
-        int herr = 0;
+        char* ip = crn_getaddrinfo(host);
+        if (is_local) {
+            CHECK(ip != nilptr, "s10 crn_getaddrinfo(%s)=nil", host);
+        } else if (ip == nilptr) {
+            if (!is_bad) {
+                lwarn("s10 crn_getaddrinfo(%s)=nil（外部域名，容忍）\n", host);
+            }
+        }
+        if (ip != nilptr) {
+            struct in_addr a4;
+            struct in6_addr a6;
+            CHECK(ip[0] != '\0', "s10 %s empty ip", host);
+            CHECK(inet_pton(AF_INET, ip, &a4) == 1 ||
+                  inet_pton(AF_INET6, ip, &a6) == 1,
+                  "s10 %s bad ip=%s", host, ip);
+            if (is_bad) {
+                lwarn("s10 crn_getaddrinfo(%s) 返回有效地址（DNS 劫持？仅记录）\n", host);
+            }
+        }
+
         tick(S10, 1);
-        gethostbyname_r("localhost", &he, buf2, sizeof(buf2) - 1, &res, &herr);
+        (void)s10_check_addrinfo(host);
+
+#ifdef __linux__
+        if (strcmp(host, "localhost") == 0) {
+            struct hostent he;
+            struct hostent* hr = nilptr;
+            char hbuf[1024] = {0};
+            int herr = 0;
+            tick(S10, 2);
+            int rv = gethostbyname_r(host, &he, hbuf, sizeof(hbuf) - 1, &hr, &herr);
+            CHECK(rv == 0 && hr != nilptr,
+                  "s10 gethostbyname_r(%s) rv=%d herr=%d", host, rv, herr);
+        }
 #endif
         usleep(20 * 1000);
     }
@@ -1174,7 +1302,7 @@ int main(void) {
     g_seconds = env_i("CRN2_SECONDS", 3600);
     g_seed = env_u("CRN2_SEED", (unsigned)time(0));
     g_stats_sec = env_i("CRN2_STATS_SEC", 30);
-    g_dns = env_i("CRN2_DNS", 0);
+    g_dns = env_i("CRN2_DNS", 1);
     g_deep = env_i("CRN2_DEEP", 0);
     g_overflow = env_i("CRN2_OVERFLOW", 0);
     g_abort_on_stall = env_i("CRN2_ABORT_ON_STALL", 0);

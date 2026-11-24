@@ -23,7 +23,7 @@ cd corona-c && zig build run2         # 直接运行（默认参数）
 | `CRN2_SEED` | time() | 随机种子（复现用）|
 | `CRN2_SCENARIOS` | 全部 | 逗号分隔，如 `s1,s5,s21`（也接受完整名 `s5_closestorm`）|
 | `CRN2_STATS_SEC` | 30 | 统计输出间隔 |
-| `CRN2_DNS` | 0 | 启用 DNS 场景（s10）|
+| `CRN2_DNS` | 1 | DNS 场景（s10）默认开启；设为 0 可关闭 |
 | `CRN2_DEEP` | 0 | 深递归栈探针（s17 加深）|
 | `CRN2_OVERFLOW` | 0 | 蓄意触发 fiber 栈保护页（s18）|
 | `CRN2_ABORT_ON_STALL` | 0 | 场景心跳停滞时主动 abort（拿 core）|
@@ -42,7 +42,7 @@ cd corona-c && zig build run2         # 直接运行（默认参数）
 | s7 | cond 变量 | timedwait/signal/broadcast（小规模）|
 | s8 | socketpair | 非阻塞 EAGAIN→yield、握手 |
 | s9 | TCP 回环 | accept/connect/read/write |
-| s10 | DNS | `crn_getaddrinfo` + `gethostbyname_r` |
+| s10 | DNS | 默认开启；`crn_getaddrinfo`（localhost + 真实域名，失败只 WARN）+ `gethostbyname_r` |
 | s11 | timer 风暴 | usleep/nanosleep 与并发 sleeper |
 | s12 | fiber churn | post/exit、stats 校验 |
 | s13 | GC 压力 | malloc/calloc/realloc/uncollectable/finalizer |
@@ -80,7 +80,7 @@ CRN2_DEEP=1 CRN2_SECONDS=600 ./build/corona2
 # 4) 目标复现：macOS 长跑 + DNS（配合 core dump）
 ulimit -c unlimited
 sudo sysctl -w kern.corefile=/cores/core.%P      # macOS
-CRN2_SECONDS=3600 CRN2_DNS=1 ./corona2
+CRN2_SECONDS=3600 ./corona2
 # 崩溃后：lldb ./corona2 /cores/core.*
 #        thread apply all bt / register read
 
@@ -105,10 +105,10 @@ grep "^STATS" soak.log | awk '{print $2, $5, $6}'   # 时间戳 / fiber_totcnt /
 一键顺序执行全部验证：
 
 ```bash
-./main2.sh              # 默认：构建→冒烟→过滤→溢出取证→DNS→fd→valgrind（可用时）
-./main2.sh quick        # 只跑冒烟+过滤（~2 分钟）
+./main2.sh              # 默认：构建→冒烟→过滤→栈探针→全场景(s1..s27)→溢出取证→DNS→fd→valgrind（可用时）
+./main2.sh quick        # 只跑冒烟+过滤+栈探针（~3 分钟）
 ./main2.sh long         # 追加 30 分钟长跑
-./main2.sh all          # 追加 1 小时目标复现（CRN2_DNS=1）
+./main2.sh all          # 追加 1 小时目标复现
 ```
 
 脚本特性：
