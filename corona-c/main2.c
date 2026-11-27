@@ -814,6 +814,25 @@ static void s12(void* arg) {
         memset(&st, 0, sizeof(st));
         crn_get_stats(&st);
         CHECK(st.fiber_totcnt > 0, "s12 stats fibers=%d", st.fiber_totcnt);
+
+        crn_fiber_info fi[64];
+        int nf = 0;
+        for (int t = 0; t < 10 && nf <= 0; t++) {
+            nf = crn_get_fibers(fi, (int)(sizeof(fi) / sizeof(fi[0])));
+            if (nf <= 0) usleep(1000);
+        }
+        CHECK(nf > 0, "s12 fiber list nf=%d", nf);
+        int ncheck = nf < (int)(sizeof(fi) / sizeof(fi[0]))
+                   ? nf : (int)(sizeof(fi) / sizeof(fi[0]));
+        for (int i = 0; i < ncheck; i++) {
+            CHECK(fi[i].id > 0, "s12 fiber[%d] id=%d", i, fi[i].id);
+            CHECK(fi[i].mcid != 0 && fi[i].mcid != 2,
+                  "s12 fiber[%d] mcid=%d", i, fi[i].mcid);
+            CHECK(fi[i].state >= 0 && fi[i].state <= 4,
+                  "s12 fiber[%d] state=%d", i, fi[i].state);
+            CHECK(fi[i].stksz > 0, "s12 fiber[%d] stksz=%zu", i, fi[i].stksz);
+        }
+        CHECK(crn_num_fibers() > 0, "s12 crn_num_fibers=0");
     }
     leave(S12);
 }

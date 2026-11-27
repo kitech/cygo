@@ -17,6 +17,7 @@
 #include <assert.h>
 #include <string.h>
 #include <signal.h>
+#include <sched.h>
 #include <sigsegv.h>
 
 // #include <private/pthread_support.h>
@@ -2033,6 +2034,65 @@ void crn_get_stats(crn_inner_stats* st) {
             }
         }
     }
+}
+
+typedef struct crn_fiber_snap {
+    crn_fiber_info* out;
+    int cap;
+    int n;
+} crn_fiber_snap;
+
+static int crn_fiber_snap_cb(uintptr_t key, void* val, void* arg) {
+    (void)key;
+    fiber* gr = (fiber*)val;
+    crn_fiber_snap* s = (crn_fiber_snap*)arg;
+    int idx = s->n++;
+    if (s->out != nilptr && idx < s->cap) {
+        crn_fiber_info* o = &s->out[idx];
+        o->id = gr->id;
+        o->mcid = gr->mcid;
+        o->state = atomic_getint((int*)&gr->state);
+        o->pkreason = gr->pkreason;
+        o->stksz = gr->stack.ssze;
+        o->used_stksz = gr->used_stksz;
+    }
+    return 0;
+}
+
+int crn_get_fibers(crn_fiber_info* out, int cap) {
+    if (cap < 0 || (cap > 0 && out == nilptr)) {
+        return -1;
+    }
+    if (gnr__ == nilptr) {
+        return 0;
+    }
+
+    crn_fiber_snap s = {out, cap, 0};
+    for (int i = 1; i <= 5; i++) {
+        if (i == 2) {
+            continue; /* 2 号是 netpoller，不是 worker */
+        }
+        machine* mc = crn_machine_get(i);
+        if (mc == nilptr) {
+            continue;
+        }
+        /*
+         * crnmap_foreach() 在持有 mc->grs 锁时拷贝字段；fiber 的移除/销毁
+         * 也走同一把锁，所以快照期间不会读到已释放的 fiber。
+         * 它是非阻塞 trylock，忙时让出一次再重试，避免和调度器互相卡住。
+         */
+        for (int retry = 0; retry < 3; retry++) {
+            if (crnmap_foreach(mc->grs, crn_fiber_snap_cb, &s)) {
+                break;
+            }
+            sched_yield();
+        }
+    }
+    return s.n;
+}
+
+int crn_num_fibers(void) {
+    return crn_get_fibers(nilptr, 0);
 }
 
 // 开启的总线程数除了以下，还有libgc的线程（3个？）
