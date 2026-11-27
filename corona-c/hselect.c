@@ -142,19 +142,43 @@ bool crn_selectgo(int* rcasi, crn_scase** cas0, uint16_t* order0, int ncases) {
 
         hc = cas->hc;
 
+        int addrv = -1;
         switch (cas->kind) {
         case caseRecv:
             hcdt = cas->hcdt;
-            szqueue_add(hc->recvq, hcdt);
+            addrv = szqueue_add(hc->recvq, hcdt);
             hcdt = nilptr;
             break;
         case caseSend:
             hcdt = cas->hcdt;
-            szqueue_add(hc->sendq, hcdt);
+            addrv = szqueue_add(hc->sendq, hcdt);
             hcdt = nilptr;
             break;
         default:
             assert(1==2); break;
+        }
+
+        if (addrv != 0) {
+            /*
+             * 队列满（szqueue 上限 256）。旧代码忽略返回值：这个 case 的
+             * hcdt 没有进入任何队列，fiber 却照样 yield，之后没有任何人
+             * 能唤醒它（永久 parked，destroy 永远不会被调用）。
+             * 这里回滚已经入队的 case，解锁后返回失败，避免静默挂死。
+             */
+            for (int j = i - 1; j >= 0; j--) {
+                crn_scase* rj = cas0[j];
+                if (rj->kind == caseNil || rj->kind == caseDefault) continue;
+                if (rj->kind == caseSend) {
+                    szqueue_remove_value(rj->hc->sendq, rj->hcdt);
+                } else if (rj->kind == caseRecv) {
+                    szqueue_remove_value(rj->hc->recvq, rj->hcdt);
+                }
+            }
+            crn_selunlock(cas0, order0, ncases);
+            lerror("select enqueue full hc=%p grid=%d ncases=%d\n",
+                   hc, mygr->id, ncases);
+            *rcasi = -1;
+            return false;
         }
     }
 
@@ -191,24 +215,20 @@ bool crn_selectgo(int* rcasi, crn_scase** cas0, uint16_t* order0, int ncases) {
             linfo("case woke i=%d direction=%d by=%p val=%p\n", i, casewk, wkgr, sk->hcelem);
         }
         else{
+            /*
+             * 摘除本 case 自己的 hcdt，而不是盲取队头。
+             * 旧实现按队头 szqueue_remove：如果队头是别的等待者的 hcdt，
+             * 会被取走且不放回，那个 fiber 就永远等不到唤醒（永久 parked，
+             * destroy 永远不会被调用）。hcdt 也可能已被 waker/close 提前
+             * 取走，此时 remove_value 返回 -1，属于正常情况。
+             */
             hc = sk->hc;
             if (sk->kind == caseSend) {
-                hcdt = szqueue_remove(hc->sendq);
+                szqueue_remove_value(hc->sendq, sk->hcdt);
             }else{
-                hcdt = szqueue_remove(hc->recvq);
+                szqueue_remove_value(hc->recvq, sk->hcdt);
             }
-            if (hcdt == nilptr) {
-                // our hcdt was already removed (e.g. chan close drained the
-                // queue and woke us with caseClose); nothing left to dequeue
-                continue;
-            }
-            gr = hcdt->gr;
-            if (gr != mygr) {
-                // not ours (queue order raced with another waker); skip
-                continue;
-            }
-            gr = nilptr;
-            hcdt = nilptr;
+            continue;
         }
     }
 

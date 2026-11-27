@@ -133,6 +133,7 @@ void crn_gc_free(void* ptr) {
         // no-op by design: memory stays in the GC heap and is reclaimed later.
         // Callers must NOT assume reuse-after-free safety here; bzero'ing
         // "freed" memory actually zeroes live GC memory (see hchan close).
+        GC_FREE(ptr);
     }
     crn_post_gclock(__func__);
 }

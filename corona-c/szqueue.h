@@ -28,6 +28,11 @@ int szqueue_add(szqueue_t* queue, void* value);
 // empty.
 void* szqueue_remove(szqueue_t* queue);
 
+// Removes the first occurrence of a specific item (by pointer identity),
+// preserving the order of the remaining items. Returns 0 if the item was
+// removed, -1 if it was not found.
+int szqueue_remove_value(szqueue_t* queue, void* value);
+
 // Returns, but does not remove, the head of the queue. Returns NULL if the
 // queue is empty.
 void* szqueue_peek(szqueue_t*);

@@ -31,6 +31,7 @@
 
 #include <corona.h>
 #include <coronapriv.h>
+#include "crnpub.h"
 
 #define dftstksz (128*1024)
 // const int dftstksz = 128*1024;
@@ -85,6 +86,7 @@ typedef struct corona {
     sigsegv_dispatcher sigdpt;
     netpoller* np;
     rtsettings* rtsets;
+    crn_inner_stats instats;
 } corona;
 
 
@@ -390,6 +392,7 @@ void crn_fiber_destroy(fiber* gr) {
     }
     void* optr = gr;
     crn_gc_free(gr); // malloc/calloc分配的不能用GC_FREE()释放
+    atomic_addint(&gnr__->instats.fiber_dtorcnt, 1);
     ldebug("fiber freed %d-%d %p\n", grid, mcid, optr);
 }
 
@@ -1195,7 +1198,7 @@ fiber* crn_sched_steal_ready_one(machine*mc) {
     assert(1==2);
 }
 static
-void crn_sched_run_one(machine* mc, fiber* rungr) {
+int crn_sched_run_one(machine* mc, fiber* rungr) {
     mc->curgr = rungr;
     gcurgrid__ = rungr->id;
     rungr->coctx0 = &mc->coctx0;
@@ -1231,6 +1234,16 @@ void crn_sched_run_one(machine* mc, fiber* rungr) {
 
     if (curst == waiting) {
     } else if (curst == finished) {
+        /*
+         * 正常完成时 yinfo 必须为空（yield 后要么被 commit 清掉，要么在
+         * wake_pending 分支由 crn_fiber_suspend 清掉）。若不为空，说明
+         * 提交协议已破；先清掉，避免调用方拿已 destroy 的 rungr 注册事件。
+         */
+        if (mc->yinfo.seted) {
+            lerror("yinfo leak on finished gr %d ytype=%d\n",
+                   rungr->id, mc->yinfo.ytype);
+            memset(&mc->yinfo, 0, sizeof(mc->yinfo));
+        }
         // linfo("finished gr %d\n", rungr->id);
         crn_machine_grfree(mc, rungr->id);
     }else if (curst == runnable){
@@ -1240,6 +1253,7 @@ void crn_sched_run_one(machine* mc, fiber* rungr) {
         linfo("break from gr %d, state=%d pkreason=%d(%s)\n",
               rungr->id, curst, rungr->pkreason, yield_type_name(rungr->pkreason));
     }
+    return curst;
 }
 
 // make sure fiber suspended then push to netpoller
@@ -1293,8 +1307,10 @@ static void* crn_procerx(void*arg) {
             fiber* rungr = nilptr;
             rungr = crn_sched_get_ready_one(mc);
             if (rungr != nilptr) {
-                crn_sched_run_one(mc, rungr);
-                crn_procer_yield_commit(mc, rungr);
+                int st = crn_sched_run_one(mc, rungr);
+                if (st != finished) {
+                    crn_procer_yield_commit(mc, rungr);
+                }
                 continue;
             }
 	    // seems not run proper, disabled
@@ -1931,7 +1947,7 @@ void crn_init_intern() {
     GC_set_free_space_divisor(50); // default 3
     GC_set_dont_precollect(1);
     GC_set_dont_expand(1);
-    /* GC_set_force_unmap_on_gcollect(1); */
+    GC_set_force_unmap_on_gcollect(1); // default 1
     /* GC_enable_incremental(); */
     // GC_set_rate(5);
     // GC_set_all_interior_pointers(1);
@@ -1995,10 +2011,32 @@ corona* crn_new() {
     return nr;
 }
 
-#include "crnpub.h"
+
+typedef struct crn_stats_snap {
+    int nact;
+    int totmem;
+    int maxstk;
+} crn_stats_snap;
+
+static int crn_stats_snap_cb(uintptr_t key, void* val, void* arg) {
+    (void)key;
+    fiber* gr = (fiber*)val;
+    crn_stats_snap* s = (crn_stats_snap*)arg;
+    if (atomic_getint((int*)&gr->state) == executing) {
+        s->nact += 1;
+    }
+    s->totmem += (int)gr->stack.ssze;
+    if ((int)gr->used_stksz > s->maxstk) {
+        s->maxstk = (int)gr->used_stksz;
+    }
+    return 0;
+}
+
 void crn_get_stats(crn_inner_stats* st) {
     corona* nr = gnr__;
+    st->version = -3; // -4, -5
     st->mch_totcnt = 3;
+    st->fiber_dtorcnt = atomic_getint(&nr->instats.fiber_dtorcnt);
     machine* mc = nilptr;
     for (int i = 5; i > 0; i --) {
         if (i == 2) continue;
@@ -2010,27 +2048,27 @@ void crn_get_stats(crn_inner_stats* st) {
         if (mc->parking == 0) st->mch_actcnt += 1;
         // linfo("fn1=%d, fn2=%d mc=%d stsz=%d\n", fibnum1, fibnum2, i, sizeof(crn_inner_stats));
 
-        Array* arr = nilptr;
-        rv = crnmap_get_values(mc->grs, &arr);
-        if (rv != CC_OK) {
-            if (rv == CC_ERR_INVALID_CAPACITY) {
-                // nothing
-                assert(crnmap_size(mc->grs) == 0);
-            }else{
-                linfo("some err %d get fiber of mc %d %p %d\n", rv, i, mc->grs, crnmap_size(mc->grs));
+        /*
+         * 旧实现用 crnmap_get_values() 先拷指针、解锁后再读 fiber 字段：
+         * 期间 fiber 可能被销毁（读到已释放内存），且每次调用都会分配
+         * 一个 Array 却从不释放。这里改用 crnmap_foreach()，在 mc->grs
+         * 锁内直接拷标量字段，与 crn_get_fibers() 的快照方式一致；
+         * 它还是非阻塞 trylock，忙时让出重试，避免和调度器互相卡住。
+         */
+        crn_stats_snap ss = {0};
+        int ok = 0;
+        for (int retry = 0; retry < 3; retry++) {
+            if (crnmap_foreach(mc->grs, crn_stats_snap_cb, &ss)) {
+                ok = 1;
+                break;
             }
-        }else{
-            assert(rv == CC_OK || rv == CC_ERR_KEY_NOT_FOUND || rv == CC_ERR_OUT_OF_RANGE);
-            for (int i = 0; i < array_size(arr); i++) {
-                fiber* gr = nilptr;
-                rv = array_get_at(arr, i, (void**)&gr);
-                assert(rv == CC_OK);
-                if (gr->state == executing) st->fiber_actcnt += 1;
-                st->fiber_totmem += gr->stack.ssze;
-                if (gr->used_stksz > st->maxstksz) {
-                    st->maxstksz = gr->used_stksz;
-                }
-                // linfo("max stksz fib %d %d/%d\n", gr->id, gr->used_stksz, gr->stack.ssze);
+            sched_yield();
+        }
+        if (ok) {
+            st->fiber_actcnt += ss.nact;
+            st->fiber_totmem += ss.totmem;
+            if (ss.maxstk > st->maxstksz) {
+                st->maxstksz = ss.maxstk;
             }
         }
     }

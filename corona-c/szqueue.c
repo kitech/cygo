@@ -110,6 +110,53 @@ void* szqueue_remove(szqueue_t* queue)
     return value;
 }
 
+// Removes the first occurrence of a specific item (by pointer identity),
+// preserving the order of the remaining items. Returns 0 if the item was
+// removed, -1 if it was not found.
+int szqueue_remove_value(szqueue_t* queue, void* value)
+{
+    // Size is bounded by capacity (see szqueue_add), so a linear scan is fine.
+    for (int k = 0; k < queue->size; k++)
+    {
+        int pos = queue->next + k;
+        if (pos >= queue->capacity)
+        {
+            pos -= queue->capacity;
+        }
+        if (queue->data[pos] != value)
+        {
+            continue;
+        }
+
+        // Shift the following items one slot toward the front.
+        for (int j = k; j + 1 < queue->size; j++)
+        {
+            int cur = queue->next + j;
+            int nxt = cur + 1;
+            if (cur >= queue->capacity)
+            {
+                cur -= queue->capacity;
+            }
+            if (nxt >= queue->capacity)
+            {
+                nxt -= queue->capacity;
+            }
+            queue->data[cur] = queue->data[nxt];
+        }
+
+        int last = queue->next + queue->size - 1;
+        if (last >= queue->capacity)
+        {
+            last -= queue->capacity;
+        }
+        queue->data[last] = NULL;
+        queue->size--;
+        return 0;
+    }
+
+    return -1;
+}
+
 // Returns, but does not remove, the head of the queue. Returns NULL if the
 // queue is empty.
 void* szqueue_peek(szqueue_t* queue)

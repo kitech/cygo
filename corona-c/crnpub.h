@@ -2,19 +2,23 @@
 #define _CRN_PUB_H_
 
 #include <stddef.h>
+#include <stdint.h>
 
 typedef struct corona corona;
 
 typedef struct crn_inner_stats {
+	int version;
     int mch_totcnt;
     int mch_actcnt;
     int fiber_totcnt;
     int fiber_actcnt;
-    int fiber_totmem;
+    int64_t fiber_totmem;
+    int fiber_dtorcnt;
     int maxstksz;
 } crn_inner_stats;
 
 typedef struct crn_fiber_info {
+	int version;
     int id;            /* fiber id */
     int mcid;          /* machine id */
     int state;         /* grstate: 0 nostack,1 runnable,2 executing,3 waiting,4 finished */
