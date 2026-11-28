@@ -568,9 +568,8 @@ void crn_fiber_run_first(fiber* gr) {
     mc->curgr = gr;
     coro_context* curcoctx = curgr == 0? gr->coctx0 : &curgr->coctx; // 暂时无用
 
-#if !defined(CORO_LIBCO89)
-    ((ucontext_t*)(&gr->coctx))->uc_link = (ucontext_t*)gr->coctx0;
-#endif
+    // uc_link 已在 corowp_create 里统一设置（指向本线程 main coro），不再
+    // 在每个切换点重复赋值；entry 返回路径由 corowp_ucontext_corofwd 兜底 abort。
     lverb("coctx before swapto workco fid %d mcid %d\n", gr->id, gr->mcid);
     crn_call_with_alloc_lock(crn_gc_setbottom1, gr);
     // 对-DCORO_UCONTEXT/-DCORO_ASM等来说，这句是真正开始执行
@@ -590,9 +589,6 @@ void crn_fiber_resume(fiber* gr) {
     if (gr->myfrm != nilptr) crn_set_frame(gr->myfrm); // 恢复fiber的frame
     crn_call_with_alloc_lock(crn_gc_setbottom1, gr);
     // 对-DCORO_UCONTEXT/-DCORO_ASM等来说，这句是真正开始执行
-#if !defined(CORO_LIBCO89)
-    ((ucontext_t*)(&gr->coctx))->uc_link = (ucontext_t*)gr->coctx0;
-#endif
     lverb("coctx before swapto workco fid %d mcid %d\n", gr->id, gr->mcid);
     corowp_transfer(gr->coctx0, &gr->coctx);
     lverb("coctx returned to mainco fid %d mcid %d\n", gr->id, gr->mcid);

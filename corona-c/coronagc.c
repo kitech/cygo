@@ -170,6 +170,13 @@ void crn_call_with_alloc_lock(void*(*fnptr)(void* arg1), void* arg) {
     #elif __ANDROID__ || __BIONIC__
     GC_call_with_gc_active(fnptr, arg);
     #else
+    // NOTE: enabling this on Linux activates GC_set_stackbottom in the fiber
+    // switch path. Verified correct in isolation, but it destabilizes the
+    // runtime: corona's GC coordination layer (crn_gc_start/stop_proc,
+    // machine parking/wantgclock safepoints, the collector-yield usleep
+    // guards) assumes these paths never block on the GC reader lock.
+    // s12 showed marker SIGSEGV, in-scenario hangs and exit hangs within a
+    // single run. Do not enable without redesigning that coordination.
     // GC_call_with_gc_active(fnptr, arg);
     #endif
     crn_post_gclock(__func__);

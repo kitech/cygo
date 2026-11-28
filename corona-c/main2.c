@@ -167,12 +167,22 @@ static void on_fatal(int sig, siginfo_t* si, void* uc) {
     _exit(70);
 }
 
-static void install_fatal_handlers(void) {
-    static char altstack[64 * 1024];
+// sigaltstack is per-thread state: every thread that can receive an
+// SA_ONSTACK signal needs its OWN alternate stack. The old process-wide
+// static buffer made all machine handlers share one 64KB region; two
+// concurrent faults (e.g. a fiber guard-page hit plus a second machine
+// during GC stop-world) stomp each other's frames - verified by probe
+// (altprobe.c): shared -> immediate nested SIGSEGV, no diagnostics at all.
+static void install_thread_altstack(void) {
+    static __thread char altstack[64 * 1024];
     stack_t ss = {0};
     ss.ss_sp = altstack;
     ss.ss_size = sizeof(altstack);
     sigaltstack(&ss, 0);
+}
+
+static void install_fatal_handlers(void) {
+    install_thread_altstack();
 
     struct sigaction sa;
     memset(&sa, 0, sizeof(sa));
@@ -214,10 +224,12 @@ static void maybe_allow_ptrace(void) {
 #endif
 }
 
-// machine threads: altstack per thread (SIGSEGV handling on fiber overflow)
+// machine threads: altstack per thread (SIGSEGV handling on fiber overflow).
+// sigaction is process-wide and already installed by main before machine
+// creation; each thread only needs its own sigaltstack, not a re-install.
 static void thread_create_cb(void* arg) {
     (void)arg;
-    install_fatal_handlers();
+    install_thread_altstack();
 }
 
 // ------------------------------------------------------------------- helpers

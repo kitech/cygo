@@ -128,13 +128,23 @@ void corowp_destroy (coro_context *ctx) {
 #elif defined (CORO_LIBCO89)
 
 static __thread coro_context* crn_libco_boot_ctx;
+// one-shot handoff: corowp_create writes, the entry consumes. create is
+// always immediately followed by transfer on the same machine thread.
+static __thread int crn_libco_boot_used;
 
 static void corowp_libco_entry(void) {
+    assert(crn_libco_boot_used == 1);
     coro_context* ctx = crn_libco_boot_ctx;
+    crn_libco_boot_used = 0; // consume before running user code
     assert(ctx != nilptr);
     assert(ctx->coro != 0);
     ctx->coro(ctx->arg);
-    assert(0); // corowp_transfer should have switched away
+    // corowp_transfer should have switched away; falling out of the entry
+    // would return into garbage. keep it visible instead of assert(NDEBUG-noop)
+    fiber* gr = crn_fiber_getcur();
+    lerror("fiber entry returned (libco): grid=%d mcid=%d\n",
+           gr ? gr->id : -1, gr ? gr->mcid : -1);
+    abort();
 }
 
 void corowp_create(coro_context *ctx, coro_func coro, void *arg, void *sptr, size_t ssze) {
@@ -144,7 +154,9 @@ void corowp_create(coro_context *ctx, coro_func coro, void *arg, void *sptr, siz
     /* Layout (low -> high): [handle page][guard page][stack ...].
      * libco writes its handle block at `sptr`; the guard above it faults
      * before a stack overflow can corrupt the saved context. */
+    assert(crn_libco_boot_used == 0);
     crn_libco_boot_ctx = ctx; // thread-local: create is followed by transfer
+    crn_libco_boot_used = 1;
     ctx->handle = co_derive(sptr, (unsigned int)ssze, corowp_libco_entry);
     assert(ctx->handle != NULL);
 }
@@ -160,22 +172,37 @@ void corowp_destroy (coro_context *ctx) {
 
 #elif defined (CORO_BACKEND_UCONEXT)
 
-// makecontext need this proto type
-static void corowp_ucontext_corofwd(int arg0, ...) {
-    int argc = arg0;
-    assert(argc==2); // arg0=2, arg1=fn, arg2=arg
-    void* (*f)(void*) = 0;
-    void* arg = 0;
+// makecontext's int varargs cannot portably carry pointers (LP64 truncation
+// per POSIX), so the entry reads its {fn,arg} from a one-shot thread-local
+// slot written by corowp_create. Invariant: create is always immediately
+// followed by transfer on the same machine thread (crn_fiber_run_first), so
+// the slot cannot be overwritten before it is consumed; the used flag turns
+// a future violation of that invariant into an assert.
+typedef struct {
+    coro_func fn;
+    void* arg;
+    int used;
+} crn_uc_boot_t;
+static __thread crn_uc_boot_t crn_uc_boot;
 
-    va_list list;
-    va_start(list, arg0);
-    f = va_arg(list, void*);
-    arg = va_arg(list, void*);
-    va_end(list);
+static void corowp_ucontext_corofwd(void) {
+    assert(crn_uc_boot.used == 1);
+    coro_func f = crn_uc_boot.fn;
+    void* a = crn_uc_boot.arg;
+    crn_uc_boot.used = 0; // consume before running user code
+    crn_uc_boot.fn = 0;
 
-    ldebug("arg0 %d, f %p, arg %p\n", arg0, f, arg);
+    ldebug("f %p, arg %p\n", (void*)f, a);
     assert(f!=0);
-    f(arg);
+    f(a);
+    // corowp_transfer should have switched away; falling out of the entry
+    // with uc_link==NULL would silently exit(0) the whole process, and with
+    // uc_link set it would masquerade as a normally-finished fiber. both
+    // are state-machine violations: make them loud.
+    fiber* gr = crn_fiber_getcur();
+    lerror("fiber entry returned: grid=%d mcid=%d\n",
+           gr ? gr->id : -1, gr ? gr->mcid : -1);
+    abort();
 }
 
 void corowp_create(coro_context *ctx, coro_func coro, void *arg, void *sptr,  size_t ssze) {
@@ -200,11 +227,19 @@ void corowp_create(coro_context *ctx, coro_func coro, void *arg, void *sptr,  si
 
     rctx->uc_stack.ss_sp = sptr;
     rctx->uc_stack.ss_size = ssze;
-    rctx->uc_link = 0; // (ucontext_t*)crn_main_coro_ctx; // ???
+    /* Backstop only: the normal end-of-fiber path is the explicit
+     * corowp_transfer in crn_fiber_forward. If the entry ever returned
+     * anyway, uc_link must not be NULL: glibc terminates the whole process
+     * with exit(0) for a NULL uc_link, i.e. a silent, "successful" exit.
+     * (The entry itself aborts before falling through to this.) */
+    rctx->uc_link = (ucontext_t*)crn_main_coro_ctx;
     assert (crn_main_coro_ctx != 0);
 
-    makecontext(rctx, (void*) corowp_ucontext_corofwd, 3, 2, (void*)coro, arg);
-    // makecontext(rctx, (void*) coro, 1, arg);
+    assert(crn_uc_boot.used == 0);
+    crn_uc_boot.fn = coro;
+    crn_uc_boot.arg = arg;
+    crn_uc_boot.used = 1;
+    makecontext(rctx, (void*) corowp_ucontext_corofwd, 1, 0);
     pmutex_unlock(&coroccmu);
 }
 
