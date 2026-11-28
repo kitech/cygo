@@ -84,6 +84,7 @@ void netpoller_loop() {
 }
 
 typedef struct evdata {
+    npreg_hdr np;   // 首成员：无锁登记状态机（见 datstu.c）
     int evtyp;
     void* data; // fiber*
     int grid;
@@ -120,12 +121,29 @@ void evdata_free(evdata* d) {
     crn_gc_free(d);
 }
 
+// drain 用：先 event_free（同步从 base 摘除，之后该事件不会再触发），
+// 再释放 evdata。DONE 条目的 evt 已被回调清空，只回收 evdata。
+static void np_ev_free_evdata(void* vd) {
+    evdata* d = (evdata*)vd;
+    if (d->evt != nilptr) { event_free(d->evt); d->evt = nilptr; }
+    evdata_free(d);
+}
+// 取消该 fiber 的全部未决事件：crn_fiber_destroy（兜底）与 __poll/
+// __select 唤醒后的兄弟清理（iohook.c）调用。无锁：见 datstu.c 线程纪律。
+void netpoller_cancelfiber(fiber* gr) {
+    crn_npreg_drain(gr, np_ev_free_evdata);
+}
+
 extern void crn_procer_resume_one(void* cbdata, int ytype, int grid, int mcid);
 
 // common version callback, support ev_io, ev_timer
 static
 void netpoller_evwatcher_cb(evutil_socket_t fd, short events, void* arg) {
     evdata* d = (evdata*)arg;
+    // 先认领（无锁状态机）：0=并发 drain 已接管，什么都不碰立即返回；
+    // 2=fiber 正在销毁，收尾但不唤醒
+    int nprv = crn_npreg_claim(d);
+    if (nprv == 0) { return; }
     assert(d != 0);
     void* dd = d->data;
     int ytype = d->ytype;
@@ -157,8 +175,13 @@ void netpoller_evwatcher_cb(evutil_socket_t fd, short events, void* arg) {
     // if direct event_free, it ok.
     // because non-persist event already run event_del by loop itself
     event_free(evt);
-    evdata_free(d);
-    crn_procer_resume_one(dd, ytype, grid, mcid);
+    d->evt = nilptr;   // drain 的 free_fn 据此跳过二次释放
+    if (nprv == 1) {
+        crn_procer_resume_one(dd, ytype, grid, mcid);
+    }
+    // evdata 不在此释放（无锁纪律：只有该 fiber 的 machine 线程释放它）。
+    // 标记 DONE，留给下一次 drain；fiber 已销毁则弃置给 GC 回收。
+    crn_npreg_done(d);
 }
 
 extern void crn_pre_gclock_proc(const char* funcname);
@@ -177,11 +200,15 @@ void netpoller_readfd(int fd, int ytype, fiber* gr) {
 
     struct event* evt = event_new(np->loop, fd, EV_READ|EV_CLOSED, netpoller_evwatcher_cb, d);
     d->evt = evt;
+    // 登记必须先于武装(event_add)：零/纳秒级事件可能在 add 返回前就被
+    // netpoller 线程触发，回调 claim 不到登记会静默丢唤醒
+    crn_npreg_add(gr, d);
     crn_pre_gclock_proc(__func__);
     int rv = event_add(evt, &d->tv);
     crn_post_gclock_proc(__func__);
     if (rv != 0) {
         // [warn] Epoll ADD(8193) on fd 18 failed. Old events were 0; read change was 1 (add); write change was 0 (none); close change was 1 (add): Bad file descriptor
+        crn_npreg_undo(gr, d); // 撤销登记（弹出链头）
         lwarn("add error %d %d %d\n", rv, fd, gr->id);
         event_free(evt);
         evdata_free(d);
@@ -209,10 +236,13 @@ void netpoller_writefd(int fd, int ytype, fiber* gr) {
 
     struct event* evt = event_new(np->loop, fd, EV_WRITE|EV_CLOSED, netpoller_evwatcher_cb, d);
     d->evt = evt;
+    // 登记必须先于武装：见 netpoller_readfd 同注
+    crn_npreg_add(gr, d);
     crn_pre_gclock_proc(__func__);
     int rv = event_add(evt, &d->tv);
     crn_post_gclock_proc(__func__);
     if (rv != 0) {
+        crn_npreg_undo(gr, d); // 撤销登记（弹出链头）
         lwarn("add error %d %d %d\n", rv, fd, gr->id);
         event_free(evt);
         evdata_free(d);
@@ -238,10 +268,14 @@ void netpoller_timer(int64_t ns, int ytype, fiber* gr) {
     struct event* tmer = evtimer_new(np->loop, netpoller_evwatcher_cb, d);
     // struct event* tmer = event_new(np->loop, -1, 0, netpoller_evwatcher_cb, d);
     d->evt = tmer;
+    // 登记必须先于武装：零纳秒定时器（sleep(0)/crn_sched 等）可能在
+    // evtimer_add 返回前就被 netpoller 线程触发，claim 不到=丢唤醒
+    crn_npreg_add(gr, d);
     crn_pre_gclock_proc(__func__);
     int rv = evtimer_add(tmer, &d->tv);
     crn_post_gclock_proc(__func__);
     if (rv != 0) {
+        crn_npreg_undo(gr, d); // 撤销登记（弹出链头）
         lwarn("add error %d %" PRId64 " %d\n", rv, ns, gr->id);
         event_free(tmer);
         evdata_free(d);
@@ -305,6 +339,9 @@ static
 void evdns_resolv_cbproc(int errcode, struct evutil_addrinfo *addr, void *ptr)
 {
     evdata* d = (evdata*)ptr;
+    // 同 netpoller_evwatcher_cb：先认领（0=drain 已接管即返回，2=销毁中不唤醒）
+    int nprv = crn_npreg_claim(d);
+    if (nprv == 0) { return; }
     fiber* gr = (fiber*)d->data;
     void* dd = d->data;
     int ytype = d->ytype;
@@ -325,18 +362,20 @@ void evdns_resolv_cbproc(int errcode, struct evutil_addrinfo *addr, void *ptr)
         resout = netpoller_dump_addrinfo(addr);
         evutil_freeaddrinfo(addr);
     }
-    evdata_free(d);
+    // evdata 不在此释放（无锁纪律）：标记 DONE 留给 drain
 
     //crn_post_gclock_proc(__func__);
-    if (crn_procer_resume_prechk(dd,ytype,grid,mcid) == false) {
+    if (nprv == 2 || crn_procer_resume_prechk(dd,ytype,grid,mcid) == false) {
         lwarn("oops, seems gr gone %d\n", grid);
         if (resout != nilptr) { freeaddrinfo(resout); }
+        crn_npreg_done(d);
         return;
     }
     // void* chkderef = *resout2; // FIXME deref crash
     *resout2 = resout;
     *ioerrcode = errcode;
     // linfo("resolved resume %d\n", grid);
+    crn_npreg_done(d);
     crn_procer_resume_one(dd, ytype, grid, mcid);
 }
 
@@ -365,6 +404,10 @@ void* netpoller_dnsresolv(const char* hostname, int ytype, fiber* gr, struct add
      * want. */
     hints.ai_socktype = SOCK_STREAM;
     hints.ai_protocol = IPPROTO_TCP;
+
+    // 登记要先于 evdns_getaddrinfo：后者可能同步内联回调（req==NULL 时），
+    // 内联回调会立即 claim+释放，登记在后会把已释放指针留在表里
+    crn_npreg_add(gr, d);
 
     crn_pre_gclock_proc(__func__);
     req = evdns_getaddrinfo(np->dnsbase, hostname, NULL /* no service name given */,

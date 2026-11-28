@@ -52,6 +52,7 @@ typedef struct evwaiter {
     evfd* f;
     int want; // EV_READ / EV_WRITE
     int done;
+    np_token* tok;
     evdata d;
     ev_timer tmo; // [差异 5] 每个等待者独立的 3.456s 超时
 } evwaiter;
@@ -67,6 +68,7 @@ struct evfd {
 typedef struct evsleep {
     ev_timer t;
     struct evsleep* gnext;
+    np_token* tok;
     evdata d;
 } evsleep;
 
@@ -80,6 +82,8 @@ typedef struct evdns_req {
     int* errcode;
     struct addrinfo* res;
     int status;
+    int canceled;   // 取消标记：worker 在途时由取消 job 置位
+    np_token* tok;
     struct evdns_req* next;
 } evdns_req;
 
@@ -87,6 +91,7 @@ enum evjobtyp {
     EVJOB_READ = 1,
     EVJOB_WRITE,
     EVJOB_TIMER,
+    EVJOB_CANCEL, // 取消一批未决令牌（destroy/poll轮清理）
 };
 
 typedef struct evjob {
@@ -98,6 +103,9 @@ typedef struct evjob {
     int grid;
     int mcid;
     void* data; // fiber*
+    np_token* tok;   // 未决事件令牌（机器线程入列，loop 侧挂 obj）
+    void** carr;      // EVJOB_CANCEL: np_token* 数组
+    int ccnt;
 } evjob;
 
 struct netpoller {
@@ -219,7 +227,12 @@ static void ev_sleep_free_later(netpoller* np, evsleep* s) {
  * watcher 内存延后到 prepare 释放，避免 libev 在 callback 返回后访问。
  */
 static void ev_waiter_resume(netpoller* np, evwaiter* w) {
+    // 先认领令牌：0=并发取消已接管（其 obj 由取消 job 释放），不碰 w；
+    // 2=fiber 正在销毁，只做停止/摘链/延后释放，跳过唤醒
+    int nprv = crn_npreg_claim(w->tok);
+    if (nprv == 0) { return; }
     if (w->done) {
+        crn_npreg_done(w->tok);
         return;
     }
     w->done = 1;
@@ -229,7 +242,10 @@ static void ev_waiter_resume(netpoller* np, evwaiter* w) {
     int mcid = w->d.mcid;
     int ytype = w->d.ytype;
     ev_waiter_free_later(np, w);
-    crn_procer_resume_one(data, ytype, grid, mcid);
+    crn_npreg_done(w->tok);
+    if (nprv == 1) {
+        crn_procer_resume_one(data, ytype, grid, mcid);
+    }
 }
 
 static void ev_wake_list(netpoller* np, evwaiter** head) {
@@ -289,13 +305,19 @@ static void ev_sleep_cb(struct ev_loop* loop, ev_timer* w, int revents) {
     (void)loop;
     (void)revents;
 
+    // 先认领令牌：0=取消已接管；2=销毁中跳过唤醒（同 ev_waiter_resume）
+    int nprv = crn_npreg_claim(s->tok);
+    if (nprv == 0) { return; }
     ev_timer_stop(np->loop, &s->t);
     void* data = s->d.data;
     int grid = s->d.grid;
     int mcid = s->d.mcid;
     int ytype = s->d.ytype;
     ev_sleep_free_later(np, s);
-    crn_procer_resume_one(data, ytype, grid, mcid);
+    crn_npreg_done(s->tok);
+    if (nprv == 1) {
+        crn_procer_resume_one(data, ytype, grid, mcid);
+    }
 }
 
 /* ------------------------------------------------------------------ */
@@ -320,6 +342,8 @@ static void ev_start_io(netpoller* np, evjob* j) {
     w->d.mcid = j->mcid;
     w->d.ytype = j->ytype;
     w->d.fd = j->fd;
+    w->tok = j->tok;
+    if (j->tok != nilptr) { j->tok->obj = w; }
 
     ev_timer_init(&w->tmo, ev_io_timeout_cb, EV_IO_TIMEOUT_S, 0);
     w->tmo.data = w;
@@ -347,6 +371,8 @@ static void ev_start_timer(netpoller* np, evjob* j) {
     s->d.mcid = j->mcid;
     s->d.ytype = j->ytype;
     s->d.fd = j->ns;
+    s->tok = j->tok;
+    if (j->tok != nilptr) { j->tok->obj = s; }
     ev_timer_init(&s->t, ev_sleep_cb, (double)j->ns / 1000000000.0, 0);
     s->t.data = s;
     ev_timer_start(np->loop, &s->t);
@@ -370,10 +396,39 @@ static void ev_prepare_cb(struct ev_loop* loop, ev_prepare* pw, int revents) {
         evjob* next = q->next;
         if (q->typ == EVJOB_TIMER) {
             ev_start_timer(np, q);
+        } else if (q->typ == EVJOB_CANCEL) {
+            // 机器线程摘除的未决令牌：在此（loop 线程）释放其挂接对象
+            for (int i = 0; i < q->ccnt; i++) {
+                np_token* tok = (np_token*)q->carr[i];
+                if (tok == nilptr) { continue; }
+                int st = __atomic_load_n(&tok->np.npstate, __ATOMIC_ACQUIRE);
+                if (st == NPREG_DONE) { continue; } // 唤醒路径已自行释放
+                if (tok->kind == NPT_IO && tok->obj != nilptr) {
+                    evwaiter* w = (evwaiter*)tok->obj;
+                    evfd* f = w->f;
+                    ev_timer_stop(np->loop, &w->tmo);
+                    if (ev_unlink(&f->rds, w) == nilptr) {
+                        ev_unlink(&f->wrs, w);
+                    }
+                    ev_waiter_free_later(np, w);
+                    ev_fd_update(np, f);
+                } else if (tok->kind == NPT_TIMER && tok->obj != nilptr) {
+                    evsleep* s = (evsleep*)tok->obj;
+                    ev_timer_stop(np->loop, &s->t);
+                    ev_sleep_free_later(np, s);
+                } else if (tok->kind == NPT_DNS && tok->obj != nilptr) {
+                    // worker 在途：置取消标记，done 路径见标记后跳过唤醒
+                    evdns_req* r = (evdns_req*)tok->obj;
+                    r->canceled = 1;
+                }
+                // 令牌本体是 GC 内存，弃置给 GC
+            }
+            crn_raw_free(q->carr);
         } else {
             ev_start_io(np, q);
         }
-        crn_raw_free(q);
+        if (q->typ != EVJOB_CANCEL) { crn_raw_free(q); }
+        else { crn_raw_free(q); }
         q = next;
     }
 
@@ -387,7 +442,17 @@ static void ev_prepare_cb(struct ev_loop* loop, ev_prepare* pw, int revents) {
     while (dq != nilptr) {
         evdns_req* r = dq;
         dq = r->next;
-        if (crn_procer_resume_prechk(r->data, r->ytype, r->grid, r->mcid)) {
+        // 先认领令牌：0=取消已接管（obj 由取消路径善后）；2=销毁中跳过唤醒
+        int nprv = 0;
+        if (r->tok != nilptr) {
+            nprv = crn_npreg_claim(r->tok);
+            if (nprv == 0) {
+                /* 取消路径只置 canceled 标记不释放 r，这里统一善后 */
+            }
+        }
+        if (r->canceled || nprv == 2) {
+            if (r->res != nilptr) { freeaddrinfo(r->res); }
+        } else if (crn_procer_resume_prechk(r->data, r->ytype, r->grid, r->mcid)) {
             if (r->out != nilptr) {
                 *r->out = r->res;
             }
@@ -401,6 +466,7 @@ static void ev_prepare_cb(struct ev_loop* loop, ev_prepare* pw, int revents) {
                 freeaddrinfo(r->res);
             }
         }
+        if (r->tok != nilptr && nprv != 0) { crn_npreg_done(r->tok); }
         if (r->node != nilptr) {
             crn_raw_free(r->node);
         }
@@ -506,6 +572,41 @@ void netpoller_loop() {
 }
 
 /* 与 event 版相同的 ytype 分派；这里只入队，所有 ev_* 在 loop 线程执行。 */
+void netpoller_cancelfiber(fiber* gr) {
+    // 机器线程摘令牌（单写者），经 async 桥转 loop 线程释放挂接对象
+    netpoller* np = gnpl__;
+    if (np == nilptr || gr == nilptr) { return; }
+    for (;;) {
+        void** arr = crn_raw_malloc(sizeof(void*) * 64);
+        if (arr == nilptr) { return; }
+        int n = crn_npreg_take(gr, arr, 64);
+        if (n == 0) {
+            crn_raw_free(arr);
+            return;
+        }
+        evjob* j = crn_raw_malloc(sizeof(evjob));
+        if (j == nilptr) {
+            crn_raw_free(arr);
+            return;
+        }
+        memset(j, 0, sizeof(*j));
+        j->typ = EVJOB_CANCEL;
+        j->carr = arr;
+        j->ccnt = n;
+        crn_pre_gclock_proc(__func__);
+        pthread_mutex_lock(&np->qmu);
+        if (np->qtail != nilptr) {
+            np->qtail->next = j;
+        } else {
+            np->qhead = j;
+        }
+        np->qtail = j;
+        pthread_mutex_unlock(&np->qmu);
+        crn_post_gclock_proc(__func__);
+        ev_async_send(np->loop, &np->async);
+        if (n < 64) { return; }
+    }
+}
 void netpoller_yieldfd(int64_t fd, int ytype, fiber* gr) {
     netpoller* np = gnpl__;
     assert(np != nilptr);
@@ -571,6 +672,15 @@ void netpoller_yieldfd(int64_t fd, int ytype, fiber* gr) {
     j->grid = gr->id;
     j->mcid = gr->mcid;
     j->data = gr;
+    // 令牌在机器线程入列（fiber 自己的 machine = 单写者），随 job 发往
+    // loop；loop 侧把 watcher 挂到 obj 上
+    np_token* tok = (np_token*)crn_gc_malloc(sizeof(np_token));
+    if (tok != nilptr) {
+        tok->kind = (typ == EVJOB_TIMER) ? NPT_TIMER : NPT_IO;
+        tok->obj = nilptr;
+        crn_npreg_add(gr, tok);
+        j->tok = tok;
+    }
 
     crn_pre_gclock_proc(__func__);
     pthread_mutex_lock(&np->qmu);
@@ -601,6 +711,14 @@ void* netpoller_dnsresolv(const char* hostname, int ytype, fiber* gr,
     r->data = gr;
     r->out = (void**)addr;
     r->errcode = errcode;
+    // 令牌：机器线程入列，DNS done 时认领
+    np_token* tok = (np_token*)crn_gc_malloc(sizeof(np_token));
+    if (tok != nilptr) {
+        tok->kind = NPT_DNS;
+        tok->obj = r;
+        crn_npreg_add(gr, tok);
+        r->tok = tok;
+    }
 
     if (hostname != nilptr) {
         size_t n = strlen(hostname) + 1;

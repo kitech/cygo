@@ -358,6 +358,9 @@ void crn_fiber_destroy(fiber* gr) {
     int state = crn_fiber_getstate(gr);
     assert(state != executing );
     int grid = gr->id;
+    // 真GC_FREE前先清掉本fiber全部未决netpoller事件：poll/select 的兄弟
+    // 注册残留否则会在3.456s超时后唤醒一个已释放的fiber（UAF读来源）
+    netpoller_cancelfiber(gr);
     int mcid = gr->mcid;
     size_t ssze = gr->stack.ssze; // save temp value
     GC_remove_roots(gr->stkptr, gr->stkptr+ssze);
@@ -1455,6 +1458,12 @@ int crn_procer_yield_multi(int ytype, int nfds, const int64_t fds[], const int y
     crn_fiber_suspend(gr);
     return 0;
 }
+// 在所有 machine 的 grs 表里按 grid 找 fiber 的现属 machine。
+// 唤醒路径的迁移修配保持旧形态（读 gr->mcid），加一道范围校验：
+// 上游 netpoller 的 claim/DYING 协议已把死 fiber 的唤醒挡在 resume 之
+// 前，这里只剩迁移场景；极窄窗口（销毁竞态在途回调）读到已释放内存
+// 的垃圾值时，范围校验直接丢弃——不再喂给 crn_machine_get 产生
+// "mc not found" 刷屏。无锁：不再跨 machine 遍历 grs 表。
 bool crn_procer_resume_prechk(void* gr_, int ytype, int grid, int mcid) {
     fiber* gr = (fiber*)gr_;
     fiber* curgr = crn_fiber_getcur();
@@ -1464,7 +1473,13 @@ bool crn_procer_resume_prechk(void* gr_, int ytype, int grid, int mcid) {
     if (gr2 != gr && gr != nilptr && gr->mcid != mcid) {
         // queued event carried a stale mcid because the fiber migrated;
         // the fiber's own mcid is authoritative
-        mcid = gr->mcid;
+        int gmcid = gr->mcid;
+        if (gmcid < 1 || gmcid > 99) {
+            // 垃圾值（gr 可能是被竞态销毁的残留指针）：安全丢弃
+            ldebug("Invalid gmcid=%d grid=%d mcid=%d stale wake\n", gmcid, grid, mcid);
+            return false;
+        }
+        mcid = gmcid;
         mc = crn_machine_get(mcid);
         if (mc != nilptr) { gr2 = crn_machine_grget(mc, grid); }
     }
@@ -1489,7 +1504,13 @@ void crn_procer_resume_one(void* gr_, int ytype, int grid, int mcid) {
         // queued event carried a stale mcid because the fiber migrated;
         // the fiber's own mcid is authoritative. Without this the wakeup is
         // silently dropped below and the peer parks forever (lost wakeup).
-        mcid = gr->mcid;
+        int gmcid = gr->mcid;
+        if (gmcid < 1 || gmcid > 99) {
+            // 垃圾值（gr 可能是被竞态销毁的残留指针）：安全丢弃
+            ldebug("Invalid gmcid=%d grid=%d mcid=%d stale wake\n", gmcid, grid, mcid);
+            return;
+        }
+        mcid = gmcid;
         mc = crn_machine_get(mcid);
         if (mc != nilptr) { gr2 = crn_machine_grget(mc, grid); }
     }

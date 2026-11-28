@@ -167,6 +167,7 @@ typedef struct uvwaiter {
     int ytype;
     void* data;               // fiber*
     evdata* d;
+    np_token* tok;
     struct uvfd* fdref;
     uv_timer_t tmo;           // [D3] 每个等待者独立的 3456ms 超时
 } uvwaiter;
@@ -189,6 +190,7 @@ enum uvjobtyp {
     UVJOB_WRITE,
     UVJOB_TIMER,
     UVJOB_DNS,
+    UVJOB_CANCEL, // 取消一批未决令牌（destroy/poll轮清理）
 };
 
 typedef struct uvjob {
@@ -201,6 +203,9 @@ typedef struct uvjob {
     int mcid;
     void* data;               // fiber*
     struct uvdns* dns;
+    np_token* tok;            // 未决事件令牌（机器线程入列，loop 侧挂 obj）
+    void** carr;              // UVJOB_CANCEL: np_token* 数组
+    int ccnt;
 } uvjob;
 
 /*
@@ -216,11 +221,13 @@ typedef struct uvdns {
     void** out;               // struct addrinfo**
     int* errcode;
     char* node;               // 自己复制一份，uv_getaddrinfo 调用后即可释放
+    np_token* tok;
 } uvdns;
 
 typedef struct uvtimer {
     uv_timer_t t;
     evdata* d;
+    np_token* tok;
 } uvtimer;
 
 struct netpoller {
@@ -279,12 +286,25 @@ static uvjob* np_job_new(int typ, int64_t fd, int ytype, fiber* gr) {
     if (j == nilptr) {
         return nilptr;
     }
+    memset(j, 0, sizeof(*j));
     j->typ = typ;
     j->fd = fd;
     j->ytype = ytype;
     j->grid = gr->id;
     j->mcid = gr->mcid;
     j->data = gr;
+    // 令牌在机器线程入列（fiber 自己的 machine = 单写者），随 job 发往
+    // loop；loop 侧把 watcher 挂到 obj 上。DNS 的令牌在 netpoller_dnsresolv
+    // 里创建（挂在 r->tok），这里不重复。
+    if (typ != UVJOB_DNS) {
+        np_token* tok = (np_token*)crn_gc_malloc(sizeof(np_token));
+        if (tok != nilptr) {
+            tok->kind = (typ == UVJOB_TIMER) ? NPT_TIMER : NPT_IO;
+            tok->obj = nilptr;
+            crn_npreg_add(gr, tok);
+            j->tok = tok;
+        }
+    }
     return j;
 }
 
@@ -427,6 +447,10 @@ static int np_unlink(netpoller* np, uvfd* f, uvwaiter* w) {
 static void np_wake_waiter(netpoller* np, uvfd* f, uvwaiter* w) {
     (void)np;
     (void)f;
+    // 先认领令牌：0=并发取消已接管（obj 由取消 job 释放），不碰 w；
+    // 2=fiber 正在销毁，只做注销/释放，跳过唤醒
+    int nprv = crn_npreg_claim(w->tok);
+    if (nprv == 0) { return; }
     evdata* d = w->d;
     int grid = d->grid;
     int mcid = d->mcid;
@@ -437,7 +461,10 @@ static void np_wake_waiter(netpoller* np, uvfd* f, uvwaiter* w) {
     uv_close((uv_handle_t*)&w->tmo, np_waiter_free_cb);
     w->d = nilptr;
     evdata_free(d);
-    crn_procer_resume_one(data, ytype, grid, mcid);
+    crn_npreg_done(w->tok);
+    if (nprv == 1) {
+        crn_procer_resume_one(data, ytype, grid, mcid);
+    }
 }
 
 static void np_waiter_free_cb(uv_handle_t* h) {
@@ -586,6 +613,9 @@ static void np_poll_cb(uv_poll_t* h, int status, int events) {
 
 static void np_timer_cb(uv_timer_t* t) {
     uvtimer* ut = (uvtimer*)t->data;
+    // 先认领令牌：0=取消已接管；2=销毁中跳过唤醒
+    int nprv = crn_npreg_claim(ut->tok);
+    if (nprv == 0) { return; }
     evdata* d = ut->d;
     int grid = d->grid;
     int mcid = d->mcid;
@@ -595,7 +625,10 @@ static void np_timer_cb(uv_timer_t* t) {
     ut->d = nilptr;
     uv_close((uv_handle_t*)t, np_uvtimer_free_cb);
     evdata_free(d);
-    crn_procer_resume_one(data, ytype, grid, mcid);
+    crn_npreg_done(ut->tok);
+    if (nprv == 1) {
+        crn_procer_resume_one(data, ytype, grid, mcid);
+    }
 }
 
 static void np_uvtimer_free_cb(uv_handle_t* h) {
@@ -723,6 +756,10 @@ static void np_dns_complete(uvdns* r, int status, struct addrinfo* res) {
     struct addrinfo* outres = nilptr;
     int errcode = 0;
 
+    // 先认领令牌：0=取消已接管（obj 由取消路径善后）；2=销毁中跳过唤醒
+    int nprv = crn_npreg_claim(r->tok);
+    if (nprv == 0) { return; }
+
     if (status == 0) {
         outres = np_dump_addrinfo(res);
         uv_freeaddrinfo(res);
@@ -731,6 +768,10 @@ static void np_dns_complete(uvdns* r, int status, struct addrinfo* res) {
         lwarn("%s -> %s\n", uv_strerror(status), r->node ? r->node : "(null)");
     }
 
+    if (nprv == 2) {
+        crn_npreg_done(r->tok);
+        return;
+    }
     if (crn_procer_resume_prechk(r->data, r->ytype, r->grid, r->mcid)) {
         if (r->out != nilptr) {
             *r->out = outres;
@@ -738,6 +779,7 @@ static void np_dns_complete(uvdns* r, int status, struct addrinfo* res) {
         if (r->errcode != nilptr) {
             *r->errcode = errcode;
         }
+        crn_npreg_done(r->tok);
         crn_procer_resume_one(r->data, r->ytype, r->grid, r->mcid);
     } else {
         lwarn("oops, seems gr gone %d\n", r->grid);
@@ -745,6 +787,7 @@ static void np_dns_complete(uvdns* r, int status, struct addrinfo* res) {
             freeaddrinfo(outres);
         }
     }
+    crn_npreg_done(r->tok);
     if (r->node != nilptr) {
         crn_raw_free(r->node);
         r->node = nilptr;
@@ -807,6 +850,8 @@ static int np_start_io(uvjob* j) {
     w->d->mcid = j->mcid;
     w->d->ytype = j->ytype;
     w->d->fd = j->fd;
+    w->tok = j->tok;
+    if (j->tok != nilptr) { j->tok->obj = w; }
 
     int rv = uv_timer_init(&np->loop, &w->tmo);
     if (rv != 0) {
@@ -871,6 +916,8 @@ static void np_start_timer(uvjob* j) {
     ut->d->ytype = j->ytype;
     ut->d->fd = j->fd;
     ut->d->deadline_ns = j->deadline_ns;
+    ut->tok = j->tok;
+    if (j->tok != nilptr) { j->tok->obj = ut; }
 
     int rv = uv_timer_init(&np->loop, &ut->t);
     if (rv != 0) {
@@ -921,6 +968,43 @@ static void np_start_dns(uvjob* j) {
     }
 }
 
+static void np_cancel_tokens(uvjob* j) {
+    netpoller* np = gnpl__;
+    // loop 线程：释放机器线程摘除的未决令牌所挂接的对象。
+    // DONE=唤醒路径已自行释放，跳过；在途 DNS 只能等完成回调善后。
+    for (int i = 0; i < j->ccnt; i++) {
+        np_token* tok = (np_token*)j->carr[i];
+        if (tok == nilptr) { continue; }
+        int st = __atomic_load_n(&tok->np.npstate, __ATOMIC_ACQUIRE);
+        if (st == NPREG_DONE) { continue; }
+        if (tok->kind == NPT_IO && tok->obj != nilptr) {
+            uvwaiter* w = (uvwaiter*)tok->obj;
+            uvfd* f = w->fdref;
+            /* 未认领=唤醒从未发生：与 np_io_timeout_cb 同序：
+             * 摘链 -> 注销fd -> 停timer/释放（含evdata） */
+            (void)np_unlink(np, f, w);
+            np_fd_maybe_close(np, f);
+            evdata* d = w->d;
+            w->d = nilptr;
+            uv_timer_stop(&w->tmo);
+            uv_close((uv_handle_t*)&w->tmo, np_waiter_free_cb);
+            if (d != nilptr) { evdata_free(d); }
+        } else if (tok->kind == NPT_TIMER && tok->obj != nilptr) {
+            uvtimer* ut = (uvtimer*)tok->obj;
+            evdata* d = ut->d;
+            ut->d = nilptr;
+            uv_close((uv_handle_t*)&ut->t, np_uvtimer_free_cb);
+            if (d != nilptr) { evdata_free(d); }
+        } else if (tok->kind == NPT_DNS && tok->obj != nilptr) {
+            // uv_getaddrinfo 在途无法安全取消（uv_cancel 仅特定阶段有效）：
+            // 留给完成回调；其 claim 会因 DRAINING/DYING 而跳过唤醒。
+            // 这里不释放 r（uv 线程池仍持有）。
+        }
+        // 令牌本体是 GC 内存，弃置给 GC
+    }
+    crn_raw_free(j->carr);
+}
+
 static int np_dispatch(uvjob* j) {
     switch (j->typ) {
     case UVJOB_READ:
@@ -931,6 +1015,9 @@ static int np_dispatch(uvjob* j) {
         return 1;
     case UVJOB_DNS:
         np_start_dns(j);
+        return 1;
+    case UVJOB_CANCEL:
+        np_cancel_tokens(j);
         return 1;
     default:
         lwarn("unknown job typ %d\n", j->typ);
@@ -1065,6 +1152,29 @@ void netpoller_loop() {
  * deadline 在入队时用 uv_hrtime() 绝对化，排队延迟不会拉长 sleep；
  * event 版的 event_add 是相对超时，但同样在 yield 时计算。
  */
+void netpoller_cancelfiber(fiber* gr) {
+    // 机器线程摘令牌（单写者），经 uv_async 桥转 loop 线程释放挂接对象
+    netpoller* np = gnpl__;
+    if (np == 0 || gr == nilptr) { return; }
+    for (;;) {
+        void** arr = crn_raw_malloc(sizeof(void*) * 64);
+        if (arr == nilptr) { return; }
+        int n = crn_npreg_take(gr, arr, 64);
+        if (n == 0) {
+            crn_raw_free(arr);
+            return;
+        }
+        uvjob* j = np_job_new(UVJOB_CANCEL, 0, 0, gr);
+        if (j == nilptr) {
+            crn_raw_free(arr);
+            return;
+        }
+        j->carr = arr;
+        j->ccnt = n;
+        np_enqueue(j);
+        if (n < 64) { return; }
+    }
+}
 void netpoller_yieldfd(int64_t fd, int ytype, fiber* gr) {
     netpoller* np = gnpl__;
     assert(np != 0);
@@ -1169,6 +1279,15 @@ void* netpoller_dnsresolv(const char* hostname, int ytype, fiber* gr,
     r->data = gr;
     r->out = (void**)addr;
     r->errcode = errcode;
+
+    /* 令牌：机器线程入列（单写者），DNS 完成时认领 */
+    np_token* tok = (np_token*)crn_gc_malloc(sizeof(np_token));
+    if (tok != nilptr) {
+        tok->kind = NPT_DNS;
+        tok->obj = r;
+        crn_npreg_add(gr, tok);
+        r->tok = tok;
+    }
 
     if (hostname != nilptr) {
         size_t n = strlen(hostname) + 1;

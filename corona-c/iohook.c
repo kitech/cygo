@@ -746,6 +746,9 @@ int __poll(struct pollfd fds[], nfds_t nfds, int timeout)
         // linfo("poll yeild %d timeo %d rv %d\n", i, timeout, rv);
         int fixyn = i == 0 ? ynfds : (ynfds-1);
         crn_procer_yield_multi(YIELD_TYPE_UUPOLL, fixyn, tfds, tytypes);
+        // 多fd唤醒：本轮其余fd的事件仍挂着。返回后先全部取消再重探，
+        // 否则每自旋一轮就叠加一批重复注册，残留最终打在已销毁fiber上
+        netpoller_cancelfiber(crn_fiber_getcur());
     }
     assert(1==2);
 }
@@ -957,6 +960,8 @@ int pselect(int nfds, fd_set *readfds, fd_set *writefds,
 	// n == 0, no timeout set, some fd(s) nonblocing
         if (n > 0) {
             crn_procer_yield_multi(YIELD_TYPE_PSELECT, n, fds, ytypes);
+            // 同 __poll：唤醒后取消本轮其余fd的残留注册
+            netpoller_cancelfiber(crn_fiber_getcur());
         }
 
         struct timespec ztv = {0};

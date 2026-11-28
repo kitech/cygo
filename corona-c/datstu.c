@@ -333,3 +333,125 @@ size_t crnunique_size(crnunique* q){
     assert(rv == rv2);
     return rv;
 }
+
+/////
+// netpoller pending-registration registry（event/ev/uv 三后端共享，无锁）。
+//
+// 结构：每个 fiber 一条单链表（头在 gr->nphead），节点是各后端 evdata
+// 的首成员 npreg_hdr。
+//
+// 线程纪律（这是无锁成立的前提）：
+//  - 链表只由该 fiber 自己的 machine 线程读写：add（注册时入列）与
+//    drain（销毁/poll轮清理时遍历）。loop 线程绝不遍历、绝不改链表，
+//    跨线程只碰 npstate 一个原子字。
+//  - evdata 只由 machine 线程（drain）释放；回调（loop 线程）认领后
+//    只标记状态、拷贝字段、event_free 自己的 event，从不 free evdata。
+//    销毁时仍在途的已认领条目直接弃置——它是 GC 内存，链表随 fiber
+//    消失后无人引用，GC 自然回收。
+//  - event（libevent 自有内存）由认领方（回调）或 drain 中的一方释放，
+//    归属由 npstate 的原子交换裁决，恰好一次。
+//
+// npstate: 0=已注册 NPREG_CLAIMED=回调已认领 NPREG_DONE=回调已收尾
+//          NPREG_DYING 位=fiber 正在销毁（drain 对已认领条目置位，
+//          在途回调看到后跳过唤醒）
+void crn_npreg_add(fiber* gr, void* d) {
+    npreg_hdr* h = (npreg_hdr*)d;
+    h->npstate = NPREG_REGD;
+    h->npnext = gr->nphead;
+    gr->nphead = d;
+}
+// machine 线程：撤销刚压入的链头登记（武装失败路径）。
+// 单写者纪律保证 d 就是当前链头。
+void crn_npreg_undo(fiber* gr, void* d) {
+    npreg_hdr* h = (npreg_hdr*)d;
+    if (gr->nphead == d) {
+        gr->nphead = h->npnext;
+    }
+}
+// loop 线程回调入口调用。返回：
+//   0 = 认领失败（并发 drain 已接管该条目），调用方不得再触碰 d
+//   1 = 认领成功，正常走唤醒
+//   2 = 认领成功但 fiber 正在销毁：只 event_free 自己的 event 并收尾，
+//       跳过唤醒
+int crn_npreg_claim(void* d) {
+    npreg_hdr* h = (npreg_hdr*)d;
+    int old = __atomic_exchange_n(&h->npstate, NPREG_CLAIMED, __ATOMIC_ACQ_REL);
+    if (old & (NPREG_CLAIMED | NPREG_DONE | NPREG_DRAINING)) { return 0; }
+    if (__atomic_load_n(&h->npstate, __ATOMIC_ACQUIRE) & NPREG_DYING) { return 2; }
+    return 1;
+}
+// loop 线程回调收尾调用：标记 DONE，条目留给下一次 drain 释放
+// （本 fiber 已销毁时无人再 drain，弃置给 GC）
+void crn_npreg_done(void* d) {
+    npreg_hdr* h = (npreg_hdr*)d;
+    __atomic_store_n(&h->npstate, NPREG_DONE, __ATOMIC_RELEASE);
+}
+// machine 线程调用（destroy 兜底 / poll 每轮清理）。返回释放条数。
+// 遍历链表安全：节点只由本线程释放，在途回调只碰状态字不改链。
+int crn_npreg_drain(fiber* gr, void (*free_fn)(void* d)) {
+    int n = 0;
+    void* p = gr->nphead;
+    gr->nphead = nilptr;
+    while (p != nilptr) {
+        npreg_hdr* h = (npreg_hdr*)p;
+        void* nxt = h->npnext;   // 先取 next：free_fn 会释放节点
+        int st = __atomic_load_n(&h->npstate, __ATOMIC_ACQUIRE);
+        if (st == NPREG_REGD) {
+            // 0 -> DRAINING 抢归属：抢到才释放；被并发回调抢走则置 DYING
+            // 让其跳过唤醒（回调从不释放 evdata，条目弃置给 GC）
+            int exp = NPREG_REGD;
+            if (__atomic_compare_exchange_n(&h->npstate, &exp, NPREG_DRAINING,
+                                            0, __ATOMIC_ACQ_REL, __ATOMIC_ACQUIRE)) {
+                if (free_fn != nilptr) { free_fn(p); }
+                n++;
+            } else {
+                __atomic_fetch_or(&h->npstate, NPREG_DYING, __ATOMIC_ACQ_REL);
+            }
+        } else if (st == NPREG_DONE) {
+            // 回调已收尾（event 已由其释放）：只回收 evdata
+            if (free_fn != nilptr) { free_fn(p); }
+            n++;
+        } else if (st & NPREG_CLAIMED) {
+            // 在途回调：置 DYING 让它跳过唤醒；条目不再动（弃置给 GC
+            // 或下一次 drain）
+            __atomic_fetch_or(&h->npstate, NPREG_DYING, __ATOMIC_ACQ_REL);
+        }
+        p = nxt;
+    }
+    return n;
+}
+// drain 的"只收集不释放"变体：给注册/释放都必须在 loop 线程做的后端
+// （ev/uv）用。machine 线程把 REGD 条目摘出（CAS 0->DRAINING 抢归属）
+// 放进 arr，调用方再经后端线程桥转给 loop 释放；在途回调置 DYING 跳过
+// 唤醒后自行收尾。返回收集条数（arr 满则停止，剩余留给下次）。
+int crn_npreg_take(fiber* gr, void** arr, int cap) {
+    int n = 0;
+    void** link = &gr->nphead;
+    while (*link != nilptr) {
+        npreg_hdr* h = (npreg_hdr*)*link;
+        if (n >= cap) { break; }
+        int st = __atomic_load_n(&h->npstate, __ATOMIC_ACQUIRE);
+        if (st == NPREG_REGD) {
+            int exp = NPREG_REGD;
+            if (__atomic_compare_exchange_n(&h->npstate, &exp, NPREG_DRAINING,
+                                            0, __ATOMIC_ACQ_REL, __ATOMIC_ACQUIRE)) {
+                void* taken = *link;
+                *link = h->npnext;   // 摘除
+                arr[n++] = taken;
+                continue;
+            }
+            __atomic_fetch_or(&h->npstate, NPREG_DYING, __ATOMIC_ACQ_REL);
+        } else if (st & NPREG_CLAIMED) {
+            __atomic_fetch_or(&h->npstate, NPREG_DYING, __ATOMIC_ACQ_REL);
+        } else if (st == NPREG_DONE) {
+            if (n >= cap) { break; }
+            // 回调已收尾：obj 已由唤醒路径释放，令牌本体摘除弃置（GC）
+            void* taken = *link;
+            *link = h->npnext;
+            arr[n++] = taken;
+            continue;
+        }
+        link = (void**)&h->npnext;
+    }
+    return n;
+}
