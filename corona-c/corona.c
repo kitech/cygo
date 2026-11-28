@@ -132,7 +132,8 @@ static int crn_nxtid(corona* nr) {
 
 static void crn_global_so_handler(int emergency, stackoverflow_context_t scp) {
     lerror("glob so: emergency %d, scp %p\n", emergency, scp);
-    return;
+    // 从 stack overflow handler 返回=恢复执行=原指令立即再溢出，只能终止
+    _exit(70);
 }
 
 static int is__stack_chk_fail = 0;
@@ -141,16 +142,19 @@ static int is__stack_chk_fail = 0;
 // default output
 // *** stack smashing detected ***: terminated
 // do nothing, then SIGSEGV
-void __stack_chk_fail() {
+void __attribute__((noreturn)) __stack_chk_fail() {
     is__stack_chk_fail = 1;
-    lerror("stack so: __stack_chk_fail %p\n", pthread_self());
+    fiber* gr = crn_fiber_getcur();
+    lerror("stack so: __stack_chk_fail %p grid %d mcid %d\n", pthread_self(), gr?gr->id:-1, gr?gr->mcid:-1);
     void* stklo = 0; size_t stksz = 0;
     thread_getstack(pthread_self(), &stklo, &stksz);
     ucontext_t ctx = {0};
     ctx.uc_stack.ss_size = stksz;
     ctx.uc_stack.ss_sp = stklo;
     sigaddset(&ctx.uc_sigmask, SIGABRT);
-    // crn_global_so_handler(0, &ctx);
+    // crn_global_so_handler(0, &ctx);    
+    assert(0);
+    abort();
 }
 
 static int crn_global_fault_handler(void* fault_address, int serious) {
@@ -169,8 +173,11 @@ static int crn_global_fault_handler(void* fault_address, int serious) {
 
     // where to go ???
     if (is__stack_chk_fail) is__stack_chk_fail=0;
-    rv = sigsegv_leave_handler(0, 0, 0, 0);
+    // rv = sigsegv_leave_handler(0, 0, 0, 0);
     // int rv = sigsegv_leave_handler(void (*continuation)(void *, void *, void *), void *cont_arg1, void *cont_arg2, void *cont_arg3);
+    // sigsegv_handler_t 契约：非零=已处理(恢复执行)，0=拒接(libsigsegv 走默认
+    // 终止)。旧链尾调 sigsegv_leave_handler(0,0,0,0)：libsigsegv>=2.6 的该函
+    // 数第一参数是 continuation 函数指针，传 NULL 等于跳到地址 0。
     return rv;
 }
 

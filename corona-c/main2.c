@@ -131,6 +131,8 @@ static void on_fatal(int sig, siginfo_t* si, void* uc) {
     n += app_l(buf + n, sizeof(buf) - n, sig);
     n += app(buf + n, sizeof(buf) - n, " addr=");
     n += app_l(buf + n, sizeof(buf) - n, (long)(uintptr_t)(si ? si->si_addr : 0));
+    n += app(buf + n, sizeof(buf) - n, " grid=");
+    n += app_l(buf + n, sizeof(buf) - n, crn_goid());
     n += app_c(buf + n, 1, '\n');
     long t = now_ms();
     for (int i = 0; i < S_MAX; i++) {
